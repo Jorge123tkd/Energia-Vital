@@ -1,0 +1,21 @@
+{
+  "name": "energia-vital",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Energía Vital — Plataforma comercial inteligente con asistente conversacional",
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "deploy:web": "npm run deploy --workspace=apps/web",
+    "deploy:api": "npm run deploy --workspace=apps/api",
+    "test": "npm run test --workspace=apps/web && npm run test --workspace=apps/api"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "wrangler": "^3.0.0"
+  }
+}

@@ -1,0 +1,59 @@
+name: Desplegar Energía Vital
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-web:
+    runs-on: ubuntu-latest
+    name: Desplegar frontend en Cloudflare Pages
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias del frontend
+        working-directory: ./apps/web
+        run: npm ci
+
+      - name: Construir frontend
+        working-directory: ./apps/web
+        run: npm run build
+
+      - name: Desplegar a Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: energia-vital-web
+          directory: ./apps/web/dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-api:
+    runs-on: ubuntu-latest
+    name: Desplegar API en Cloudflare Workers
+    needs: deploy-web
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias del API
+        working-directory: ./apps/api
+        run: npm ci
+
+      - name: Desplegar API a Workers
+        working-directory: ./apps/api
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
