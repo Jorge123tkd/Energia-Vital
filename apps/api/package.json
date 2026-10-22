@@ -7,14 +7,22 @@
   "scripts": {
     "dev": "wrangler dev src/index.ts",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node tests/integration.cjs",
+    "db:seed": "wrangler d1 execute energia-vital-db --local --file tests/seed.sql",
+    "db:clean": "wrangler d1 execute energia-vital-db --local --file tests/clean.sql",
+    "db:integrity": "wrangler d1 execute energia-vital-db --local --file tests/integrity.sql",
+    "db:seed:prod": "wrangler d1 execute energia-vital-db --remote --file tests/seed-prod.sql",
+    "db:migrate": "wrangler d1 migrations apply energia-vital-db --remote",
+    "db:migrate:local": "wrangler d1 migrations apply energia-vital-db --local"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240109.0",
     "typescript": "^5.3.3",
-    "wrangler": "^3.0.0"
+    "wrangler": "^4.151.2"
   },
   "dependencies": {
+    "@cloudflare/workerd-windows-64": "^1.20261019.1",
     "hono": "^4.0.0"
   }
 }

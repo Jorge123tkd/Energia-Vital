@@ -111,7 +111,10 @@ publicRoutes.get('/gallery', async (c) => {
 // Configuración pública (YouTube, sitio, etc.)
 publicRoutes.get('/settings', async (c) => {
   const { DB } = c.env;
-  const { results } = await DB.prepare('SELECT key, value FROM system_settings').all();
+  const { results } = await DB.prepare('SELECT key, value FROM system_settings').all<{
+    key: string;
+    value: string;
+  }>();
   const settings: Record<string, string> = {};
   for (const row of results ?? []) {
     settings[row.key] = row.value;

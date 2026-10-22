@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
-  import Assistant from './components/Assistant.svelte';
+  import { isAssistantOpen } from './lib/store';
 
-  let products: any[] = [];
+  let products: any[] = $state([]);
   let settings: any = {};
-  let loading = true;
+  let loading = $state(true);
 
   onMount(async () => {
     try {
@@ -18,6 +18,10 @@
       loading = false;
     }
   });
+
+  function openAssistant() {
+    isAssistantOpen.set(true);
+  }
 </script>
 
 <header class="relative overflow-hidden">
@@ -33,7 +37,7 @@
       Dime qué necesitas y te guiaré paso a paso. Equipos solares, inversores, baterías, estaciones EcoFlow, instalación y mantenimiento.
     </p>
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
-      <button class="bg-energia-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-energia-700 transition-colors" onclick={() => document.getElementById('assistant-widget')?.scrollIntoView()}>
+      <button class="bg-energia-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-energia-700 transition-colors" onclick={openAssistant}>
         Hablar con el asistente
       </button>
       <button class="bg-white text-energia-900 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors" onclick={() => document.getElementById('catalogo-section')?.scrollIntoView()}>
@@ -88,8 +92,5 @@
     <p class="text-gray-600 mb-8 max-w-2xl mx-auto">
       Nuestro asistente está listo para ayudarte a encontrar el equipo solar adecuado, agendar una cita o resolver dudas sobre instalación y mantenimiento.
     </p>
-    <div id="assistant-widget" class="bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden max-w-md mx-auto">
-      <Assistant />
-    </div>
   </div>
 </section>

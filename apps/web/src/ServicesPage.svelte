@@ -2,8 +2,8 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
 
-  let services: any[] = [];
-  let loading = true;
+  let services: any[] = $state([]);
+  let loading = $state(true);
 
   onMount(async () => {
     try {

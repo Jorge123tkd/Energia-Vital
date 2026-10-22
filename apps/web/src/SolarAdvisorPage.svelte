@@ -1,20 +1,20 @@
 <script lang="ts">
-  let step = 1;
+  let step = $state(1);
   const totalSteps = 4;
 
-  let amps = '';
-  let voltage = '';
-  let phases = '';
-  let measurementType = '';
-  let powerWatts = '';
-  let autonomyHours = '';
-  let systemType = '';
-  let coverage = '';
-  let sunHours = '';
-  let existingEquipment = '';
+  let amps = $state('');
+  let voltage = $state('');
+  let phases = $state('');
+  let measurementType = $state('');
+  let powerWatts = $state('');
+  let autonomyHours = $state('');
+  let systemType = $state('');
+  let coverage = $state('');
+  let sunHours = $state('');
+  let existingEquipment = $state('');
 
-  let results: any = null;
-  let calculating = false;
+  let results: any = $state(null);
+  let calculating = $state(false);
 
   function nextStep() {
     if (step < totalSteps) step++;
@@ -23,12 +23,54 @@
   function prevStep() {
     if (step > 1) step--;
   }
+
+  async function calculate() {
+    calculating = true;
+    const v = parseFloat(voltage) || 220;
+    const i = parseFloat(amps) || 0;
+    const fp = 0.85;
+    const power = v * i * fp;
+    const energyPerHour = power / 1000;
+    const autonomy = parseFloat(autonomyHours) || 5;
+    const dailyEnergy = energyPerHour * autonomy;
+    const dod = 0.8;
+    const efficiency = 0.9;
+    const batteryCapacity = dailyEnergy / (dod * efficiency);
+    const inverterMin = power * 1.25;
+    const peakSunHours = parseFloat(sunHours) || 4;
+    const pvPower = dailyEnergy / (peakSunHours * 0.75);
+    const panelWatts = 450;
+    const panelCount = Math.ceil((pvPower * 1000) / panelWatts);
+
+    results = {
+      power: power,
+      energyPerHour: energyPerHour,
+      dailyEnergy: dailyEnergy,
+      batteryCapacity: batteryCapacity,
+      inverterMin: inverterMin,
+      pvPower: pvPower,
+      panelCount: panelCount,
+      panelWatts: panelWatts,
+    };
+    calculating = false;
+  }
 </script>
 
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
   <div class="mb-8">
     <h1 class="text-3xl font-bold text-gray-900 mb-2">Asesor Solar</h1>
     <p class="text-gray-600">Calcula el sistema solar que necesitas para tu vivienda.</p>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-xl p-6 md:p-8 shadow-sm">
+    <div class="flex justify-between items-center mb-6">
+      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Paso {step} de {totalSteps}</span>
+      <div class="flex gap-1">
+        {#each Array(totalSteps) as _, i}
+          <div class="w-2 h-2 rounded-full" class:bg-energia-600={i < step} class:bg-gray-300={i >= step}></div>
+        {/each}
+      </div>
+    </div>
 
     {#if step === 1}
       <div class="space-y-6">
@@ -60,10 +102,8 @@
           </select>
         </div>
       </div>
-    {:else if step === 2}
-  </div>
 
-  <div class="bg-white border border-gray-200 rounded-xl p-6 md:p-8 shadow-sm">
+    {:else if step === 2}
       <div class="space-y-6">
         <h2 class="text-xl font-bold text-gray-900">Potencia y autonomía</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -91,6 +131,7 @@
           </select>
         </div>
       </div>
+
     {:else if step === 3}
       <div class="space-y-6">
         <h2 class="text-xl font-bold text-gray-900">Condiciones solares</h2>
@@ -104,6 +145,7 @@
           <input type="text" bind:value={existingEquipment} placeholder="Ej: Inversor de 3000W (opcional)" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
         </div>
       </div>
+
     {:else if step === 4}
       {#if results}
         <div class="space-y-6">
@@ -154,50 +196,11 @@
       {/if}
       {#if step < totalSteps}
         <button class="bg-energia-600 text-white px-6 py-2 rounded-md font-medium hover:bg-energia-700 transition-colors" onclick={nextStep}>Siguiente</button>
-      {:else if results}
-        <button class="bg-energia-600 text-white px-6 py-2 rounded-md font-medium hover:bg-energia-700 transition-colors" onclick={calculate}>Calcular</button>
+      {:else if !results}
+        <button class="bg-energia-600 text-white px-6 py-2 rounded-md font-medium hover:bg-energia-700 transition-colors" onclick={calculate}>
+          {calculating ? 'Calculando...' : 'Calcular'}
+        </button>
       {/if}
     </div>
   </div>
 </div>
-
-<script>
-  async function calculate() {
-    calculating = true;
-    const v = parseFloat(voltage) || 220;
-    const i = parseFloat(amps) || 0;
-    const fp = 0.85;
-    const power = v * i * fp;
-    const energyPerHour = power / 1000;
-    const autonomy = parseFloat(autonomyHours) || 5;
-    const dailyEnergy = energyPerHour * autonomy;
-    const dod = 0.8;
-    const efficiency = 0.9;
-    const batteryCapacity = dailyEnergy / (dod * efficiency);
-    const inverterMin = power * 1.25;
-    const peakSunHours = parseFloat(sunHours) || 4;
-    const pvPower = dailyEnergy / (peakSunHours * 0.75);
-    const panelWatts = 450;
-    const panelCount = Math.ceil((pvPower * 1000) / panelWatts);
-
-    results = {
-      power: power,
-      energyPerHour: energyPerHour,
-      dailyEnergy: dailyEnergy,
-      batteryCapacity: batteryCapacity,
-      inverterMin: inverterMin,
-      pvPower: pvPower,
-      panelCount: panelCount,
-      panelWatts: panelWatts,
-    };
-    calculating = false;
-  }
-</script>
-    <div class="flex justify-between items-center mb-6">
-      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Paso {step} de {totalSteps}</span>
-      <div class="flex gap-1">
-        {#each Array(totalSteps) as _, i}
-          <div class="w-2 h-2 rounded-full" class:bg-energia-600={i < step} class:bg-gray-300={i >= step}></div>
-        {/each}
-      </div>
-    </div>

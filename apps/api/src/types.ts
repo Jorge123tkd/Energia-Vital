@@ -194,4 +194,10 @@ export interface Env {
   YOUTUBE_CHANNEL_URL?: string;
   WORKERS_AI_ENABLED?: string;
   WORKERS_AI_MODEL?: string;
+  /** Binding opcional de Workers AI. Si no existe, el asistente usa el motor determinista. */
+  AI?: Ai;
+  /** Proveedor compatible con la API de chat de OpenAI (opcional). */
+  AI_API_BASE?: string;
+  AI_API_KEY?: string;
+  AI_MODEL?: string;
 }

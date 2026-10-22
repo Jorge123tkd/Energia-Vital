@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
 
-  let settings: any = {};
+  let settings: any = $state({});
   let loading = true;
 
   onMount(async () => {
@@ -54,7 +54,7 @@
       <div class="bg-white border border-gray-200 rounded-xl p-6">
         <h3 class="text-xl font-bold text-gray-900 mb-4">Síguenos en YouTube</h3>
         <p class="text-gray-600 mb-4">Mira nuestras instalaciones, tutoriales y consejos solares.</p>
-        <a href="{$settings.youtube_channel_url || 'https://youtube.com/@energiavital'}" target="_blank" class="inline-flex items-center gap-2 text-energia-600 font-medium hover:underline">
+        <a href="{settings.youtube_channel_url || 'https://youtube.com/@energiavital'}" target="_blank" class="inline-flex items-center gap-2 text-energia-600 font-medium hover:underline">
           Ver canal de YouTube ▶
         </a>
       </div>

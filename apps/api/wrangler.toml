@@ -5,11 +5,15 @@ compatibility_date = "2024-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "energia-vital-db"
-database_id = ""
+database_id = "bbb91e7a-37c6-4290-aa9c-29a8022226b4"
 
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "energia-vital-assets"
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
+# Activa/desactiva el binding de Workers AI. Si no hay binding AI configurado
+# en wrangler.toml, el asistente usa automaticamente el motor determinista.
+WORKERS_AI_ENABLED = "false"
+WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"

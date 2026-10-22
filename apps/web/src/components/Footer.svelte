@@ -1,5 +1,9 @@
 <script lang="ts">
-  export let settings: any = {};
+  interface Props {
+    settings?: any;
+  }
+
+  let { settings = {} }: Props = $props();
 </script>
 
 <footer class="bg-gray-900 text-white mt-auto py-8 border-t border-gray-800">
@@ -23,20 +27,21 @@
       <div>
         <h4 class="font-semibold mb-4">Contacto</h4>
         <ul class="space-y-2 text-sm text-gray-400">
-          <li>WhatsApp/Telegram: <a href="#" class="hover:text-white">+57 300 000 0000</a></li>
+        <li>WhatsApp: <span class="hover:text-white cursor-pointer"><a href="https://wa.me/+5356085711">+5356085711</a></span></li>
+          <li>WhatsApp: <span class="hover:text-white cursor-pointer"><a href="https://wa.me/+5356085711">+5356085711</a></span></li>
           <li>Email: <a href="mailto:info@energiavital.com" class="hover:text-white">info@energiavital.com</a></li>
-          <li>Bogotá, Colombia</li>
+          <li>Playa, Cuba</li>
         </ul>
       </div>
       <div>
         <h4 class="font-semibold mb-4">Síguenos</h4>
         <div class="flex gap-4">
-          <a href="#" class="text-gray-400 hover:text-white">YouTube</a>
-          <a href="#" class="text-gray-400 hover:text-white">Instagram</a>
-          <a href="#" class="text-gray-400 hover:text-white">Facebook</a>
+          <a href="{settings.youtube_channel_url || '#'}" class="text-gray-400 hover:text-white" target="_blank" rel="noopener noreferrer">YouTube</a>
+          <span class="text-gray-400 hover:text-white cursor-default">Instagram</span>
+          <span class="text-gray-400 hover:text-white cursor-default">Facebook</span>
         </div>
         <p class="mt-4 text-xs text-gray-500">
-          {$settings.youtube_channel_url || 'Canal de YouTube'}
+          {settings.youtube_channel_url || 'Canal de YouTube'}
         </p>
       </div>
     </div>

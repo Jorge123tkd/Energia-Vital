@@ -1,4 +1,11 @@
-const API_BASE = '/api';
+const API_BASE = (import.meta.env.VITE_API_URL as string) || '';
+
+function getApiBase(): string {
+  // En producción, si no hay VITE_API_URL, intentamos detectar si estamos en el mismo dominio
+  // Si no, el usuario debe configurar la variable en Cloudflare Pages
+  const base = (import.meta.env.VITE_API_URL as string) || '';
+  return base;
+}
 
 async function request(path: string, options?: RequestInit) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -19,61 +26,61 @@ export const api = {
   // Productos
   getProducts: (params?: { category_id?: string; featured?: string; search?: string }) => {
     const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return request(`/public/products${qs}`);
+    return request(`/api/public/products${qs}`);
   },
-  getProduct: (id: string) => request(`/public/products/${id}`),
-  getCategories: () => request('/public/categories'),
-  getServices: () => request('/public/services'),
-  getService: (id: string) => request(`/public/services/${id}`),
+  getProduct: (id: string) => request(`/api/public/products/${id}`),
+  getCategories: () => request('/api/public/categories'),
+  getServices: () => request('/api/public/services'),
+  getService: (id: string) => request(`/api/public/services/${id}`),
   getFAQ: (params?: { category_id?: string }) => {
     const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return request(`/public/faq${qs}`);
+    return request(`/api/public/faq${qs}`);
   },
-  getGallery: () => request('/public/gallery'),
-  getSettings: () => request('/public/settings'),
+  getGallery: () => request('/api/public/gallery'),
+  getSettings: () => request('/api/public/settings'),
 
   // Asistente
-  getAssistantConfig: () => request('/assistant/config'),
+  getAssistantConfig: () => request('/api/assistant/config'),
   postAssistantMessage: (body: { session_id?: string; message: string; channel?: string; telegram_chat_id?: string }) =>
-    request('/assistant/message', { method: 'POST', body: JSON.stringify(body) }),
+    request('/api/assistant/message', { method: 'POST', body: JSON.stringify(body) }),
 
   // Auth
   login: (body: { email: string; password: string }) =>
-    request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+    request('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   setup: (body: { email: string; password: string }) =>
-    request('/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
+    request('/api/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
 
   // Admin
   getAdminProducts: (token: string) =>
-    request('/admin/products', { headers: { Authorization: `Bearer ${token}` } }),
+    request('/api/admin/products', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminProduct: (token: string, body: any) =>
-    request('/admin/products', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+    request('/api/admin/products', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
   updateAdminProduct: (token: string, id: string, body: any) =>
-    request(`/admin/products/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+    request(`/api/admin/products/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
   deleteAdminProduct: (token: string, id: string) =>
-    request(`/admin/products/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
+    request(`/api/admin/products/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
   getAdminCategories: (token: string) =>
-    request('/admin/categories', { headers: { Authorization: `Bearer ${token}` } }),
+    request('/api/admin/categories', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminCategory: (token: string, body: any) =>
-    request('/admin/categories', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+    request('/api/admin/categories', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
   getAdminServices: (token: string) =>
-    request('/admin/services', { headers: { Authorization: `Bearer ${token}` } }),
+    request('/api/admin/services', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminService: (token: string, body: any) =>
-    request('/admin/services', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+    request('/api/admin/services', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
   getAdminFAQ: (token: string) =>
-    request('/admin/faq', { headers: { Authorization: `Bearer ${token}` } }),
+    request('/api/admin/faq', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminFAQ: (token: string, body: any) =>
-    request('/admin/faq', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+    request('/api/admin/faq', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
   getAdminGallery: (token: string) =>
-    request('/admin/gallery', { headers: { Authorization: `Bearer ${token}` } }),
+    request('/api/admin/gallery', { headers: { Authorization: `Bearer ${token}` } }),
   getAdminAssistantConfig: (token: string) =>
-    request('/admin/assistant-config', { headers: { Authorization: `Bearer ${token}` } }),
+    request('/api/admin/assistant-config', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminAssistantConfig: (token: string, body: any) =>
-    request('/admin/assistant-config', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+    request('/api/admin/assistant-config', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
   getAdminSettings: (token: string) =>
-    request('/admin/settings', { headers: { Authorization: `Bearer ${token}` } }),
+    request('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminSetting: (token: string, body: any) =>
-    request('/admin/settings', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+    request('/api/admin/settings', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
   getAdminAudit: (token: string) =>
-    request('/admin/audit', { headers: { Authorization: `Bearer ${token}` } }),
+    request('/api/admin/audit', { headers: { Authorization: `Bearer ${token}` } }),
 };

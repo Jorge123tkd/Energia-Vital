@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import Nav from './components/Nav.svelte';
   import Footer from './components/Footer.svelte';
+  import Assistant from './components/Assistant.svelte';
   import HomePage from './HomePage.svelte';
   import CatalogPage from './CatalogPage.svelte';
   import ServicesPage from './ServicesPage.svelte';
@@ -9,18 +9,20 @@
   import GalleryPage from './GalleryPage.svelte';
   import ContactPage from './ContactPage.svelte';
   import AdminPage from './AdminPage.svelte';
+  import { isAssistantOpen } from './lib/store';
 
-  let currentRoute = '/';
-  
+  let currentRoute = $state('/');
+
+  // Inicializa la ruta en cliente
+  currentRoute = window.location.pathname || '/';
+
   function navigate(path: string) {
     currentRoute = path;
     history.pushState(null, '', path);
   }
 
-  onMount(() => {
-    window.addEventListener('popstate', () => {
-      currentRoute = window.location.pathname;
-    });
+  window.addEventListener('popstate', () => {
+    currentRoute = window.location.pathname || '/';
   });
 </script>
 
@@ -46,10 +48,10 @@
   {/if}
 </main>
 
-<footer class="w-full"><Footer /></footer>
+{#if $isAssistantOpen}
+  <div class="fixed bottom-6 right-6 z-[100]">
+    <Assistant />
+  </div>
+{/if}
 
-<style>
-  main {
-    display: block;
-  }
-</style>
+<footer class="w-full"><Footer /></footer>

@@ -2,8 +2,8 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
 
-  let gallery: any[] = [];
-  let loading = true;
+  let gallery: any[] = $state([]);
+  let loading = $state(true);
 
   onMount(async () => {
     try {

@@ -3,13 +3,14 @@
   import { api } from './lib/api';
   import { isAuthenticated, authToken, adminUser, addNotification } from './lib/store';
 
-  let email = '';
-  let password = '';
-  let loggingIn = false;
-  let showAdmin = false;
-  let products: any[] = [];
+  let email = $state('');
+  let password = $state('');
+  let loggingIn = $state(false);
+  let showAdmin = $state(false);
+  let products: any[] = $state([]);
 
-  async function login() {
+  async function login(e?: Event) {
+    if (e) e.preventDefault();
     loggingIn = true;
     try {
       const res = await api.login({ email, password });
@@ -47,7 +48,7 @@
   {#if !showAdmin}
     <div class="bg-white border border-gray-200 rounded-xl p-8 md:p-12 shadow-sm max-w-md mx-auto">
       <h1 class="text-2xl font-bold text-gray-900 mb-6">Panel de Administración</h1>
-      <form on:submit|preventDefault={login} class="space-y-4">
+      <form onsubmit={login} class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
           <input type="email" bind:value={email} required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
@@ -112,7 +113,7 @@
                   <td class="px-4 py-3 text-gray-600">{product.brand || '-'} {product.model || ''}</td>
                   <td class="px-4 py-3 text-gray-900">${product.price?.toLocaleString() || '-'} {product.currency}</td>
                   <td class="px-4 py-3">
-                    <span class="px-2 py-1 rounded-full text-xs font-medium" class:bg-green-100 class:text-green-700={product.is_active} class:bg-red-100 class:text-red-700={!product.is_active}>
+                    <span class="px-2 py-1 rounded-full text-xs font-medium {product.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
                       {product.is_active ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>

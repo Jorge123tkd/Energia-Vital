@@ -3,10 +3,10 @@
   import { api } from './lib/api';
 
   let products: any[] = [];
-  let categories: any[] = [];
-  let selectedCategory: string | null = null;
-  let search = '';
-  let loading = true;
+  let categories: any[] = $state([]);
+  let selectedCategory: string | null = $state(null);
+  let search = $state('');
+  let loading = $state(true);
 
   onMount(async () => {
     try {
@@ -48,9 +48,9 @@
   </div>
 
   <div class="flex gap-2 overflow-x-auto pb-6 scrollbar-hide">
-    <button class="px-4 py-2 rounded-full whitespace-nowrap font-medium transition-colors" class:bg-energia-600 class:text-white={!selectedCategory} class:bg-gray-100 class:text-gray-600={selectedCategory} onclick={() => filterByCategory('')}>Todos</button>
+    <button class="px-4 py-2 rounded-full whitespace-nowrap font-medium transition-colors {!selectedCategory ? 'bg-energia-600 text-white' : 'bg-gray-100 text-gray-600'}" onclick={() => filterByCategory('')}>Todos</button>
     {#each categories as cat}
-      <button class="px-4 py-2 rounded-full whitespace-nowrap font-medium transition-colors" class:bg-energia-600 class:text-white={selectedCategory === cat.id} class:bg-gray-100 class:text-gray-600={selectedCategory !== cat.id} onclick={() => filterByCategory(cat.id)}>
+      <button class="px-4 py-2 rounded-full whitespace-nowrap font-medium transition-colors {selectedCategory === cat.id ? 'bg-energia-600 text-white' : 'bg-gray-100 text-gray-600'}" onclick={() => filterByCategory(cat.id)}>
         {cat.name}
       </button>
     {/each}

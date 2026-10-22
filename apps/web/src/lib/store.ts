@@ -9,7 +9,7 @@ export const adminUser = writable<{ id: string; email: string; role: string } | 
 export const cart = writable<any[]>([]);
 export const notifications = writable<{ type: string; message: string }[]>([]);
 
-export function addNotification(type: 'success' | 'error' | 'info', message: string) {
+export function addNotification(type: 'success' | 'error' | 'info' | 'warning', message: string) {
   const id = Date.now();
   notifications.update((n) => [...n, { type, message } as any]);
   setTimeout(() => {
