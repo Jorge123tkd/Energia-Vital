@@ -1,0 +1,36 @@
+
+ Ôøà´©Å wrangler 4.151.2 (update available 4.157.0)
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+Resource location: remote 
+
+­ƒîÇ Executing on remote database energia-vital-db (bbb91e7a-37c6-4290-aa9c-29a8022226b4):
+­ƒîÇ To execute on your local development database, remove the --remote flag from your wrangler command.
+­ƒÜú Executed 1 command in 0.24ms
+[
+  {
+    "results": [
+      {
+        "email": "taliety@energiavital.com",
+        "hash_prefix": "pbkdf2$100000$fd693382f288421c"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "MIA",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.237
+      },
+      "duration": 0.237,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 487424,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]

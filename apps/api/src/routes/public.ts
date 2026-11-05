@@ -100,6 +100,18 @@ publicRoutes.get('/faq', async (c) => {
 });
 
 // Galería de trabajos
+// Servir imagen de R2 (galería)
+publicRoutes.get('/gallery/image/:key', async (c) => {
+  const { BUCKET } = c.env;
+  const key = decodeURIComponent(c.req.param('key'));
+  const obj = await BUCKET.get(key);
+  if (!obj) return c.notFound();
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  headers.set('etag', obj.httpEtag);
+  headers.set('cache-control', 'public, max-age=31536000, immutable');
+  return c.body(obj.body, 200, headers);
+});
 publicRoutes.get('/gallery', async (c) => {
   const { DB } = c.env;
   const { results } = await DB.prepare(

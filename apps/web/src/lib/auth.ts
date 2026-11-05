@@ -21,10 +21,7 @@ export function clearAuth() {
   localStorage.removeItem('energia_vital_is_authenticated');
 }
 
-/**
- * Rehidrata los stores de autenticación desde localStorage.
- * Debe llamarse al inicio (onMount) para que persistan los inicios de sesión.
- */
+/** Rehidrata los stores de autenticación desde localStorage. */
 export function hydrateAuth(): boolean {
   try {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -45,6 +42,83 @@ export function hydrateAuth(): boolean {
   authToken.set(null);
   adminUser.set(null);
   return false;
+}
+
+/** Registro de cliente (email + password). */
+export async function registerCustomer(body: {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+}) {
+  return await api.register(body);
+}
+
+/** Login de cliente (email + password). */
+export async function customerLogin(body: { email: string; password: string }) {
+  return await api.customerLogin(body);
+}
+
+/** Refrescar el access token. */
+export async function refreshAuth(body: { refresh_token: string }) {
+  const res = await api.refreshToken(body);
+  if (res && res.access_token) {
+    authToken.set(res.access_token);
+    persistAuth(res.access_token, { id: '', email: '', role: '' });
+  }
+  return res;
+}
+
+/** Cerrar sesión. */
+export async function logout() {
+  await api.logout();
+  clearAuth();
+  authToken.set(null);
+  adminUser.set(null);
+  isAuthenticated.set(false);
+}
+
+/** Obtener info del customer autenticado. */
+export async function getMe() {
+  return await api.me();
+}
+
+/** Obtener info del admin autenticado. */
+export async function getAdminMe() {
+  return await api.adminMe();
+}
+
+/** Solicitar código de verificación por teléfono/telegram. */
+export async function requestPhoneCode(body: {
+  phone?: string;
+  email?: string;
+  telegram_chat_id?: string;
+}) {
+  return await api.phoneRequest(body);
+}
+
+/** Verificar código de teléfono. */
+export async function verifyPhoneCode(body: { phone?: string; email?: string; code: string }) {
+  return await api.phoneVerify(body);
+}
+
+/** Generar código de enlace para vincular Telegram. */
+export async function requestTelegramLink(body: {
+  telegram_chat_id: string;
+  name?: string;
+  email?: string;
+}) {
+  return await api.telegramLink(body);
+}
+
+/** Intercambiar código de Telegram por tokens JWT. */
+export async function exchangeTelegramCode(body: { link_code: string }) {
+  return await api.telegramExchange(body);
+}
+
+/** Webhook de Telegram. */
+export async function telegramWebhook(body: any) {
+  return await api.telegramWebhook(body);
 }
 
 export { isAuthenticated, authToken, adminUser };

@@ -1,0 +1,1 @@
+InvalidOperation: No se puede recuperar la variable "$100000" porque no se ha establecido.
