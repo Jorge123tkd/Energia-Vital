@@ -11,6 +11,7 @@ export interface AssistantContext {
   faq: { question: string; answer: string }[];
   categories: { name: string }[];
   products: { name: string; price: number | null; currency: string; stock_status: string }[];
+  services: { name: string; price: number | null; price_type: string; scope: string }[];
 }
 
 export type AssistantIntent =
@@ -23,33 +24,32 @@ export type AssistantIntent =
   | 'product_inquiry'
   | 'complaint'
   | 'telegram'
+  | 'service_request'
   | 'general';
 
 const DEFAULT_WELCOME =
   '¡Hola! Soy el asistente de Energía Vital. ¿En qué puedo ayudarte hoy?';
 
 export function detectIntent(message: string): AssistantIntent {
-  const m = normalize(message);
+  const m = normalizeWithTypos(message);
 
   // Un saludo solo se detecta si el mensaje es esencialmente un saludo.
-  // "Hola, quiero información de paneles solares" es una consulta de asesoría
-  // solar con saludo, no un saludo a secas.
   if (isPureGreeting(m)) {
     return 'greeting';
   }
-  if (hasAny(m, ['repar', 'averia', 'falla', 'no enciende', 'error', 'se quemo'])) {
+  if (hasAny(m, ['repar', 'averia', 'falla', 'no enciende', 'error', 'quemo', 'quemado', 'arreglar'])) {
     return 'repair';
   }
-  if (hasAny(m, ['mantenimiento', 'preventivo', 'revision'])) {
+  if (hasAny(m, ['mantenimiento', 'preventivo', 'revision', 'limpieza', 'limpiar'])) {
     return 'maintenance';
   }
   if (hasAny(m, ['cita', 'agendar', 'agenda', 'reservar', 'visita', 'calendario', 'horario'])) {
     return 'appointment';
   }
-  if (hasAny(m, ['precio', 'cuanto', 'cotizar', 'cotizacion', 'valor', 'costo', 'presupuesto'])) {
+  if (hasAny(m, ['precio', 'cuanto', 'cotizar', 'cotizacion', 'valor', 'costo', 'presupuesto', 'cuesta'])) {
     return 'price_inquiry';
   }
-  if (hasAny(m, ['solar', 'panel', 'inversor', 'bateria', 'instalacion', 'autonomia'])) {
+  if (hasAny(m, ['solar', 'panel', 'inversor', 'bateria', 'instalacion', 'autonomia', 'paneles', 'baterias', 'inversores'])) {
     return 'solar_advice';
   }
   if (hasAny(m, ['producto', 'catalogo', 'equipo', 'venta', 'disponible', 'stock'])) {
@@ -62,6 +62,30 @@ export function detectIntent(message: string): AssistantIntent {
     return 'telegram';
   }
   return 'general';
+}
+
+/**
+ * Normaliza texto: corrige errores ortográficos comunes, minúsculas y sin acentos.
+ */
+function normalizeWithTypos(text: string): string {
+  let normalized = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  // Aplicar correcciones de errores ortográficos comunes
+  const typoCorrections: [string, string][] = [
+    ['slAR', 'solar'], ['slAr', 'solar'], ['mantemiento', 'mantenimiento'],
+    ['mantenimeinto', 'mantenimiento'], ['instalcion', 'instalacion'],
+    ['paneles', 'panel'], ['baterias', 'bateria'], ['inversores', 'inversor'],
+    ['prespuesto', 'presupuesto'], ['cuesta', 'cuanto'], ['cuestan', 'cuanto'],
+    ['arreglar', 'repar'], ['averiado', 'averia'], ['quemado', 'quemo'],
+    ['limpieza', 'mantenimiento'], ['limpiar', 'mantenimiento'],
+    ['cotice', 'cotizar'], ['agende', 'agendar'],
+  ];
+  for (const [typo, correct] of typoCorrections) {
+    normalized = normalized.replace(new RegExp(typo, 'g'), correct);
+  }
+  return normalized;
 }
 
 /**
@@ -94,6 +118,40 @@ function normalize(text: string): string {
 
 function hasAny(text: string, needles: string[]): boolean {
   return needles.some((n) => text.includes(n));
+}
+
+/** Calcula distancia de Levenshtein simplificada para matching difuso. */
+function levenshtein(a: string, b: string): number {
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+/** Verifica si una palabra está cerca de una palabra clave (distancia <= 30% del largo). */
+function fuzzyMatch(word: string, keyword: string): boolean {
+  if (word.length < 3 || keyword.length < 3) return word === keyword;
+  const maxDist = Math.ceil(Math.max(word.length, keyword.length) * 0.3);
+  return levenshtein(word, keyword) <= maxDist;
+}
+
+/** Verifica si alguna palabra del texto está cerca de alguna aguja (fuzzy). */
+function fuzzyHasAny(text: string, needles: string[]): boolean {
+  const words = text.split(/[^a-z0-9]+/).filter((w) => w.length > 0);
+  return needles.some((n) => words.some((w) => fuzzyMatch(w, n)));
 }
 
 /** Tokens relevantes de la consulta (sin palabras vacías, mínimo 4 letras). */
@@ -152,9 +210,9 @@ function topicWords(question: string): string[] {
   return tokenize(question).filter((t) => !GENERIC_DOMAIN_WORDS.has(t));
 }
 
-/** Carga el contexto del asistente desde D1 (config, FAQ, catálogo). */
+/** Carga el contexto del asistente desde D1 (config, FAQ, catálogo, servicios). */
 export async function loadAssistantContext(db: D1Database): Promise<AssistantContext> {
-  const [configRows, faqRows, catRows, prodRows] = await Promise.all([
+  const [configRows, faqRows, catRows, prodRows, svcRows] = await Promise.all([
     db.prepare('SELECT key, value FROM assistant_config').all<{ key: string; value: string }>(),
     db
       .prepare(
@@ -167,6 +225,11 @@ export async function loadAssistantContext(db: D1Database): Promise<AssistantCon
         'SELECT name, price, currency, stock_status FROM products WHERE is_active = 1 ORDER BY is_featured DESC, sort_order ASC LIMIT 12'
       )
       .all<{ name: string; price: number | null; currency: string; stock_status: string }>(),
+    db
+      .prepare(
+        'SELECT name, price, price_type, scope FROM services WHERE is_active = 1 ORDER BY sort_order ASC LIMIT 20'
+      )
+      .all<{ name: string; price: number | null; price_type: string; scope: string }>(),
   ]);
 
   const config: Record<string, string> = {};
@@ -177,6 +240,7 @@ export async function loadAssistantContext(db: D1Database): Promise<AssistantCon
     faq: faqRows.results ?? [],
     categories: catRows.results ?? [],
     products: prodRows.results ?? [],
+    services: svcRows.results ?? [],
   };
 }
 
@@ -189,6 +253,12 @@ function stockLabel(status: string): string {
   if (status === 'in_stock') return 'disponible';
   if (status === 'on_order') return 'en pedido';
   return 'agotado';
+}
+
+/** Formatea el precio de un servicio para mostrar al cliente. */
+function formatServicePrice(s: AssistantContext['services'][number]): string {
+  if (s.price === null || s.price === undefined) return 'precio a consultar';
+  return `${s.price.toFixed(2)}`;
 }
 
 /**
@@ -237,26 +307,26 @@ export function generateResponse(
 
     case 'product_inquiry':
     case 'price_inquiry': {
-      const matching = ctx.products.filter((p) => tokenize(p.name).some((t) => tokens.includes(t)));
-      const list = (matching.length > 0 ? matching : ctx.products).slice(0, 6);
-      if (list.length === 0) {
-        return {
-          text:
-            'Nuestro catálogo se está actualizando. Puedes revisar los productos y servicios disponibles en la web, ' +
-            'o dejarme tu solicitud para que te contactemos.',
-          intent,
-          source: 'catalog',
-        };
-      }
-      const lines = list.map((p) => `- ${p.name} — ${formatPrice(p)} (${stockLabel(p.stock_status)})`);
+      const prods = ctx.products
+        .filter((p) => p.price !== null && p.price !== undefined)
+        .map((p) => `- ${p.name}: ${formatPrice(p)} (${stockLabel(p.stock_status)})`)
+        .slice(0, 8);
+      const svc = ctx.services
+        .filter((s) => s.price !== null && s.price !== undefined && s.price_type === 'fixed')
+        .map((s) => `- ${s.name}: ${formatServicePrice(s)}`)
+        .slice(0, 8);
+      const lines = [...prods, ...svc];
       const header =
-        intent === 'price_inquiry'
-          ? 'Estos son algunos precios de nuestro catálogo:'
-          : 'Estos son algunos de nuestros equipos:';
+        lines.length > 0
+          ? '\n\nEstos son algunos precios de referencia:\n' + lines.join('\n')
+          : '';
       return {
-        text: `${header}\n${lines.join('\n')}\n\n¿Te interesa alguno en particular?`,
+        text:
+          'Para darte un precio exacto necesitamos conocer los detalles de tu proyecto ' +
+          '(potencia, equipos, zona, distancia). ' +
+          '¿Quieres que te contactemos para una cotización personalizada?' + header,
         intent,
-        source: 'catalog',
+        source: 'template',
       };
     }
 
@@ -298,17 +368,24 @@ export function generateResponse(
         source: 'template',
       };
 
-    case 'maintenance':
+    case 'maintenance': {
+      const svc = ctx.services
+        .filter((s) => s.name.toLowerCase().includes('mantenimiento'))
+        .map((s) => `-${s.name}: ${formatServicePrice(s)}`)
+        .slice(0, 3);
+      const priceLine =
+        svc.length > 0 ? '\n\nServicios de mantenimiento disponibles:\n' + svc.join('\n') : '';
       return {
         text:
           'Ofrecemos mantenimiento preventivo para sistemas solares. Para agendar la visita necesito:\n\n' +
           '1. ¿Qué tipo de sistema tienes?\n' +
           '2. ¿Cuándo fue tu última instalación o mantenimiento?\n' +
           '3. ¿Tu zona y datos de contacto?\n\n' +
-          '¿Te gustaría agendar una visita?',
+          '¿Te gustaría agendar una visita?' + priceLine,
         intent,
         source: 'template',
       };
+    }
 
     case 'complaint':
       return {
@@ -327,6 +404,31 @@ export function generateResponse(
         intent,
         source: 'template',
       };
+
+    case 'service_request': {
+      const active = ctx.services.filter((s) => s.price_type !== null).slice(0, 10);
+      if (!active.length) {
+        return {
+          text:
+            'En este momento no tenemos servicios publicados. Déjanos tus datos y te contactamos ' +
+            'para asesorarte.',
+          intent,
+          source: 'template',
+        };
+      }
+      const lines = active.map(
+        (s) =>
+          `- ${s.name}: ${formatServicePrice(s)} ${s.scope ? '— ' + s.scope : ''}`,
+      );
+      return {
+        text:
+          'Ofrecemos los siguientes servicios:\n' +
+          lines.join('\n') +
+          '\n\n¿Qué servicio te interesa? Con gusto te ayudo a agendar.',
+        intent,
+        source: 'template',
+      };
+    }
 
     default: {
       const cats = ctx.categories.map((c) => c.name).slice(0, 8);
@@ -351,6 +453,10 @@ export function buildSystemPrompt(ctx: AssistantContext): string {
     .map((p) => `- ${p.name} (${formatPrice(p)}, ${stockLabel(p.stock_status)})`)
     .join('\n');
   const faq = ctx.faq.map((f) => `P: ${f.question}\nR: ${f.answer}`).join('\n');
+  const svc = ctx.services
+    .filter((s) => s.price_type === 'fixed' && s.price !== null)
+    .map((s) => `- ${s.name}: ${formatServicePrice(s)} ${s.scope ? '— ' + s.scope : ''}`)
+    .join('\n');
 
   return [
     `Eres el asistente de ${business}, una empresa de energía solar y equipos eléctricos.`,
@@ -358,6 +464,7 @@ export function buildSystemPrompt(ctx: AssistantContext): string {
     'Si no tienes la información, indica que el equipo la confirmará contactando al cliente.',
     ctx.config.tone ? `Tono: ${ctx.config.tone}.` : '',
     catalog ? `Catálogo disponible:\n${catalog}` : '',
+    svc ? `Servicios con precio fijo:\n${svc}` : '',
     faq ? `Preguntas frecuentes:\n${faq}` : '',
   ]
     .filter(Boolean)

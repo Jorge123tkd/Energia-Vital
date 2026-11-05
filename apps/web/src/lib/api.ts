@@ -63,16 +63,32 @@ export const api = {
     request('/api/admin/categories', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminCategory: (token: string, body: any) =>
     request('/api/admin/categories', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+  updateAdminCategory: (token: string, id: string, body: any) =>
+    request(`/api/admin/categories/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+  deleteAdminCategory: (token: string, id: string) =>
+    request(`/api/admin/categories/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
   getAdminServices: (token: string) =>
     request('/api/admin/services', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminService: (token: string, body: any) =>
     request('/api/admin/services', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+  updateAdminService: (token: string, id: string, body: any) =>
+    request(`/api/admin/services/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+  deleteAdminService: (token: string, id: string) =>
+    request(`/api/admin/services/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
   getAdminFAQ: (token: string) =>
     request('/api/admin/faq', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminFAQ: (token: string, body: any) =>
     request('/api/admin/faq', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+  updateAdminFAQ: (token: string, id: string, body: any) =>
+    request(`/api/admin/faq/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+  deleteAdminFAQ: (token: string, id: string) =>
+    request(`/api/admin/faq/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
   getAdminGallery: (token: string) =>
     request('/api/admin/gallery', { headers: { Authorization: `Bearer ${token}` } }),
+  createAdminGalleryImage: (token: string, body: any) =>
+    request('/api/admin/gallery', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+  deleteAdminGalleryImage: (token: string, id: string) =>
+    request(`/api/admin/gallery/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
   getAdminAssistantConfig: (token: string) =>
     request('/api/admin/assistant-config', { headers: { Authorization: `Bearer ${token}` } }),
   createAdminAssistantConfig: (token: string, body: any) =>

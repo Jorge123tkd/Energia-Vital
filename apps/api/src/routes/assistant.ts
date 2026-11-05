@@ -108,7 +108,7 @@ assistantRoutes.post('/message', async (c) => {
       ctx = await loadAssistantContext(DB);
     } catch (e) {
       console.error('No se pudo cargar el contexto del asistente:', e);
-      ctx = { config: {}, faq: [], categories: [], products: [] };
+      ctx = { config: {}, faq: [], categories: [], products: [], services: [] };
     }
 
     // 4) Historial reciente de la sesion para dar contexto a la IA.

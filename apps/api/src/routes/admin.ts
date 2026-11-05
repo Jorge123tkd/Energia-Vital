@@ -71,6 +71,23 @@ adminRoutes.post('/categories', async (c) => {
   return c.json({ id, message: 'Categoría creada' });
 });
 
+adminRoutes.patch('/categories/:id', async (c) => {
+  const { DB } = c.env;
+  const id = c.req.param('id');
+  const b = await c.req.json<any>();
+  const now = new Date().toISOString();
+  await DB.prepare(
+    'UPDATE categories SET name = COALESCE(?, name), slug = COALESCE(?, slug), description = COALESCE(?, description), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order), updated_at = ? WHERE id = ?'
+  ).bind(b.name || null, b.slug || null, b.description || null, b.is_active !== undefined ? (b.is_active ? 1 : 0) : null, b.sort_order !== undefined ? b.sort_order : null, now, id).run();
+  return c.json({ message: 'Categoría actualizada' });
+});
+
+adminRoutes.delete('/categories/:id', async (c) => {
+  const { DB } = c.env;
+  await DB.prepare('DELETE FROM categories WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ message: 'Categoría eliminada' });
+});
+
 // --- SERVICIOS ---
 adminRoutes.get('/services', async (c) => {
   const { DB } = c.env;
@@ -87,6 +104,28 @@ adminRoutes.post('/services', async (c) => {
     'INSERT INTO services (id, name, slug, description, scope, price, price_type, duration_minutes, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(id, b.name, b.slug, b.description || null, b.scope || null, b.price || null, b.price_type || 'quote', b.duration_minutes || null, 1, b.sort_order || 0, now, now).run();
   return c.json({ id, message: 'Servicio creado' });
+});
+
+adminRoutes.patch('/services/:id', async (c) => {
+  const { DB } = c.env;
+  const id = c.req.param('id');
+  const b = await c.req.json<any>();
+  const now = new Date().toISOString();
+  await DB.prepare(
+    'UPDATE services SET name = COALESCE(?, name), slug = COALESCE(?, slug), description = COALESCE(?, description), scope = COALESCE(?, scope), price = COALESCE(?, price), price_type = COALESCE(?, price_type), duration_minutes = COALESCE(?, duration_minutes), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order), updated_at = ? WHERE id = ?'
+  ).bind(
+    b.name || null, b.slug || null, b.description || null, b.scope || null,
+    b.price !== undefined ? b.price : null, b.price_type || null, b.duration_minutes !== undefined ? b.duration_minutes : null,
+    b.is_active !== undefined ? (b.is_active ? 1 : 0) : null, b.sort_order !== undefined ? b.sort_order : null,
+    now, id
+  ).run();
+  return c.json({ message: 'Servicio actualizado' });
+});
+
+adminRoutes.delete('/services/:id', async (c) => {
+  const { DB } = c.env;
+  await DB.prepare('DELETE FROM services WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ message: 'Servicio eliminado' });
 });
 
 // --- PREGUNTAS FRECUENTES (FAQ) ---
@@ -107,11 +146,48 @@ adminRoutes.post('/faq', async (c) => {
   return c.json({ id, message: 'FAQ creada' });
 });
 
+adminRoutes.patch('/faq/:id', async (c) => {
+  const { DB } = c.env;
+  const id = c.req.param('id');
+  const b = await c.req.json<any>();
+  const now = new Date().toISOString();
+  await DB.prepare(
+    'UPDATE frequently_asked_questions SET category_id = COALESCE(?, category_id), question = COALESCE(?, question), answer = COALESCE(?, answer), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order), updated_at = ? WHERE id = ?'
+  ).bind(b.category_id || null, b.question || null, b.answer || null, b.is_active !== undefined ? (b.is_active ? 1 : 0) : null, b.sort_order !== undefined ? b.sort_order : null, now, id).run();
+  return c.json({ message: 'FAQ actualizada' });
+});
+
+adminRoutes.delete('/faq/:id', async (c) => {
+  const { DB } = c.env;
+  await DB.prepare('DELETE FROM frequently_asked_questions WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ message: 'FAQ eliminada' });
+});
+
 // --- GALERÍA ---
 adminRoutes.get('/gallery', async (c) => {
   const { DB } = c.env;
   const { results } = await DB.prepare('SELECT * FROM work_gallery ORDER BY sort_order ASC').all();
   return c.json({ gallery: results ?? [] });
+});
+
+adminRoutes.post('/gallery', async (c) => {
+  const { DB } = c.env;
+  const b = await c.req.json<any>();
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await DB.prepare(
+    'INSERT INTO work_gallery (id, title, description, url, r2_key, video_url, category, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    id, b.title, b.description || null, b.url || null, b.r2_key || null, b.video_url || null,
+    b.category || null, b.is_active !== false ? 1 : 0, b.sort_order || 0, now, now
+  ).run();
+  return c.json({ id, message: 'Imagen de galería creada' });
+});
+
+adminRoutes.delete('/gallery/:id', async (c) => {
+  const { DB } = c.env;
+  await DB.prepare('DELETE FROM work_gallery WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ message: 'Imagen de galería eliminada' });
 });
 
 // --- CONFIGURACIÓN DEL ASISTENTE ---
