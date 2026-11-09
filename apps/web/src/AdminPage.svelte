@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api, apiRequest, ADMIN_TOKEN_KEY } from './lib/api';
   import AdminContent from './components/AdminContent.svelte';
+  import AdminCustomers from './components/AdminCustomers.svelte';
   let token = $state('');
   let email = $state('');
   let password = $state('');
@@ -105,10 +106,7 @@
     {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
     {#if tab === 'customers'}
-      <h2 class="font-semibold text-xl mb-4">Clientes registrados ({customers.length})</h2>
-      <div class="space-y-3">{#each customers as c (c.id)}
-        <article class="bg-white border rounded-lg p-4"><strong>{c.name}</strong><p>{c.email ?? 'Sin correo'} · {c.phone ?? 'Sin teléfono'}</p><p class="text-gray-600">{[c.address, c.city, c.province].filter(Boolean).join(', ')}</p></article>
-      {/each}</div>
+      <AdminCustomers {token} {customers} onRefresh={async () => { await reload(); }} />
     {:else if tab === 'requests'}
       <h2 class="font-semibold text-xl mb-4">Solicitudes ({requests.length})</h2>
       <div class="space-y-3">{#each requests as r (r.id)}
