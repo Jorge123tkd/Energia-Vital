@@ -56,7 +56,7 @@ publicRoutes.get('/gallery/image/:key', async c => {
   headers.set('etag', object.httpEtag);
   headers.set('cache-control', 'public, max-age=86400');
   headers.set('X-Content-Type-Options', 'nosniff');
-  return c.body(object.body, 200, headers);
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
 publicRoutes.get('/gallery', async c => {
   const { results } = await c.env.DB.prepare('SELECT * FROM work_gallery WHERE is_active = 1 ORDER BY sort_order LIMIT 200').all();
