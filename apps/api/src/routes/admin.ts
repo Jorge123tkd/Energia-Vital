@@ -512,12 +512,17 @@ adminRoutes.put('/site-settings', async c => {
       try { slides = JSON.parse(value); } catch {
         return c.json({ error: 'Configuración del carrusel inválida.' }, 400);
       }
-      const isSafeLink = (url: string) => /^\\/(?!\\/)[a-zA-Z0-9/_?=&.-]*$/.test(url) || /^https:\\/\\/[^\\s]+$/i.test(url);
+      const isHttps = (address: string) => {
+        try { const parsed = new URL(address); return parsed.protocol === 'https:' && Boolean(parsed.hostname); }
+        catch { return false; }
+      };
+      const isSafeLink = (address: string) =>
+        (address.startsWith('/') && !address.startsWith('//') && !address.includes('\\')) || isHttps(address);
       if (!Array.isArray(slides) || slides.length !== 3 || !slides.every((s: any) =>
         s && typeof s.title === 'string' && s.title.trim().length > 0 && s.title.length <= 120 &&
         typeof s.subtitle === 'string' && s.subtitle.length <= 450 &&
         typeof s.image_url === 'string' && s.image_url.length <= 600 &&
-        (!s.image_url || /^https:\\/\\/[^\\s]+$/i.test(s.image_url)) &&
+        (!s.image_url || isHttps(s.image_url)) &&
         typeof s.link_label === 'string' && s.link_label.length <= 60 &&
         typeof s.link_url === 'string' && s.link_url.length <= 500 &&
         isSafeLink(s.link_url))) {
