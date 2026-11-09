@@ -414,7 +414,7 @@ adminRoutes.post('/gallery', async (c) => {
     category, is_active ? 1 : 0, sort_order, now
   ).run();
 
-  return c.json({ id, message: 'Imagen de galería creada', url, r2_key });
+  return c.json({ id, message: 'Imagen de galería creada', url, r2_key }, 201);
 });
 
 adminRoutes.patch('/gallery/:id', async c => {
