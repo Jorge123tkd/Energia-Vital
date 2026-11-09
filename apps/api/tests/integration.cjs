@@ -47,6 +47,13 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   assert.ok(!other.requests.some(r => r.id === created.id));
   const chat = await request('Assistant message A', '/api/assistant/message', 'POST', { message: 'Hola, necesito paneles solares' }, at);
   assert.ok(chat.session_id);
+  const followUp = await request('Assistant preserves topic in follow-up', '/api/assistant/message', 'POST',
+    { session_id: chat.session_id, message: '¿Y a 48 voltios?' }, at);
+  assert.equal(followUp.intent, 'solar_advice');
+  const commercial = await request('Assistant understands catalog availability', '/api/assistant/message', 'POST',
+    { message: '¿Tienen disponibilidad de baterías?' }, at);
+  assert.equal(commercial.intent, 'product_inquiry');
+  assert.ok(!/reserva confirmada|pedido realizado/i.test(commercial.response));
   await request('Customer B denied A chat', `/api/assistant/session/${chat.session_id}/messages`, 'GET', null, bt, 404);
   const starts = new Date(Date.now() + 48 * 3600 * 1000);
   starts.setUTCHours(14, 0, 0, 0);
