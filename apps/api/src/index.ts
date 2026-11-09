@@ -36,8 +36,8 @@ export default {
     app.use('/api/admin/gallery', async (c, next) => {
       if (c.req.method === 'POST' && (c.req.header('content-type') || '').includes('multipart/form-data')) {
         const form = await c.req.raw.clone().formData().catch(() => null);
-        const file = form?.get('file');
-        if (typeof file !== 'string' && file != null && file.size > 0 && (file.size > 8 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)))
+        const file = form?.get('file') as unknown as { size: number; type: string } | null;
+        if (file && typeof file.size === 'number' && file.size > 0 && (file.size > 8 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)))
           return c.json({ error: 'Solo imágenes JPG, PNG o WebP de hasta 8 MB' }, 400);
       }
       await next();
