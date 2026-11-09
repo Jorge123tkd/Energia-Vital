@@ -12,8 +12,8 @@ adminCustomersRoutes.get('/customers', async c => {
 });
 // Perfil comercial: no se permite editar contraseñas ni roles desde este módulo.
 const trim = (value: unknown, max: number) => typeof value === 'string' ? value.trim().slice(0, max) : '';
-const emailPattern = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-const phonePattern = /^\\+?[0-9 ()-]{8,20}$/;
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phonePattern = /^\+?[0-9 ()-]{8,20}$/;
 
 adminCustomersRoutes.patch('/customers/:id', async c => {
   const id = c.req.param('id');
