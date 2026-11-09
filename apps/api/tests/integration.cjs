@@ -106,6 +106,9 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   assert.equal(sharedCustomer.user.role, 'customer');
 
   await request('Duplicate email refused', '/api/auth/register', 'POST', a, null, 409);
+  await request('Admin changes customer address', '/api/admin-customers/customers/' + br.user.id,
+    'PATCH', { name: b.name, email: b.email, phone: b.phone, address: 'Nueva avenida 123', city: b.city, province: b.province }, adminToken);
+
   const me = await request('Profile belongs to A', '/api/auth/me', 'GET', null, at);
   assert.equal(me.user.email, a.email);
   assert.equal(me.user.address, a.address);
