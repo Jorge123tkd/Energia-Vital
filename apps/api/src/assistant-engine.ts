@@ -46,6 +46,12 @@ export function detectIntent(message: string): AssistantIntent {
   if (hasAny(m, ['cita', 'agendar', 'agenda', 'reservar', 'visita', 'calendario', 'horario'])) {
     return 'appointment';
   }
+  if (hasAny(m, ['disponibilidad', 'existencia', 'venden', 'comprar', 'compraria', 'tienen en venta', 'en stock', 'hay disponible'])) {
+    return 'product_inquiry';
+  }
+  if (hasAny(m, ['servicios', 'solicitar servicio', 'servicio tecnico', 'instalacion a domicilio', 'hacen instalaciones', 'servicio de instalacion'])) {
+    return 'service_request';
+  }
   if (hasAny(m, ['precio', 'cuanto', 'cotizar', 'cotizacion', 'valor', 'costo', 'presupuesto', 'cuesta'])) {
     return 'price_inquiry';
   }
@@ -96,6 +102,7 @@ function isPureGreeting(m: string): boolean {
   const GREETINGS = ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches', 'hey', 'saludos', 'que tal', 'hi', 'hello', 'inicio', 'start'];
   const FILLERS = ['gracias', 'por favor', 'amigo', 'estimado', 'que', 'tal', 'como', 'andas'];
 
+  if (/^(buenos dias|buenas tardes|buenas noches|que tal|hola|buenas|saludos|hey|hello|hi)([!?. ]*)$/.test(m.trim())) return true;
   const words = m.split(/[^a-z0-9]+/).filter((w) => w.length > 0);
 
   // Sin palabras -> no es saludo.
