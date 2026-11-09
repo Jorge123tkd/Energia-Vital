@@ -1,190 +1,81 @@
-const API_BASE = (import.meta.env.VITE_API_URL as string) || '';
+/** Cliente REST para Cloudflare Workers. Evita tokens Bearer manuales en cada pantalla. */
+const API_BASE = (import.meta.env.VITE_API_URL as string || '').replace(/\/$/, '');
+export const CUSTOMER_TOKEN_KEY = 'energia_vital_customer_session';
+export const ADMIN_TOKEN_KEY = 'energia_vital_admin_session';
 
-function getApiBase(): string {
-  // En producción, si no hay VITE_API_URL, intentamos detectar si estamos en el mismo dominio
-  // Si no, el usuario debe configurar la variable en Cloudflare Pages
-  const base = (import.meta.env.VITE_API_URL as string) || '';
-  return base;
+export function customerToken(): string | null {
+  return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(CUSTOMER_TOKEN_KEY) : null;
 }
-
-async function request(path: string, options?: RequestInit) {
-  const isFormData = options?.body instanceof FormData;
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: isFormData
-      ? { ...options?.headers }
-      : {
-          'Content-Type': 'application/json',
-          ...options?.headers,
-        },
-    ...options,
-  });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: 'Error desconocido' }));
-    throw new Error(error.error || `Error ${res.status}`);
-  }
-  return res.json();
+export function setCustomerToken(token: string | null) {
+  if (token) sessionStorage.setItem(CUSTOMER_TOKEN_KEY, token);
+  else sessionStorage.removeItem(CUSTOMER_TOKEN_KEY);
 }
+export async function apiRequest(path: string, options: RequestInit = {}): Promise<any> {
+  const headers = new Headers(options.headers);
+  if (!(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+  const token = customerToken();
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.message || `Error HTTP ${response.status}`);
+  return data;
+}
+function withAdmin(token: string, options: RequestInit = {}): RequestInit {
+  return { ...options, headers: { ...Object.fromEntries(new Headers(options.headers).entries()), Authorization: `Bearer ${token}` } };
+}
+const post = (path: string, body: unknown, options: RequestInit = {}) => apiRequest(path, { ...options, method: 'POST', body: JSON.stringify(body) });
+const patch = (path: string, body: unknown, options: RequestInit = {}) => apiRequest(path, { ...options, method: 'PATCH', body: JSON.stringify(body) });
 
 export const api = {
-  // Productos
-  getProducts: (params?: { category_id?: string; featured?: string; search?: string }) => {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return request(`/api/public/products${qs}`);
-  },
-  getProduct: (id: string) => request(`/api/public/products/${id}`),
-  getCategories: () => request('/api/public/categories'),
-  getServices: () => request('/api/public/services'),
-  getService: (id: string) => request(`/api/public/services/${id}`),
-  getFAQ: (params?: { category_id?: string }) => {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return request(`/api/public/faq${qs}`);
-  },
-  getGallery: () => request('/api/public/gallery'),
-  getSettings: () => request('/api/public/settings'),
+  getProducts: (params?: Record<string, string>) => apiRequest(`/api/public/products${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  getProduct: (id: string) => apiRequest(`/api/public/products/${encodeURIComponent(id)}`),
+  getCategories: () => apiRequest('/api/public/categories'),
+  getServices: () => apiRequest('/api/public/services'),
+  getService: (id: string) => apiRequest(`/api/public/services/${encodeURIComponent(id)}`),
+  getFAQ: (params?: Record<string, string>) => apiRequest(`/api/public/faq${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  getGallery: () => apiRequest('/api/public/gallery'),
+  getSettings: () => apiRequest('/api/public/settings'),
+  getAssistantConfig: () => apiRequest('/api/assistant/config'),
+  postAssistantMessage: (body: { session_id?: string; message: string; channel?: string }) => post('/api/assistant/message', body),
 
-  // Asistente
-  getAssistantConfig: () => request('/api/assistant/config'),
-  postAssistantMessage: (body: { session_id?: string; message: string; channel?: string; telegram_chat_id?: string }) =>
-    request('/api/assistant/message', { method: 'POST', body: JSON.stringify(body) }),
+  register: (body: { name: string; email: string; phone: string; address: string; city: string; province: string; password: string }) => post('/api/auth/register', body),
+  customerLogin: (body: { email: string; password: string }) => post('/api/auth/customer/login', body),
+  me: () => apiRequest('/api/auth/me'),
+  updateProfile: (body: { name: string; phone: string; address: string; city: string; province: string }) =>
+    apiRequest('/api/auth/me', { method: 'PUT', body: JSON.stringify(body) }),
+  changePassword: (body: { current_password: string; new_password: string }) =>
+    apiRequest('/api/auth/password', { method: 'PUT', body: JSON.stringify(body) }),
+  logout: () => post('/api/auth/logout', {}),
+  refreshToken: (body: { refresh_token: string }) => post('/api/auth/refresh', body),
+  getMyRequests: () => apiRequest('/api/private/requests'),
+  createRequest: (body: { type: string; title: string; description: string; preferred_date?: string }) => post('/api/private/requests', body),
+  getMyAppointments: () => apiRequest('/api/private/appointments'),
+  createAppointment: (body: { title: string; starts_at: string; ends_at: string }) => post('/api/private/appointments', body),
+  getCalendarSlots: (date: string, minutes = 60) => apiRequest(`/api/calendar/slots?date=${encodeURIComponent(date)}&duration_minutes=${minutes}`),
+  getNotifications: () => apiRequest('/api/notifications'),
+  getRewards: () => apiRequest('/api/rewards'),
+  getRewardBalance: () => apiRequest('/api/rewards/balance'),
+  getRewardRedemptions: () => apiRequest('/api/rewards/redemptions'),
+  getGiveawaysPublic: () => apiRequest('/api/giveaways/public/list'),
+  getGiveawayPublic: (id: string) => apiRequest(`/api/giveaways/public/${id}`),
+  participateGiveaway: (id: string, body: unknown) => post(`/api/giveaways/public/${id}/participate`, body),
 
-  // Auth (dual login: Telegram + Phone)
-  login: (body: { email: string; password: string }) =>
-    request('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
-  setup: (body: { email: string; password: string }) =>
-    request('/api/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
-  register: (body: { name: string; email: string; password: string; phone?: string }) =>
-    request('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
-  customerLogin: (body: { email: string; password: string }) =>
-    request('/api/auth/customer/login', { method: 'POST', body: JSON.stringify(body) }),
-  refreshToken: (body: { refresh_token: string }) =>
-    request('/api/auth/refresh', { method: 'POST', body: JSON.stringify(body) }),
-  logout: () => request('/api/auth/logout', { method: 'POST' }),
-  me: () => request('/api/auth/me'),
-  adminMe: () => request('/api/auth/admin/me'),
-  phoneRequest: (body: { phone?: string; email?: string; telegram_chat_id?: string }) =>
-    request('/api/auth/phone/request', { method: 'POST', body: JSON.stringify(body) }),
-  phoneVerify: (body: { phone?: string; email?: string; code: string }) =>
-    request('/api/auth/phone/verify', { method: 'POST', body: JSON.stringify(body) }),
-  telegramLink: (body: { telegram_chat_id: string; name?: string; email?: string }) =>
-    request('/api/auth/telegram/link', { method: 'POST', body: JSON.stringify(body) }),
-  telegramExchange: (body: { link_code: string }) =>
-    request('/api/auth/telegram/exchange', { method: 'POST', body: JSON.stringify(body) }),
-  telegramWebhook: (body: any) =>
-    request('/api/auth/telegram/webhook', { method: 'POST', body: JSON.stringify(body) }),
-
-  // Giveaways
-  getGiveaways: (token: string) =>
-    request('/api/giveaways', { headers: { Authorization: `Bearer ${token}` } }),
-  createGiveaway: (token: string, body: any) =>
-    request('/api/giveaways', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  getGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
-  updateGiveaway: (token: string, id: string, body: any) =>
-    request(`/api/giveaways/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  deleteGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-  activateGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}/activate`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
-  deactivateGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}/deactivate`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
-  getGiveawayParticipants: (token: string, id: string) =>
-    request(`/api/giveaways/${id}/participants`, { headers: { Authorization: `Bearer ${token}` } }),
-  drawGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}/draw`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
-  getGiveawayPublic: (id: string) =>
-    request(`/api/giveaways/public/${id}`),
-  getGiveawaysPublic: () =>
-    request('/api/giveaways/public/list'),
-  participateGiveaway: (id: string, body: any) =>
-    request(`/api/giveaways/public/${id}/participate`, { method: 'POST', body: JSON.stringify(body) }),
-
-  // Rewards
-  getRewards: () => request('/api/rewards'),
-  createReward: (token: string, body: any) =>
-    request('/api/rewards', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  updateReward: (token: string, id: string, body: any) =>
-    request(`/api/rewards/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  deleteReward: (token: string, id: string) =>
-    request(`/api/rewards/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-  getRewardBalance: () => request('/api/rewards/balance'),
-  redeemReward: (token: string, id: string) =>
-    request(`/api/rewards/${id}/redeem`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
-  getRewardRedemptions: () => request('/api/rewards/redemptions'),
-  getRewardRedemptionsById: (token: string, id: string) =>
-    request(`/api/rewards/${id}/redemptions`, { headers: { Authorization: `Bearer ${token}` } }),
-
-  // Notifications
-  getNotifications: () => request('/api/notifications'),
-  markNotificationRead: (token: string, id: string) =>
-    request(`/api/notifications/${id}/read`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } }),
-  getAdminNotifications: (token: string) =>
-    request('/api/notifications/admin', { headers: { Authorization: `Bearer ${token}` } }),
-  sendNotification: (token: string, body: { customer_ids: string[]; title: string; message: string; type?: string; data?: string }) =>
-    request('/api/notifications/admin/send', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  broadcastNotification: (token: string, body: { title: string; message: string; type?: string; data?: string }) =>
-    request('/api/notifications/admin/send-all', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  // --- Admin CRUD (productos, servicios, categorías, FAQ, galería, config) ---
-  createAdminProduct: (token: string, body: any) =>
-    request('/api/admin/products', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  updateAdminProduct: (token: string, id: string, body: any) =>
-    request(`/api/admin/products/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  deleteAdminProduct: (token: string, id: string) =>
-    request(`/api/admin/products/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-
-  createAdminService: (token: string, body: any) =>
-    request('/api/admin/services', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  updateAdminService: (token: string, id: string, body: any) =>
-    request(`/api/admin/services/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  deleteAdminService: (token: string, id: string) =>
-    request(`/api/admin/services/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-
-  createAdminCategory: (token: string, body: any) =>
-    request('/api/admin/categories', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  updateAdminCategory: (token: string, id: string, body: any) =>
-    request(`/api/admin/categories/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  deleteAdminCategory: (token: string, id: string) =>
-    request(`/api/admin/categories/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-
-  createAdminFAQ: (token: string, body: any) =>
-    request('/api/admin/faq', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  updateAdminFAQ: (token: string, id: string, body: any) =>
-    request(`/api/admin/faq/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  deleteAdminFAQ: (token: string, id: string) =>
-    request(`/api/admin/faq/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-
-  createAdminGalleryImage: (token: string, body: FormData) =>
-    request('/api/admin/gallery', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body }),
-
-  deleteAdminGalleryImage: (token: string, id: string) =>
-    request(`/api/admin/gallery/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-
-  getAdminConfig: (token: string) =>
-    request('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } }),
-
-  updateAdminConfig: (token: string, body: any) =>
-    request('/api/admin/settings', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  // --- Lectura admin ---
-  getAdminProducts: (token: string) =>
-    request('/api/admin/products', { headers: { Authorization: `Bearer ${token}` } }),
-  getAdminServices: (token: string) =>
-    request('/api/admin/services', { headers: { Authorization: `Bearer ${token}` } }),
-  getAdminCategories: (token: string) =>
-    request('/api/admin/categories', { headers: { Authorization: `Bearer ${token}` } }),
-  getAdminFAQ: (token: string) =>
-    request('/api/admin/faq', { headers: { Authorization: `Bearer ${token}` } }),
-  getAdminGallery: (token: string) =>
-    request('/api/admin/gallery', { headers: { Authorization: `Bearer ${token}` } }),
-  deleteAdminConfig: (token: string, id: string) =>
-    request(`/api/admin/settings/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-};
+  adminLogin: (body: { email: string; password: string }) => post('/api/auth/login', body),
+  adminMe: (token: string) => apiRequest('/api/auth/admin/me', withAdmin(token)),
+  adminCustomers: (token: string) => apiRequest('/api/admin-customers/customers', withAdmin(token)),
+  adminRequests: (token: string) => apiRequest('/api/admin-customers/requests', withAdmin(token)),
+  adminAppointments: (token: string) => apiRequest('/api/admin-customers/appointments', withAdmin(token)),
+  updateAdminRequest: (token: string, id: string, status: string) => patch(`/api/admin-customers/requests/${id}`, { status }, withAdmin(token)),
+  updateAdminAppointment: (token: string, id: string, status: string) => patch(`/api/admin-customers/appointments/${id}`, { status }, withAdmin(token)),
+  getAdminProducts: (token: string) => apiRequest('/api/admin/products', withAdmin(token)),
+  getAdminServices: (token: string) => apiRequest('/api/admin/services', withAdmin(token)),
+  createAdminProduct: (token: string, body: unknown) => post('/api/admin/products', body, withAdmin(token)),
+  createAdminService: (token: string, body: unknown) => post('/api/admin/services', body, withAdmin(token)),
+  updateAdminProduct: (token: string, id: string, body: unknown) => patch(`/api/admin/products/${id}`, body, withAdmin(token)),
+  updateAdminService: (token: string, id: string, body: unknown) => patch(`/api/admin/services/${id}`, body, withAdmin(token)),
+  deleteAdminProduct: (token: string, id: string) => apiRequest(`/api/admin/products/${id}`, withAdmin(token, { method: 'DELETE' })),
+  deleteAdminService: (token: string, id: string) => apiRequest(`/api/admin/services/${id}`, withAdmin(token, { method: 'DELETE' })),
+  getAdminCategories: (token: string) => apiRequest('/api/admin/categories', withAdmin(token)),
+  createAdminCategory: (token: string, body: unknown) => post('/api/admin/categories', body, withAdmin(token)),
+  getAdminConfig: (token: string) => apiRequest('/api/admin/settings', withAdmin(token)),
 };

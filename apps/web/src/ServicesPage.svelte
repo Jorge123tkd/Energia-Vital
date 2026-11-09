@@ -1,54 +1,30 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
-
   let services: any[] = $state([]);
   let loading = $state(true);
-
+  let error = $state('');
   onMount(async () => {
-    try {
-      const res = await api.getServices();
-      services = res.services ?? [];
-    } catch (e) {
-      console.error(e);
-    } finally {
-      loading = false;
-    }
+    try { services = (await api.getServices()).services ?? []; }
+    catch (e) { error = e instanceof Error ? e.message : 'Error al cargar servicios'; }
+    finally { loading = false; }
   });
+  function request(service: any) { window.location.href = `/contacto?service=${encodeURIComponent(service.name)}`; }
 </script>
-
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <h1 class="text-3xl font-bold text-gray-900 mb-8">Nuestros servicios</h1>
-
-  {#if loading}
-    <div class="text-center py-20">Cargando servicios...</div>
-  {:else if services.length === 0}
-    <div class="text-center py-20 text-gray-500">No hay servicios disponibles.</div>
-  {:else}
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {#each services as service}
-        <div class="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
-          <h3 class="text-xl font-bold text-gray-900 mb-2">{service.name}</h3>
-          {#if service.description}
-            <p class="text-gray-600 mb-4 line-clamp-3">{service.description}</p>
-          {/if}
-          {#if service.scope}
-            <p class="text-sm text-gray-500 mb-4"><strong>Alcance:</strong> {service.scope}</p>
-          {/if}
-          <div class="mb-4">
-            {#if service.price_type === 'fixed' && service.price !== null}
-              <span class="text-energia-600 font-bold text-lg">${service.price.toLocaleString()} {service.currency || 'USD'}</span>
-            {:else if service.price_type === 'quote'}
-              <span class="text-gray-500 text-sm">Precio bajo consulta</span>
-            {:else}
-              <span class="text-green-600 text-sm font-medium">Servicio gratuito</span>
-            {/if}
-          </div>
-          <button class="w-full bg-energia-600 text-white py-3 rounded-lg text-sm font-medium hover:bg-energia-700 transition-colors">
-            Solicitar visita o cita
-          </button>
-        </div>
-      {/each}
-    </div>
+<div class="max-w-7xl mx-auto px-4 py-8">
+  <h1 class="text-3xl font-bold mb-8">Nuestros servicios</h1>
+  {#if loading}<p>Cargando…</p>
+  {:else if error}<p role="alert" class="text-red-700">{error}</p>
+  {:else if services.length === 0}<p>Todavía no se han publicado servicios.</p>
+  {:else}<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {#each services as s (s.id)}
+      <article class="bg-white border rounded-xl p-6 space-y-3">
+        <h2 class="text-xl font-semibold">{s.name}</h2>
+        <p class="text-gray-600">{s.description || 'Consulta detalles del servicio.'}</p>
+        {#if s.scope}<p class="text-sm text-gray-500">{s.scope}</p>{/if}
+        <p class="font-medium">{s.price_type === 'fixed' && s.price != null ? `${Number(s.price).toLocaleString('es-CU')} ${s.currency || 'USD'}` : 'Precio a consultar'}</p>
+        <button class="bg-energia-600 text-white rounded-lg px-5 py-3 w-full" onclick={() => request(s)}>Solicitar servicio</button>
+      </article>
+    {/each}</div>
   {/if}
 </div>

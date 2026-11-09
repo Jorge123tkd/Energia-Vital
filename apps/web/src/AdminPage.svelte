@@ -1,241 +1,151 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from './lib/api';
-  import { isAuthenticated, authToken, adminUser, addNotification } from './lib/store';
-
+  import { api, apiRequest, ADMIN_TOKEN_KEY } from './lib/api';
+  let token = $state('');
   let email = $state('');
   let password = $state('');
-  let loggingIn = $state(false);
-  let showAdmin = $state(false);
-  let activeTab = $state('dashboard');
-
+  let loading = $state(false);
+  let checking = $state(true);
+  let error = $state('');
+  let message = $state('');
+  let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services'>('requests');
+  let customers: any[] = $state([]);
+  let requests: any[] = $state([]);
+  let appointments: any[] = $state([]);
   let products: any[] = $state([]);
   let services: any[] = $state([]);
-  let gallery: any[] = $state([]);
   let categories: any[] = $state([]);
-  let faqs: any[] = $state([]);
-  let configItems: any[] = $state([]);
+  let categoryName = $state('');
+  let productCategoryId = $state('');
+  let productName = $state('');
+  let productPrice = $state<number | undefined>(undefined);
+  let serviceName = $state('');
 
-  function setTab(tab) {
-    activeTab = tab;
-  }
-</script>
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  {#if !showAdmin}
-    <div class="bg-white border border-gray-200 rounded-xl p-8 md:p-12 shadow-sm max-w-md mx-auto">
-      <h1 class="text-2xl font-bold text-gray-900 mb-6">Panel de Administración</h1>
-      <form onsubmit={login} class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
-          <input type="email" bind:value={email} required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-          <input type="password" bind:value={password} required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-        </div>
-        <button type="submit" class="w-full bg-energia-600 text-white py-3 rounded-lg font-medium hover:bg-energia-700 transition-colors" disabled={loggingIn}>
-          {loggingIn ? 'Iniciando sesión...' : 'Iniciar sesión'}
-        </button>
-      </form>
-      <p class="mt-6 text-center text-sm text-gray-500">
-        ¿Primera vez? Usa <code>/api/auth/setup</code> para crear el primer administrador.
-      </p>
-    </div>
-  {:else}
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
-      <div class="flex gap-2">
-        <span class="text-sm text-gray-600">{$adminUser?.email}</span>
-        <button class="text-gray-600 hover:text-red-600 text-sm" onclick={logout}>Cerrar sesión</button>
-      </div>
-    </div>
-<div class="flex gap-4 border-b border-gray-200 mb-6">
-      <button class="px-4 py-2 font-medium {activeTab === 'dashboard' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('dashboard')}>Dashboard</button>
-      <button class="px-4 py-2 font-medium {activeTab === 'products' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('products')}>Productos</button>
-      <button class="px-4 py-2 font-medium {activeTab === 'services' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('services')}>Servicios</button>
-      <button class="px-4 py-2 font-medium {activeTab === 'categories' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('categories')}>Categorías</button>
-      <button class="px-4 py-2 font-medium {activeTab === 'faq' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('faq')}>FAQ</button>
-      <button class="px-4 py-2 font-medium {activeTab === 'gallery' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('gallery')}>Galería</button>
-      <button class="px-4 py-2 font-medium {activeTab === 'config' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('config')}>Configuración</button>
-    </div>
-
-    {#if activeTab === 'dashboard'}
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="bg-white border border-gray-200 rounded-xl p-6">
-          <p class="text-sm text-gray-500 uppercase">Productos</p>
-          <p class="text-2xl font-bold text-gray-900">{products.length}</p>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-xl p-6">
-          <p class="text-sm text-gray-500 uppercase">Servicios</p>
-          <p class="text-2xl font-bold text-gray-900">{services.length}</p>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-xl p-6">
-          <p class="text-sm text-gray-500 uppercase">Galería</p>
-          <p class="text-2xl font-bold text-gray-900">{gallery.length}</p>
-        </div>
-      </div>
-    {:else if activeTab === 'products'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Productos</h2>
-        <p class="text-gray-500">Productos tab content</p>
-      </div>
-    {:else if activeTab === 'services'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Servicios</h2>
-        <p class="text-gray-500">Servicios tab content</p>
-      </div>
-    {:else if activeTab === 'categories'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Categorías</h2>
-        <p class="text-gray-500">Categorías tab content</p>
-      </div>
-    {:else if activeTab === 'faq'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Preguntas Frecuentes</h2>
-        <p class="text-gray-500">FAQ tab content</p>
-      </div>
-    {:else if activeTab === 'gallery'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Galería</h2>
-        <p class="text-gray-500">Galería tab content</p>
-      </div>
-    {:else if activeTab === 'config'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Configuración</h2>
-        <p class="text-gray-500">Configuración tab content</p>
-      </div>
-    {/if}<script lang="ts">
-  import { onMount } from 'svelte';
-  import { api } from './lib/api';
-  import { isAuthenticated, authToken, adminUser, addNotification } from './lib/store';
-
-  let email = $state('');
-  let password = $state('');
-  let loggingIn = $state(false);
-  let showAdmin = $state(false);
-  let activeTab = $state('dashboard');
-
-  let products: any[] = $state([]);
-  let services: any[] = $state([]);
-  let gallery: any[] = $state([]);
-  let categories: any[] = $state([]);
-  let faqs: any[] = $state([]);
-  let configItems: any[] = $state([]);
-
-  function setTab(tab: string) {
-    activeTab = tab;
-  }
-
-  async function login(e: Event) {
-    e.preventDefault();
-    loggingIn = true;
-    try {
-      // TODO: Reemplaza esto con tu llamada real a la API de login
-      // const res = await api.post('/auth/login', { email, password });
-      console.log("Intentando login con:", email, password);
-      
-      // Simulación de éxito para que puedas ver la UI del dashboard
-      showAdmin = true; 
-    } catch (err) {
-      addNotification("Error al iniciar sesión", "error");
-    } finally {
-      loggingIn = false;
+  onMount(() => { void restore(); });
+  async function restore() {
+    const saved = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+    if (saved) {
+      try { await api.adminMe(saved); token = saved; await reload(saved); }
+      catch { sessionStorage.removeItem(ADMIN_TOKEN_KEY); }
     }
+    checking = false;
   }
-
-  function logout() {
-    showAdmin = false;
-    email = '';
-    password = '';
-    // TODO: Agrega aquí la lógica para limpiar el token o store si es necesario
+  async function login(event: SubmitEvent) {
+    event.preventDefault(); loading = true; error = '';
+    try {
+      const data = await api.adminLogin({ email, password });
+      token = data.access_token;
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+      password = '';
+      await reload(token);
+    } catch (e) { error = e instanceof Error ? e.message : 'Error al iniciar sesión'; }
+    finally { loading = false; }
+  }
+  async function logout() {
+    try { await apiRequest('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: '{}' }); } catch { /* Limpiar sesión local. */ }
+    token = ''; sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    customers = []; requests = []; appointments = []; products = []; services = []; categories = [];
+  }
+  async function reload(t = token) {
+    if (!t) return;
+    const [c, r, a, p, s, cat] = await Promise.all([
+      api.adminCustomers(t), api.adminRequests(t), api.adminAppointments(t), api.getAdminProducts(t), api.getAdminServices(t), api.getAdminCategories(t),
+    ]);
+    customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
+    products = p.products ?? []; services = s.services ?? []; categories = cat.categories ?? [];
+    if (!productCategoryId || !categories.some((c: any) => c.id === productCategoryId)) productCategoryId = categories[0]?.id || '';
+  }
+  async function changeRequest(id: string, status: string) {
+    error = ''; message = '';
+    try { await api.updateAdminRequest(token, id, status); await reload(); message = 'Solicitud actualizada.'; }
+    catch (e) { error = e instanceof Error ? e.message : 'No se pudo actualizar'; }
+  }
+  async function changeAppointment(id: string, status: string) {
+    error = ''; message = '';
+    try { await api.updateAdminAppointment(token, id, status); await reload(); message = 'Cita actualizada.'; }
+    catch (e) { error = e instanceof Error ? e.message : 'No se pudo actualizar'; }
+  }
+  const slug = (name: string) => name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  async function createProduct(event: SubmitEvent) {
+    event.preventDefault(); error = '';
+    try {
+      if (!productCategoryId) throw new Error('Debes crear una categoría antes de añadir productos.');
+      await api.createAdminProduct(token, { category_id: productCategoryId, name: productName, slug: `${slug(productName)}-${Date.now()}`, price: productPrice === undefined ? null : Number(productPrice), currency: 'USD', stock_status: 'on_order' });
+      productName = ''; productPrice = undefined; await reload(); message = 'Producto registrado.';
+    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo crear el producto'; }
+  }
+  async function createCategory(event: SubmitEvent) {
+    event.preventDefault(); error = ''; message = '';
+    try {
+      if (!categoryName.trim()) return;
+      await api.createAdminCategory(token, { name: categoryName.trim(), slug: `${slug(categoryName)}-${Date.now()}` });
+      categoryName = ''; await reload(); message = 'Categoría creada.';
+    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo crear la categoría'; }
+  }
+  async function createService(event: SubmitEvent) {
+    event.preventDefault(); error = '';
+    try {
+      await api.createAdminService(token, { name: serviceName, slug: `${slug(serviceName)}-${Date.now()}`, price_type: 'quote' });
+      serviceName = ''; await reload(); message = 'Servicio registrado.';
+    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo crear el servicio'; }
   }
 </script>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  {#if !showAdmin}
-    <div class="bg-white border border-gray-200 rounded-xl p-8 md:p-12 shadow-sm max-w-md mx-auto">
-      <h1 class="text-2xl font-bold text-gray-900 mb-6">Panel de Administración</h1>
-      <form onsubmit={login} class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
-          <input type="email" bind:value={email} required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-          <input type="password" bind:value={password} required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-        </div>
-        <button type="submit" class="w-full bg-energia-600 text-white py-3 rounded-lg font-medium hover:bg-energia-700 transition-colors" disabled={loggingIn}>
-          {loggingIn ? 'Iniciando sesión...' : 'Iniciar sesión'}
-        </button>
-      </form>
-      <p class="mt-6 text-center text-sm text-gray-500">
-        ¿Primera vez? Usa <code>/api/auth/setup</code> para crear el primer administrador.
-      </p>
-    </div>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 min-h-screen">
+  <header class="flex flex-wrap items-center justify-between gap-3 mb-7">
+    <div><h1 class="text-3xl font-bold">Administración de Energía Vital</h1><p class="text-gray-600">Panel privado de operaciones y clientes</p></div>
+    <div class="flex gap-3"><a class="underline text-energia-700" href="/">Ir al sitio</a>{#if token}<button class="text-red-700 underline" onclick={logout}>Cerrar sesión</button>{/if}</div>
+  </header>
+  {#if checking}
+    <p>Verificando acceso…</p>
+  {:else if !token}
+    <form onsubmit={login} class="max-w-md bg-white border rounded-xl p-6 space-y-4">
+      <h2 class="text-xl font-semibold">Acceso de administrador</h2>
+      <label class="block">Correo<input required type="email" autocomplete="username" bind:value={email} class="block border rounded-lg p-3 mt-1 w-full" /></label>
+      <label class="block">Contraseña<input required type="password" autocomplete="current-password" bind:value={password} class="block border rounded-lg p-3 mt-1 w-full" /></label>
+      {#if error}<p role="alert" class="text-red-700">{error}</p>{/if}
+      <button disabled={loading} class="bg-energia-600 text-white py-3 px-5 rounded-lg">{loading ? 'Entrando…' : 'Iniciar sesión'}</button>
+    </form>
   {:else}
-    <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
-      <div class="flex gap-2">
-        <span class="text-sm text-gray-600">{$adminUser?.email || 'Admin'}</span>
-        <button class="text-gray-600 hover:text-red-600 text-sm" onclick={logout}>Cerrar sesión</button>
-      </div>
-    </div>
-
-    <div class="flex gap-4 border-b border-gray-200 mb-6 overflow-x-auto">
-      <button class="px-4 py-2 font-medium whitespace-nowrap {activeTab === 'dashboard' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('dashboard')}>Dashboard</button>
-      <button class="px-4 py-2 font-medium whitespace-nowrap {activeTab === 'products' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('products')}>Productos</button>
-      <button class="px-4 py-2 font-medium whitespace-nowrap {activeTab === 'services' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('services')}>Servicios</button>
-      <button class="px-4 py-2 font-medium whitespace-nowrap {activeTab === 'categories' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('categories')}>Categorías</button>
-      <button class="px-4 py-2 font-medium whitespace-nowrap {activeTab === 'faq' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('faq')}>FAQ</button>
-      <button class="px-4 py-2 font-medium whitespace-nowrap {activeTab === 'gallery' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('gallery')}>Galería</button>
-      <button class="px-4 py-2 font-medium whitespace-nowrap {activeTab === 'config' ? 'text-energia-600 border-b-2 border-energia-600' : 'text-gray-600 hover:text-gray-900'}" onclick={() => setTab('config')}>Configuración</button>
-    </div>
-
-    {#if activeTab === 'dashboard'}
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="bg-white border border-gray-200 rounded-xl p-6">
-          <p class="text-sm text-gray-500 uppercase">Productos</p>
-          <p class="text-2xl font-bold text-gray-900">{products.length}</p>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-xl p-6">
-          <p class="text-sm text-gray-500 uppercase">Servicios</p>
-          <p class="text-2xl font-bold text-gray-900">{services.length}</p>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-xl p-6">
-          <p class="text-sm text-gray-500 uppercase">Galería</p>
-          <p class="text-2xl font-bold text-gray-900">{gallery.length}</p>
-        </div>
-      </div>
-    {:else if activeTab === 'products'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Productos</h2>
-        <p class="text-gray-500">Productos tab content</p>
-      </div>
-    {:else if activeTab === 'services'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Servicios</h2>
-        <p class="text-gray-500">Servicios tab content</p>
-      </div>
-    {:else if activeTab === 'categories'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Categorías</h2>
-        <p class="text-gray-500">Categorías tab content</p>
-      </div>
-    {:else if activeTab === 'faq'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Preguntas Frecuentes</h2>
-        <p class="text-gray-500">FAQ tab content</p>
-      </div>
-    {:else if activeTab === 'gallery'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Galería</h2>
-        <p class="text-gray-500">Galería tab content</p>
-      </div>
-    {:else if activeTab === 'config'}
-      <div class="pb-6">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">Configuración</h2>
-        <p class="text-gray-500">Configuración tab content</p>
-      </div>
+    <nav class="flex flex-wrap gap-2 mb-6" aria-label="Panel">
+      {#each [
+        { id: 'requests', title: 'Solicitudes' }, { id: 'appointments', title: 'Citas' }, { id: 'customers', title: 'Clientes' },
+        { id: 'products', title: 'Productos' }, { id: 'services', title: 'Servicios' },
+      ] as item}
+        <button class="px-4 py-2 rounded-lg border {tab === item.id ? 'bg-energia-600 text-white' : 'bg-white'}" onclick={() => { tab = item.id as typeof tab; }}>{item.title}</button>
+      {/each}
+      <button class="px-4 py-2 border rounded-lg" onclick={() => { void reload().catch(e => error = String(e)); }}>Actualizar</button>
+    </nav>
+    {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
+    {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
+    {#if tab === 'customers'}
+      <h2 class="font-semibold text-xl mb-4">Clientes registrados ({customers.length})</h2>
+      <div class="space-y-3">{#each customers as c (c.id)}
+        <article class="bg-white border rounded-lg p-4"><strong>{c.name}</strong><p>{c.email ?? 'Sin correo'} · {c.phone ?? 'Sin teléfono'}</p><p class="text-gray-600">{[c.address, c.city, c.province].filter(Boolean).join(', ')}</p></article>
+      {/each}</div>
+    {:else if tab === 'requests'}
+      <h2 class="font-semibold text-xl mb-4">Solicitudes ({requests.length})</h2>
+      <div class="space-y-3">{#each requests as r (r.id)}
+        <article class="bg-white border rounded-lg p-4 space-y-2"><div class="flex flex-wrap justify-between gap-3"><strong>{r.title}</strong><select aria-label="Estado de la solicitud" value={r.status} onchange={e => void changeRequest(r.id, e.currentTarget.value)} class="border rounded p-2">
+          {#each ['pending', 'quoted', 'approved', 'scheduled', 'completed', 'cancelled'] as status}<option value={status}>{status}</option>{/each}
+        </select></div><p class="text-sm">{r.customer_name} · {r.phone} · {r.email}</p><p class="text-sm text-gray-600">{r.location}</p><p>{r.description}</p></article>
+      {/each}</div>
+    {:else if tab === 'appointments'}
+      <h2 class="font-semibold text-xl mb-4">Citas ({appointments.length})</h2>
+      <div class="space-y-3">{#each appointments as a (a.id)}
+        <article class="bg-white border rounded-lg p-4 flex flex-wrap justify-between gap-3"><div><strong>{a.title}</strong><p>{a.customer_name} · {a.phone}</p><p>{new Date(a.starts_at).toLocaleString('es-CU')}</p></div><select aria-label="Estado de cita" value={a.status} onchange={e => void changeAppointment(a.id, e.currentTarget.value)} class="border rounded p-2 h-fit">
+          {#each ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'] as status}<option value={status}>{status}</option>{/each}
+        </select></article>
+      {/each}</div>
+    {:else if tab === 'products'}
+      <h2 class="font-semibold text-xl mb-4">Productos ({products.length})</h2>
+      <form onsubmit={createCategory} class="flex flex-wrap gap-2 mb-4"><input required placeholder="Nueva categoría (ej. Paneles solares)" bind:value={categoryName} class="border p-2 rounded flex-1" /><button class="bg-gray-800 text-white px-4 py-2 rounded">Crear categoría</button></form>
+      <form onsubmit={createProduct} class="flex flex-wrap gap-2 mb-5"><select required bind:value={productCategoryId} class="border p-2 rounded"><option value="" disabled>Seleccionar categoría</option>{#each categories as cat (cat.id)}<option value={cat.id}>{cat.name}</option>{/each}</select><input required placeholder="Nombre del equipo" bind:value={productName} class="border p-2 rounded" /><input type="number" min="0" step="0.01" placeholder="Precio (opcional)" bind:value={productPrice} class="border p-2 rounded" /><button class="bg-energia-600 text-white px-4 rounded">Añadir</button></form>
+      <div class="space-y-2">{#each products as p (p.id)}<div class="bg-white border rounded p-3 flex justify-between"><span>{p.name}</span><span>{p.price ?? 'A consultar'} {p.currency ?? ''}</span></div>{/each}</div>
+    {:else if tab === 'services'}
+      <h2 class="font-semibold text-xl mb-4">Servicios ({services.length})</h2>
+      <form onsubmit={createService} class="flex gap-2 mb-5"><input required placeholder="Nombre del servicio" bind:value={serviceName} class="border p-2 rounded" /><button class="bg-energia-600 text-white px-4 rounded">Añadir</button></form>
+      <div class="space-y-2">{#each services as s (s.id)}<div class="bg-white border rounded p-3">{s.name} · {s.price_type}</div>{/each}</div>
     {/if}
-  {/if} <!-- ✅ Cierre del {#if !showAdmin} -->
-</div> <!-- ✅ Cierre del div principal -->
+  {/if}
+</div>

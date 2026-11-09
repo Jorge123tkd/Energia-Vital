@@ -1,117 +1,52 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
-import { requireCustomerAuth, requireAdminAuth, optionalAuth, getUser } from '../middleware';
+import type { Env } from '../types';
+import { getUser, requireAdminAuth, requireCustomerAuth } from '../middleware';
 
 export const notificationsRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
-
-/* ─── LISTAR NOTIFICACIONES ─── */
-
-// Listar notificaciones del customer/admin autenticado
-notificationsRoutes.get('/', requireCustomerAuth, async (c) => {
+notificationsRoutes.get('/', requireCustomerAuth, async c => {
   const user = getUser(c)!;
-  const { results } = await c.env.DB.prepare(
-    `SELECT * FROM notifications WHERE user_id = ? AND user_type = ? ORDER BY created_at DESC LIMIT 50`
-  ).bind(user.user_id, user.user_id ? user.type : 'customer').all<any>();
+  const { results } = await c.env.DB.prepare(`SELECT id, type, title, message, is_read, created_at FROM notifications
+    WHERE user_id = ? AND user_type = 'customer' ORDER BY created_at DESC LIMIT 50`).bind(user.user_id).all();
   return c.json({ notifications: results ?? [] });
 });
-
-// Listar notificaciones del admin (todas las de los clientes)
-notificationsRoutes.get('/admin', requireAdminAuth, async (c) => {
-  const { results } = await c.env.DB.prepare(
-    `SELECT n.*, u.name as customer_name FROM notifications n
-     LEFT JOIN customers u ON n.user_id = u.id
-     WHERE n.user_type = 'customer' ORDER BY n.created_at DESC LIMIT 100`
-  ).all<any>();
+notificationsRoutes.patch('/:id/read', requireCustomerAuth, async c => {
+  const user = getUser(c)!;
+  await c.env.DB.prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ? AND user_type = 'customer'")
+    .bind(c.req.param('id'), user.user_id).run();
+  return c.json({ message: 'Notificación leída' });
+});
+notificationsRoutes.get('/admin', requireAdminAuth, async c => {
+  const { results } = await c.env.DB.prepare(`SELECT n.*, cu.name AS customer_name FROM notifications n
+    LEFT JOIN customers cu ON cu.id = n.user_id WHERE n.user_type = 'customer' ORDER BY n.created_at DESC LIMIT 100`).all();
   return c.json({ notifications: results ?? [] });
 });
-
-// Marcar como leídas
-notificationsRoutes.patch('/:id/read', requireCustomerAuth, async (c) => {
+notificationsRoutes.post('/admin/send', requireAdminAuth, async c => {
   const user = getUser(c)!;
-  const { results } = await c.env.DB.prepare(
-    'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ? AND user_type = ?'
-  ).bind(c.req.param('id'), user.user_id, user.type).all<any>();
-  return c.json({ message: 'Notificación marcada como leída' });
+  const b = await c.req.json<any>();
+  const customers = Array.isArray(b.customer_ids) ? [...new Set(b.customer_ids)].filter((x): x is string => typeof x === 'string').slice(0, 100) : [];
+  const title = typeof b.title === 'string' ? b.title.trim().slice(0, 200) : '';
+  const message = typeof b.message === 'string' ? b.message.trim().slice(0, 2000) : '';
+  if (!title || !message || !customers.length) return c.json({ error: 'Destinatarios, título y mensaje requeridos' }, 400);
+  const now = new Date().toISOString();
+  const statements = customers.map(id => c.env.DB.prepare(`INSERT INTO notifications (id, user_id, user_type, type, title, message, is_read, created_at)
+    SELECT ?, id, 'customer', 'admin_message', ?, ?, 0, ? FROM customers WHERE id = ?`)
+    .bind(crypto.randomUUID(), title, message, now, id));
+  await c.env.DB.batch(statements);
+  await c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, details, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(crypto.randomUUID(), user.user_id, 'notifications.send', 'notifications', JSON.stringify({ count: customers.length }), now).run();
+  return c.json({ message: 'Notificaciones procesadas' });
 });
-
-// Marcar como leídas todas (por tipo)
-notificationsRoutes.patch('/admin/read-all', requireAdminAuth, async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare('SELECT type FROM notifications LIMIT 1').all<any>();
-  // Marcar todas las entradas del usuario no leídas
-  const { results: all } = await DB.prepare(
-    'UPDATE notifications SET is_read = 1 WHERE user_type = ? AND is_read = 0'
-  ).bind('customer').all<any>();
-  return c.json({ count: all[0]?.changes || 0 });
-});
-
-/* ─── ADMIN: envío masivo de notificación ─── */
-
-// Enviar notificación a un customer específico (admin)
-notificationsRoutes.post('/admin/send', requireAdminAuth, async (c) => {
-  const { DB } = c.env;
+notificationsRoutes.post('/admin/send-all', requireAdminAuth, async c => {
   const user = getUser(c)!;
-  const b = await c.req.json<{
-    customer_ids: string[];
-    title: string;
-    message: string;
-    type: string;
-    data?: string;
-  }>();
-
-  if (!b.customer_ids?.length || !b.title || !b.message) {
-    return c.json({ error: 'customer_ids, title y message son requeridos' }, 400);
-  }
-
-  let count = 0;
-  for (const customerId of b.customer_ids) {
-    await DB.prepare(
-      `INSERT INTO notifications (id, user_id, user_type, type, title, message, data, is_read, created_at)
-       VALUES (?, ?, 'customer', ?, ?, ?, ?, 0, ?)`
-    )
-      .bind(crypto.randomUUID(), customerId, b.type || 'system', b.title, b.message, b.data || null, new Date().toISOString())
-      .run();
-    count++;
-  }
-
-  // Registrar en audit logs
-  await DB.prepare(
-    'INSERT INTO audit_logs (id, action, entity, entity_id, detail, performed_by, performed_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  )
-    .bind(crypto.randomUUID(), 'notif_send', 'notification', null, JSON.stringify({ customer_ids: b.customer_ids, count }), user.user_id, new Date().toISOString())
-    .run();
-
-  return c.json({ message: `Notificación enviada a ${count} cliente(s)` });
-});
-
-// Enviar notificación masiva a todos los clientes
-notificationsRoutes.post('/admin/send-all', requireAdminAuth, async (c) => {
-  const { DB } = c.env;
-  const user = getUser(c)!;
-  const b = await c.req.json<{ title: string; message: string; type?: string; data?: string }>();
-
-  if (!b.title || !b.message) return c.json({ error: 'title y message son requeridos' }, 400);
-
-  const { results } = await DB.prepare(
-    'SELECT id FROM customers WHERE phone_verified = 1 OR telegram_chat_id IS NOT NULL'
-  ).all<any>();
-
-  let count = 0;
-  for (const row of results ?? []) {
-    await DB.prepare(
-      `INSERT INTO notifications (id, user_id, user_type, type, title, message, data, is_read, created_at)
-       VALUES (?, ?, 'customer', ?, ?, ?, ?, 0, ?)`
-    )
-      .bind(crypto.randomUUID(), row.id, b.type || 'system', b.title, b.message, b.data || null, new Date().toISOString())
-      .run();
-    count++;
-  }
-
-  await DB.prepare(
-    'INSERT INTO audit_logs (id, action, entity, entity_id, detail, performed_by, performed_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  )
-    .bind(crypto.randomUUID(), 'notif_send_all', 'notification', null, JSON.stringify({ recipients: count }), user.user_id, new Date().toISOString())
-    .run();
-
-  return c.json({ message: `Notificación enviada a ${count} cliente(s)` });
+  const b = await c.req.json<any>();
+  const title = typeof b.title === 'string' ? b.title.trim().slice(0, 200) : '';
+  const message = typeof b.message === 'string' ? b.message.trim().slice(0, 2000) : '';
+  if (!title || !message) return c.json({ error: 'Título y mensaje requeridos' }, 400);
+  const now = new Date().toISOString();
+  const result = await c.env.DB.prepare(`INSERT INTO notifications (id, user_id, user_type, type, title, message, is_read, created_at)
+    SELECT lower(hex(randomblob(16))), id, 'customer', 'admin_message', ?, ?, 0, ? FROM customers`)
+    .bind(title, message, now).run();
+  await c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, details, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+    .bind(crypto.randomUUID(), user.user_id, 'notifications.send_all', 'notifications', JSON.stringify({ count: result.meta?.changes }), now).run();
+  return c.json({ sent: result.meta?.changes ?? 0 });
 });

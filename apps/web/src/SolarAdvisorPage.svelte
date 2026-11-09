@@ -1,316 +1,99 @@
 <script lang="ts">
-  import { api } from './lib/api';
-
-  let step = $state(1);
-  const totalSteps = 3;
-
-  let amps = $state('');
-  let voltage = $state('');
-  let phases = $state('');
-  let measurementType = $state('');
-  let autonomyHours = $state('');
-  let sunHours = $state('');
+  type Result = { power: number; battery: number; daily: number; inverter: number; pv: number; panelCount: number; panelWatts: number };
+  let phase = $state('monofasica');
+  let measurement = $state('real');
+  let voltage = $state(220);
+  let amps = $state(0);
+  let powerFactor = $state(0.85);
+  let hoursDaily = $state(6);
+  let autonomyHours = $state(5);
+  let peakSunHours = $state(4.5);
   let existingEquipment = $state('');
+  let result: Result | null = $state(null);
+  let error = $state('');
 
-  let results: any = $state(null);
-  let calculating = $state(false);
-  let equivalentProducts: any[] = [];
-  let noEquivalents: string[] = [];
-
-  async function fetchProducts() {
-    try {
-      const data = await api.getProducts();
-      return data.products ?? [];
-    } catch {
-      return [];
+  function calculate(event: SubmitEvent) {
+    event.preventDefault(); error = ''; result = null;
+    const v = Number(voltage), a = Number(amps), fp = Number(powerFactor);
+    const dailyHours = Number(hoursDaily), backup = Number(autonomyHours), sun = Number(peakSunHours);
+    if (measurement === 'acometida') {
+      error = 'La capacidad del interruptor o acometida no equivale al consumo. Introduce una medición real o una estimación razonada de cargas simultáneas.';
+      return;
     }
-  }
-
-  function matchEquivalents(products: any[]) {
-    equivalentProducts = [];
-    noEquivalents = [];
-
-    const inverter = products.find(
-      (p: any) =>
-        (p.name.toLowerCase().includes('inversor') ||
-          p.name.toLowerCase().includes('inverter')) &&
-        p.price !== null &&
-        p.price !== undefined
-    );
-    if (inverter) {
-      equivalentProducts.push({
-        type: 'Inversor',
-        name: inverter.name,
-        price: inverter.price,
-        currency: inverter.currency || 'USD',
-        note: `Potencia mínima recomendada: ${results.inverterMin.toFixed(0)} W`,
-      });
-    } else {
-      noEquivalents.push('inversor');
+    if (![v, a, fp, dailyHours, backup, sun].every(Number.isFinite) || v < 50 || v > 600 || a <= 0 || a > 1000 || fp <= 0 || fp > 1 || dailyHours <= 0 || dailyHours > 24 || backup <= 0 || backup > 72 || sun < 1 || sun > 8) {
+      error = 'Revisa los valores. Todas las magnitudes deben ser positivas y estar dentro de rangos plausibles.';
+      return;
     }
-
-    const battery = products.find(
-      (p: any) =>
-        (p.name.toLowerCase().includes('batería') ||
-          p.name.toLowerCase().includes('bateria') ||
-          p.name.toLowerCase().includes('battery')) &&
-        p.price !== null &&
-        p.price !== undefined
-    );
-    if (battery) {
-      equivalentProducts.push({
-        type: 'Batería',
-        name: battery.name,
-        price: battery.price,
-        currency: battery.currency || 'USD',
-        note: `Capacidad mínima recomendada: ${results.batteryCapacity.toFixed(1)} kWh`,
-      });
-    } else {
-      noEquivalents.push('batería');
-    }
-
-    const panels = products.filter(
-      (p: any) =>
-        (p.name.toLowerCase().includes('panel') ||
-          p.name.toLowerCase().includes('placa')) &&
-        p.price !== null &&
-        p.price !== undefined
-    );
-    if (panels.length > 0) {
-      equivalentProducts.push({
-        type: 'Paneles solares',
-        name: panels[0].name,
-        price: panels[0].price,
-        currency: panels[0].currency || 'USD',
-        note: `Cantidad recomendada: ${results.panelCount} unidades de ${results.panelWatts} W`,
-      });
-    } else {
-      noEquivalents.push('paneles solares');
-    }
-  }
-
-  function nextStep() {
-    if (step < totalSteps) step++;
-  }
-
-  function prevStep() {
-    if (step > 1) step--;
-  }
-
-  async function calculate() {
-    calculating = true;
-    const v = parseFloat(voltage) || 220;
-    const i = parseFloat(amps) || 0;
-    const fp = 0.85;
-    const power = v * i * fp;
-    const energyPerHour = power / 1000;
-    const autonomy = parseFloat(autonomyHours) || 5;
-    const dailyEnergy = energyPerHour * autonomy;
-    const dod = 0.8;
-    const efficiency = 0.9;
-    const batteryCapacity = dailyEnergy / (dod * efficiency);
-    const inverterMin = power * 1.25;
-    const peakSunHours = parseFloat(sunHours) || 4;
-    const pvPower = dailyEnergy / (peakSunHours * 0.75);
+    const multiplier = phase === 'trifasica' ? Math.sqrt(3) : 1;
+    const power = v * a * fp * multiplier;
+    const daily = (power / 1000) * dailyHours;
+    const battery = (power / 1000) * backup / (0.8 * 0.9);
+    const pv = daily / (sun * 0.75);
+    const inverter = power * 1.25;
     const panelWatts = 450;
-    const panelCount = Math.ceil((pvPower * 1000) / panelWatts);
-
-    results = {
-      power: power,
-      energyPerHour: energyPerHour,
-      dailyEnergy: dailyEnergy,
-      batteryCapacity: batteryCapacity,
-      inverterMin: inverterMin,
-      pvPower: pvPower,
-      panelCount: panelCount,
-      panelWatts: panelWatts,
-    };
-
-    const products = await fetchProducts();
-    matchEquivalents(products);
-
-    calculating = false;
+    result = { power, daily, battery, pv, inverter, panelWatts, panelCount: Math.ceil(pv * 1000 / panelWatts) };
   }
-
-  function requestEvaluation() {
-    if (!results) return;
-    const params = new URLSearchParams({
-      power: results.power.toFixed(0),
-      dailyEnergy: results.dailyEnergy.toFixed(1),
-      batteryCapacity: results.batteryCapacity.toFixed(1),
-      inverterMin: results.inverterMin.toFixed(0),
-      pvPower: results.pvPower.toFixed(1),
-      panelCount: results.panelCount.toString(),
-      panelWatts: results.panelWatts.toString(),
-      existingEquipment,
+  function requestAssessment() {
+    if (!result) return;
+    const query = new URLSearchParams({
+      power: result.power.toFixed(0), dailyEnergy: result.daily.toFixed(2),
+      batteryCapacity: result.battery.toFixed(2), inverterMin: result.inverter.toFixed(0),
+      pvPower: result.pv.toFixed(2), panelCount: String(result.panelCount),
+      existingEquipment, phase, measurement,
     });
-    window.location.href = `/contacto?${params.toString()}`;
+    window.location.href = `/contacto?${query}`;
   }
 </script>
 
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <div class="mb-8">
-    <h1 class="text-3xl font-bold text-gray-900 mb-2">Asesor Solar</h1>
-    <p class="text-gray-600">Calcula el sistema solar que necesitas para tu vivienda.</p>
-  </div>
-
-  <div class="bg-white border border-gray-200 rounded-xl p-6 md:p-8 shadow-sm">
-    <div class="flex justify-between items-center mb-6">
-      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Paso {step} de {totalSteps}</span>
-      <div class="flex gap-1">
-        {#each Array(totalSteps) as _, i}
-          <div class="w-2 h-2 rounded-full" class:bg-energia-600={i < step} class:bg-gray-300={i >= step}></div>
-        {/each}
-      </div>
+<div class="max-w-4xl mx-auto py-8 px-3">
+  <h1 class="text-3xl font-bold mb-3">Asesor solar preliminar</h1>
+  <p class="text-gray-600 mb-7">Estimación orientativa de batería, inversor y paneles. Para una oferta real revisaremos los equipos, picos de arranque, sombras y protecciones.</p>
+  <form onsubmit={calculate} class="bg-white rounded-xl border p-6 space-y-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <label class="block font-medium">Tipo de instalación
+        <select bind:value={phase} class="mt-1 w-full border rounded-lg p-3"><option value="monofasica">Monofásica</option><option value="bifasica">Dos líneas / 220 V</option><option value="trifasica">Trifásica (tensión entre líneas)</option></select>
+      </label>
+      <label class="block font-medium">Origen del dato
+        <select bind:value={measurement} class="mt-1 w-full border rounded-lg p-3"><option value="real">Medición real de corriente</option><option value="habitual">Estimación de equipos simultáneos</option><option value="acometida">Solo conozco el interruptor de entrada</option></select>
+      </label>
+      <label class="block font-medium">Tensión medida (V)
+        <input type="number" required min="50" max="600" step="any" bind:value={voltage} class="mt-1 w-full border rounded-lg p-3" />
+      </label>
+      <label class="block font-medium">Corriente de las cargas (A)
+        <input type="number" required min="0.1" max="1000" step="any" bind:value={amps} class="mt-1 w-full border rounded-lg p-3" />
+      </label>
+      <label class="block font-medium">Factor de potencia estimado
+        <input type="number" required min="0.1" max="1" step="0.01" bind:value={powerFactor} class="mt-1 w-full border rounded-lg p-3" />
+      </label>
+      <label class="block font-medium">Horas diarias de uso de estas cargas
+        <input type="number" required min="0.5" max="24" step="any" bind:value={hoursDaily} class="mt-1 w-full border rounded-lg p-3" />
+      </label>
+      <label class="block font-medium">Horas de respaldo deseadas
+        <input type="number" required min="0.5" max="72" step="any" bind:value={autonomyHours} class="mt-1 w-full border rounded-lg p-3" />
+      </label>
+      <label class="block font-medium">Horas solares pico por día
+        <input type="number" required min="1" max="8" step="any" bind:value={peakSunHours} class="mt-1 w-full border rounded-lg p-3" />
+      </label>
     </div>
-
-    {#if step === 1}
-      <div class="space-y-6">
-        <h2 class="text-xl font-bold text-gray-900">Información de consumo</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Amperios de consumo</label>
-            <input type="number" bind:value={amps} placeholder="Ej: 10" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Voltaje (V)</label>
-            <input type="number" bind:value={voltage} placeholder="Ej: 220" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-          </div>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de instalación</label>
-          <select bind:value={phases} class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none">
-            <option value="monofasica">Monofásica (120V o 220V)</option>
-            <option value="bifasica">Bifásica (dos líneas de 120V)</option>
-            <option value="trifasica">Trifásica</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de medición</label>
-          <select bind:value={measurementType} class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none">
-            <option value="real">Medición real (amperímetro)</option>
-            <option value="habitual">Consumo habitual estimado</option>
-            <option value="acometida">Capacidad de la acometida</option>
-          </select>
-        </div>
+    <label class="block font-medium">Equipos que ya tienes (opcional)
+      <input bind:value={existingEquipment} class="mt-1 w-full border rounded-lg p-3" placeholder="Ej.: inversor 3 kW, baterías 48 V…" />
+    </label>
+    {#if error}<p role="alert" class="text-red-700">{error}</p>{/if}
+    <button class="bg-energia-600 text-white py-3 px-6 rounded-lg font-semibold">Calcular estimación</button>
+  </form>
+  {#if result}
+    <section class="mt-7 bg-white border rounded-xl p-6 space-y-5">
+      <h2 class="text-2xl font-bold">Resultado orientativo</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="bg-gray-50 p-4 rounded-lg"><p class="text-xs uppercase text-gray-600">Potencia estimada simultánea</p><p class="text-2xl font-bold">{result.power.toFixed(0)} W</p></div>
+        <div class="bg-gray-50 p-4 rounded-lg"><p class="text-xs uppercase text-gray-600">Consumo diario estimado</p><p class="text-2xl font-bold">{result.daily.toFixed(2)} kWh</p></div>
+        <div class="bg-gray-50 p-4 rounded-lg"><p class="text-xs uppercase text-gray-600">Batería nominal aprox.</p><p class="text-2xl font-bold">{result.battery.toFixed(2)} kWh</p></div>
+        <div class="bg-gray-50 p-4 rounded-lg"><p class="text-xs uppercase text-gray-600">Inversor mínimo aproximado</p><p class="text-2xl font-bold">{result.inverter.toFixed(0)} W</p></div>
+        <div class="bg-gray-50 p-4 rounded-lg"><p class="text-xs uppercase text-gray-600">Potencia fotovoltaica estimada</p><p class="text-2xl font-bold">{result.pv.toFixed(2)} kWp</p></div>
+        <div class="bg-gray-50 p-4 rounded-lg"><p class="text-xs uppercase text-gray-600">Paneles de {result.panelWatts} W</p><p class="text-2xl font-bold">{result.panelCount} unidades</p></div>
       </div>
-
-        {:else if step === 2}
-      <div class="space-y-6">
-        <h2 class="text-xl font-bold text-gray-900">Equipo existente (opcional)</h2>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">
-            Equipo que ya tienes
-          </label>
-          <input
-            type="text"
-            bind:value={existingEquipment}
-            placeholder="Ej: Inversor de 3000W, 2 paneles de 300W"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none"
-          />
-          <p class="text-xs text-gray-500 mt-1">
-            Si ya tienes algún equipo, indícalo para considerar tu instalación actual.
-          </p>
-        </div>
-      </div>{:else if step === 3}
-      <div class="space-y-6">
-        <h2 class="text-xl font-bold text-gray-900">Condiciones solares</h2>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Horas de sol pico (estimado)</label>
-          <input type="number" bind:value={sunHours} placeholder="Ej: 4.5" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-          <p class="text-xs text-gray-500 mt-1">Según tu ubicación y condiciones de instalación.</p>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Equipo existente</label>
-          <input type="text" bind:value={existingEquipment} placeholder="Ej: Inversor de 3000W (opcional)" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-        </div>
-      </div>
-
-    {:else if step === 3}
-      {#if results}
-        <div class="space-y-6">
-          <h2 class="text-xl font-bold text-gray-900">Resultado preliminar</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-gray-50 rounded-lg p-4">
-              <p class="text-sm text-gray-500 uppercase">Potencia estimada</p>
-              <p class="text-2xl font-bold text-gray-900">{results.power.toFixed(0)} W</p>
-            </div>
-            <div class="bg-gray-50 rounded-lg p-4">
-              <p class="text-sm text-gray-500 uppercase">Energía por autonomía</p>
-              <p class="text-2xl font-bold text-gray-900">{results.dailyEnergy.toFixed(1)} kWh</p>
-            </div>
-            <div class="bg-gray-50 rounded-lg p-4">
-              <p class="text-sm text-gray-500 uppercase">Capacidad batería (nominal)</p>
-              <p class="text-2xl font-bold text-gray-900">{results.batteryCapacity.toFixed(1)} kWh</p>
-            </div>
-            <div class="bg-gray-50 rounded-lg p-4">
-              <p class="text-sm text-gray-500 uppercase">Inversor mínimo recomendado</p>
-              <p class="text-2xl font-bold text-gray-900">{results.inverterMin.toFixed(0)} W</p>
-            </div>
-            <div class="bg-gray-50 rounded-lg p-4">
-              <p class="text-sm text-gray-500 uppercase">Potencia fotovoltaica</p>
-              <p class="text-2xl font-bold text-gray-900">{results.pvPower.toFixed(1)} kWp</p>
-            </div>
-            <div class="bg-gray-50 rounded-lg p-4">
-              <p class="text-sm text-gray-500 uppercase">Cantidad de paneles ({results.panelWatts} W c/u)</p>
-              <p class="text-2xl font-bold text-gray-900">{results.panelCount} paneles</p>
-            </div>
-          </div>
-          {#if equivalentProducts.length > 0 || noEquivalents.length > 0}
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 class="text-sm font-semibold text-blue-900 mb-3">
-                Productos equivalentes en catálogo
-              </h3>
-              {#if equivalentProducts.length > 0}
-                <ul class="space-y-2 mb-4">
-                  {#each equivalentProducts as eq}
-                    <li class="flex justify-between items-start text-sm">
-                      <span>
-                        <strong>{eq.type}:</strong> {eq.name}
-                        {#if eq.note}<br /><span class="text-blue-600 text-xs">{eq.note}</span>{/if}
-                      </span>
-                      <span class="font-medium">{eq.currency} {eq.price}</span>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-              {#if noEquivalents.length > 0}
-                <div class="text-sm text-orange-600">
-                  <strong>En este momento no contamos con productos de equivalencia para:</strong>
-                  <ul class="list-disc list-inside mt-1">
-                    {#each noEquivalents as item}
-                      <li>{item}</li>
-                    {/each}
-                  </ul>
-                </div>
-              {/if}
-            </div>
-          {/if}
-          <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <p class="text-sm text-amber-800">
-              <strong>Nota importante:</strong> Esta es una estimación preliminar basada en los datos proporcionados. La configuración definitiva debe verificarse mediante una evaluación técnica de la instalación, las cargas, las condiciones solares, el cableado y la compatibilidad de los equipos.
-            </p>
-          </div>
-          <button class="w-full bg-energia-600 text-white py-3 rounded-lg font-medium hover:bg-energia-700 transition-colors" onclick={requestEvaluation}>
-            Solicitar evaluación técnica
-          </button>
-        </div>
-      {:else}
-        <div class="text-center py-10 text-gray-500">Calcula tus resultados en el paso anterior.</div>
-      {/if}
-    {/if}
-
-    <div class="flex justify-between mt-8 pt-6 border-t border-gray-200">
-      {#if step > 1}
-        <button class="text-gray-600 hover:text-energia-600 font-medium" onclick={prevStep}>Anterior</button>
-      {/if}
-      {#if step < totalSteps}
-        <button class="bg-energia-600 text-white px-6 py-2 rounded-md font-medium hover:bg-energia-700 transition-colors" onclick={nextStep}>Siguiente</button>
-      {:else if !results}
-        <button class="bg-energia-600 text-white px-6 py-2 rounded-md font-medium hover:bg-energia-700 transition-colors" onclick={calculate}>
-          {calculating ? 'Calculando...' : 'Calcular'}
-        </button>
-      {/if}
-    </div>
-  </div>
+      <p class="text-sm text-gray-600">Supuestos: batería con 80% de descarga y 90% de eficiencia; rendimiento fotovoltaico global de 75%; inversor con margen del 25%. Los resultados NO consideran motores, arranque, variación horaria, orientación, sombras ni límites reales de equipos y normativa.</p>
+      <button type="button" onclick={requestAssessment} class="bg-energia-600 text-white py-3 px-6 rounded-lg">Solicitar evaluación técnica</button>
+    </section>
+  {/if}
 </div>

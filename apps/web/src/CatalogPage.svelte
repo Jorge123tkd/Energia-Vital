@@ -1,94 +1,51 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
-
-  let products: any[] = [];
+  let products: any[] = $state([]);
   let categories: any[] = $state([]);
-  let selectedCategory: string | null = $state(null);
+  let category = $state('');
   let search = $state('');
   let loading = $state(true);
-
+  let error = $state('');
+  let selected: any = $state(null);
   onMount(async () => {
     try {
       const [p, c] = await Promise.all([api.getProducts(), api.getCategories()]);
-      products = p.products ?? [];
-      categories = c.categories ?? [];
-    } catch (e) {
-      console.error(e);
-    } finally {
-      loading = false;
-    }
+      products = p.products ?? []; categories = c.categories ?? [];
+    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo cargar el catálogo'; }
+    finally { loading = false; }
   });
-
-  function filterByCategory(id: string) {
-    selectedCategory = selectedCategory === id ? null : id;
-  }
-
-  function getFilteredProducts() {
-    return products.filter((p) => {
-      if (selectedCategory && p.category_id !== selectedCategory) return false;
-      if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    });
-  }
+  function consult(product: any) { window.location.href = `/contacto?product=${encodeURIComponent(product.name)}`; }
+  let filtered = $derived(products.filter(p => (!category || p.category_id === category) && (!search || [p.name, p.brand, p.model].some(x => String(x || '').toLowerCase().includes(search.toLowerCase())))));
 </script>
-
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <div class="flex flex-col md:flex-row gap-6 mb-8 items-end">
-    <div class="flex-1">
-      <h1 class="text-3xl font-bold text-gray-900 mb-2">Catálogo de productos</h1>
-      <p class="text-gray-600">Encuentra el equipo solar adecuado para tu hogar o negocio.</p>
-    </div>
-    <div class="flex-1 md:flex-1">
-      <div class="relative">
-        <input type="text" bind:value={search} placeholder="Buscar productos..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-energia-500 outline-none" />
-        <span class="absolute left-3 top-3 text-gray-400">🔍</span>
-      </div>
-    </div>
+<div class="max-w-7xl mx-auto px-4 py-8">
+  <h1 class="text-3xl font-bold mb-2">Catálogo solar</h1>
+  <p class="text-gray-600 mb-7">Consulta nuestros equipos disponibles; la compatibilidad se confirma con un técnico.</p>
+  <div class="flex flex-wrap gap-3 mb-7">
+    <input aria-label="Buscar productos" placeholder="Buscar producto o marca" bind:value={search} class="border p-3 rounded-lg flex-1 min-w-48" />
+    <select aria-label="Filtrar categoría" bind:value={category} class="border p-3 rounded-lg"><option value="">Todas las categorías</option>{#each categories as c}<option value={c.id}>{c.name}</option>{/each}</select>
   </div>
-
-  <div class="flex gap-2 overflow-x-auto pb-6 scrollbar-hide">
-    <button class="px-4 py-2 rounded-full whitespace-nowrap font-medium transition-colors {!selectedCategory ? 'bg-energia-600 text-white' : 'bg-gray-100 text-gray-600'}" onclick={() => filterByCategory('')}>Todos</button>
-    {#each categories as cat}
-      <button class="px-4 py-2 rounded-full whitespace-nowrap font-medium transition-colors {selectedCategory === cat.id ? 'bg-energia-600 text-white' : 'bg-gray-100 text-gray-600'}" onclick={() => filterByCategory(cat.id)}>
-        {cat.name}
-      </button>
-    {/each}
-  </div>
-
-  {#if loading}
-    <div class="text-center py-20">Cargando productos...</div>
-  {:else}
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {#each getFilteredProducts() as product}
-        <div class="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow group">
-          {#if product.images && product.images.length > 0}
-            <img src="{product.images[0].url || ''}" alt="{product.name}" class="w-full h-48 object-cover" />
-          {:else}
-            <div class="w-full h-48 bg-gray-100 flex items-center justify-center text-gray-400">Sin imagen</div>
-          {/if}
-          <div class="p-4">
-            <h3 class="font-semibold text-gray-900 mb-1 group-hover:text-energia-600 transition-colors">{product.name}</h3>
-            {#if product.brand}
-              <p class="text-sm text-gray-500 mb-2">{product.brand} {product.model || ''}</p>
-            {/if}
-            {#if product.short_description}
-              <p class="text-sm text-gray-600 mb-3 line-clamp-2">{product.short_description}</p>
-            {/if}
-            {#if product.price !== null && product.price !== undefined}
-              <div class="text-energia-600 font-bold text-lg mb-3">${product.price.toLocaleString()} {product.currency}</div>
-            {:else}
-              <div class="text-gray-500 text-sm mb-3">Precio bajo consulta</div>
-            {/if}
-            <div class="flex gap-2">
-              <button class="flex-1 bg-energia-600 text-white py-2 rounded-md text-sm font-medium hover:bg-energia-700 transition-colors">Consultar</button>
-              <button class="w-10 bg-gray-100 text-gray-600 rounded-md text-sm hover:bg-gray-200 transition-colors" title="Detalles">
-                <span class="sr-only">Detalles</span>ℹ️
-              </button>
-            </div>
-          </div>
+  {#if loading}<p>Cargando productos…</p>
+  {:else if error}<p role="alert" class="text-red-700">{error}</p>
+  {:else if filtered.length === 0}<p>No se encontraron equipos.</p>
+  {:else}<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+    {#each filtered as product (product.id)}
+      <article class="bg-white border rounded-xl overflow-hidden">
+        {#if product.primary_image_url || product.images?.[0]?.url}<img class="w-full h-44 object-cover" src={product.primary_image_url || product.images[0].url} alt={product.name} />{:else}<div class="h-44 bg-gray-100 flex items-center justify-center text-gray-500">Imagen pendiente</div>{/if}
+        <div class="p-5 space-y-2"><h2 class="font-semibold text-lg">{product.name}</h2><p class="text-sm text-gray-600">{product.brand || ''} {product.model || ''}</p>
+          <p class="font-semibold text-energia-700">{product.price == null ? 'Precio a consultar' : `${Number(product.price).toLocaleString('es-CU')} ${product.currency || 'USD'}`}</p>
+          <div class="flex gap-2"><button class="flex-1 bg-energia-600 text-white rounded-lg py-2" onclick={() => consult(product)}>Consultar equipo</button><button class="border rounded-lg p-2" aria-label={`Detalles de ${product.name}`} onclick={() => selected = product}>Detalles</button></div>
         </div>
-      {/each}
+      </article>
+    {/each}</div>
+  {/if}
+  {#if selected}
+    <div class="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-4" role="presentation">
+      <section role="dialog" aria-modal="true" aria-label="Detalle del producto" class="bg-white rounded-xl p-6 max-w-lg w-full space-y-4">
+        <div class="flex justify-between"><h2 class="text-xl font-bold">{selected.name}</h2><button aria-label="Cerrar detalles" onclick={() => selected = null}>✕</button></div>
+        <p>{selected.description || selected.short_description || 'Consulta especificaciones y disponibilidad con Energía Vital.'}</p>
+        <button class="bg-energia-600 text-white rounded-lg py-2 px-4" onclick={() => consult(selected)}>Solicitar información</button>
+      </section>
     </div>
   {/if}
 </div>

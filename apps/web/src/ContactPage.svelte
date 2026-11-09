@@ -1,71 +1,68 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
-
-  let settings: any = $state({});
-  let loading = true;
-
+  let settings: Record<string, string> = $state({});
+  let type = $state('consultation');
+  let title = $state('');
+  let description = $state('');
+  let preferredDate = $state('');
+  let message = $state('');
+  let error = $state('');
+  let busy = $state(false);
   onMount(async () => {
-    try {
-      const res = await api.getSettings();
-      settings = res.settings ?? {};
-    } catch (e) {
-      console.error(e);
-    } finally {
-      loading = false;
+    try { settings = (await api.getSettings()).settings ?? {}; } catch { /* Los datos de contacto son opcionales. */ }
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('product')) {
+      type = 'consultation'; title = `Consulta sobre ${params.get('product')}`;
+      description = `Solicito información sobre el equipo ${params.get('product')}: disponibilidad, precio y compatibilidad.`;
+    } else if (params.has('service')) {
+      type = 'installation'; title = `Servicio: ${params.get('service')}`;
+      description = `Quiero información y presupuesto para el servicio ${params.get('service')}.`;
+    } else if (params.has('reference')) {
+      type = 'installation'; title = `Proyecto similar a ${params.get('reference')}`;
+      description = `Solicito evaluación para un proyecto semejante a ${params.get('reference')}.`;
+    } else if (params.has('power')) {
+      type = 'installation'; title = 'Evaluación de sistema solar';
+      description = `Asesor solar: potencia ${params.get('power')} W, energía ${params.get('dailyEnergy')} kWh, batería ${params.get('batteryCapacity')} kWh, inversor ${params.get('inverterMin')} W, sistema ${params.get('pvPower')} kWp, ${params.get('panelCount')} paneles. Equipo existente: ${params.get('existingEquipment') || 'No especificado'}.`;
     }
   });
+  async function submit(event: SubmitEvent) {
+    event.preventDefault(); busy = true; error = ''; message = '';
+    try {
+      const result = await api.createRequest({ type, title, description, preferred_date: preferredDate || undefined });
+      message = `Tu solicitud se registró correctamente. Número de referencia: ${result.id}`;
+      title = ''; description = ''; preferredDate = '';
+    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo enviar la solicitud'; }
+    finally { busy = false; }
+  }
 </script>
-
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-    <div>
-      <h1 class="text-3xl font-bold text-gray-900 mb-6">Contáctanos</h1>
-      <form class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-          <input type="text" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
-          <input type="email" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-          <input type="tel" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Mensaje</label>
-          <textarea required rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-energia-500 outline-none"></textarea>
-        </div>
-        <button type="submit" class="w-full bg-energia-600 text-white py-3 rounded-lg font-medium hover:bg-energia-700 transition-colors">Enviar mensaje</button>
-      </form>
-    </div>
-
-    <div class="space-y-6">
-      <div class="bg-white border border-gray-200 rounded-xl p-6">
-        <h3 class="text-xl font-bold text-gray-900 mb-4">Información de contacto</h3>
-        <p class="text-gray-600 mb-2">📍 Bogotá, Colombia</p>
-        <p class="text-gray-600 mb-2">📞 +57 300 000 0000</p>
-        <p class="text-gray-600 mb-2">✉️ info@energiavital.com</p>
-        <p class="text-gray-600">🕐 Lunes a Viernes: 8:00 AM - 6:00 PM</p>
-      </div>
-
-      <div class="bg-white border border-gray-200 rounded-xl p-6">
-        <h3 class="text-xl font-bold text-gray-900 mb-4">Síguenos en YouTube</h3>
-        <p class="text-gray-600 mb-4">Mira nuestras instalaciones, tutoriales y consejos solares.</p>
-        <a href="{settings.youtube_channel_url || 'https://youtube.com/@energiavital'}" target="_blank" class="inline-flex items-center gap-2 text-energia-600 font-medium hover:underline">
-          Ver canal de YouTube ▶
-        </a>
-      </div>
-
-      <div class="bg-energia-600 text-white rounded-xl p-6">
-        <h3 class="text-xl font-bold mb-4">¿Necesitas ayuda urgente?</h3>
-        <p class="text-gray-200 mb-4">Escríbenos por Telegram y te responderemos lo antes posible.</p>
-        <button class="bg-white text-energia-900 px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors">
-          Abrir Telegram
-        </button>
-      </div>
-    </div>
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <h1 class="text-3xl font-bold mb-3">Contactar a Energía Vital</h1>
+  <p class="text-gray-600 mb-7">Tu solicitud quedará vinculada a tu cuenta, teléfono y dirección guardados en «Mi perfil».</p>
+  <div class="grid lg:grid-cols-2 gap-8">
+    <form onsubmit={submit} class="bg-white border rounded-xl p-6 space-y-4">
+      <label class="block font-medium">Tipo de solicitud
+        <select bind:value={type} class="mt-1 block w-full border rounded-lg p-3">
+          <option value="consultation">Consulta</option><option value="installation">Instalación solar</option>
+          <option value="repair">Reparación</option><option value="maintenance">Mantenimiento</option>
+          <option value="complaint">Reclamación</option><option value="suggestion">Sugerencia</option>
+        </select>
+      </label>
+      <label class="block font-medium">Asunto<input required minlength="3" maxlength="180" bind:value={title} class="mt-1 block w-full border rounded-lg p-3" /></label>
+      <label class="block font-medium">Descripción<textarea required minlength="6" maxlength="3000" rows="5" bind:value={description} class="mt-1 block w-full border rounded-lg p-3"></textarea></label>
+      <label class="block font-medium">Fecha preferida (opcional)<input type="date" bind:value={preferredDate} class="mt-1 block w-full border rounded-lg p-3" /></label>
+      {#if error}<p role="alert" class="text-red-700">{error}</p>{/if}
+      {#if message}<p role="status" class="text-green-700 break-words">{message}</p>{/if}
+      <button disabled={busy} type="submit" class="bg-energia-600 hover:bg-energia-700 text-white px-5 py-3 rounded-lg w-full">{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
+    </form>
+    <aside class="bg-white border rounded-xl p-6 space-y-4">
+      <h2 class="text-xl font-semibold">Información comercial</h2>
+      <p>Atendemos consultas sobre paneles, baterías, inversores, instalación y mantenimiento.</p>
+      {#if settings.business_phone}<p>Teléfono: {settings.business_phone}</p>{/if}
+      {#if settings.business_email}<p>Correo: {settings.business_email}</p>{/if}
+      {#if settings.business_address}<p>Dirección: {settings.business_address}</p>{/if}
+      {#if settings.youtube_channel_url}<a target="_blank" rel="noopener noreferrer" class="text-energia-600 underline" href={settings.youtube_channel_url}>Nuestro canal de YouTube</a>{/if}
+      <p class="text-sm text-gray-600">La visita técnica y los precios finales se confirmarán individualmente.</p>
+    </aside>
   </div>
 </div>

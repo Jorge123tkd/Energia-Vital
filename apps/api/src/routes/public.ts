@@ -1,135 +1,71 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
+import type { Env } from '../types';
 
 export const publicRoutes = new Hono<{ Bindings: Env }>();
 
-// Catálogo de productos
-publicRoutes.get('/products', async (c) => {
-  const { DB } = c.env;
-  const categoryId = c.req.query('category_id');
-  const featured = c.req.query('featured');
-  const search = c.req.query('search');
-
-  let sql = `
-    SELECT p.*, c.name as category_name, c.slug as category_slug
+publicRoutes.get('/products', async c => {
+  const category = c.req.query('category_id'), search = c.req.query('search'), featured = c.req.query('featured');
+  let sql = `SELECT p.*, cat.name AS category_name, cat.slug AS category_slug,
+    (SELECT pi.url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1) AS primary_image_url
     FROM products p
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE p.is_active = 1
-  `;
-  const params: any[] = [];
-
-  if (categoryId) {
-    sql += ' AND p.category_id = ?';
-    params.push(categoryId);
-  }
-  if (featured === 'true') {
-    sql += ' AND p.is_featured = 1';
-  }
-  if (search) {
-    sql += ' AND (p.name LIKE ? OR p.brand LIKE ? OR p.model LIKE ?)';
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-  }
-
-  sql += ' ORDER BY p.sort_order ASC, p.created_at DESC';
-
-  const { results } = await DB.prepare(sql).bind(...params).all();
+    LEFT JOIN categories cat ON p.category_id = cat.id WHERE p.is_active = 1`;
+  const params: string[] = [];
+  if (category) { sql += ' AND p.category_id = ?'; params.push(category); }
+  if (featured === 'true') sql += ' AND p.is_featured = 1';
+  if (search) { sql += ' AND (p.name LIKE ? OR p.brand LIKE ? OR p.model LIKE ?)';
+    const match = `%${search.slice(0, 100)}%`; params.push(match, match, match); }
+  sql += ' ORDER BY p.sort_order, p.created_at DESC LIMIT 200';
+  const { results } = await c.env.DB.prepare(sql).bind(...params).all();
   return c.json({ products: results ?? [] });
 });
-
-// Detalle de producto
-publicRoutes.get('/products/:id', async (c) => {
-  const { DB } = c.env;
-  const id = c.req.param('id');
-
-  const product = await DB.prepare(`
-    SELECT p.*, c.name as category_name
-    FROM products p
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE p.id = ? AND p.is_active = 1
-  `).bind(id).first();
-
+publicRoutes.get('/products/:id', async c => {
+  const product = await c.env.DB.prepare(`SELECT p.*, cat.name AS category_name FROM products p
+    LEFT JOIN categories cat ON p.category_id = cat.id WHERE p.id = ? AND p.is_active = 1`).bind(c.req.param('id')).first();
   if (!product) return c.notFound();
-
-  const images = await DB.prepare(
-    'SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order ASC'
-  ).bind(id).all();
-
-  return c.json({ product, images: images.results ?? [] });
+  const { results } = await c.env.DB.prepare('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order').bind(c.req.param('id')).all();
+  return c.json({ product, images: results ?? [] });
 });
-
-// Categorías
-publicRoutes.get('/categories', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare(
-    'SELECT * FROM categories WHERE is_active = 1 ORDER BY sort_order ASC'
-  ).all();
+publicRoutes.get('/categories', async c => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM categories WHERE is_active = 1 ORDER BY sort_order LIMIT 200').all();
   return c.json({ categories: results ?? [] });
 });
-
-// Servicios
-publicRoutes.get('/services', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare(
-    'SELECT * FROM services WHERE is_active = 1 ORDER BY sort_order ASC'
-  ).all();
+publicRoutes.get('/services', async c => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM services WHERE is_active = 1 ORDER BY sort_order LIMIT 200').all();
   return c.json({ services: results ?? [] });
 });
-
-// Detalle de servicio
-publicRoutes.get('/services/:id', async (c) => {
-  const { DB } = c.env;
-  const id = c.req.param('id');
-  const service = await DB.prepare('SELECT * FROM services WHERE id = ? AND is_active = 1').bind(id).first();
-  if (!service) return c.notFound();
-  return c.json({ service });
+publicRoutes.get('/services/:id', async c => {
+  const service = await c.env.DB.prepare('SELECT * FROM services WHERE id = ? AND is_active = 1').bind(c.req.param('id')).first();
+  return service ? c.json({ service }) : c.notFound();
 });
-
-// Preguntas frecuentes
-publicRoutes.get('/faq', async (c) => {
-  const { DB } = c.env;
-  const categoryId = c.req.query('category_id');
-  let sql = 'SELECT * FROM frequently_asked_questions WHERE is_active = 1';
-  const params: any[] = [];
-  if (categoryId) {
-    sql += ' AND (category_id = ? OR category_id IS NULL)';
-    params.push(categoryId);
-  }
-  sql += ' ORDER BY sort_order ASC';
-  const { results } = await DB.prepare(sql).bind(...params).all();
+publicRoutes.get('/faq', async c => {
+  const category = c.req.query('category_id');
+  const query = category ? 'SELECT * FROM frequently_asked_questions WHERE is_active = 1 AND (category_id = ? OR category_id IS NULL) ORDER BY sort_order LIMIT 100'
+    : 'SELECT * FROM frequently_asked_questions WHERE is_active = 1 ORDER BY sort_order LIMIT 100';
+  const prepared = c.env.DB.prepare(query);
+  const { results } = await (category ? prepared.bind(category) : prepared).all();
   return c.json({ faqs: results ?? [] });
 });
-
-// Galería de trabajos
-// Servir imagen de R2 (galería)
-publicRoutes.get('/gallery/image/:key', async (c) => {
-  const { BUCKET } = c.env;
+// Imágenes sin datos personales: acceso desde <img>, que no envía Authorization.
+publicRoutes.get('/gallery/image/:key', async c => {
   const key = decodeURIComponent(c.req.param('key'));
-  const obj = await BUCKET.get(key);
-  if (!obj) return c.notFound();
+  if (!key.startsWith('gallery/') || key.includes('..')) return c.notFound();
+  const object = await c.env.BUCKET.get(key);
+  if (!object) return c.notFound();
   const headers = new Headers();
-  obj.writeHttpMetadata(headers);
-  headers.set('etag', obj.httpEtag);
-  headers.set('cache-control', 'public, max-age=31536000, immutable');
-  return c.body(obj.body, 200, headers);
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=86400');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, headers);
 });
-publicRoutes.get('/gallery', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare(
-    'SELECT * FROM work_gallery WHERE is_active = 1 ORDER BY sort_order ASC'
-  ).all();
+publicRoutes.get('/gallery', async c => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM work_gallery WHERE is_active = 1 ORDER BY sort_order LIMIT 200').all();
   return c.json({ gallery: results ?? [] });
 });
-
-// Configuración pública (YouTube, sitio, etc.)
-publicRoutes.get('/settings', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare('SELECT key, value FROM system_settings').all<{
-    key: string;
-    value: string;
-  }>();
-  const settings: Record<string, string> = {};
-  for (const row of results ?? []) {
-    settings[row.key] = row.value;
-  }
-  return c.json({ settings });
+// Solo configuración comercial publicada; nunca claves internas ni datos privados.
+const publicSettingKeys = ['youtube_channel_url', 'business_phone', 'business_email', 'business_address', 'business_hours', 'telegram_public_url'];
+publicRoutes.get('/settings', async c => {
+  const marks = publicSettingKeys.map(() => '?').join(', ');
+  const { results } = await c.env.DB.prepare(`SELECT key, value FROM system_settings WHERE key IN (${marks})`).bind(...publicSettingKeys).all<{key:string;value:string}>();
+  return c.json({ settings: Object.fromEntries((results || []).map(r => [r.key,r.value])) });
 });

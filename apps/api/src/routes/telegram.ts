@@ -1,71 +1,45 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
+import type { Env } from '../types';
+import { requireAdminAuth } from '../middleware';
 
-export const telegramRoutes = new Hono<{ Bindings: Env }>();
+export const telegramRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 
-// Webhook de Telegram
-telegramRoutes.post('/webhook', async (c) => {
-  const { env } = c;
-  const secret = c.req.header('X-Telegram-Bot-Api-Secret-Token');
-
-  if (env.TELEGRAM_WEBHOOK_SECRET && secret !== env.TELEGRAM_WEBHOOK_SECRET) {
-    return c.json({ error: 'Secret inválido' }, 401);
+// Telegram envía webhooks autenticados por un secreto configurado en Cloudflare.
+telegramRoutes.post('/webhook', async c => {
+  const configured = c.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!configured || configured.length < 16) return c.json({ error: 'Telegram no configurado' }, 503);
+  if (c.req.header('x-telegram-bot-api-secret-token') !== configured) return c.json({ error: 'Webhook no autorizado' }, 401);
+  const b = await c.req.json<any>().catch(() => null);
+  const msg = b?.message || b?.edited_message;
+  if (!msg?.chat?.id) return c.json({ ok: true });
+  const firstName = typeof msg.from?.first_name === 'string' ? msg.from.first_name.slice(0, 60) : 'cliente';
+  const text = typeof msg.text === 'string' ? msg.text : '';
+  const reply = /^\/(start|help|login)\b/i.test(text)
+    ? `Hola, ${firstName}. Por seguridad, crea tu cuenta e inicia sesión con correo y contraseña en el sitio oficial de Energía Vital. Nunca compartas contraseñas por Telegram.`
+    : 'Gracias por contactar a Energía Vital. Para consultas, citas y seguimiento, inicia sesión en nuestra plataforma oficial.';
+  if (c.env.TELEGRAM_BOT_TOKEN) {
+    await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: msg.chat.id, text: reply }),
+    }).catch(error => console.error('Fallo de Telegram', error));
   }
-
-  const body = await c.req.json<any>();
-  const message = body.message || body.edited_message;
-  if (!message) return c.json({ ok: true });
-
-  const chatId = message.chat.id;
-  const text = message.text || '';
-  const userName = message.from?.first_name || 'Usuario';
-
-  // Respuesta básica del bot
-  if (text === '/start' || text === '/help') {
-    await sendTelegramMessage(env, chatId, `¡Hola ${userName}! Soy el bot de Energía Vital. Puedo notificarte sobre citas, solicitudes y ayudarte con consultas básicas.`);
-  } else {
-    await sendTelegramMessage(env, chatId, `Recibí tu mensaje: "${text}". Nuestro equipo lo revisará y se pondrá en contacto contigo.`);
-  }
-
   return c.json({ ok: true });
 });
 
-// Enviar mensaje por Telegram
-async function sendTelegramMessage(env: Env, chatId: number | string, text: string): Promise<void> {
-  if (!env.TELEGRAM_BOT_TOKEN) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' }),
-    });
-  } catch (e) {
-    console.error('Error enviando mensaje de Telegram:', e);
-  }
-}
-
-// Configurar webhook (llamada única desde el administrador)
-telegramRoutes.post('/set-webhook', async (c) => {
-  const { env } = c;
-  const body = await c.req.json<{ url: string }>();
-  if (!env.TELEGRAM_BOT_TOKEN) return c.json({ error: 'Token no configurado' }, 400);
-
-  const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: body.url, secret_token: env.TELEGRAM_WEBHOOK_SECRET }),
+telegramRoutes.post('/set-webhook', requireAdminAuth, async c => {
+  const b = await c.req.json<any>();
+  if (!c.env.TELEGRAM_BOT_TOKEN || !c.env.TELEGRAM_WEBHOOK_SECRET || c.env.TELEGRAM_WEBHOOK_SECRET.length < 16)
+    return c.json({ error: 'Configura los secretos de Telegram' }, 503);
+  if (!b?.url || typeof b.url !== 'string' || !b.url.startsWith('https://')) return c.json({ error: 'URL HTTPS requerida' }, 400);
+  const res = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: b.url, secret_token: c.env.TELEGRAM_WEBHOOK_SECRET }),
   });
-
-  const data = await res.json();
-  return c.json(data);
+  return c.json(await res.json());
 });
 
-// Obtener info del webhook
-telegramRoutes.get('/webhook-info', async (c) => {
-  const { env } = c;
-  if (!env.TELEGRAM_BOT_TOKEN) return c.json({ error: 'Token no configurado' }, 400);
-
-  const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
-  const data = await res.json();
-  return c.json(data);
+telegramRoutes.get('/webhook-info', requireAdminAuth, async c => {
+  if (!c.env.TELEGRAM_BOT_TOKEN) return c.json({ error: 'Telegram no configurado' }, 503);
+  const res = await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
+  return c.json(await res.json());
 });
