@@ -5,6 +5,13 @@ import { requireAdminAuth } from '../middleware';
 export const adminCustomersRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 adminCustomersRoutes.use('*', requireAdminAuth);
 
+function audit(c: any, action: string, customerId: string) {
+  return c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, entity_id, created_at)
+    VALUES (?, ?, ?, 'customer', ?, ?)`).bind(
+      crypto.randomUUID(), c.get('user')?.user_id || null, action, customerId, new Date().toISOString());
+}
+
+
 adminCustomersRoutes.get('/customers', async c => {
   const { results } = await c.env.DB.prepare(`SELECT id, name, email, phone, address, city, province, phone_verified, is_active, created_at
     FROM customers ORDER BY created_at DESC LIMIT 200`).all();
@@ -33,10 +40,15 @@ adminCustomersRoutes.patch('/customers/:id', async c => {
   const taken = await c.env.DB.prepare('SELECT id FROM customers WHERE LOWER(email) = ? AND id != ?')
     .bind(email, id).first();
   if (taken) return c.json({ error: 'El correo pertenece a otra cuenta' }, 409);
+  const adminEmail = await c.env.DB.prepare('SELECT id FROM admin_users WHERE LOWER(email) = ?').bind(email).first();
+  if (adminEmail) return c.json({ error: 'Ese correo está reservado para una cuenta administrativa' }, 409);
   try {
-    await c.env.DB.prepare(`UPDATE customers SET name = ?, email = ?, phone = ?, address = ?, city = ?, province = ?,
-      phone_verified = CASE WHEN phone = ? THEN phone_verified ELSE 0 END, updated_at = ? WHERE id = ?`)
-      .bind(name, email, phone, address, city, province, phone, new Date().toISOString(), id).run();
+    await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE customers SET name = ?, email = ?, phone = ?, address = ?, city = ?, province = ?,
+        phone_verified = CASE WHEN phone = ? THEN phone_verified ELSE 0 END, updated_at = ? WHERE id = ?`)
+        .bind(name, email, phone, address, city, province, phone, new Date().toISOString(), id),
+      audit(c, 'customer_updated', id),
+    ]);
   } catch (e) {
     const detail = e instanceof Error ? e.message : '';
     if (/UNIQUE|constraint/i.test(detail)) return c.json({ error: 'El correo ya está en uso' }, 409);
@@ -61,6 +73,7 @@ adminCustomersRoutes.patch('/customers/:id/status', async c => {
     statements.push(c.env.DB.prepare(`UPDATE auth_sessions SET revoked_at = ?
       WHERE user_id = ? AND user_type = 'customer' AND revoked_at IS NULL`).bind(now, id));
   }
+  statements.push(audit(c, b.is_active ? 'customer_reactivated' : 'customer_blocked', id));
   await c.env.DB.batch(statements);
   return c.json({ message: b.is_active ? 'Cliente reactivado' : 'Cliente bloqueado y sesiones cerradas' });
 });
@@ -86,6 +99,7 @@ adminCustomersRoutes.delete('/customers/:id', async c => {
       c.env.DB.prepare(`DELETE FROM notifications WHERE user_id = ? AND user_type = 'customer'`).bind(id),
       c.env.DB.prepare('DELETE FROM customer_points WHERE customer_id = ?').bind(id),
       c.env.DB.prepare('DELETE FROM customers WHERE id = ?').bind(id),
+      audit(c, 'customer_deleted', id),
     ]);
   } catch (e) {
     const detail = e instanceof Error ? e.message : '';
