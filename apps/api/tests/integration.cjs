@@ -151,6 +151,11 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   await request('Unblock customer', '/api/admin-customers/customers/' + br.user.id + '/status',
     'PATCH', { is_active: true }, adminToken);
 
+
+  const disposable = await request('Create disposable customer', '/api/auth/register',
+    'POST', make('disposable'), null, 201);
+  await request('Remove disposable customer', '/api/admin-customers/customers/' + disposable.user.id,
+    'DELETE', null, adminToken);
   await request('Logout customer A', '/api/auth/logout', 'POST', {}, at);
   await request('Revoked token rejected', '/api/private/requests', 'GET', null, at, 401);
   console.log('SUCCESS: Worker + D1 local integration');
