@@ -1,7 +1,8 @@
 <script lang="ts">
   import { api } from '../lib/api';
-  let { onSuccess }: { onSuccess: (user: any, token: string) => void } = $props();
-  let mode = $state<'login' | 'register'>('login');
+  let { onSuccess, initialMode = 'login' }: { onSuccess: (user: any, token: string) => void; initialMode?: 'login' | 'register' } = $props();
+  let mode = $state<'login' | 'register'>(initialMode);
+  $effect(() => { mode = initialMode; error = ''; });
   let email = $state('');
   let password = $state('');
   let name = $state('');
@@ -75,6 +76,6 @@
         {busy ? 'Procesando…' : mode === 'login' ? 'Iniciar sesión' : 'Crear mi cuenta'}
       </button>
     </form>
-    <p class="text-xs text-center text-gray-500 mt-6">Acceso requerido para usar los servicios de Energía Vital.</p>
+    <p class="text-xs text-center text-gray-500 mt-6">Puedes explorar productos, servicios y galería sin registrarte. Necesitas una cuenta para hacer solicitudes, agendar citas y hablar con el asistente.</p>
   </section>
 </div>
