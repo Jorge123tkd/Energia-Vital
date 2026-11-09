@@ -121,6 +121,9 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const own = await request('Customer A lists own requests', '/api/private/requests', 'GET', null, at);
   const other = await request('Customer B lists own requests', '/api/private/requests', 'GET', null, bt);
   assert.ok(own.requests.some(r => r.id === created.id));
+  await request('Prevent deletion of customer with history', '/api/admin-customers/customers/' + ar.user.id,
+    'DELETE', null, adminToken, 409);
+
   assert.ok(!other.requests.some(r => r.id === created.id));
   const chat = await request('Assistant message A', '/api/assistant/message', 'POST', { message: 'Hola, necesito paneles solares' }, at);
   assert.ok(chat.session_id);
