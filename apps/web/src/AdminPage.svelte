@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, apiRequest, ADMIN_TOKEN_KEY } from './lib/api';
+  import AdminContent from './components/AdminContent.svelte';
   let token = $state('');
   let email = $state('');
   let password = $state('');
@@ -8,18 +9,14 @@
   let checking = $state(true);
   let error = $state('');
   let message = $state('');
-  let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services'>('requests');
+  let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services' | 'gallery' | 'site'>('requests');
   let customers: any[] = $state([]);
   let requests: any[] = $state([]);
   let appointments: any[] = $state([]);
   let products: any[] = $state([]);
   let services: any[] = $state([]);
   let categories: any[] = $state([]);
-  let categoryName = $state('');
-  let productCategoryId = $state('');
-  let productName = $state('');
-  let productPrice = $state<number | undefined>(undefined);
-  let serviceName = $state('');
+
 
   onMount(() => { void restore(); });
   async function restore() {
@@ -53,7 +50,6 @@
     ]);
     customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
     products = p.products ?? []; services = s.services ?? []; categories = cat.categories ?? [];
-    if (!productCategoryId || !categories.some((c: any) => c.id === productCategoryId)) productCategoryId = categories[0]?.id || '';
   }
   async function changeRequest(id: string, status: string) {
     error = ''; message = '';
@@ -65,36 +61,13 @@
     try { await api.updateAdminAppointment(token, id, status); await reload(); message = 'Cita actualizada.'; }
     catch (e) { error = e instanceof Error ? e.message : 'No se pudo actualizar'; }
   }
-  const slug = (name: string) => name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  async function createProduct(event: SubmitEvent) {
-    event.preventDefault(); error = '';
-    try {
-      if (!productCategoryId) throw new Error('Debes crear una categoría antes de añadir productos.');
-      await api.createAdminProduct(token, { category_id: productCategoryId, name: productName, slug: `${slug(productName)}-${Date.now()}`, price: productPrice === undefined ? null : Number(productPrice), currency: 'USD', stock_status: 'on_order' });
-      productName = ''; productPrice = undefined; await reload(); message = 'Producto registrado.';
-    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo crear el producto'; }
-  }
-  async function createCategory(event: SubmitEvent) {
-    event.preventDefault(); error = ''; message = '';
-    try {
-      if (!categoryName.trim()) return;
-      await api.createAdminCategory(token, { name: categoryName.trim(), slug: `${slug(categoryName)}-${Date.now()}` });
-      categoryName = ''; await reload(); message = 'Categoría creada.';
-    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo crear la categoría'; }
-  }
-  async function createService(event: SubmitEvent) {
-    event.preventDefault(); error = '';
-    try {
-      await api.createAdminService(token, { name: serviceName, slug: `${slug(serviceName)}-${Date.now()}`, price_type: 'quote' });
-      serviceName = ''; await reload(); message = 'Servicio registrado.';
-    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo crear el servicio'; }
-  }
+
 </script>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 min-h-screen">
-  <header class="flex flex-wrap items-center justify-between gap-3 mb-7">
-    <div><h1 class="text-3xl font-bold">Administración de Energía Vital</h1><p class="text-gray-600">Panel privado de operaciones y clientes</p></div>
-    <div class="flex gap-3"><a class="underline text-energia-700" href="/">Ir al sitio</a>{#if token}<button class="text-red-700 underline" onclick={logout}>Cerrar sesión</button>{/if}</div>
+<div class="max-w-screen-2xl mx-auto px-4 sm:px-6 py-8 min-h-screen bg-slate-50">
+  <header class="flex flex-wrap items-center justify-between gap-3 mb-7 rounded-2xl bg-gradient-to-r from-slate-950 via-teal-950 to-teal-800 text-white p-6 sm:p-8 shadow-lg">
+    <div><p class="uppercase text-xs font-semibold tracking-widest text-teal-200 mb-2">Centro de operaciones</p><h1 class="text-3xl sm:text-4xl font-bold">Administración de Energía Vital</h1><p class="text-teal-100 mt-2">Gestiona el catálogo, los clientes y el contenido de tu sitio desde un solo lugar.</p></div>
+    <div class="flex gap-3 items-center"><a class="rounded-xl border border-teal-300 px-4 py-2 hover:bg-white/10" href="/">Ver sitio público</a>{#if token}<button class="rounded-xl bg-white text-slate-950 px-4 py-2" onclick={logout}>Cerrar sesión</button>{/if}</div>
   </header>
   {#if checking}
     <p>Verificando acceso…</p>
@@ -107,14 +80,27 @@
       <button disabled={loading} class="bg-energia-600 text-white py-3 px-5 rounded-lg">{loading ? 'Entrando…' : 'Iniciar sesión'}</button>
     </form>
   {:else}
-    <nav class="flex flex-wrap gap-2 mb-6" aria-label="Panel">
-      {#each [
-        { id: 'requests', title: 'Solicitudes' }, { id: 'appointments', title: 'Citas' }, { id: 'customers', title: 'Clientes' },
-        { id: 'products', title: 'Productos' }, { id: 'services', title: 'Servicios' },
-      ] as item}
-        <button class="px-4 py-2 rounded-lg border {tab === item.id ? 'bg-energia-600 text-white' : 'bg-white'}" onclick={() => { tab = item.id as typeof tab; }}>{item.title}</button>
+    <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6" aria-label="Resumen de operaciones">
+      {#each [{label:'Solicitudes',count:requests.length,id:'requests'}, {label:'Citas',count:appointments.length,id:'appointments'},
+        {label:'Clientes',count:customers.length,id:'customers'}, {label:'Productos',count:products.length,id:'products'}] as item}
+        <button class="rounded-2xl text-left bg-white border border-slate-200 shadow-sm p-4 hover:border-teal-500" onclick={() => tab = item.id as typeof tab}>
+          <span class="block text-slate-500 text-xs uppercase tracking-wide">{item.label}</span>
+          <span class="block text-3xl font-bold mt-2 text-slate-900">{item.count}</span>
+        </button>
       {/each}
-      <button class="px-4 py-2 border rounded-lg" onclick={() => { void reload().catch(e => error = String(e)); }}>Actualizar</button>
+    </section>
+    <nav class="flex flex-wrap items-center gap-2 mb-6 border-b border-slate-200 pb-4" aria-label="Secciones de administración">
+      {#each [
+        { id: 'requests', title: 'Solicitudes' }, { id: 'appointments', title: 'Citas' },
+        { id: 'customers', title: 'Clientes' }, { id: 'products', title: 'Productos' },
+        { id: 'services', title: 'Servicios' }, { id: 'gallery', title: 'Galería' },
+        { id: 'site', title: 'Mi sitio web' },
+      ] as item}
+        <button class="rounded-xl px-4 py-2.5 text-sm font-semibold transition {tab === item.id ? 'bg-teal-700 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:border-teal-400'}"
+          onclick={() => { tab = item.id as typeof tab; }}>{item.title}</button>
+      {/each}
+      <button title="Consultar nuevamente cambios que hayan realizado otras personas" class="ml-auto px-3 py-2.5 text-sm text-slate-500 hover:text-teal-700"
+        onclick={() => { void reload().then(() => message = 'Datos sincronizados.').catch(e => error = String(e)); }}>↻ Sincronizar</button>
     </nav>
     {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
@@ -137,15 +123,8 @@
           {#each ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'] as status}<option value={status}>{status}</option>{/each}
         </select></article>
       {/each}</div>
-    {:else if tab === 'products'}
-      <h2 class="font-semibold text-xl mb-4">Productos ({products.length})</h2>
-      <form onsubmit={createCategory} class="flex flex-wrap gap-2 mb-4"><input required placeholder="Nueva categoría (ej. Paneles solares)" bind:value={categoryName} class="border p-2 rounded flex-1" /><button class="bg-gray-800 text-white px-4 py-2 rounded">Crear categoría</button></form>
-      <form onsubmit={createProduct} class="flex flex-wrap gap-2 mb-5"><select required bind:value={productCategoryId} class="border p-2 rounded"><option value="" disabled>Seleccionar categoría</option>{#each categories as cat (cat.id)}<option value={cat.id}>{cat.name}</option>{/each}</select><input required placeholder="Nombre del equipo" bind:value={productName} class="border p-2 rounded" /><input type="number" min="0" step="0.01" placeholder="Precio (opcional)" bind:value={productPrice} class="border p-2 rounded" /><button class="bg-energia-600 text-white px-4 rounded">Añadir</button></form>
-      <div class="space-y-2">{#each products as p (p.id)}<div class="bg-white border rounded p-3 flex justify-between"><span>{p.name}</span><span>{p.price ?? 'A consultar'} {p.currency ?? ''}</span></div>{/each}</div>
-    {:else if tab === 'services'}
-      <h2 class="font-semibold text-xl mb-4">Servicios ({services.length})</h2>
-      <form onsubmit={createService} class="flex gap-2 mb-5"><input required placeholder="Nombre del servicio" bind:value={serviceName} class="border p-2 rounded" /><button class="bg-energia-600 text-white px-4 rounded">Añadir</button></form>
-      <div class="space-y-2">{#each services as s (s.id)}<div class="bg-white border rounded p-3">{s.name} · {s.price_type}</div>{/each}</div>
+    {:else if tab === 'products' || tab === 'services' || tab === 'gallery' || tab === 'site'}
+      <AdminContent {token} {tab} {products} {services} {categories} onRefresh={async () => { await reload(); }} />
     {/if}
   {/if}
 </div>
