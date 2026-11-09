@@ -36,6 +36,7 @@ export const api = {
   getGallery: () => apiRequest('/api/public/gallery'),
   getSettings: () => apiRequest('/api/public/settings'),
   getAssistantConfig: () => apiRequest('/api/assistant/config'),
+  getAssistantMessages: (id: string) => apiRequest(`/api/assistant/session/${encodeURIComponent(id)}/messages`),
   postAssistantMessage: (body: { session_id?: string; message: string; channel?: string }) => post('/api/assistant/message', body),
 
   register: (body: { name: string; email: string; phone: string; address: string; city: string; province: string; password: string }) => post('/api/auth/register', body),
