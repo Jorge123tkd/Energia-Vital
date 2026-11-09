@@ -9,7 +9,11 @@ export async function activeSession(env: Env, user: JwtPayload): Promise<boolean
   const session = await env.DB.prepare(
     'SELECT id FROM auth_sessions WHERE id = ? AND user_id = ? AND user_type = ? AND revoked_at IS NULL AND expires_at > ?'
   ).bind(user.sid, user.user_id, user.type, new Date().toISOString()).first();
-  return !!session;
+  if (!session) return false;
+  // A blocked customer loses access immediately, even with a token signed earlier.
+  const table = user.type === 'admin' ? 'admin_users' : 'customers';
+  const active = await env.DB.prepare(`SELECT id FROM ${table} WHERE id = ? AND is_active = 1`).bind(user.user_id).first();
+  return !!active;
 }
 export async function currentUser(c: AppContext): Promise<JwtPayload | null> {
   const payload = await extractToken(c.req.header('authorization'), c.env);
