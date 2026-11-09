@@ -11,7 +11,7 @@ export interface JwtPayload {
 
 export const ACCESS_TTL = 60 * 60;
 export const REFRESH_TTL = 30 * 24 * 60 * 60;
-const PBKDF2_ITERATIONS = 310_000;
+const PBKDF2_ITERATIONS = 100_000;
 
 function toHex(buffer: ArrayBufferLike): string {
   return Array.from(new Uint8Array(buffer)).map(x => x.toString(16).padStart(2, '0')).join('');
@@ -47,7 +47,7 @@ export async function comparePassword(password: string, stored: string): Promise
     const [algo, iter, saltHex, hashHex] = (stored || '').split('$');
     if (algo !== 'pbkdf2' || !/^\d+$/.test(iter)) return false;
     const iterations = Number(iter);
-    if (iterations < 50_000 || iterations > 1_000_000) return false;
+    if (iterations < 50_000 || iterations > 100_000) return false;
     const salt = fromHex(saltHex);
     const expected = fromHex(hashHex);
     const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
