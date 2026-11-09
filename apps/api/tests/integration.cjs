@@ -20,7 +20,12 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const a = make('a'), b = make('b');
   await request('Health endpoint', '/health');
   await request('Anonymous requests blocked', '/api/private/requests', 'GET', null, null, 401);
-  await request('Anonymous catalog blocked', '/api/public/products', 'GET', null, null, 401);
+  await request('Anonymous catalog is public', '/api/public/products');
+  await request('Anonymous services are public', '/api/public/services');
+  await request('Anonymous gallery is public', '/api/public/gallery');
+  await request('Anonymous FAQ is public', '/api/public/faq');
+  await request('Assistant remains private', '/api/assistant/message', 'POST', { message: 'Hola' }, null, 401);
+  await request('Anonymous cannot submit a customer request', '/api/private/requests', 'POST', { title: 'Prueba' }, null, 401);
   await request('Admin login rejects unknown credentials', '/api/auth/login', 'POST', { email: 'nobody@example.invalid', password: 'bad' }, null, 401);
   const ar = await request('Register customer A', '/api/auth/register', 'POST', a, null, 201);
   const br = await request('Register customer B', '/api/auth/register', 'POST', b, null, 201);
