@@ -491,7 +491,7 @@ adminRoutes.delete('/settings/:id', async (c) => {
 });
 
 // Configuración pública editable sin exponer secretos ni aceptar HTML arbitrario.
-const allowedSiteFields = ['home_title', 'home_subtitle', 'footer_description', 'footer_links',
+const allowedSiteFields = ['home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links',
   'business_phone', 'business_email', 'business_address', 'business_hours',
   'youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url'] as const;
 adminRoutes.put('/site-settings', async c => {
@@ -507,6 +507,27 @@ adminRoutes.put('/site-settings', async c => {
     let value = (b[key] as string).trim();
     if (socialKeys.has(key) && value && !/^https:\/\/[^\s]+$/i.test(value))
       return c.json({ error: `Utiliza una dirección HTTPS válida en ${key}` }, 400);
+    if (key === 'home_slides') {
+      let slides: unknown;
+      try { slides = JSON.parse(value); } catch {
+        return c.json({ error: 'Configuración del carrusel inválida.' }, 400);
+      }
+      const isSafeLink = (url: string) => /^\\/(?!\\/)[a-zA-Z0-9/_?=&.-]*$/.test(url) || /^https:\\/\\/[^\\s]+$/i.test(url);
+      if (!Array.isArray(slides) || slides.length !== 3 || !slides.every((s: any) =>
+        s && typeof s.title === 'string' && s.title.trim().length > 0 && s.title.length <= 120 &&
+        typeof s.subtitle === 'string' && s.subtitle.length <= 450 &&
+        typeof s.image_url === 'string' && s.image_url.length <= 600 &&
+        (!s.image_url || /^https:\\/\\/[^\\s]+$/i.test(s.image_url)) &&
+        typeof s.link_label === 'string' && s.link_label.length <= 60 &&
+        typeof s.link_url === 'string' && s.link_url.length <= 500 &&
+        isSafeLink(s.link_url))) {
+        return c.json({ error: 'El carrusel necesita tres diapositivas válidas con enlaces seguros.' }, 400);
+      }
+      value = JSON.stringify(slides.map((s: any) => ({
+        title: s.title.trim(), subtitle: s.subtitle.trim(), image_url: s.image_url.trim(),
+        link_label: s.link_label.trim(), link_url: s.link_url.trim()
+      })));
+    }
     if (key === 'footer_links') {
       let links: unknown;
       try { links = JSON.parse(value || '[]'); } catch { return c.json({ error: 'Enlaces del footer inválidos.' }, 400); }
