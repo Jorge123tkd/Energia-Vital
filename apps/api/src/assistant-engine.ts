@@ -267,9 +267,17 @@ function formatServicePrice(s: AssistantContext['services'][number]): string {
  */
 export function generateResponse(
   message: string,
-  ctx: AssistantContext
+  ctx: AssistantContext,
+  history: { role: string; content: string }[] = []
 ): { text: string; intent: AssistantIntent; source: 'faq' | 'catalog' | 'template' } {
-  const intent = detectIntent(message);
+  let intent = detectIntent(message);
+  // Una respuesta corta ("sí", "48 voltios", "dos horas") continúa el asunto
+  // de la conversación, en lugar de reiniciar el diálogo con una plantilla.
+  if (intent === 'general' && message.length < 110) {
+    const previous = [...history].reverse().find(entry =>
+      entry.role === 'user' && !['general', 'greeting'].includes(detectIntent(entry.content)));
+    if (previous) intent = detectIntent(previous.content);
+  }
   const tokens = tokenize(message);
 
   // 1) Coincidencia con la FAQ configurada.
@@ -307,41 +315,50 @@ export function generateResponse(
 
     case 'product_inquiry':
     case 'price_inquiry': {
-      const prods = ctx.products
-        .filter((p) => p.price !== null && p.price !== undefined)
-        .map((p) => `- ${p.name}: ${formatPrice(p)} (${stockLabel(p.stock_status)})`)
-        .slice(0, 8);
-      const svc = ctx.services
-        .filter((s) => s.price !== null && s.price !== undefined && s.price_type === 'fixed')
-        .map((s) => `- ${s.name}: ${formatServicePrice(s)}`)
-        .slice(0, 8);
-      const lines = [...prods, ...svc];
-      const header =
-        lines.length > 0
-          ? '\n\nEstos son algunos precios de referencia:\n' + lines.join('\n')
-          : '';
+      const current = normalize(message);
+      const topic = ['bateria', 'inversor', 'panel', 'estacion', 'ecoflow', 'regulador', 'controlador']
+        .find(word => current.includes(word));
+      const terms = tokenize(message).filter(t => !GENERIC_DOMAIN_WORDS.has(t));
+      const units = current.match(/\b\d+(?:[.,]\d+)?\s*(?:kw|kwh|w|ah|v)\b/g) || [];
+      const scored = ctx.products.map(product => {
+        const name = normalize(product.name);
+        let score = topic && name.includes(topic) ? 5 : 0;
+        score += terms.filter(t => name.includes(t)).length * 2;
+        score += units.filter(t => name.includes(t.replace(/\s+/g, '')) || name.includes(t)).length * 3;
+        return { product, score };
+      }).filter(x => x.score > 0).sort((x, y) => y.score - x.score).slice(0, 5);
+      const featured = scored.length ? scored.map(x => x.product) : (topic ? [] : ctx.products.slice(0, 5));
+      const products = featured.map(p => `- ${p.name}: ${formatPrice(p)} (estado publicado: ${stockLabel(p.stock_status)})`);
+      const line = products.length ? `\n\nEn el catálogo aparecen:\n${products.join('\n')}` :
+        '\n\nNo encuentro un equipo que coincida claramente con tu consulta en el catálogo publicado.';
       return {
-        text:
-          'Para darte un precio exacto necesitamos conocer los detalles de tu proyecto ' +
-          '(potencia, equipos, zona, distancia). ' +
-          '¿Quieres que te contactemos para una cotización personalizada?' + header,
+        text: `Te ayudo a comparar equipos y preparar una cotización.${line}\n\nLa disponibilidad y la compatibilidad se confirman con nuestro equipo antes de cualquier pedido. ¿Qué potencia, voltaje o modelo necesitas? Puedes enviar la solicitud en «Solicitar servicio».`,
+        intent,
+        source: products.length ? 'catalog' : 'template',
+      };
+    }
+
+    case 'solar_advice': {
+      const prior = history.filter(h => h.role === 'user').slice(-4).map(h => h.content).join(' ');
+      const combined = normalize(prior + ' ' + message);
+      const consumption = /\d+(?:[.,]\d+)?\s*(?:kw|kwh|watts?|amperios?|ampere|a\b)/.test(combined)
+        || /nevera|refrigerador|aire acondicionado|equipos a alimentar/.test(combined);
+      const autonomy = /\d+(?:[.,]\d+)?\s*(?:horas?|h\b)|autonomia|durante apagones/.test(combined);
+      const choice = /solo respaldo|solo baterias|con paneles|tambien paneles|generacion solar/.test(combined);
+      const question = !consumption
+        ? 'Primero dime qué equipos necesitas alimentar y, si la conoces, su potencia en W o consumo diario en kWh.'
+        : !autonomy
+        ? '¿Cuántas horas de autonomía necesitas cuando falle la electricidad?'
+        : !choice
+        ? '¿Buscas solo respaldo con baterías o quieres generar también con paneles solares?'
+        : 'Con esos datos podemos preparar una evaluación. Ve a «Asesor solar» para una estimación inicial y a «Solicitar servicio» para que un técnico revise el proyecto.';
+      return {
+        text: 'Vamos por partes para evitar recomendar equipos incompatibles. ' + question +
+          '\n\nLa estimación no sustituye la revisión de cargas, picos de arranque, protecciones y compatibilidad eléctrica.',
         intent,
         source: 'template',
       };
     }
-
-    case 'solar_advice':
-      return {
-        text:
-          'Con gusto te ayudo a dimensionar tu sistema solar. Para darte una estimación necesito:\n\n' +
-          '1. ¿Cuánta energía consume tu vivienda (o qué equipos quieres alimentar)?\n' +
-          '2. ¿A qué voltaje funciona (120V, 220V)?\n' +
-          '3. ¿Cuántas horas de autonomía necesitas?\n' +
-          '4. ¿Solo respaldo con baterías o también paneles solares?\n\n' +
-          'Con esos datos te indico el equipo recomendado.',
-        intent,
-        source: 'template',
-      };
 
     case 'appointment':
       return {
@@ -350,7 +367,7 @@ export function generateResponse(
           '1. ¿Qué servicio necesitas (instalación, mantenimiento, reparación o evaluación)?\n' +
           '2. ¿En qué ciudad o zona te encuentras?\n' +
           '3. ¿Qué fecha te gustaría?\n\n' +
-          'Con eso consulto la disponibilidad y te propongo horarios.',
+          'Puedes registrar una solicitud en «Solicitar servicio». El equipo te confirmará fecha y horario; no reservaré una cita desde este chat sin registrarla.',
         intent,
         source: 'template',
       };
@@ -362,7 +379,7 @@ export function generateResponse(
           '1. ¿Qué equipo falla (inversor, panel, batería u otro)?\n' +
           '2. ¿Marca y modelo?\n' +
           '3. ¿Qué error o síntoma presenta?\n' +
-          '4. ¿Tu nombre y teléfono para contactarte?\n\n' +
+          '4. ¿En qué municipio está el equipo?\n\n' +
           '¿Me los puedes compartir?',
         intent,
         source: 'template',
@@ -380,8 +397,8 @@ export function generateResponse(
           'Ofrecemos mantenimiento preventivo para sistemas solares. Para agendar la visita necesito:\n\n' +
           '1. ¿Qué tipo de sistema tienes?\n' +
           '2. ¿Cuándo fue tu última instalación o mantenimiento?\n' +
-          '3. ¿Tu zona y datos de contacto?\n\n' +
-          '¿Te gustaría agendar una visita?' + priceLine,
+          '3. ¿Qué síntoma o necesidad de mantenimiento presenta?\n\n' +
+          'Si deseas una visita, regístrala en «Solicitar servicio» para que quede vinculada a tu cuenta.' + priceLine,
         intent,
         source: 'template',
       };
@@ -460,7 +477,12 @@ export function buildSystemPrompt(ctx: AssistantContext): string {
 
   return [
     `Eres el asistente de ${business}, una empresa de energía solar y equipos eléctricos.`,
-    'Responde en español, de forma breve, amable y profesional. No inventes precios, productos ni fechas.',
+    'Responde en español claro y cercano al contexto de Cuba. Guía paso a paso con una pregunta útil por turno.',
+    'La información del catálogo es orientativa: no inventes precios, existencias, garantía, compatibilidad, fechas ni trámites.',
+    'Nunca afirmes que reservaste una cita, registraste una solicitud o realizaste un pedido: el chat no ejecuta esas acciones.',
+    'La persona ya inició sesión. No vuelvas a pedir contraseña, teléfono ni dirección por el chat; indícale Mi perfil si necesita actualizarlos.',
+    'Para solicitar cotización, instalación o visita indícale la sección Solicitar servicio. Para seguimiento, Mis solicitudes.',
+    'Las estimaciones solares son orientativas: pide consumo, tensión, autonomía y propósito antes de hablar de dimensionamiento; exige revisión técnica.',
     'Si no tienes la información, indica que el equipo la confirmará contactando al cliente.',
     ctx.config.tone ? `Tono: ${ctx.config.tone}.` : '',
     catalog ? `Catálogo disponible:\n${catalog}` : '',
