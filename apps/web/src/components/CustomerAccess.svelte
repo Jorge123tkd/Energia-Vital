@@ -19,7 +19,7 @@
     busy = true;
     try {
       const result = mode === 'login'
-        ? await api.customerLogin({ email, password })
+        ? await api.signIn({ email, password })
         : await api.register({ name, email, password, phone, address, city, province });
       password = '';
       onSuccess(result.user, result.access_token);
@@ -34,7 +34,7 @@
     <div class="text-center mb-8">
       <div class="inline-flex w-12 h-12 rounded-xl bg-energia-600 text-white font-bold items-center justify-center">EV</div>
       <h1 class="text-3xl font-bold text-gray-900 mt-3">Energía Vital</h1>
-      <p class="text-gray-600 mt-2">Tu espacio para consultar equipos, solicitar servicios y dar seguimiento a tus citas.</p>
+      <p class="text-gray-600 mt-2">Accede con tu cuenta de cliente o administrador. El sistema reconocerá automáticamente tus permisos.</p>
     </div>
     <div class="flex gap-2 mb-6" role="group" aria-label="Acceso">
       <button type="button" class="flex-1 py-2 rounded-lg {mode === 'login' ? 'bg-energia-600 text-white' : 'bg-gray-100 text-gray-700'}" onclick={() => { mode = 'login'; error = ''; }}>Entrar</button>
@@ -76,6 +76,6 @@
         {busy ? 'Procesando…' : mode === 'login' ? 'Iniciar sesión' : 'Crear mi cuenta'}
       </button>
     </form>
-    <p class="text-xs text-center text-gray-500 mt-6">Puedes explorar productos, servicios y galería sin registrarte. Necesitas una cuenta para hacer solicitudes, agendar citas y hablar con el asistente.</p>
+    <p class="text-xs text-center text-gray-500 mt-6">Puedes explorar productos y servicios sin registrarte. Las cuentas de administrador también pueden iniciar sesión aquí y acceder a su panel desde Mi perfil.</p>
   </section>
 </div>
