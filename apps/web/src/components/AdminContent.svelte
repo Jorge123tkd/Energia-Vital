@@ -119,6 +119,16 @@
       youtube_channel_url: '', facebook_url: '', instagram_url: '', telegram_public_url: '' };
   }
   let site = $state<Record<string, string>>(siteDefaults());
+
+  type HomeSlide = { title: string; subtitle: string; image_url: string; link_label: string; link_url: string };
+  function defaultSlides(): HomeSlide[] {
+    return [
+      { title: 'Energía Vital', subtitle: 'Paneles solares, inversores, baterías y servicios de instalación y mantenimiento.', image_url: '', link_label: 'Explorar equipos', link_url: '/catalogo' },
+      { title: 'Trabajos que hablan por nosotros', subtitle: 'Conoce nuestros proyectos e instalaciones de energía solar.', image_url: '', link_label: 'Ver nuestros trabajos', link_url: '/galeria' },
+      { title: 'Novedades y soluciones solares', subtitle: 'Descubre equipos disponibles y las propuestas que mejor se adaptan a ti.', image_url: '', link_label: 'Ver catálogo', link_url: '/catalogo' },
+    ];
+  }
+  let slides = $state<HomeSlide[]>(defaultSlides());
   let linksText = $state('');
   async function loadExtra() {
     try {
@@ -131,6 +141,21 @@
       let links: any[] = [];
       try { links = JSON.parse(row?.value || '[]'); } catch { /* configuración antigua */ }
       linksText = Array.isArray(links) ? links.map((l: any) => String(l.label) + ' | ' + String(l.url)).join('\n') : '';
+      const slidesRow = (cfg.settings ?? []).find((x: any) => x.key === 'home_slides');
+      try {
+        const parsed = JSON.parse(slidesRow?.value || 'null');
+        if (Array.isArray(parsed) && parsed.length === 3) {
+          slides = parsed.map((s: any) => ({
+            title: String(s.title || ''), subtitle: String(s.subtitle || ''),
+            image_url: String(s.image_url || ''), link_label: String(s.link_label || ''),
+            link_url: String(s.link_url || '')
+          }));
+        } else {
+          slides = defaultSlides();
+          if (next.home_title) slides[0].title = next.home_title;
+          if (next.home_subtitle) slides[0].subtitle = next.home_subtitle;
+        }
+      } catch { slides = defaultSlides(); }
     } catch (e) { error = e instanceof Error ? e.message : 'No se pudo cargar la configuración.'; }
   }
   onMount(() => { void loadExtra(); });
@@ -176,7 +201,7 @@
         if (pos < 1) throw new Error('Enlaces: escribe una línea como Catálogo | /catalogo');
         return { label: line.slice(0, pos).trim(), url: line.slice(pos + 1).trim() };
       });
-      await api.saveSiteSettings(token, { ...site, footer_links: JSON.stringify(links) });
+      await api.saveSiteSettings(token, { ...site, footer_links: JSON.stringify(links), home_slides: JSON.stringify(slides) });
       notice = 'Contenido de la portada y el pie de página publicado.';
     });
   }
@@ -291,9 +316,41 @@
     <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm max-w-4xl space-y-5">
       <div><h2 class="text-2xl font-bold text-slate-900">Personalizar la web</h2><p class="text-slate-500 mt-1">Controla los textos principales, el contacto, las redes sociales y los enlaces del pie de página sin editar código.</p></div>
       <form onsubmit={saveSite} class="space-y-7">
-        <fieldset class="space-y-3"><legend class="text-lg font-semibold mb-3">Portada</legend>
-          <label class="admin-label">Título principal<input maxlength="120" class="admin-input" bind:value={site.home_title} /></label>
-          <label class="admin-label">Descripción de bienvenida<textarea rows="4" class="admin-input" placeholder="Explica por qué elegir Energía Vital" bind:value={site.home_subtitle}></textarea></label>
+        <fieldset class="space-y-4">
+          <legend class="text-lg font-semibold mb-3">Carrusel de portada · 3 diapositivas</legend>
+          <p class="text-sm text-slate-500">Cada entrada puede mostrar un trabajo, la empresa o una promoción real. Para subir imágenes, entra en «Galería» y selecciona aquí la foto publicada.</p>
+          {#each slides as slide, index}
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-3">
+              <h3 class="font-bold text-slate-900">Diapositiva {index + 1} · {index === 0 ? 'Presentación' : index === 1 ? 'Trabajos' : 'Novedades o promociones'}</h3>
+              <label class="admin-label">Título
+                <input required maxlength="120" class="admin-input" bind:value={slide.title} />
+              </label>
+              <label class="admin-label">Descripción
+                <textarea maxlength="450" rows="3" class="admin-input" bind:value={slide.subtitle}></textarea>
+              </label>
+              <label class="admin-label">Seleccionar una imagen de la galería
+                <select class="admin-input" bind:value={slide.image_url}>
+                  <option value="">Sin imagen (usar fondo de color)</option>
+                  {#each gallery.filter((g: any) => g.url && g.is_active) as g (g.id)}
+                    <option value={g.url}>{g.title || 'Trabajo sin título'}</option>
+                  {/each}
+                  {#if slide.image_url && !gallery.some((g: any) => g.url === slide.image_url)}
+                    <option value={slide.image_url}>Imagen externa / guardada</option>
+                  {/if}
+                </select>
+              </label>
+              <label class="admin-label">O pegar una URL HTTPS de imagen
+                <input type="url" maxlength="600" class="admin-input" placeholder="https://..." bind:value={slide.image_url} />
+              </label>
+              {#if slide.image_url && slide.image_url.startsWith('https://')}
+                <img src={slide.image_url} alt="Vista previa de la diapositiva" class="rounded-xl max-h-44 w-full object-cover" />
+              {/if}
+              <div class="grid sm:grid-cols-2 gap-3">
+                <label class="admin-label">Texto del botón<input maxlength="60" class="admin-input" bind:value={slide.link_label} /></label>
+                <label class="admin-label">Enlace del botón<input required maxlength="500" class="admin-input" placeholder="/galeria" bind:value={slide.link_url} /></label>
+              </div>
+            </div>
+          {/each}
         </fieldset>
         <fieldset class="space-y-3"><legend class="text-lg font-semibold mb-3">Pie de página y contacto</legend>
           <label class="admin-label">Texto sobre la empresa<textarea rows="3" class="admin-input" bind:value={site.footer_description}></textarea></label>
