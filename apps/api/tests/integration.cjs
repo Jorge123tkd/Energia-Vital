@@ -102,6 +102,9 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const br = await request('Register customer B', '/api/auth/register', 'POST', b, null, 201);
   const at = ar.access_token, bt = br.access_token;
   assert.ok(at && bt, 'registration returns tokens');
+  const sharedCustomer = await request('Site login recognizes customer', '/api/auth/sign-in', 'POST', a);
+  assert.equal(sharedCustomer.user.role, 'customer');
+
   await request('Duplicate email refused', '/api/auth/register', 'POST', a, null, 409);
   const me = await request('Profile belongs to A', '/api/auth/me', 'GET', null, at);
   assert.equal(me.user.email, a.email);
