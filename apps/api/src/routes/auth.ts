@@ -53,9 +53,24 @@ authRoutes.post('/login', async c => {
   return c.json({ user: { id: admin.id, email: admin.email, role: admin.role }, token: tokens.access_token, ...tokens });
 });
 
+/** Evita registros incompletos cuando la D1 remota no recibió todas las migraciones. */
+async function registrationSchemaReady(env: Env): Promise<boolean> {
+  const { results } = await env.DB.prepare('PRAGMA table_info(customers)').all<{ name: string }>();
+  const columns = new Set((results || []).map(row => row.name));
+  const required = ['id', 'name', 'email', 'phone', 'address', 'city', 'province', 'password_hash', 'role', 'phone_verified', 'created_at', 'updated_at'];
+  const missing = required.filter(name => !columns.has(name));
+  const sessions = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'auth_sessions'").first();
+  if (missing.length || !sessions) {
+    console.error('[register] D1 necesita migraciones de cuentas', { missingColumns: missing, missingSessions: !sessions });
+    return false;
+  }
+  return true;
+}
+
 authRoutes.post('/register', async c => {
-  if (await rateLimited(c.env, c.req.raw, 'register', 5, 3600)) return c.json({ error: 'Demasiados intentos de registro' }, 429);
-  const b = await c.req.json<any>();
+  if (await rateLimited(c.env, c.req.raw, 'register', 5, 3600)) return c.json({ error: 'Demasiados intentos de registro. Inténtalo más tarde.' }, 429);
+  const b = await c.req.json<any>().catch(() => null);
+  if (!b || typeof b !== 'object') return c.json({ error: 'Solicitud de registro inválida' }, 400);
   const name = clean(b.name, 120);
   const email = clean(b.email, 254).toLowerCase();
   const phone = clean(b.phone, 25);
@@ -63,18 +78,42 @@ authRoutes.post('/register', async c => {
   const city = clean(b.city, 100);
   const province = clean(b.province, 100);
   if (name.length < 3 || !validEmail(email) || !validPhone(phone) || address.length < 6 || city.length < 2 || province.length < 2 || !validPassword(b.password))
-    return c.json({ error: 'Completa nombre, email, teléfono, dirección, municipio, provincia y contraseña de al menos 10 caracteres' }, 400);
-  const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE LOWER(email) = ?').bind(email).first();
-  if (existing) return c.json({ error: 'Este correo ya está registrado' }, 409);
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
+    return c.json({ error: 'Completa nombre, email, teléfono, dirección, municipio, provincia y contraseña de al menos 10 caracteres.' }, 400);
+  if (!c.env.JWT_SECRET || c.env.JWT_SECRET.length < 32) {
+    console.error('[register] JWT_SECRET no configurado');
+    return c.json({ error: 'El registro no está disponible temporalmente. Contacta al equipo de Energía Vital.' }, 503);
+  }
   try {
-    await c.env.DB.prepare(`INSERT INTO customers (id, name, email, phone, address, city, province, password_hash, role, phone_verified, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer', 0, ?, ?)`)
-      .bind(id, name, email, phone, address, city, province, await hashPassword(b.password), now, now).run();
-  } catch { return c.json({ error: 'No se pudo registrar el usuario; revisa si el correo está duplicado' }, 409); }
-  const tokens = await issue(c.env, id, 'customer', 'customer');
-  return c.json({ user: { id, name, email, phone, address, city, province, role: 'customer', phone_verified: false }, ...tokens }, 201);
+    if (!await registrationSchemaReady(c.env)) {
+      return c.json({ error: 'El registro no está disponible temporalmente. Contacta al equipo de Energía Vital.' }, 503);
+    }
+    const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE LOWER(email) = ?').bind(email).first();
+    if (existing) return c.json({ error: 'Este correo ya está registrado. Utiliza «Entrar» o contacta a soporte para recuperar el acceso.' }, 409);
+
+    const id = crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const expires = new Date(Date.now() + REFRESH_TTL * 1000).toISOString();
+    const hash = await hashPassword(b.password);
+    // D1.batch ejecuta ambas sentencias de forma transaccional:
+    // no deja una cuenta creada a medias si la sesión no se puede guardar.
+    await c.env.DB.batch([
+      c.env.DB.prepare(`INSERT INTO customers (id, name, email, phone, address, city, province, password_hash, role, phone_verified, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer', 0, ?, ?)`)
+        .bind(id, name, email, phone, address, city, province, hash, now, now),
+      c.env.DB.prepare('INSERT INTO auth_sessions (id, user_id, user_type, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
+        .bind(sessionId, id, 'customer', now, expires),
+    ]);
+    const tokens = await generateTokenPair(c.env, id, 'customer', 'customer', sessionId);
+    return c.json({ user: { id, name, email, phone, address, city, province, role: 'customer', phone_verified: false }, ...tokens }, 201);
+  } catch (error) {
+    console.error('[register] Error en D1 al registrar una cuenta', error);
+    const detail = error instanceof Error ? error.message : String(error);
+    if (/UNIQUE constraint failed|unique index|SQLITE_CONSTRAINT_UNIQUE/i.test(detail)) {
+      return c.json({ error: 'Este correo ya está registrado. Utiliza «Entrar».' }, 409);
+    }
+    return c.json({ error: 'No se pudo completar el registro por un problema temporal. Inténtalo más tarde o contacta a soporte.' }, 500);
+  }
 });
 
 authRoutes.post('/customer/login', async c => {
