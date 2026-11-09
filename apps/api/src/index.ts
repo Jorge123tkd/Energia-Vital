@@ -15,7 +15,12 @@ import { giveawaysRoutes } from './routes/giveaways';
 import { rewardsRoutes } from './routes/rewards';
 import { notificationsRoutes } from './routes/notifications';
 
-const knownOrigins = ['https://energia-vital-web.pages.dev', 'http://localhost:5173'];
+// Vista previa controlada del panel: misma API, sin habilitar cualquier subdominio.
+const knownOrigins = [
+  'https://energia-vital-web.pages.dev',
+  'https://admin-visual-preview.energia-vital-web.pages.dev',
+  'http://localhost:5173',
+];
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const app = new Hono<{ Bindings: Env; Variables: { user?: JwtPayload } }>();
