@@ -41,6 +41,8 @@ export const api = {
 
   register: (body: { name: string; email: string; phone: string; address: string; city: string; province: string; password: string }) => post('/api/auth/register', body),
   customerLogin: (body: { email: string; password: string }) => post('/api/auth/customer/login', body),
+  signIn: (body: { email: string; password: string }) => post('/api/auth/sign-in', body),
+  logoutAdmin: (token: string) => post('/api/auth/logout', {}, withAdmin(token)),
   me: () => apiRequest('/api/auth/me'),
   updateProfile: (body: { name: string; phone: string; address: string; city: string; province: string }) =>
     apiRequest('/api/auth/me', { method: 'PUT', body: JSON.stringify(body) }),
@@ -64,6 +66,12 @@ export const api = {
   adminLogin: (body: { email: string; password: string }) => post('/api/auth/login', body),
   adminMe: (token: string) => apiRequest('/api/auth/admin/me', withAdmin(token)),
   adminCustomers: (token: string) => apiRequest('/api/admin-customers/customers', withAdmin(token)),
+  updateAdminCustomer: (token: string, id: string, body: Record<string, string>) =>
+    patch(`/api/admin-customers/customers/${encodeURIComponent(id)}`, body, withAdmin(token)),
+  setAdminCustomerStatus: (token: string, id: string, is_active: boolean) =>
+    patch(`/api/admin-customers/customers/${encodeURIComponent(id)}/status`, { is_active }, withAdmin(token)),
+  deleteAdminCustomer: (token: string, id: string) =>
+    apiRequest(`/api/admin-customers/customers/${encodeURIComponent(id)}`, withAdmin(token, { method: 'DELETE' })),
   adminRequests: (token: string) => apiRequest('/api/admin-customers/requests', withAdmin(token)),
   adminAppointments: (token: string) => apiRequest('/api/admin-customers/appointments', withAdmin(token)),
   updateAdminRequest: (token: string, id: string, status: string) => patch(`/api/admin-customers/requests/${id}`, { status }, withAdmin(token)),
