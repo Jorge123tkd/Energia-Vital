@@ -391,7 +391,7 @@ adminRoutes.post('/gallery', async (c) => {
       });
       r2_key = key;
       const origin = new URL(c.req.url).origin;
-      url = `${origin}/api/public/gallery/image/${encodeURIComponent(key)}`;
+      url = `${origin}/api/public/gallery/media/${id}`;
     } else {
       url = (formData.get('url') as string) || null;
     }
