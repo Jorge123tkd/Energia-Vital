@@ -22,7 +22,6 @@
     "wrangler": "^4.151.2"
   },
   "dependencies": {
-    "@cloudflare/workerd-windows-64": "^1.20261019.1",
     "hono": "^4.0.0"
   }
 }
