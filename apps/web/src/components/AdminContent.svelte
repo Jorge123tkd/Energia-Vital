@@ -9,6 +9,7 @@
   } = $props();
 
   let busy = $state(false);
+  let modal = $state<'category' | 'product' | 'service' | null>(null);
   let notice = $state('');
   let error = $state('');
   let categoryName = $state('');
@@ -38,11 +39,11 @@
   function editProduct(p: any) {
     editingProduct = p.id; product = { ...blankProduct(), ...p, price: p.price ?? undefined, stock_quantity: p.stock_quantity ?? undefined,
       warranty_months: p.warranty_months ?? undefined }; productPhoto = null;
-    notice = ''; error = '';
+    notice = ''; error = ''; modal = 'product';
   }
   function editService(s: any) {
     editingService = s.id; service = { ...blankService(), ...s, price: s.price ?? undefined, duration_minutes: s.duration_minutes ?? undefined };
-    servicePhoto = null; notice = ''; error = '';
+    servicePhoto = null; notice = ''; error = ''; modal = 'service';
   }
 
   async function execute(task: () => Promise<void>) {
@@ -56,7 +57,7 @@
     await execute(async () => {
       await api.createAdminCategory(token, { name: categoryName.trim(), description: categoryDescription.trim(),
         slug: slug(categoryName) + '-' + Date.now() });
-      categoryName = ''; categoryDescription = ''; await onRefresh(); notice = 'Categoría creada correctamente.';
+      categoryName = ''; categoryDescription = ''; await onRefresh(); modal = null; notice = 'Categoría creada correctamente.';
     });
   }
   async function saveProduct(event: SubmitEvent) {
@@ -73,7 +74,7 @@
         id = result.id;
       }
       if (productPhoto) await api.uploadProductImage(token, id, productPhoto, product.name);
-      await onRefresh(); resetProduct(); notice = 'Producto guardado y visible según su estado de publicación.';
+      await onRefresh(); resetProduct(); modal = null; notice = 'Producto guardado y visible según su estado de publicación.';
     });
   }
   async function saveService(event: SubmitEvent) {
@@ -88,7 +89,7 @@
         id = result.id;
       }
       if (servicePhoto) await api.uploadServiceImage(token, id, servicePhoto);
-      await onRefresh(); resetService(); notice = 'Servicio guardado correctamente.';
+      await onRefresh(); resetService(); modal = null; notice = 'Servicio guardado correctamente.';
     });
   }
   async function toggleProduct(p: any) {
@@ -186,69 +187,23 @@
   {#if notice}<div role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-900 p-4">{notice}</div>{/if}
 
   {#if tab === 'products'}
-    <div class="grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-6 items-start">
-      <div class="space-y-6">
-        <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <h2 class="text-lg font-bold text-slate-900 mb-1">Categorías</h2>
-          <p class="text-sm text-slate-500 mb-4">Agrupa los equipos para facilitar la búsqueda en el catálogo.</p>
-          <form onsubmit={saveCategory} class="space-y-3">
-            <label class="block text-sm font-medium">Nombre de la categoría
-              <input required maxlength="120" class="admin-input" placeholder="Ej. Paneles solares" bind:value={categoryName} />
-            </label>
-            <label class="block text-sm font-medium">Descripción breve
-              <textarea rows="2" class="admin-input" placeholder="Ej. Paneles monocristalinos para hogares y negocios" bind:value={categoryDescription}></textarea>
-            </label>
-            <button disabled={busy} class="admin-secondary w-full">+ Añadir categoría</button>
-          </form>
-          <div class="flex flex-wrap gap-2 mt-4">{#each categories as cat (cat.id)}<span class="text-xs px-3 py-1.5 bg-slate-100 rounded-full text-slate-700">{cat.name}</span>{/each}</div>
-        </section>
-        <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <div class="flex justify-between items-center gap-3 mb-4">
-            <div><h2 class="text-xl font-bold">{editingProduct ? 'Editar equipo' : 'Nuevo equipo'}</h2><p class="text-sm text-slate-500">Toda la información que necesita el cliente.</p></div>
-            {#if editingProduct}<button type="button" class="text-sm underline" onclick={resetProduct}>Cancelar edición</button>{/if}
-          </div>
-          <form class="grid gap-3" onsubmit={saveProduct}>
-            <label class="admin-label">Categoría
-              <select required class="admin-input" bind:value={product.category_id}><option value="">Selecciona una categoría</option>{#each categories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}</select>
-            </label>
-            <label class="admin-label">Nombre del equipo
-              <input required maxlength="120" class="admin-input" placeholder="Panel solar monocristalino 550 W" bind:value={product.name} />
-            </label>
-            <div class="grid sm:grid-cols-2 gap-3">
-              <label class="admin-label">Marca<input class="admin-input" placeholder="Marca" bind:value={product.brand} /></label>
-              <label class="admin-label">Modelo<input class="admin-input" placeholder="Modelo" bind:value={product.model} /></label>
-            </div>
-            <label class="admin-label">Resumen para el catálogo
-              <textarea rows="2" class="admin-input" placeholder="Lo más importante del producto en dos frases" bind:value={product.short_description}></textarea>
-            </label>
-            <label class="admin-label">Descripción completa
-              <textarea rows="4" class="admin-input" placeholder="Rendimiento, ventajas, usos recomendados y detalles..." bind:value={product.description}></textarea>
-            </label>
-            <label class="admin-label">Especificaciones técnicas
-              <textarea rows="3" class="admin-input" placeholder="Potencia: 550 W&#10;Eficiencia: ...&#10;Dimensiones: ..." bind:value={product.specifications}></textarea>
-            </label>
-            <div class="grid sm:grid-cols-2 gap-3">
-              <label class="admin-label">Precio (opcional)<input type="number" min="0" step="0.01" class="admin-input" bind:value={product.price} /></label>
-              <label class="admin-label">Moneda<select class="admin-input" bind:value={product.currency}><option value="USD">USD</option><option value="CUP">CUP</option><option value="MLC">MLC</option></select></label>
-              <label class="admin-label">Inventario<select class="admin-input" bind:value={product.stock_status}><option value="in_stock">Disponible</option><option value="on_order">Bajo pedido</option><option value="out_of_stock">Agotado</option></select></label>
-              <label class="admin-label">Existencias<input type="number" min="0" step="1" class="admin-input" bind:value={product.stock_quantity} /></label>
-              <label class="admin-label">Garantía (meses)<input type="number" min="0" step="1" class="admin-input" bind:value={product.warranty_months} /></label>
-            </div>
-            <label class="admin-label">Fotografía principal (JPG, PNG o WebP · máximo 8 MB)
-              <input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => productPhoto = e.currentTarget.files?.[0] ?? null} />
-            </label>
-            <div class="flex flex-wrap gap-4 py-2">
-              <label class="flex gap-2 items-center text-sm"><input type="checkbox" bind:checked={product.is_featured} /> Destacar en inicio</label>
-              <label class="flex gap-2 items-center text-sm"><input type="checkbox" bind:checked={product.is_active} /> Publicado</label>
-            </div>
-            <button disabled={busy} class="admin-primary">{busy ? 'Guardando…' : editingProduct ? 'Guardar cambios del producto' : 'Publicar producto'}</button>
-          </form>
-        </section>
+    <section class="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+      <div class="flex flex-wrap gap-3 justify-between items-start">
+        <div><h2 class="text-2xl font-bold text-slate-900">Catálogo de equipos ({products.length})</h2>
+          <p class="text-sm text-slate-500 mt-1">Crea y edita sin abandonar el catálogo. Las fichas se abren en ventanas independientes.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="admin-secondary" onclick={() => { modal = 'category'; error = ''; }}>+ Nueva categoría</button>
+          <button type="button" class="admin-primary" onclick={() => { resetProduct(); modal = 'product'; error = ''; }}>+ Nuevo equipo</button>
+        </div>
       </div>
-      <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-        <h2 class="text-xl font-bold mb-1">Catálogo administrado <span class="text-slate-400 text-sm font-normal">({products.length})</span></h2>
-        <p class="text-sm text-slate-500 mb-4">Pulsa «Editar» para ajustar descripción, precio o fotografía. Los cambios se guardan automáticamente en la base de datos.</p>
-        <div class="grid sm:grid-cols-2 gap-4">
+      <div class="flex flex-wrap gap-2">
+        {#each categories as cat (cat.id)}
+          <span class="text-xs px-3 py-1.5 bg-slate-100 rounded-full text-slate-700">{cat.name}</span>
+        {/each}
+        {#if categories.length === 0}<p class="text-sm text-orange-700">Crea primero una categoría.</p>{/if}
+      </div>
+      <div class="grid sm:grid-cols-2 gap-4">
           {#each products as p (p.id)}
             <article class="rounded-xl border border-slate-200 overflow-hidden bg-white">
               {#if p.primary_image_url}<img src={p.primary_image_url} alt={p.name} class="h-40 w-full object-cover" />{:else}<div class="h-40 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400 text-sm">Sin fotografía</div>{/if}
@@ -261,30 +216,18 @@
             </article>
           {/each}
         </div>
-        {#if products.length === 0}<p class="text-slate-500 text-sm py-8">Aún no hay equipos. Crea una categoría y añade el primer producto.</p>{/if}
-      </section>
-    </div>
+        
+      {#if products.length === 0}<p class="text-slate-500 text-sm py-8">Aún no hay equipos. Crea una categoría y añade el primer producto.</p>{/if}
+    </section>
   {:else if tab === 'services'}
-    <div class="grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-6 items-start">
-      <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <div class="flex justify-between items-center gap-2 mb-4"><h2 class="text-xl font-bold">{editingService ? 'Editar servicio' : 'Nuevo servicio'}</h2>{#if editingService}<button class="admin-link" onclick={resetService}>Cancelar</button>{/if}</div>
-        <form class="space-y-4" onsubmit={saveService}>
-          <label class="admin-label">Nombre del servicio<input required maxlength="120" class="admin-input" placeholder="Instalación de paneles solares" bind:value={service.name} /></label>
-          <label class="admin-label">Descripción detallada<textarea required rows="4" class="admin-input" placeholder="Qué incluye el servicio, para quién es y qué ventajas ofrece..." bind:value={service.description}></textarea></label>
-          <label class="admin-label">Alcance y condiciones<textarea rows="3" class="admin-input" placeholder="Incluye revisión, instalación, puesta en marcha..." bind:value={service.scope}></textarea></label>
-          <div class="grid sm:grid-cols-2 gap-3">
-            <label class="admin-label">Tipo de precio<select class="admin-input" bind:value={service.price_type}><option value="quote">Bajo presupuesto</option><option value="fixed">Precio fijo</option><option value="free">Gratuito</option></select></label>
-            <label class="admin-label">Precio (si es fijo)<input type="number" min="0" step="0.01" class="admin-input" bind:value={service.price} /></label>
-            <label class="admin-label">Duración estimada (minutos)<input type="number" min="0" step="1" class="admin-input" bind:value={service.duration_minutes} /></label>
-          </div>
-          <label class="admin-label">Imagen del servicio (JPG, PNG o WebP · máximo 8 MB)<input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => servicePhoto = e.currentTarget.files?.[0] ?? null} /></label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={service.is_active} /> Publicado en la página de servicios</label>
-          <button disabled={busy} class="admin-primary w-full">{busy ? 'Guardando…' : editingService ? 'Guardar cambios' : 'Crear servicio'}</button>
-        </form>
-      </section>
-      <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-        <h2 class="text-xl font-bold mb-4">Servicios ({services.length})</h2>
-        <div class="grid sm:grid-cols-2 gap-4">
+    <section class="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+      <div class="flex flex-wrap gap-3 justify-between items-center">
+        <div><h2 class="text-2xl font-bold text-slate-900">Servicios ({services.length})</h2>
+          <p class="text-sm text-slate-500 mt-1">Publica servicios completos con fotografías, descripción y precio.</p>
+        </div>
+        <button type="button" class="admin-primary" onclick={() => { resetService(); modal = 'service'; error = ''; }}>+ Nuevo servicio</button>
+      </div>
+      <div class="grid sm:grid-cols-2 gap-4">
           {#each services as s (s.id)}
             <article class="border border-slate-200 rounded-xl overflow-hidden">
               {#if s.image_url}<img class="w-full h-40 object-cover" src={s.image_url} alt={s.name} />{:else}<div class="h-40 bg-slate-100 flex items-center justify-center text-slate-400">Sin fotografía</div>{/if}
@@ -297,9 +240,9 @@
             </article>
           {/each}
         </div>
-        {#if services.length === 0}<p class="text-slate-500">Aún no hay servicios publicados.</p>{/if}
-      </section>
-    </div>
+        
+      {#if services.length === 0}<p class="text-slate-500">Aún no hay servicios publicados.</p>{/if}
+    </section>
   {:else if tab === 'gallery'}
     <div class="grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-6 items-start">
       <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -378,6 +321,86 @@
     </section>
   {/if}
 </div>
+
+{#if modal}
+  <div class="fixed inset-0 z-[180] bg-slate-950/70 flex justify-center items-center p-4">
+    <dialog open aria-label={modal === 'category' ? 'Nueva categoría' : modal === 'product' ? 'Datos del equipo' : 'Datos del servicio'}
+      class="relative m-0 bg-white rounded-2xl shadow-2xl w-full {modal === 'category' ? 'max-w-lg' : 'max-w-3xl'} max-h-[92vh] overflow-y-auto p-5 sm:p-7">
+      <header class="flex items-start justify-between gap-3 mb-5">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900">
+            {modal === 'category' ? 'Nueva categoría' : modal === 'product' ? (editingProduct ? 'Editar equipo' : 'Nuevo equipo') : (editingService ? 'Editar servicio' : 'Nuevo servicio')}
+          </h2>
+          <p class="text-sm text-slate-500 mt-1">Completa la información y pulsa guardar para publicar los cambios.</p>
+        </div>
+        <button class="admin-secondary" type="button" aria-label="Cerrar formulario" onclick={() => modal = null}>✕</button>
+      </header>
+      {#if error}<p role="alert" class="mb-4 border border-red-200 bg-red-50 text-red-700 rounded-lg p-3">{error}</p>{/if}
+      {#if modal === 'category'}
+        <form onsubmit={saveCategory} class="space-y-3">
+            <label class="block text-sm font-medium">Nombre de la categoría
+              <input required maxlength="120" class="admin-input" placeholder="Ej. Paneles solares" bind:value={categoryName} />
+            </label>
+            <label class="block text-sm font-medium">Descripción breve
+              <textarea rows="2" class="admin-input" placeholder="Ej. Paneles monocristalinos para hogares y negocios" bind:value={categoryDescription}></textarea>
+            </label>
+            <button disabled={busy} class="admin-secondary w-full">+ Añadir categoría</button>
+          </form>
+      {:else if modal === 'product'}
+        <form class="grid gap-3" onsubmit={saveProduct}>
+            <label class="admin-label">Categoría
+              <select required class="admin-input" bind:value={product.category_id}><option value="">Selecciona una categoría</option>{#each categories as c (c.id)}<option value={c.id}>{c.name}</option>{/each}</select>
+            </label>
+            <label class="admin-label">Nombre del equipo
+              <input required maxlength="120" class="admin-input" placeholder="Panel solar monocristalino 550 W" bind:value={product.name} />
+            </label>
+            <div class="grid sm:grid-cols-2 gap-3">
+              <label class="admin-label">Marca<input class="admin-input" placeholder="Marca" bind:value={product.brand} /></label>
+              <label class="admin-label">Modelo<input class="admin-input" placeholder="Modelo" bind:value={product.model} /></label>
+            </div>
+            <label class="admin-label">Resumen para el catálogo
+              <textarea rows="2" class="admin-input" placeholder="Lo más importante del producto en dos frases" bind:value={product.short_description}></textarea>
+            </label>
+            <label class="admin-label">Descripción completa
+              <textarea rows="4" class="admin-input" placeholder="Rendimiento, ventajas, usos recomendados y detalles..." bind:value={product.description}></textarea>
+            </label>
+            <label class="admin-label">Especificaciones técnicas
+              <textarea rows="3" class="admin-input" placeholder="Potencia: 550 W&#10;Eficiencia: ...&#10;Dimensiones: ..." bind:value={product.specifications}></textarea>
+            </label>
+            <div class="grid sm:grid-cols-2 gap-3">
+              <label class="admin-label">Precio (opcional)<input type="number" min="0" step="0.01" class="admin-input" bind:value={product.price} /></label>
+              <label class="admin-label">Moneda<select class="admin-input" bind:value={product.currency}><option value="USD">USD</option><option value="CUP">CUP</option><option value="MLC">MLC</option></select></label>
+              <label class="admin-label">Inventario<select class="admin-input" bind:value={product.stock_status}><option value="in_stock">Disponible</option><option value="on_order">Bajo pedido</option><option value="out_of_stock">Agotado</option></select></label>
+              <label class="admin-label">Existencias<input type="number" min="0" step="1" class="admin-input" bind:value={product.stock_quantity} /></label>
+              <label class="admin-label">Garantía (meses)<input type="number" min="0" step="1" class="admin-input" bind:value={product.warranty_months} /></label>
+            </div>
+            <label class="admin-label">Fotografía principal (JPG, PNG o WebP · máximo 8 MB)
+              <input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => productPhoto = e.currentTarget.files?.[0] ?? null} />
+            </label>
+            <div class="flex flex-wrap gap-4 py-2">
+              <label class="flex gap-2 items-center text-sm"><input type="checkbox" bind:checked={product.is_featured} /> Destacar en inicio</label>
+              <label class="flex gap-2 items-center text-sm"><input type="checkbox" bind:checked={product.is_active} /> Publicado</label>
+            </div>
+            <button disabled={busy} class="admin-primary">{busy ? 'Guardando…' : editingProduct ? 'Guardar cambios del producto' : 'Publicar producto'}</button>
+          </form>
+      {:else if modal === 'service'}
+        <form class="space-y-4" onsubmit={saveService}>
+          <label class="admin-label">Nombre del servicio<input required maxlength="120" class="admin-input" placeholder="Instalación de paneles solares" bind:value={service.name} /></label>
+          <label class="admin-label">Descripción detallada<textarea required rows="4" class="admin-input" placeholder="Qué incluye el servicio, para quién es y qué ventajas ofrece..." bind:value={service.description}></textarea></label>
+          <label class="admin-label">Alcance y condiciones<textarea rows="3" class="admin-input" placeholder="Incluye revisión, instalación, puesta en marcha..." bind:value={service.scope}></textarea></label>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <label class="admin-label">Tipo de precio<select class="admin-input" bind:value={service.price_type}><option value="quote">Bajo presupuesto</option><option value="fixed">Precio fijo</option><option value="free">Gratuito</option></select></label>
+            <label class="admin-label">Precio (si es fijo)<input type="number" min="0" step="0.01" class="admin-input" bind:value={service.price} /></label>
+            <label class="admin-label">Duración estimada (minutos)<input type="number" min="0" step="1" class="admin-input" bind:value={service.duration_minutes} /></label>
+          </div>
+          <label class="admin-label">Imagen del servicio (JPG, PNG o WebP · máximo 8 MB)<input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => servicePhoto = e.currentTarget.files?.[0] ?? null} /></label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={service.is_active} /> Publicado en la página de servicios</label>
+          <button disabled={busy} class="admin-primary w-full">{busy ? 'Guardando…' : editingService ? 'Guardar cambios' : 'Crear servicio'}</button>
+        </form>
+      {/if}
+    </dialog>
+  </div>
+{/if}
 
 <style>
   .admin-input { display: block; width: 100%; padding: .65rem .8rem; margin-top: .35rem; border: 1px solid #cbd5e1; border-radius: .75rem; background: white; color: #0f172a; }
