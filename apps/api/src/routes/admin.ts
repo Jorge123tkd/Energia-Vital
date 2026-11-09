@@ -4,6 +4,31 @@ import { requireAdminAuth } from '../middleware';
 
 export const adminRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 
+const cleanText = (value: unknown, max = 3000): string => typeof value === 'string' ? value.trim().slice(0, max) : '';
+const nullableNumber = (value: unknown): number | null => value === null || value === undefined || value === '' ? null : Number(value);
+const validPrice = (value: number | null) => value === null || (Number.isFinite(value) && value >= 0);
+const mediaTypes: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+
+async function uploadMedia(c: any, folder: 'products' | 'services', ownerId: string) {
+  const form = await c.req.formData();
+  const file = form.get('file');
+  if (!(file instanceof File) || file.size === 0 || file.size > 8 * 1024 * 1024 || !mediaTypes[file.type]) {
+    return { error: 'Selecciona una imagen JPG, PNG o WebP de hasta 8 MB.' } as const;
+  }
+  const buffer = await file.arrayBuffer();
+  const b = new Uint8Array(buffer);
+  const jpg = b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+  const png = b.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => b[i] === v);
+  const webp = b.length >= 12 && String.fromCharCode(...b.slice(0, 4)) === 'RIFF' && String.fromCharCode(...b.slice(8, 12)) === 'WEBP';
+  if (!(file.type === 'image/jpeg' && jpg || file.type === 'image/png' && png || file.type === 'image/webp' && webp)) {
+    return { error: 'El archivo no coincide con un formato de imagen admitido.' } as const;
+  }
+  const id = crypto.randomUUID();
+  const key = `${folder}/${ownerId}/${id}.${mediaTypes[file.type]}`;
+  await c.env.BUCKET.put(key, buffer, { httpMetadata: { contentType: file.type } });
+  return { key, id, alt: cleanText(form.get('alt_text'), 180) } as const;
+}
+
 // Middleware de autenticación
 adminRoutes.use('*', requireAdminAuth);
 
@@ -120,20 +145,22 @@ adminRoutes.get('/notifications', async (c) => {
 // --- PRODUCTOS ---
 adminRoutes.get('/products', async (c) => {
   const { DB } = c.env;
-  const { results } = await DB.prepare('SELECT * FROM products ORDER BY sort_order ASC').all();
+  const { results } = await DB.prepare(`SELECT p.*, (SELECT pi.url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1) AS primary_image_url FROM products p ORDER BY p.sort_order ASC`).all();
   return c.json({ products: results ?? [] });
 });
 
 adminRoutes.post('/products', async (c) => {
   const { DB } = c.env;
   const b = await c.req.json<any>();
+  const price = nullableNumber(b.price);
+  if (!cleanText(b.name, 120) || !cleanText(b.category_id, 100) || !validPrice(price)) return c.json({ error: 'Nombre, categoría y precio válido son necesarios.' }, 400);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await DB.prepare(
     'INSERT INTO products (id, category_id, name, slug, brand, model, description, short_description, price, currency, stock_quantity, stock_status, specifications, warranty_months, compatibility, purchase_url, is_featured, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     id, b.category_id, b.name, b.slug, b.brand || null, b.model || null, b.description || null,
-    b.short_description || null, b.price || null, b.currency || 'USD', b.stock_quantity || null,
+    b.short_description || null, price, b.currency || 'USD', nullableNumber(b.stock_quantity),
     b.stock_status || 'in_stock', b.specifications || null, b.warranty_months || null,
     b.compatibility || null, b.purchase_url || null, b.is_featured ? 1 : 0, b.is_active !== false ? 1 : 0,
     b.sort_order || 0, now, now
@@ -141,15 +168,47 @@ adminRoutes.post('/products', async (c) => {
   return c.json({ id, message: 'Producto creado' });
 });
 
-adminRoutes.patch('/products/:id', async (c) => {
-  const { DB } = c.env;
+adminRoutes.patch('/products/:id', async c => {
   const id = c.req.param('id');
+  const existing = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first<any>();
+  if (!existing) return c.notFound();
   const b = await c.req.json<any>();
-  const now = new Date().toISOString();
-  await DB.prepare(
-    'UPDATE products SET name = COALESCE(?, name), price = COALESCE(?, price), stock_status = COALESCE(?, stock_status), is_active = COALESCE(?, is_active), updated_at = ? WHERE id = ?'
-  ).bind(b.name || null, b.price || null, b.stock_status || null, b.is_active !== undefined ? (b.is_active ? 1 : 0) : null, now, id).run();
+  const row = { ...existing, ...b };
+  const name = cleanText(row.name, 120);
+  const category = cleanText(row.category_id, 100);
+  const price = nullableNumber(row.price);
+  const quantity = nullableNumber(row.stock_quantity);
+  if (!name || !category || !validPrice(price) || (quantity !== null && (!Number.isInteger(quantity) || quantity < 0)))
+    return c.json({ error: 'Revisa nombre, categoría, precio y existencias.' }, 400);
+  if (!['in_stock', 'out_of_stock', 'on_order'].includes(row.stock_status)) return c.json({ error: 'Estado de inventario inválido.' }, 400);
+  await c.env.DB.prepare(`UPDATE products SET category_id=?, name=?, brand=?, model=?, description=?, short_description=?, price=?, currency=?, stock_quantity=?, stock_status=?, specifications=?, warranty_months=?, compatibility=?, purchase_url=?, is_featured=?, is_active=?, updated_at=? WHERE id=?`)
+    .bind(category, name, cleanText(row.brand, 120) || null, cleanText(row.model, 120) || null,
+      cleanText(row.description, 5000) || null, cleanText(row.short_description, 400) || null,
+      price, ['USD', 'CUP', 'MLC'].includes(row.currency) ? row.currency : 'USD', quantity,
+      row.stock_status, cleanText(row.specifications, 3000) || null, nullableNumber(row.warranty_months),
+      cleanText(row.compatibility, 2000) || null, cleanText(row.purchase_url, 400) || null,
+      row.is_featured ? 1 : 0, row.is_active ? 1 : 0, new Date().toISOString(), id).run();
   return c.json({ message: 'Producto actualizado' });
+});
+
+adminRoutes.post('/products/:id/image', async c => {
+  const id = c.req.param('id');
+  const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(id).first();
+  if (!product) return c.notFound();
+  const uploaded = await uploadMedia(c, 'products', id);
+  if ('error' in uploaded) return c.json({ error: uploaded.error }, 400);
+  const url = `${new URL(c.req.url).origin}/api/public/products/image/${uploaded.id}`;
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare('UPDATE product_images SET is_primary = 0 WHERE product_id = ?').bind(id),
+      c.env.DB.prepare('INSERT INTO product_images (id, product_id, r2_key, url, alt_text, is_primary, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)')
+        .bind(uploaded.id, id, uploaded.key, url, uploaded.alt || null, new Date().toISOString()),
+    ]);
+  } catch (e) {
+    await c.env.BUCKET.delete(uploaded.key);
+    throw e;
+  }
+  return c.json({ message: 'Foto añadida al producto', image_url: url }, 201);
 });
 
 adminRoutes.delete('/products/:id', async (c) => {
@@ -203,11 +262,13 @@ adminRoutes.get('/services', async (c) => {
 adminRoutes.post('/services', async (c) => {
   const { DB } = c.env;
   const b = await c.req.json<any>();
+  const price = nullableNumber(b.price);
+  if (!cleanText(b.name, 120) || !validPrice(price) || !['fixed', 'quote', 'free'].includes(b.price_type || 'quote')) return c.json({ error: 'Revisa el nombre, precio y tipo de servicio.' }, 400);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await DB.prepare(
     'INSERT INTO services (id, name, slug, description, scope, price, price_type, duration_minutes, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(id, b.name, b.slug, b.description || null, b.scope || null, b.price || null, b.price_type || 'quote', b.duration_minutes || null, 1, b.sort_order || 0, now, now).run();
+  ).bind(id, b.name, b.slug, b.description || null, b.scope || null, price, b.price_type || 'quote', b.duration_minutes || null, 1, b.sort_order || 0, now, now).run();
   return c.json({ id, message: 'Servicio creado' });
 });
 
@@ -227,9 +288,29 @@ adminRoutes.patch('/services/:id', async (c) => {
   return c.json({ message: 'Servicio actualizado' });
 });
 
+adminRoutes.post('/services/:id/image', async c => {
+  const id = c.req.param('id');
+  const service = await c.env.DB.prepare('SELECT image_r2_key FROM services WHERE id = ?').bind(id).first<{ image_r2_key: string | null }>();
+  if (!service) return c.notFound();
+  const uploaded = await uploadMedia(c, 'services', id);
+  if ('error' in uploaded) return c.json({ error: uploaded.error }, 400);
+  const url = `${new URL(c.req.url).origin}/api/public/services/image/${id}`;
+  try {
+    await c.env.DB.prepare('UPDATE services SET image_r2_key = ?, image_url = ?, updated_at = ? WHERE id = ?')
+      .bind(uploaded.key, url, new Date().toISOString(), id).run();
+  } catch (e) {
+    await c.env.BUCKET.delete(uploaded.key);
+    throw e;
+  }
+  if (service.image_r2_key) await c.env.BUCKET.delete(service.image_r2_key).catch(() => {});
+  return c.json({ message: 'Foto del servicio actualizada', image_url: url }, 201);
+});
+
 adminRoutes.delete('/services/:id', async (c) => {
   const { DB } = c.env;
+  const row = await DB.prepare('SELECT image_r2_key FROM services WHERE id = ?').bind(c.req.param('id')).first<{ image_r2_key: string | null }>();
   await DB.prepare('DELETE FROM services WHERE id = ?').bind(c.req.param('id')).run();
+  if (row?.image_r2_key) await c.env.BUCKET.delete(row.image_r2_key).catch(() => {});
   return c.json({ message: 'Servicio eliminado' });
 });
 
@@ -327,13 +408,25 @@ adminRoutes.post('/gallery', async (c) => {
   }
 
   await DB.prepare(
-    'INSERT INTO work_gallery (id, title, description, url, r2_key, video_url, category, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO work_gallery (id, title, description, url, r2_key, video_url, category, is_active, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     id, title, description, url, r2_key, video_url,
-    category, is_active ? 1 : 0, sort_order, now, now
+    category, is_active ? 1 : 0, sort_order, now
   ).run();
 
   return c.json({ id, message: 'Imagen de galería creada', url, r2_key });
+});
+
+adminRoutes.patch('/gallery/:id', async c => {
+  const id = c.req.param('id');
+  const current = await c.env.DB.prepare('SELECT * FROM work_gallery WHERE id = ?').bind(id).first<any>();
+  if (!current) return c.notFound();
+  const b = await c.req.json<any>();
+  await c.env.DB.prepare('UPDATE work_gallery SET title=?, description=?, category=?, video_url=?, is_active=?, sort_order=? WHERE id=?')
+    .bind(cleanText(b.title ?? current.title, 160), cleanText(b.description ?? current.description, 2000) || null,
+      cleanText(b.category ?? current.category, 120) || null, cleanText(b.video_url ?? current.video_url, 500) || null,
+      (b.is_active ?? current.is_active) ? 1 : 0, Number(b.sort_order ?? current.sort_order) || 0, id).run();
+  return c.json({ message: 'Galería actualizada' });
 });
 
 adminRoutes.delete('/gallery/:id', async (c) => {
@@ -395,4 +488,40 @@ adminRoutes.delete('/settings/:id', async (c) => {
   const { DB } = c.env;
   await DB.prepare('DELETE FROM system_settings WHERE id = ?').bind(c.req.param('id')).run();
   return c.json({ message: 'Configuración eliminada' });
+});
+
+// Configuración pública editable sin exponer secretos ni aceptar HTML arbitrario.
+const allowedSiteFields = ['home_title', 'home_subtitle', 'footer_description', 'footer_links',
+  'business_phone', 'business_email', 'business_address', 'business_hours',
+  'youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url'] as const;
+adminRoutes.put('/site-settings', async c => {
+  const b = await c.req.json<Record<string, unknown>>();
+  const keys = Object.keys(b);
+  if (keys.length === 0 || keys.some(k => !(allowedSiteFields as readonly string[]).includes(k)))
+    return c.json({ error: 'Campos de configuración no permitidos.' }, 400);
+  const records: Array<{ key: string; value: string }> = [];
+  const socialKeys = new Set(['youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url']);
+  for (const key of keys) {
+    if (typeof b[key] !== 'string' || (b[key] as string).length > 3500)
+      return c.json({ error: `Valor inválido en ${key}` }, 400);
+    let value = (b[key] as string).trim();
+    if (socialKeys.has(key) && value && !/^https:\/\/[^\s]+$/i.test(value))
+      return c.json({ error: `Utiliza una dirección HTTPS válida en ${key}` }, 400);
+    if (key === 'footer_links') {
+      let links: unknown;
+      try { links = JSON.parse(value || '[]'); } catch { return c.json({ error: 'Enlaces del footer inválidos.' }, 400); }
+      if (!Array.isArray(links) || links.length > 12 || !links.every((l: any) =>
+        l && typeof l.label === 'string' && l.label.trim().length > 0 && l.label.length <= 60 &&
+        typeof l.url === 'string' && l.url.length <= 400 &&
+        (/^\/(?!\/)[a-zA-Z0-9/_?=&.-]*$/.test(l.url) || /^https:\/\/[^\s]+$/i.test(l.url))))
+        return c.json({ error: 'Cada enlace necesita nombre y una ruta interna o dirección HTTPS válida (máximo 12).' }, 400);
+      value = JSON.stringify(links.map((l: any) => ({ label: l.label.trim(), url: l.url.trim() })));
+    }
+    records.push({ key, value });
+  }
+  await c.env.DB.batch(records.map(r => c.env.DB.prepare(
+    `INSERT INTO system_settings (id, key, value, updated_at) VALUES (?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`)
+    .bind(crypto.randomUUID(), r.key, r.value, new Date().toISOString())));
+  return c.json({ message: 'Cambios publicados en el sitio.' });
 });
