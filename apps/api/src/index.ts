@@ -24,11 +24,11 @@ export default {
       allowHeaders: ['Content-Type', 'Authorization', 'X-Setup-Key'],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     }));
-    // El catálogo, contacto, galería, citas y asistente son exclusivos de clientes registrados.
-    // Las imágenes de R2 pueden servir como activos estáticos sin información personal.
+    // Información comercial pública: solo consultas GET, sin datos personales.
+    // Operaciones de clientes, conversaciones, citas y administración siguen protegidas.
     app.use('/api/public/*', async (c, next) => {
-      if (c.req.path.startsWith('/api/public/gallery/image/')) return next();
-      return requireCustomerAuth(c, next);
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) return c.json({ error: 'Método no permitido' }, 405);
+      await next();
     });
     // Los sorteos públicos también exigen cuenta; no se aceptan participantes anónimos.
     app.use('/api/giveaways/public/*', requireCustomerAuth);
