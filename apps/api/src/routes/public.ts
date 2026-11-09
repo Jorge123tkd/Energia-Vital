@@ -86,6 +86,19 @@ publicRoutes.get('/gallery/image/:key', async c => {
   headers.set('X-Content-Type-Options', 'nosniff');
   return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
+publicRoutes.get('/gallery/media/:id', async c => {
+  const record = await c.env.DB.prepare('SELECT r2_key FROM work_gallery WHERE id = ? AND is_active = 1')
+    .bind(c.req.param('id')).first<{ r2_key: string | null }>();
+  if (!record?.r2_key) return c.notFound();
+  const object = await c.env.BUCKET.get(record.r2_key);
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=3600');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
+});
 publicRoutes.get('/gallery', async c => {
   const { results } = await c.env.DB.prepare('SELECT * FROM work_gallery WHERE is_active = 1 ORDER BY sort_order LIMIT 200').all();
   return c.json({ gallery: results ?? [] });
