@@ -65,7 +65,7 @@ authRoutes.post('/sign-in', async c => {
     return c.json({ error: 'Credenciales inválidas' }, 401);
 
   // Admin antes que cliente solo cuando su contraseña ha sido verificada.
-  const admin = await c.env.DB.prepare('SELECT id, email, role, password_hash FROM admin_users WHERE LOWER(email) = ? AND is_active = 1')
+  const admin = await c.env.DB.prepare('SELECT id, email, role, password_hash FROM admin_users WHERE LOWER(email) = ? AND is_active = 1 AND role = \'admin\'')
     .bind(email).first<any>();
   if (admin && await comparePassword(password, admin.password_hash)) {
     const tokens = await issue(c.env, admin.id, 'admin', admin.role);
@@ -119,6 +119,8 @@ authRoutes.post('/register', async c => {
     }
     const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE LOWER(email) = ?').bind(email).first();
     if (existing) return c.json({ error: 'Este correo ya está registrado. Utiliza «Entrar» o contacta a soporte para recuperar el acceso.' }, 409);
+    const reservedAdmin = await c.env.DB.prepare('SELECT id FROM admin_users WHERE LOWER(email) = ?').bind(email).first();
+    if (reservedAdmin) return c.json({ error: 'Este correo ya pertenece a una cuenta. Utiliza «Entrar».' }, 409);
 
     const id = crypto.randomUUID();
     const sessionId = crypto.randomUUID();
