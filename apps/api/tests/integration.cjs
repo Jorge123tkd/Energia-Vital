@@ -40,12 +40,28 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
     { email: adminEmail, password: adminPassword });
   assert.ok(adminSession.access_token, 'admin returns a signed access token');
   const adminToken = adminSession.access_token;
+  const unifiedAdmin = await request('Unified sign-in recognizes an administrator', '/api/auth/sign-in',
+    'POST', { email: adminEmail, password: adminPassword });
+  assert.equal(unifiedAdmin.user.role, 'admin');
+  await request('Admin JWT cannot access customer-only API', '/api/private/requests',
+    'GET', null, unifiedAdmin.access_token, 401);
+
   await request('Admin can access protected catalog', '/api/admin/products', 'GET', null, adminToken);
   await request('Admin edits website content', '/api/admin/site-settings', 'PUT', {
     home_title: 'Energía Vital de prueba', footer_links: JSON.stringify([{ label: 'Catálogo', url: '/catalogo' }])
   }, adminToken);
   const publishedSettings = await request('Published settings are public', '/api/public/settings');
   assert.equal(publishedSettings.settings.home_title, 'Energía Vital de prueba');
+  const slides = [
+    { title: 'Empresa', subtitle: 'Energía', image_url: '', link_label: 'Catálogo', link_url: '/catalogo' },
+    { title: 'Trabajos', subtitle: 'Instalaciones', image_url: '', link_label: 'Galería', link_url: '/galeria' },
+    { title: 'Novedades', subtitle: 'Equipos', image_url: '', link_label: 'Servicios', link_url: '/servicios' },
+  ];
+  await request('Admin saves hero carousel', '/api/admin/site-settings', 'PUT',
+    { home_slides: JSON.stringify(slides) }, adminToken);
+  const publicSlides = await request('Public hero carousel can be read', '/api/public/settings');
+  assert.equal(JSON.parse(publicSlides.settings.home_slides).length, 3);
+
   const category = await request('Admin creates a category', '/api/admin/categories', 'POST', {
     name: 'Paneles de prueba', slug: 'paneles-test-' + uid
   }, adminToken);
