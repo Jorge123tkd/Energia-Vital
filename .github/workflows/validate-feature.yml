@@ -1,0 +1,10 @@
+name: Validar rama Cloudflare
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo 'Se validara el codigo de clientes en CI'
