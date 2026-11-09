@@ -27,6 +27,43 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   await request('Assistant remains private', '/api/assistant/message', 'POST', { message: 'Hola' }, null, 401);
   await request('Anonymous cannot submit a customer request', '/api/private/requests', 'POST', { title: 'Prueba' }, null, 401);
   await request('Admin login rejects unknown credentials', '/api/auth/login', 'POST', { email: 'nobody@example.invalid', password: 'bad' }, null, 401);
+  // A real successful admin login was missing from the tests. This catches PBKDF2/JWT regressions.
+  const adminEmail = 'admin-test-' + uid + '@example.invalid';
+  const adminPassword = 'AdminSolar!Prueba2026';
+  const setup = await fetch(BASE + '/api/auth/setup', {
+    method: 'POST', headers: { 'Content-Type': 'application/json',
+      'x-setup-key': process.env.TEST_ADMIN_SETUP_KEY || 'ClaveSetupCIExclusivaParaPruebasDe36Caracteres123' },
+    body: JSON.stringify({ email: adminEmail, password: adminPassword })
+  });
+  assert.equal(setup.status, 201, 'Admin setup must succeed in local isolated D1');
+  const adminSession = await request('Admin login accepts valid credentials', '/api/auth/login', 'POST',
+    { email: adminEmail, password: adminPassword });
+  assert.ok(adminSession.access_token, 'admin returns a signed access token');
+  const adminToken = adminSession.access_token;
+  await request('Admin can access protected catalog', '/api/admin/products', 'GET', null, adminToken);
+  await request('Admin edits website content', '/api/admin/site-settings', 'PUT', {
+    home_title: 'Energía Vital de prueba', footer_links: JSON.stringify([{ label: 'Catálogo', url: '/catalogo' }])
+  }, adminToken);
+  const publishedSettings = await request('Published settings are public', '/api/public/settings');
+  assert.equal(publishedSettings.settings.home_title, 'Energía Vital de prueba');
+  const category = await request('Admin creates a category', '/api/admin/categories', 'POST', {
+    name: 'Paneles de prueba', slug: 'paneles-test-' + uid
+  }, adminToken);
+  const product = await request('Admin creates a richly described product', '/api/admin/products', 'POST', {
+    category_id: category.id, name: 'Panel de 550 W', slug: 'panel-550-' + uid,
+    price: 0, description: 'Panel monocristalino de prueba', currency: 'USD'
+  }, adminToken);
+  await request('Admin edits product description', '/api/admin/products/' + product.id, 'PATCH', {
+    description: 'Panel monocristalino actualizado', price: 120
+  }, adminToken);
+  const catalog = await request('Catalog contains updated product', '/api/public/products');
+  assert.ok(catalog.products.some(p => p.id === product.id && p.price === 120));
+  const service = await request('Admin creates service with a quote', '/api/admin/services', 'POST', {
+    name: 'Instalación de prueba', slug: 'instalacion-' + uid, description: 'Instalación completa', price_type: 'quote'
+  }, adminToken);
+  const serviceList = await request('Public services include the description', '/api/public/services');
+  assert.ok(serviceList.services.some(s => s.id === service.id && s.description === 'Instalación completa'));
+
   const ar = await request('Register customer A', '/api/auth/register', 'POST', a, null, 201);
   const br = await request('Register customer B', '/api/auth/register', 'POST', b, null, 201);
   const at = ar.access_token, bt = br.access_token;
