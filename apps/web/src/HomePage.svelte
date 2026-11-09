@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
-  import { isAssistantOpen } from './lib/store';
+  let { onAssistant }: { onAssistant: () => void } = $props();
   let products: any[] = $state([]);
   let loading = $state(true);
   let error = $state('');
@@ -14,9 +14,9 @@
 </script>
 <header class="bg-energia-900 text-white rounded-xl py-16 px-6 text-center">
   <h1 class="text-4xl sm:text-5xl font-bold mb-5">Energía Vital</h1>
-  <p class="text-xl mb-8 max-w-2xl mx-auto">Paneles solares, inversores, baterías y servicios de instalación y mantenimiento. Consulta con tu cuenta y sigue cada solicitud.</p>
+  <p class="text-xl mb-8 max-w-2xl mx-auto">Paneles solares, inversores, baterías y servicios de instalación y mantenimiento. Explora libremente nuestro catálogo y servicios. Crea una cuenta cuando quieras solicitar asesoría o hacer un pedido.</p>
   <div class="flex flex-wrap justify-center gap-3">
-    <button onclick={() => isAssistantOpen.set(true)} class="bg-energia-600 text-white font-semibold px-6 py-3 rounded-lg">Hablar con el asistente</button>
+    <button onclick={onAssistant} class="bg-energia-600 text-white font-semibold px-6 py-3 rounded-lg">Hablar con el asistente</button>
     <a href="/catalogo" class="bg-white text-energia-900 font-semibold px-6 py-3 rounded-lg">Ver catálogo</a>
     <a href="/mis-solicitudes" class="border border-white text-white font-semibold px-6 py-3 rounded-lg">Mis solicitudes</a>
   </div>
