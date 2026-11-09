@@ -44,7 +44,7 @@ assistantRoutes.post('/message', async c => {
       .bind(sessionId, messageId).all<{ role: string; content: string }>();
     const history = (results || []).reverse();
     const ai = await callAI(c.env, context, history, message);
-    const fallback = generateResponse(message, context);
+    const fallback = generateResponse(message, context, history);
     const reply = ai.text || fallback.text;
     const source = ai.text ? 'ai' : fallback.source;
     const replyId = crypto.randomUUID();
