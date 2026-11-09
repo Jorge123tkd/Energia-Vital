@@ -18,6 +18,21 @@ publicRoutes.get('/products', async c => {
   const { results } = await c.env.DB.prepare(sql).bind(...params).all();
   return c.json({ products: results ?? [] });
 });
+// R2 se sirve por identificador de imagen; no se expone el nombre del objeto.
+publicRoutes.get('/products/image/:id', async c => {
+  const row = await c.env.DB.prepare(`SELECT pi.r2_key FROM product_images pi
+    JOIN products p ON p.id = pi.product_id WHERE pi.id = ? AND p.is_active = 1`)
+    .bind(c.req.param('id')).first<{ r2_key: string }>();
+  if (!row?.r2_key) return c.notFound();
+  const object = await c.env.BUCKET.get(row.r2_key);
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=86400');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
+});
 publicRoutes.get('/products/:id', async c => {
   const product = await c.env.DB.prepare(`SELECT p.*, cat.name AS category_name FROM products p
     LEFT JOIN categories cat ON p.category_id = cat.id WHERE p.id = ? AND p.is_active = 1`).bind(c.req.param('id')).first();
@@ -32,6 +47,19 @@ publicRoutes.get('/categories', async c => {
 publicRoutes.get('/services', async c => {
   const { results } = await c.env.DB.prepare('SELECT * FROM services WHERE is_active = 1 ORDER BY sort_order LIMIT 200').all();
   return c.json({ services: results ?? [] });
+});
+publicRoutes.get('/services/image/:id', async c => {
+  const service = await c.env.DB.prepare('SELECT image_r2_key FROM services WHERE id = ? AND is_active = 1')
+    .bind(c.req.param('id')).first<{ image_r2_key: string | null }>();
+  if (!service?.image_r2_key) return c.notFound();
+  const object = await c.env.BUCKET.get(service.image_r2_key);
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=3600');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
 publicRoutes.get('/services/:id', async c => {
   const service = await c.env.DB.prepare('SELECT * FROM services WHERE id = ? AND is_active = 1').bind(c.req.param('id')).first();
@@ -63,7 +91,9 @@ publicRoutes.get('/gallery', async c => {
   return c.json({ gallery: results ?? [] });
 });
 // Solo configuración comercial publicada; nunca claves internas ni datos privados.
-const publicSettingKeys = ['youtube_channel_url', 'business_phone', 'business_email', 'business_address', 'business_hours', 'telegram_public_url'];
+const publicSettingKeys = ['youtube_channel_url', 'facebook_url', 'instagram_url', 'business_phone',
+  'business_email', 'business_address', 'business_hours', 'telegram_public_url',
+  'home_title', 'home_subtitle', 'footer_description', 'footer_links'];
 publicRoutes.get('/settings', async c => {
   const marks = publicSettingKeys.map(() => '?').join(', ');
   const { results } = await c.env.DB.prepare(`SELECT key, value FROM system_settings WHERE key IN (${marks})`).bind(...publicSettingKeys).all<{key:string;value:string}>();
