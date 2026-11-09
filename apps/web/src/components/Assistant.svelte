@@ -1,137 +1,137 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import { get } from 'svelte/store';
   import { api } from '../lib/api';
-  import { assistantSessionId, assistantMessages, isAssistantOpen, addNotification } from '../lib/store';
+  import { assistantSessionId, assistantMessages, isAssistantOpen } from '../lib/store';
 
-  let inputMessage = '';
-  let isSending = false;
-  let sessionId: string | null = null;
-  let messages: { role: string; content: string }[] = [];
+  type ChatMessage = { role: 'user' | 'assistant'; content: string };
+  let { userId, onContact }: { userId: string; onContact: () => void } = $props();
+  let inputMessage = $state('');
+  let isSending = $state(false);
+  let loadingHistory = $state(true);
+  let sessionId = $state<string | null>(null);
+  let messages = $state<ChatMessage[]>([]);
+  let scrollBox: HTMLDivElement;
+  const suggestions = ['Necesito paneles o baterías', 'Quiero conocer precios', 'Necesito mantenimiento', 'Quiero una visita técnica'];
+  const welcome = '¡Hola! Soy el asistente de Energía Vital. Puedo orientarte sobre el catálogo, las baterías, los paneles solares y los servicios. ¿Qué necesitas resolver primero?';
 
-  onMount(() => {
-    assistantSessionId.subscribe((v) => { sessionId = v; })();
-    assistantMessages.subscribe((v) => { messages = v; })();
-
-    if (!sessionId) {
-      const newId = crypto.randomUUID();
-      assistantSessionId.set(newId);
-      sessionId = newId;
-      addWelcomeMessage();
-    }
-  });
-
-  function addWelcomeMessage() {
-    const welcome = {
-      role: 'assistant',
-      content: '¡Hola! Soy el asistente de Energía Vital. ¿En qué puedo ayudarte hoy? Puedo ayudarte con equipos solares, precios, citas, mantenimiento y más.'
-    };
-    if (messages.length === 0) {
-      messages = [welcome];
-      assistantMessages.set(messages);
-    }
+  async function scrollToEnd() {
+    await tick();
+    if (scrollBox) scrollBox.scrollTop = scrollBox.scrollHeight;
   }
 
-  async function sendMessage(e?: Event) {
-    if (e) e.preventDefault();
-    if (!inputMessage.trim()) return;
-    if (!sessionId) return;
-
-    const userMsg = { role: 'user', content: inputMessage };
-    messages = [...messages, userMsg];
+  function addMessage(role: ChatMessage['role'], content: string) {
+    messages = [...messages, { role, content }];
     assistantMessages.set(messages);
+    void scrollToEnd();
+  }
 
-    const tempInput = inputMessage;
+  onMount(() => {
+    let mounted = true;
+    const key = `energia_vital_chat_${userId}`;
+    const persisted = sessionStorage.getItem(key);
+    const cachedSession = get(assistantSessionId);
+    const active = persisted || cachedSession || crypto.randomUUID();
+    sessionId = active;
+    assistantSessionId.set(active);
+    sessionStorage.setItem(key, active);
+    const cached = get(assistantMessages) as ChatMessage[];
+    if (cached.length && cachedSession === active) {
+      messages = cached;
+      loadingHistory = false;
+      void scrollToEnd();
+    } else if (persisted) {
+      api.getAssistantMessages(active).then((response: any) => {
+        if (!mounted) return;
+        const restored = Array.isArray(response.messages)
+          ? response.messages.map((m: any) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: String(m.content || '') }))
+          : [];
+        messages = restored.length ? restored : [{ role: 'assistant', content: welcome }];
+        assistantMessages.set(messages);
+      }).catch(() => {
+        if (!mounted) return;
+        sessionId = crypto.randomUUID();
+        assistantSessionId.set(sessionId);
+        sessionStorage.setItem(key, sessionId);
+        messages = [{ role: 'assistant', content: welcome }];
+        assistantMessages.set(messages);
+      }).finally(() => {
+        if (mounted) { loadingHistory = false; void scrollToEnd(); }
+      });
+    } else {
+      messages = [{ role: 'assistant', content: welcome }];
+      assistantMessages.set(messages);
+      loadingHistory = false;
+    }
+    return () => { mounted = false; };
+  });
+
+  async function sendMessage(event?: SubmitEvent) {
+    event?.preventDefault();
+    const message = inputMessage.trim();
+    if (!message || !sessionId || isSending || loadingHistory) return;
+    addMessage('user', message);
     inputMessage = '';
     isSending = true;
-
     try {
-      const res = await api.postAssistantMessage({
-        session_id: sessionId,
-        message: tempInput,
-        channel: 'web',
-      });
-
-      // Soporta tanto res.response (API) como res.text (fallback)
-      const text = (res as any).response || (res as any).text || '';
-      if (text) {
-        messages = [...messages, { role: 'assistant', content: text }];
-        assistantMessages.set(messages);
-      } else {
-        addNotification('warning', 'Respuesta vacía del asistente');
-      }
-    } catch (e: any) {
-      const errorMsg = { role: 'assistant', content: 'Lo siento, hubo un error procesando tu mensaje. Inténtalo de nuevo.' };
-      messages = [...messages, errorMsg];
-      assistantMessages.set(messages);
-      addNotification('error', e.message || 'Error al enviar mensaje');
+      const response = await api.postAssistantMessage({ session_id: sessionId, message, channel: 'web' });
+      addMessage('assistant', String(response.response || 'No tengo una respuesta confirmada. Puedes dejar tu consulta desde «Solicitar servicio».'));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Error de conexión';
+      addMessage('assistant', `No pude enviar tu consulta: ${detail}. Puedes volver a intentarlo; no se ha registrado ninguna solicitud.`);
     } finally {
       isSending = false;
     }
   }
 
-  function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
+  function quickQuestion(question: string) {
+    inputMessage = question;
+    void sendMessage();
+  }
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void sendMessage();
     }
   }
-
-  function closeAssistant() {
-    isAssistantOpen.set(false);
-  }
+  function close() { isAssistantOpen.set(false); }
+  function requestConsultation() { close(); onContact(); }
 </script>
 
-<div class="absolute bottom-0 right-0 w-96 h-[600px] bg-white rounded-t-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col">
-  <div class="bg-energia-600 text-white p-4">
-    <div class="flex justify-between items-center">
-      <h3 class="font-semibold">Asistente Energía Vital</h3>
-      <button onclick={closeAssistant} class="text-gray-200 hover:text-white">
-        <span class="sr-only">Cerrar</span>✕
-      </button>
-    </div>
-  </div>
-  <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-    {#each messages as msg (msg)}
-      <div class="flex gap-3">
-        {#if msg.role === 'user'}
-          <div class="flex justify-end">
-            <div class="bg-energia-600 text-white px-4 py-2 rounded-2xl rounded-tr-sm max-w-[80%]">
-              {msg.content}
-            </div>
-          </div>
-        {:else}
-          <div class="flex justify-start">
-            <div class="bg-white border border-gray-200 text-gray-900 px-4 py-2 rounded-2xl rounded-tl-sm max-w-[80%]">
-              {msg.content}
-            </div>
-          </div>
-        {/if}
-      </div>
-    {/each}
-    {#if isSending}
-      <div class="flex justify-start">
-        <div class="bg-white border border-gray-200 text-gray-900 px-4 py-2 rounded-2xl rounded-tl-sm max-w-[80%] animate-pulse">
-          Escribiendo...
+<section aria-label="Asistente de Energía Vital" class="w-[calc(100vw-1.5rem)] sm:w-[27rem] h-[min(35rem,calc(100vh-7rem))] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col">
+  <header class="bg-energia-600 text-white p-4 flex justify-between items-center">
+    <div><h2 class="font-semibold">Asistente Energía Vital</h2><p class="text-xs text-white/85">Orientación solar y consultas comerciales</p></div>
+    <button type="button" onclick={close} class="text-white hover:opacity-80 px-2" aria-label="Cerrar asistente">✕</button>
+  </header>
+  <div bind:this={scrollBox} class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50" role="log" aria-label="Conversación" aria-live="polite" aria-relevant="additions">
+    {#if loadingHistory}
+      <p class="text-sm text-gray-500">Cargando conversación…</p>
+    {:else}
+      {#each messages as msg, index (index)}
+        <div class="flex {msg.role === 'user' ? 'justify-end' : 'justify-start'}">
+          <p class="whitespace-pre-wrap break-words max-w-[90%] px-4 py-3 text-sm rounded-2xl {msg.role === 'user' ? 'bg-energia-600 text-white rounded-tr-sm' : 'bg-white border border-gray-200 text-gray-900 rounded-tl-sm'}">{msg.content}</p>
         </div>
-      </div>
+      {/each}
     {/if}
+    {#if isSending}<p class="text-sm text-gray-500" role="status">Preparando respuesta…</p>{/if}
   </div>
-  <div class="p-3 border-t border-gray-200 bg-white">
-    <form onsubmit={sendMessage} class="flex gap-2">
-      <input bind:value={inputMessage} placeholder="Escribe tu mensaje..." class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-energia-500 outline-none text-sm" onkeydown={handleKeyDown} disabled={isSending} />
-      <button type="submit" disabled={isSending || !inputMessage.trim()} class="bg-energia-600 text-white px-4 py-2 rounded-lg hover:bg-energia-700 transition-colors disabled:opacity-50">
-        Enviar
-      </button>
-    </form>
+  {#if messages.length <= 1 && !loadingHistory}
+    <div class="px-3 pt-2 flex gap-2 overflow-x-auto" aria-label="Preguntas sugeridas">
+      {#each suggestions as suggestion}
+        <button type="button" class="shrink-0 text-xs border border-energia-300 rounded-full px-3 py-2 text-energia-700 hover:bg-gray-50" onclick={() => quickQuestion(suggestion)} disabled={isSending}>{suggestion}</button>
+      {/each}
+    </div>
+  {/if}
+  <div class="px-3 pt-2">
+    <button type="button" class="text-sm text-energia-700 underline" onclick={requestConsultation}>Solicitar cotización o visita técnica</button>
   </div>
-</div>
-
-<style>
-  .animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
-</style>
+  <form onsubmit={sendMessage} class="p-3 border-t border-gray-200 bg-white flex items-end gap-2">
+    <label for="assistant-input" class="sr-only">Mensaje para el asistente</label>
+    <textarea id="assistant-input" rows="2" maxlength="4000" bind:value={inputMessage}
+      placeholder="Escribe tu consulta…"
+      onkeydown={handleKeydown} disabled={isSending || loadingHistory}
+      class="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-energia-500 outline-none text-sm resize-none"></textarea>
+    <button type="submit" disabled={isSending || loadingHistory || !inputMessage.trim()}
+      class="bg-energia-600 text-white px-4 py-3 rounded-lg disabled:opacity-50" aria-label="Enviar mensaje">Enviar</button>
+  </form>
+</section>
