@@ -142,6 +142,12 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   await request('Customer B changes password', '/api/auth/password', 'PUT', { current_password: b.password, new_password: 'OtraClave!MasSegura2026' }, bt);
   await request('Old password rejected', '/api/auth/customer/login', 'POST', { email: b.email, password: b.password }, null, 401);
   await request('New password accepted', '/api/auth/customer/login', 'POST', { email: b.email, password: 'OtraClave!MasSegura2026' });
+  await request('Block customer', '/api/admin-customers/customers/' + br.user.id + '/status',
+    'PATCH', { is_active: false }, adminToken);
+  await request('Blocked customer token rejected', '/api/auth/me', 'GET', null, bt, 401);
+  await request('Unblock customer', '/api/admin-customers/customers/' + br.user.id + '/status',
+    'PATCH', { is_active: true }, adminToken);
+
   await request('Logout customer A', '/api/auth/logout', 'POST', {}, at);
   await request('Revoked token rejected', '/api/private/requests', 'GET', null, at, 401);
   console.log('SUCCESS: Worker + D1 local integration');
