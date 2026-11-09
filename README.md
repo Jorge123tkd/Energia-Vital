@@ -1,6 +1,6 @@
 # Energia Vital — Plataforma Comercial Inteligente
 
-**Versión:** 1.0  
+**Versión:** 1.0  1
 
 ## Enfoque principal: asistente conversacional
 
