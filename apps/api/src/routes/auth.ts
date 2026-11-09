@@ -53,6 +53,36 @@ authRoutes.post('/login', async c => {
   return c.json({ user: { id: admin.id, email: admin.email, role: admin.role }, token: tokens.access_token, ...tokens });
 });
 
+// Acceso único al sitio: la credencial se verifica en su tabla original.
+// Un JWT de administrador nunca obtiene permisos de cliente ni viceversa.
+authRoutes.post('/sign-in', async c => {
+  if (await rateLimited(c.env, c.req.raw, 'site_login', 10, 900))
+    return c.json({ error: 'Demasiados intentos. Inténtalo más tarde.' }, 429);
+  const b = await c.req.json<any>().catch(() => null);
+  const email = clean(b?.email, 254).toLowerCase();
+  const password = typeof b?.password === 'string' ? b.password : '';
+  if (!validEmail(email) || !password || password.length > 128)
+    return c.json({ error: 'Credenciales inválidas' }, 401);
+
+  // Admin antes que cliente solo cuando su contraseña ha sido verificada.
+  const admin = await c.env.DB.prepare('SELECT id, email, role, password_hash FROM admin_users WHERE LOWER(email) = ? AND is_active = 1')
+    .bind(email).first<any>();
+  if (admin && await comparePassword(password, admin.password_hash)) {
+    const tokens = await issue(c.env, admin.id, 'admin', admin.role);
+    return c.json({
+      user: { id: admin.id, email: admin.email, name: 'Administrador', role: 'admin', account_type: 'admin' },
+      ...tokens,
+    });
+  }
+  const customer = await c.env.DB.prepare(
+    'SELECT * FROM customers WHERE LOWER(email) = ? AND password_hash IS NOT NULL AND is_active = 1'
+  ).bind(email).first<any>();
+  if (!customer || !await comparePassword(password, customer.password_hash))
+    return c.json({ error: 'Credenciales inválidas' }, 401);
+  const tokens = await issue(c.env, customer.id, 'customer', 'customer');
+  return c.json({ user: safeCustomer(customer), ...tokens });
+});
+
 /** Evita registros incompletos cuando la D1 remota no recibió todas las migraciones. */
 async function registrationSchemaReady(env: Env): Promise<boolean> {
   const { results } = await env.DB.prepare('PRAGMA table_info(customers)').all<{ name: string }>();
@@ -121,7 +151,7 @@ authRoutes.post('/customer/login', async c => {
   const b = await c.req.json<any>();
   const email = clean(b.email, 254).toLowerCase();
   if (!validEmail(email) || typeof b.password !== 'string') return c.json({ error: 'Credenciales inválidas' }, 401);
-  const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE LOWER(email) = ? AND password_hash IS NOT NULL')
+  const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE LOWER(email) = ? AND password_hash IS NOT NULL AND is_active = 1')
     .bind(email).first<any>();
   if (!customer || !await comparePassword(b.password, customer.password_hash)) return c.json({ error: 'Credenciales inválidas' }, 401);
   const tokens = await issue(c.env, customer.id, 'customer', 'customer');
@@ -132,6 +162,9 @@ authRoutes.post('/refresh', async c => {
   const b = await c.req.json<any>();
   const token = typeof b.refresh_token === 'string' ? await verifyToken(b.refresh_token, c.env.JWT_SECRET || '') : null;
   if (!token || token.kind !== 'refresh' || !await activeSession(c.env, token)) return c.json({ error: 'Sesión expirada' }, 401);
+  const table = token.type === 'admin' ? 'admin_users' : 'customers';
+  const current = await c.env.DB.prepare(`SELECT id FROM ${table} WHERE id = ? AND is_active = 1`).bind(token.user_id).first();
+  if (!current) return c.json({ error: 'Cuenta bloqueada o no disponible' }, 403);
   const tokens = await generateTokenPair(c.env, token.user_id, token.type, token.role || token.type, token.sid);
   return c.json(tokens);
 });
@@ -147,13 +180,15 @@ authRoutes.post('/logout', async c => {
 authRoutes.get('/me', async c => {
   const user = await signedIn(c, 'customer');
   if (!user) return c.json({ error: 'No autorizado' }, 401);
-  const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(user.user_id).first<any>();
-  return customer ? c.json({ user: safeCustomer(customer) }) : c.json({ error: 'Cliente no encontrado' }, 404);
+  const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ? AND is_active = 1').bind(user.user_id).first<any>();
+  return customer ? c.json({ user: safeCustomer(customer) }) : c.json({ error: 'Cuenta bloqueada o no encontrada' }, 403);
 });
 
 authRoutes.put('/me', async c => {
   const user = await signedIn(c, 'customer');
   if (!user) return c.json({ error: 'No autorizado' }, 401);
+  const active = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ? AND is_active = 1').bind(user.user_id).first();
+  if (!active) return c.json({ error: 'Cuenta bloqueada' }, 403);
   const b = await c.req.json<any>();
   const name = clean(b.name, 120), phone = clean(b.phone, 25), address = clean(b.address, 250);
   const city = clean(b.city, 100), province = clean(b.province, 100);
@@ -168,6 +203,8 @@ authRoutes.put('/me', async c => {
 authRoutes.put('/password', async c => {
   const user = await signedIn(c, 'customer');
   if (!user) return c.json({ error: 'No autorizado' }, 401);
+  const active = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ? AND is_active = 1').bind(user.user_id).first();
+  if (!active) return c.json({ error: 'Cuenta bloqueada' }, 403);
   const b = await c.req.json<any>();
   if (!validPassword(b.new_password)) return c.json({ error: 'La contraseña nueva debe tener entre 10 y 128 caracteres' }, 400);
   const current = await c.env.DB.prepare('SELECT password_hash FROM customers WHERE id = ?').bind(user.user_id).first<any>();
