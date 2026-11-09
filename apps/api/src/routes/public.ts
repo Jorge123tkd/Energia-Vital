@@ -106,7 +106,7 @@ publicRoutes.get('/gallery', async c => {
 // Solo configuración comercial publicada; nunca claves internas ni datos privados.
 const publicSettingKeys = ['youtube_channel_url', 'facebook_url', 'instagram_url', 'business_phone',
   'business_email', 'business_address', 'business_hours', 'telegram_public_url',
-  'home_title', 'home_subtitle', 'footer_description', 'footer_links'];
+  'home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links'];
 publicRoutes.get('/settings', async c => {
   const marks = publicSettingKeys.map(() => '?').join(', ');
   const { results } = await c.env.DB.prepare(`SELECT key, value FROM system_settings WHERE key IN (${marks})`).bind(...publicSettingKeys).all<{key:string;value:string}>();
