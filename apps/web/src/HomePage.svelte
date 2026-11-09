@@ -15,24 +15,72 @@
       if (config.status === 'fulfilled') settings = config.value.settings ?? {};
       loading = false;
     })();
+    const interval = window.setInterval(() => {
+      if (!document.hidden) activeSlide = (activeSlide + 1) % 3;
+    }, 7500);
+    return () => window.clearInterval(interval);
   });
+  type Slide = { title: string; subtitle: string; image_url: string; link_label: string; link_url: string };
+  let activeSlide = $state(0);
+  const defaults: Slide[] = [
+    { title: 'Energía Vital', subtitle: intro, image_url: '', link_label: 'Explorar equipos', link_url: '/catalogo' },
+    { title: 'Trabajos que hablan por nosotros', subtitle: 'Conoce nuestros proyectos e instalaciones de energía solar.', image_url: '', link_label: 'Ver nuestros trabajos', link_url: '/galeria' },
+    { title: 'Novedades y soluciones solares', subtitle: 'Descubre equipos disponibles y consulta las propuestas que mejor se adaptan a ti.', image_url: '', link_label: 'Ver catálogo', link_url: '/catalogo' }
+  ];
+  let slides = $derived.by((): Slide[] => {
+    try {
+      const parsed = JSON.parse(settings.home_slides || '');
+      if (Array.isArray(parsed) && parsed.length === 3 && parsed.every((s: any) =>
+        typeof s.title === 'string' && typeof s.subtitle === 'string' &&
+        typeof s.image_url === 'string' && typeof s.link_label === 'string' &&
+        typeof s.link_url === 'string')) return parsed;
+    } catch { /* configuración inicial: usar títulos por defecto */ }
+    return [{ ...defaults[0], title: settings.home_title || defaults[0].title,
+      subtitle: settings.home_subtitle || intro }, defaults[1], defaults[2]];
+  });
+  let slide = $derived(slides[activeSlide] || slides[0]);
+  function selectSlide(index: number) { activeSlide = (index + 3) % 3; }
   function consult(p: any) { window.location.href = '/contacto?product=' + encodeURIComponent(p.name); }
 </script>
 
-<header class="rounded-3xl overflow-hidden relative bg-gradient-to-br from-slate-950 via-teal-950 to-teal-700 text-white">
-  <div class="absolute -right-24 -top-28 w-80 h-80 rounded-full bg-teal-400/15 blur-3xl pointer-events-none"></div>
-  <div class="absolute -left-24 -bottom-28 w-96 h-96 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none"></div>
-  <div class="relative py-16 sm:py-24 px-6 sm:px-14 max-w-4xl">
-    <span class="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/15 rounded-full text-sm text-teal-100 mb-6">☀ Energía solar para Cuba</span>
-    <h1 class="text-4xl sm:text-6xl font-bold tracking-tight leading-tight mb-6">{settings.home_title || 'Energía Vital'}</h1>
-    <p class="text-lg sm:text-xl text-teal-50/90 leading-relaxed mb-9">{settings.home_subtitle || intro}</p>
+<section aria-label="Presentación de Energía Vital" class="relative rounded-3xl overflow-hidden min-h-[440px] sm:min-h-[500px] bg-slate-950 text-white flex flex-col justify-between shadow-xl">
+  {#if slide.image_url && /^https:\/\/[^\s]+$/i.test(slide.image_url)}
+    <img src={slide.image_url} alt="" class="absolute inset-0 w-full h-full object-cover" />
+    <div class="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/75 to-slate-900/25"></div>
+  {:else}
+    <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-teal-950 to-teal-700"></div>
+    <div class="absolute -right-20 -top-20 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl"></div>
+  {/if}
+  <div class="relative px-6 py-16 sm:px-14 sm:py-20 max-w-3xl flex-1">
+    <span class="inline-flex items-center px-4 py-2 border border-white/25 bg-white/10 rounded-full text-sm text-teal-50 mb-7">☀ Energía Vital · {activeSlide + 1} de 3</span>
+    <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight mb-6">{slide.title}</h1>
+    <p class="text-lg sm:text-xl text-teal-50 leading-relaxed mb-8 max-w-2xl">{slide.subtitle}</p>
     <div class="flex flex-wrap gap-3">
-      <a href="/catalogo" class="bg-white text-teal-950 font-semibold px-6 py-3 rounded-xl shadow-sm hover:bg-teal-50">Explorar equipos</a>
-      <a href="/servicios" class="border border-white/50 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/10">Nuestros servicios</a>
-      <button onclick={onAssistant} class="bg-teal-600/80 border border-teal-400 text-white font-semibold px-6 py-3 rounded-xl hover:bg-teal-600">Asesoramiento</button>
+      <a href={slide.link_url} target={slide.link_url.startsWith('https://') ? '_blank' : undefined}
+        rel={slide.link_url.startsWith('https://') ? 'noopener noreferrer' : undefined}
+        class="inline-flex items-center justify-center px-6 py-3.5 rounded-xl font-bold bg-white text-teal-950 hover:bg-teal-50">
+        {slide.link_label || 'Conocer más'} →
+      </a>
+      <button onclick={onAssistant} class="px-5 py-3.5 rounded-xl border border-white/40 bg-white/10 font-semibold hover:bg-white/20">Hablar con el asistente</button>
     </div>
   </div>
-</header>
+  <div class="relative px-6 pb-6 sm:px-14 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-2" role="group" aria-label="Seleccionar diapositiva">
+      {#each slides as item, index}
+        <button type="button" aria-label={'Mostrar diapositiva ' + (index + 1) + ': ' + item.title}
+          aria-current={activeSlide === index ? 'true' : undefined}
+          onclick={() => selectSlide(index)}
+          class="h-2.5 rounded-full transition-all {activeSlide === index ? 'w-10 bg-white' : 'w-3 bg-white/40 hover:bg-white/70'}"></button>
+      {/each}
+    </div>
+    <div class="flex gap-2">
+      <button type="button" aria-label="Diapositiva anterior" onclick={() => selectSlide(activeSlide - 1)}
+        class="border border-white/40 rounded-full w-11 h-11 hover:bg-white/15 text-xl">‹</button>
+      <button type="button" aria-label="Diapositiva siguiente" onclick={() => selectSlide(activeSlide + 1)}
+        class="border border-white/40 rounded-full w-11 h-11 hover:bg-white/15 text-xl">›</button>
+    </div>
+  </div>
+</section>
 
 <section class="max-w-7xl mx-auto py-12">
   <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
