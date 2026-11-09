@@ -63,6 +63,24 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   }, adminToken);
   const serviceList = await request('Public services include the description', '/api/public/services');
   assert.ok(serviceList.services.some(s => s.id === service.id && s.description === 'Instalación completa'));
+  // Exercise real R2 uploads and public image delivery for the content editors.
+  const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO85ggAAAABJRU5ErkJggg==', 'base64');
+  async function uploadPhoto(route, fields = {}) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.append(key, value);
+    form.append('file', new Blob([pixel], { type: 'image/png' }), 'foto.png');
+    const res = await fetch(BASE + route, { method: 'POST', headers: { Authorization: 'Bearer ' + adminToken }, body: form });
+    const body = await res.json().catch(() => ({}));
+    assert.equal(res.status, 201, 'Photo upload: HTTP ' + res.status + ' ' + JSON.stringify(body));
+    const image = await fetch(body.image_url || body.url);
+    assert.equal(image.status, 200, 'Uploaded image is publicly visible');
+    assert.match(image.headers.get('content-type') || '', /^image\/png/);
+    return body;
+  }
+  await uploadPhoto('/api/admin/products/' + product.id + '/image');
+  await uploadPhoto('/api/admin/services/' + service.id + '/image');
+  await uploadPhoto('/api/admin/gallery', { title: 'Instalación residencial de prueba', description: 'Obra terminada' });
+
 
   const ar = await request('Register customer A', '/api/auth/register', 'POST', a, null, 201);
   const br = await request('Register customer B', '/api/auth/register', 'POST', b, null, 201);
