@@ -86,6 +86,19 @@ publicRoutes.get('/gallery/image/:key', async c => {
   headers.set('X-Content-Type-Options', 'nosniff');
   return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
+publicRoutes.get('/site/media/:id', async c => {
+  const record = await c.env.DB.prepare('SELECT r2_key FROM site_media WHERE id = ?')
+    .bind(c.req.param('id')).first<{ r2_key: string }>();
+  if (!record) return c.notFound();
+  const object = await c.env.BUCKET.get(record.r2_key);
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=3600');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
+});
 publicRoutes.get('/gallery/media/:id', async c => {
   const record = await c.env.DB.prepare('SELECT r2_key FROM work_gallery WHERE id = ? AND is_active = 1')
     .bind(c.req.param('id')).first<{ r2_key: string | null }>();
@@ -105,7 +118,7 @@ publicRoutes.get('/gallery', async c => {
 });
 // Solo configuración comercial publicada; nunca claves internas ni datos privados.
 const publicSettingKeys = ['youtube_channel_url', 'facebook_url', 'instagram_url', 'business_phone',
-  'business_email', 'business_address', 'business_hours', 'telegram_public_url',
+  'business_phones', 'business_email', 'business_address', 'business_hours', 'telegram_public_url',
   'home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links'];
 publicRoutes.get('/settings', async c => {
   const marks = publicSettingKeys.map(() => '?').join(', ');
