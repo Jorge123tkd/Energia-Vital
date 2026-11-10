@@ -5,13 +5,18 @@
   } = $props();
 
   let query = $state('');
+  let copiedId = $state('');
   let edit: any = $state(null);
   let busy = $state(false);
   let error = $state('');
   let success = $state('');
   let visible = $derived(customers.filter(c =>
-    [c.name, c.email, c.phone, c.city, c.province].some(v =>
+    [c.id, c.name, c.email, c.phone, c.city, c.province].some(v =>
       String(v || '').toLowerCase().includes(query.toLowerCase().trim()))));
+  async function copyId(id: string) {
+    try { await navigator.clipboard.writeText(id); copiedId = id; }
+    catch { copiedId = 'error'; }
+  }
   async function task(action: () => Promise<void>) {
     error = ''; success = ''; busy = true;
     try { await action(); }
@@ -60,27 +65,35 @@
       <h2 class="text-2xl font-bold text-slate-900">Clientes registrados <span class="text-slate-400 text-lg">({customers.length})</span></h2>
       <p class="text-sm text-slate-500 mt-1">Gestiona sus datos, bloquea cuentas y protege el historial de solicitudes.</p>
     </div>
-    <input class="border border-slate-300 bg-white rounded-xl px-4 py-3 w-full sm:w-72" placeholder="Buscar cliente…" aria-label="Buscar cliente" bind:value={query} />
+    <input class="border border-slate-300 bg-white rounded-xl px-4 py-3 w-full sm:w-72" placeholder="Buscar por ID, nombre o correo…" aria-label="Buscar cliente por identificador, nombre o correo" bind:value={query} />
   </header>
   {#if error}<p role="alert" class="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl">{error}</p>{/if}
   {#if success}<p role="status" class="p-4 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl">{success}</p>{/if}
 
   {#if visible.length}
-    <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
       {#each visible as c (c.id)}
-        <article class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-3">
+        <article class="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm space-y-2.5 min-w-0">
           <div class="flex items-start justify-between gap-2">
-            <div><h3 class="font-bold text-lg text-slate-900">{c.name}</h3><p class="text-sm text-slate-500">{c.email || 'Sin correo'}</p></div>
+            <div class="min-w-0"><h3 class="font-bold text-sm text-slate-900 truncate" title={c.name}>{c.name}</h3><p class="text-xs text-slate-500 break-all">{c.email || 'Sin correo'}</p></div>
             <span class="text-xs font-semibold px-2.5 py-1 rounded-full {c.is_active ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}">{c.is_active ? 'Activo' : 'Bloqueado'}</span>
           </div>
-          <div class="text-sm text-slate-600 space-y-1">
-            <p>Teléfono: {c.phone || 'No registrado'}</p>
-            <p>{[c.address, c.city, c.province].filter(Boolean).join(', ') || 'Sin dirección'}</p>
+          <div class="flex gap-1 items-center rounded-lg bg-slate-50 border border-slate-100 px-2 py-1.5">
+            <span class="font-mono text-[11px] font-semibold text-slate-700 truncate flex-1" title={c.id}>
+              ID: {String(c.id).slice(0, 12).toUpperCase()}
+            </span>
+            <button class="text-[11px] font-semibold text-teal-700 shrink-0" type="button"
+              title="Copiar identificador completo" aria-label={'Copiar ID de ' + c.name}
+              onclick={() => copyId(c.id)}>{copiedId === c.id ? 'Copiado ✓' : 'Copiar'}</button>
           </div>
-          <div class="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-            <button class="rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-semibold text-sm px-3 py-2" onclick={() => openEditor(c)}>Editar</button>
-            <button disabled={busy} class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold hover:bg-slate-50" onclick={() => setStatus(c)}>{c.is_active ? 'Bloquear' : 'Reactivar'}</button>
-            <button disabled={busy} class="rounded-lg border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 text-sm font-semibold" onclick={() => remove(c)}>Eliminar</button>
+          <div class="text-xs text-slate-600 space-y-1">
+            <p>Teléfono: {c.phone || 'No registrado'}</p>
+            <p class="line-clamp-2" title={[c.address, c.city, c.province].filter(Boolean).join(', ')}>{[c.address, c.city, c.province].filter(Boolean).join(', ') || 'Sin dirección'}</p>
+          </div>
+          <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+            <button class="rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs px-2.5 py-2" onclick={() => openEditor(c)}>Editar</button>
+            <button disabled={busy} class="rounded-lg border border-slate-300 px-2.5 py-2 text-xs font-semibold hover:bg-slate-50" onclick={() => setStatus(c)}>{c.is_active ? 'Bloquear' : 'Reactivar'}</button>
+            <button disabled={busy} class="rounded-lg border border-red-200 text-red-700 hover:bg-red-50 px-2.5 py-2 text-xs font-semibold" onclick={() => remove(c)}>Eliminar</button>
           </div>
         </article>
       {/each}
@@ -94,7 +107,7 @@
   <div class="fixed inset-0 z-[150] bg-slate-950/70 flex items-center justify-center p-4">
     <dialog open aria-label="Editar ficha del cliente" class="relative m-0 rounded-2xl bg-white shadow-2xl w-full max-w-xl max-h-[92vh] overflow-y-auto p-6">
       <div class="flex justify-between items-center mb-5 gap-3">
-        <h2 class="text-xl font-bold">Editar cliente</h2>
+        <div><h2 class="text-xl font-bold">Editar cliente</h2><p class="text-xs font-mono text-slate-500 break-all mt-1">ID: {edit.id}</p></div>
         <button type="button" aria-label="Cerrar" onclick={() => edit = null} class="px-3 py-2 rounded-lg bg-slate-100">✕</button>
       </div>
       {#if error}<p class="mb-3 text-red-700" role="alert">{error}</p>{/if}
