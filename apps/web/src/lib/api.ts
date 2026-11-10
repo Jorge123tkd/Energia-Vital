@@ -56,6 +56,15 @@ export const api = {
   createAppointment: (body: { title: string; starts_at: string; ends_at: string }) => post('/api/private/appointments', body),
   getCalendarSlots: (date: string, minutes = 60) => apiRequest(`/api/calendar/slots?date=${encodeURIComponent(date)}&duration_minutes=${minutes}`),
   getNotifications: () => apiRequest('/api/notifications'),
+  markNotificationRead: (id: string) => patch('/api/notifications/' + encodeURIComponent(id) + '/read', {}),
+  getStaffInbox: (token: string) => apiRequest('/api/notifications/inbox', withAdmin(token)),
+  markStaffNotificationRead: (token: string, id: string) =>
+    patch('/api/notifications/inbox/' + encodeURIComponent(id) + '/read', {}, withAdmin(token)),
+  sendCustomerNotification: (token: string, customer_ids: string[], title: string, message: string) =>
+    post('/api/notifications/admin/send', { customer_ids, title, message }, withAdmin(token)),
+  sendAllCustomerNotifications: (token: string, title: string, message: string) =>
+    post('/api/notifications/admin/send-all', { title, message }, withAdmin(token)),
+
   getRewards: () => apiRequest('/api/rewards'),
   getRewardBalance: () => apiRequest('/api/rewards/balance'),
   getRewardRedemptions: () => apiRequest('/api/rewards/redemptions'),
@@ -65,6 +74,14 @@ export const api = {
 
   adminLogin: (body: { email: string; password: string }) => post('/api/auth/login', body),
   adminMe: (token: string) => apiRequest('/api/auth/admin/me', withAdmin(token)),
+  listStaff: (token: string) => apiRequest('/api/admin/users', withAdmin(token)),
+  createStaff: (token: string, body: { email: string; password: string; role: 'admin' | 'operator' }) =>
+    post('/api/admin/users', body, withAdmin(token)),
+  updateStaff: (token: string, id: string, body: { role?: 'admin' | 'operator'; is_active?: boolean }) =>
+    patch('/api/admin/users/' + encodeURIComponent(id), body, withAdmin(token)),
+  deactivateStaff: (token: string, id: string) =>
+    apiRequest('/api/admin/users/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
+
   adminCustomers: (token: string, query = '') => apiRequest('/api/admin-customers/customers' + (query ? '?q=' + encodeURIComponent(query) : ''), withAdmin(token)),
   updateAdminCustomer: (token: string, id: string, body: Record<string, string>) =>
     patch(`/api/admin-customers/customers/${encodeURIComponent(id)}`, body, withAdmin(token)),
