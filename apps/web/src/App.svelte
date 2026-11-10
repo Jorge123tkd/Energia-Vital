@@ -16,7 +16,7 @@
   import { api, customerToken, setCustomerToken, ADMIN_TOKEN_KEY } from './lib/api';
   import { isAssistantOpen, assistantSessionId, assistantMessages } from './lib/store';
 
-  const publicRoutes = new Set(['/', '/catalogo', '/servicios', '/galeria']);
+  const publicRoutes = new Set(['/', '/catalogo', '/servicios', '/galeria', '/asesor-solar']);
   const LOGIN_ACTION_KEY = 'energia_vital_login_action';
   let currentRoute = $state(window.location.pathname || '/');
   let user: any = $state(null);
@@ -108,7 +108,7 @@
 {:else if checking}
   <div class="min-h-screen flex justify-center items-center text-gray-600">Verificando tu sesión…</div>
 {:else}
-  <Nav {navigate} customerName={user?.name || (user?.role === 'admin' ? 'Administrador' : '')} onLogout={signOut} onAssistant={openAssistant} />
+  <Nav {navigate} customerName={user?.name || (user?.role === 'admin' ? 'Administrador' : '')} userRole={user?.role || 'customer'} onLogout={signOut} onAssistant={openAssistant} />
   {#if currentRoute === '/entrar' || currentRoute === '/registro' || (!user && !publicRoutes.has(currentRoute))}
     <CustomerAccess onSuccess={onAuthenticated} initialMode={currentRoute === '/registro' ? 'register' : 'login'} />
   {:else}
@@ -123,7 +123,7 @@
         <section class="max-w-3xl mx-auto my-10 p-8 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-5">
           <span class="text-xs font-bold uppercase tracking-widest text-teal-700">Cuenta administrativa</span>
           <h1 class="text-3xl font-bold text-slate-900">Mi perfil</h1>
-          <p class="text-slate-600">Has iniciado sesión como administrador de Energía Vital.</p>
+          <p class="text-slate-600">Has iniciado sesión como administrador de Bonaire.</p>
           <p class="text-sm text-slate-500">Correo: <strong>{user.email}</strong></p>
           <a class="inline-flex items-center rounded-xl bg-teal-700 text-white font-bold px-6 py-3 hover:bg-teal-800" href="/admin">
             Entrar al panel de administración →
@@ -141,7 +141,7 @@
       {:else}<HomePage onAssistant={openAssistant} />{/if}
     </main>
     {#if user && user.role !== 'admin' && $isAssistantOpen}
-      <div class="fixed bottom-5 right-3 sm:right-6 z-[100]"><Assistant userId={user.id} onContact={() => navigate('/contacto')} /></div>
+      <div class="fixed bottom-5 right-3 sm:right-6 z-[100]"><Assistant userId={user.id} onContact={() => navigate('/contacto')} onAdvisor={() => { isAssistantOpen.set(false); navigate('/asesor-solar'); }} /></div>
     {/if}
   {/if}
   <Footer />
