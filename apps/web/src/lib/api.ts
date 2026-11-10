@@ -65,7 +65,7 @@ export const api = {
 
   adminLogin: (body: { email: string; password: string }) => post('/api/auth/login', body),
   adminMe: (token: string) => apiRequest('/api/auth/admin/me', withAdmin(token)),
-  adminCustomers: (token: string) => apiRequest('/api/admin-customers/customers', withAdmin(token)),
+  adminCustomers: (token: string, query = '') => apiRequest('/api/admin-customers/customers' + (query ? '?q=' + encodeURIComponent(query) : ''), withAdmin(token)),
   updateAdminCustomer: (token: string, id: string, body: Record<string, string>) =>
     patch(`/api/admin-customers/customers/${encodeURIComponent(id)}`, body, withAdmin(token)),
   setAdminCustomerStatus: (token: string, id: string, is_active: boolean) =>
