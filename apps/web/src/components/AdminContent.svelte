@@ -129,6 +129,26 @@
     ];
   }
   let slides = $state<HomeSlide[]>(defaultSlides());
+  let slideFiles = $state<(File | null)[]>([null, null, null]);
+  let uploadingSlide = $state(-1);
+  let phoneRows = $state<{ label: string; number: string }[]>([]);
+  function addPhone() { phoneRows = [...phoneRows, { label: '', number: '' }]; }
+  function removePhone(index: number) { phoneRows = phoneRows.filter((_, i) => i !== index); }
+  async function uploadSlide(index: number) {
+    const file = slideFiles[index];
+    if (!file) { error = 'Selecciona primero una fotografía.'; return; }
+    if (file.size > 8 * 1024 * 1024 || !['image/jpeg','image/png','image/webp'].includes(file.type)) {
+      error = 'Utiliza JPG, PNG o WebP de hasta 8 MB.'; return;
+    }
+    error = ''; notice = ''; uploadingSlide = index;
+    try {
+      const result = await api.uploadSiteMedia(token, file);
+      slides[index].image_url = result.image_url;
+      slideFiles[index] = null;
+      notice = 'Fotografía guardada en R2. Pulsa «Guardar y publicar cambios del sitio» para mostrarla en la portada.';
+    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo subir la imagen'; }
+    finally { uploadingSlide = -1; }
+  }
   let linksText = $state('');
   async function loadExtra() {
     try {
@@ -138,6 +158,12 @@
       for (const item of cfg.settings ?? []) if (item.key in next) next[item.key] = String(item.value ?? '');
       if (next.home_title === 'Energía Vital') next.home_title = 'Bonaire';
       site = next;
+      try {
+        const phoneSetting = (cfg.settings ?? []).find((row: any) => row.key === 'business_phones');
+        const value = JSON.parse(phoneSetting?.value || '[]');
+        phoneRows = Array.isArray(value) ? value.filter((p: any) => p && typeof p.number === 'string')
+          .map((p: any) => ({ label: String(p.label || ''), number: String(p.number || '') })) : [];
+      } catch { phoneRows = []; }
       const row = (cfg.settings ?? []).find((x: any) => x.key === 'footer_links');
       let links: any[] = [];
       try { links = JSON.parse(row?.value || '[]'); } catch { /* configuración antigua */ }
@@ -202,7 +228,8 @@
         if (pos < 1) throw new Error('Enlaces: escribe una línea como Catálogo | /catalogo');
         return { label: line.slice(0, pos).trim(), url: line.slice(pos + 1).trim() };
       });
-      await api.saveSiteSettings(token, { ...site, footer_links: JSON.stringify(links), home_slides: JSON.stringify(slides) });
+      await api.saveSiteSettings(token, { ...site, footer_links: JSON.stringify(links), home_slides: JSON.stringify(slides),
+        business_phones: JSON.stringify(phoneRows.filter(p => p.number.trim()).map(p => ({ label: p.label.trim(), number: p.number.trim() }))) });
       notice = 'Contenido de la portada y el pie de página publicado.';
     });
   }
@@ -308,7 +335,7 @@
       <form onsubmit={saveSite} class="grid grid-cols-1 xl:grid-cols-12 gap-5 xl:gap-6 items-start min-w-0">
         <fieldset class="space-y-4 min-w-0 xl:col-span-8">
           <legend class="text-lg font-semibold mb-3">Carrusel de portada · 3 diapositivas</legend>
-          <p class="text-sm text-slate-500">Cada entrada puede mostrar un trabajo, la empresa o una promoción real. Para subir imágenes, entra en «Galería» y selecciona aquí la foto publicada.</p>
+          <p class="text-sm text-slate-500">Elige tus fotografías y súbelas directamente al almacenamiento R2 de Cloudflare. También puedes usar una imagen de la galería o pegar una URL HTTPS.</p>
           <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
           {#each slides as slide, index}
             <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-3">
@@ -319,7 +346,16 @@
               <label class="admin-label">Descripción
                 <textarea maxlength="450" rows="3" class="admin-input" bind:value={slide.subtitle}></textarea>
               </label>
-              <label class="admin-label">Seleccionar una imagen de la galería
+              <div class="space-y-2 rounded-xl border border-teal-100 bg-white p-3">
+                <label class="admin-label">Subir imagen a Cloudflare R2
+                  <input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input"
+                    onchange={e => slideFiles[index] = e.currentTarget.files?.[0] ?? null} />
+                </label>
+                <button type="button" class="admin-secondary w-full" disabled={uploadingSlide >= 0 || !slideFiles[index]}
+                  onclick={() => uploadSlide(index)}>{uploadingSlide === index ? 'Subiendo imagen…' : 'Subir foto a Cloudflare'}</button>
+                <p class="text-xs text-slate-500">JPG, PNG o WebP hasta 8 MB. Después guarda los cambios del sitio.</p>
+              </div>
+              <label class="admin-label">O seleccionar una imagen de la galería
                 <select class="admin-input" bind:value={slide.image_url}>
                   <option value="">Sin imagen (usar fondo de color)</option>
                   {#each gallery.filter((g: any) => g.url && g.is_active) as g (g.id)}
@@ -347,10 +383,26 @@
         <fieldset class="space-y-3 min-w-0 xl:col-span-4"><legend class="text-lg font-semibold mb-3">Pie de página y contacto</legend>
           <label class="admin-label">Texto sobre la empresa<textarea rows="3" class="admin-input" bind:value={site.footer_description}></textarea></label>
           <div class="grid sm:grid-cols-2 gap-3">
-            <label class="admin-label">Teléfono / WhatsApp<input class="admin-input" placeholder="+53 ..." bind:value={site.business_phone} /></label>
+            <label class="admin-label">Teléfono / WhatsApp principal
+              <input class="admin-input" type="tel" placeholder="+53 ..." bind:value={site.business_phone} />
+            </label>
             <label class="admin-label">Correo público<input class="admin-input" type="email" placeholder="info@..." bind:value={site.business_email} /></label>
             <label class="admin-label">Dirección<input class="admin-input" bind:value={site.business_address} /></label>
             <label class="admin-label">Horario<input class="admin-input" bind:value={site.business_hours} /></label>
+          </div>
+          <div class="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-3">
+            <div class="flex justify-between items-center gap-2">
+              <strong class="text-sm text-slate-800">Teléfonos adicionales</strong>
+              <button type="button" class="admin-secondary text-xs" onclick={addPhone}>+ Añadir teléfono</button>
+            </div>
+            {#each phoneRows as row, i}
+              <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] gap-2 items-end">
+                <label class="admin-label">Etiqueta<input class="admin-input" maxlength="60" placeholder="Ventas, soporte…" bind:value={row.label} /></label>
+                <label class="admin-label">Número<input class="admin-input" type="tel" maxlength="25" placeholder="+53 ..." bind:value={row.number} /></label>
+                <button type="button" class="admin-secondary" aria-label="Quitar teléfono" onclick={() => removePhone(i)}>Quitar</button>
+              </div>
+            {/each}
+            {#if phoneRows.length === 0}<p class="text-xs text-slate-500">Puedes añadir varios números para ventas, atención y soporte.</p>{/if}
           </div>
         </fieldset>
         <fieldset class="space-y-3 min-w-0 xl:col-span-6"><legend class="text-lg font-semibold mb-3">Redes sociales</legend>
