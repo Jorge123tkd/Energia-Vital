@@ -37,7 +37,7 @@
   }
 </script>
 <div class="max-w-5xl mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold mb-3">Contactar a Energía Vital</h1>
+  <h1 class="text-3xl font-bold mb-3">Contactar a Bonaire</h1>
   <p class="text-gray-600 mb-7">Tu solicitud quedará vinculada a tu cuenta, teléfono y dirección guardados en «Mi perfil».</p>
   <div class="grid lg:grid-cols-2 gap-8">
     <form onsubmit={submit} class="bg-white border rounded-xl p-6 space-y-4">
