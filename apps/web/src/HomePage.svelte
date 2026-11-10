@@ -23,7 +23,7 @@
   type Slide = { title: string; subtitle: string; image_url: string; link_label: string; link_url: string };
   let activeSlide = $state(0);
   const defaults: Slide[] = [
-    { title: 'Energía Vital', subtitle: intro, image_url: '', link_label: 'Explorar equipos', link_url: '/catalogo' },
+    { title: 'Bonaire', subtitle: intro, image_url: '', link_label: 'Explorar equipos', link_url: '/catalogo' },
     { title: 'Trabajos que hablan por nosotros', subtitle: 'Conoce nuestros proyectos e instalaciones de energía solar.', image_url: '', link_label: 'Ver nuestros trabajos', link_url: '/galeria' },
     { title: 'Novedades y soluciones solares', subtitle: 'Descubre equipos disponibles y consulta las propuestas que mejor se adaptan a ti.', image_url: '', link_label: 'Ver catálogo', link_url: '/catalogo' }
   ];
@@ -33,9 +33,11 @@
       if (Array.isArray(parsed) && parsed.length === 3 && parsed.every((s: any) =>
         typeof s.title === 'string' && typeof s.subtitle === 'string' &&
         typeof s.image_url === 'string' && typeof s.link_label === 'string' &&
-        typeof s.link_url === 'string')) return parsed;
+        typeof s.link_url === 'string')) return parsed.map((s: Slide) => ({
+          ...s, title: s.title === 'Energía Vital' ? 'Bonaire' : s.title
+        }));
     } catch { /* configuración inicial: usar títulos por defecto */ }
-    return [{ ...defaults[0], title: settings.home_title || defaults[0].title,
+    return [{ ...defaults[0], title: settings.home_title === 'Energía Vital' ? 'Bonaire' : settings.home_title || defaults[0].title,
       subtitle: settings.home_subtitle || intro }, defaults[1], defaults[2]];
   });
   let slide = $derived(slides[activeSlide] || slides[0]);
@@ -43,7 +45,7 @@
   function consult(p: any) { window.location.href = '/contacto?product=' + encodeURIComponent(p.name); }
 </script>
 
-<section aria-label="Presentación de Energía Vital" class="relative rounded-3xl overflow-hidden min-h-[440px] sm:min-h-[500px] bg-slate-950 text-white flex flex-col justify-between shadow-xl">
+<section aria-label="Presentación de Bonaire" class="relative rounded-3xl overflow-hidden min-h-[440px] sm:min-h-[500px] bg-slate-950 text-white flex flex-col justify-between shadow-xl">
   {#if slide.image_url && /^https:\/\/[^\s]+$/i.test(slide.image_url)}
     <img src={slide.image_url} alt="" class="absolute inset-0 w-full h-full object-cover" />
     <div class="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/75 to-slate-900/25"></div>
@@ -52,7 +54,7 @@
     <div class="absolute -right-20 -top-20 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl"></div>
   {/if}
   <div class="relative px-6 py-16 sm:px-14 sm:py-20 max-w-3xl flex-1">
-    <span class="inline-flex items-center px-4 py-2 border border-white/25 bg-white/10 rounded-full text-sm text-teal-50 mb-7">☀ Energía Vital · {activeSlide + 1} de 3</span>
+    <span class="inline-flex items-center px-4 py-2 border border-white/25 bg-white/10 rounded-full text-sm text-teal-50 mb-7">☀ Bonaire · {activeSlide + 1} de 3</span>
     <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight mb-6">{slide.title}</h1>
     <p class="text-lg sm:text-xl text-teal-50 leading-relaxed mb-8 max-w-2xl">{slide.subtitle}</p>
     <div class="flex flex-wrap gap-3">
