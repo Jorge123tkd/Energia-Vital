@@ -4,6 +4,7 @@ import { detectIntent, generateResponse, loadAssistantContext } from '../assista
 import { callAI } from '../assistant-ai';
 import { getUser, requireCustomerAuth } from '../middleware';
 import { rateLimited } from '../rate-limit';
+import { advanceSolarGuidance, type SolarState } from '../solar-guidance';
 
 export const assistantRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 assistantRoutes.use('*', requireCustomerAuth);
@@ -36,6 +37,30 @@ assistantRoutes.post('/message', async c => {
         .bind(messageId, message, intent, now, sessionId, user.user_id),
     ]);
     if (!batch[1].meta?.changes) return c.json({ error: 'Esta conversación pertenece a otra cuenta' }, 403);
+
+    // El asesoramiento guiado conserva el avance en D1 para esta conversación
+    // y no depende de una respuesta probabilística del modelo de IA.
+    const row = await DB.prepare('SELECT context FROM assistant_sessions WHERE id = ? AND customer_id = ?')
+      .bind(sessionId, user.user_id).first<{ context: string }>();
+    let sessionContext: Record<string, any> = {};
+    try {
+      const parsed = JSON.parse(row?.context || '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) sessionContext = parsed;
+    } catch { /* contexto anterior malformado; iniciar limpio */ }
+    const guided = advanceSolarGuidance(message, sessionContext.solar as SolarState | undefined);
+    if (guided.handled) {
+      if (guided.state) sessionContext.solar = guided.state;
+      else delete sessionContext.solar;
+      const replyId = crypto.randomUUID();
+      await DB.batch([
+        DB.prepare('UPDATE assistant_sessions SET context = ?, updated_at = ? WHERE id = ? AND customer_id = ?')
+          .bind(JSON.stringify(sessionContext), new Date().toISOString(), sessionId, user.user_id),
+        DB.prepare(`INSERT INTO assistant_messages (id, session_id, role, content, intent, metadata, created_at)
+          VALUES (?, ?, 'assistant', ?, 'solar_advice', ?, ?)`)
+          .bind(replyId, sessionId, guided.reply, JSON.stringify({ source: 'guided' }), new Date().toISOString()),
+      ]);
+      return c.json({ session_id: sessionId, response: guided.reply, source: 'guided', intent: 'solar_advice', message_id: replyId });
+    }
 
     let context;
     try { context = await loadAssistantContext(DB); }
