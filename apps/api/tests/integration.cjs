@@ -96,6 +96,23 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   await uploadPhoto('/api/admin/products/' + product.id + '/image');
   await uploadPhoto('/api/admin/services/' + service.id + '/image');
   await uploadPhoto('/api/admin/gallery', { title: 'Instalación residencial de prueba', description: 'Obra terminada' });
+  const slideMedia = await uploadPhoto('/api/admin/site-media');
+  assert.match(slideMedia.image_url, /\/api\/public\/site\/media\//);
+  await request('Admin saves telephone list', '/api/admin/site-settings', 'PUT', {
+    business_phone: '+53 5555 0101',
+    business_phones: JSON.stringify([{ label: 'Ventas', number: '+53 5555 0102' }])
+  }, adminToken);
+  const publicContacts = await request('Published contacts include extra phones', '/api/public/settings');
+  assert.equal(JSON.parse(publicContacts.settings.business_phones)[0].label, 'Ventas');
+  await request('Admin rejects malformed contact number', '/api/admin/site-settings', 'PUT', {
+    business_phones: JSON.stringify([{ label: 'Teléfono', number: 'not a number' }])
+  }, adminToken, 400);
+  await request('Product accepts an external image URL', '/api/admin/products/' + product.id + '/image-url',
+    'POST', { url: 'https://example.com/equipo.png' }, adminToken, 201);
+  await request('Service accepts an external image URL', '/api/admin/services/' + service.id + '/image-url',
+    'POST', { url: 'https://example.com/servicio.png' }, adminToken, 201);
+  await request('External image URL rejects non-HTTPS scheme', '/api/admin/products/' + product.id + '/image-url',
+    'POST', { url: 'javascript:alert(1)' }, adminToken, 400);
 
 
   const ar = await request('Register customer A', '/api/auth/register', 'POST', a, null, 201);
