@@ -502,7 +502,7 @@ adminRoutes.put('/site-settings', async c => {
   const records: Array<{ key: string; value: string }> = [];
   const socialKeys = new Set(['youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url']);
   for (const key of keys) {
-    if (typeof b[key] !== 'string' || (b[key] as string).length > 3500)
+    if (typeof b[key] !== 'string' || (b[key] as string).length > (key === 'home_slides' ? 9000 : 3500))
       return c.json({ error: `Valor inválido en ${key}` }, 400);
     let value = (b[key] as string).trim();
     if (socialKeys.has(key) && value && !/^https:\/\/[^\s]+$/i.test(value))
