@@ -85,8 +85,9 @@
     try {
       const response = await api.getProduct(product.id);
       if (selected?.id !== product.id) return;
-      selected = { ...product, ...(response.product || {}) };
-      const all = [selected.primary_image_url, ...(response.images || []).map((img: any) => img.url)]
+      const merged: Product = { ...product, ...(response.product || {}) };
+      selected = merged;
+      const all = [merged.primary_image_url, ...(response.images || []).map((img: any) => img.url)]
         .filter((value): value is string => typeof value === 'string' && value.length > 0);
       selectedImages = [...new Set(all)];
     } catch {
@@ -289,7 +290,7 @@
           {#if stockLabel(selected)}<p class="text-xs font-semibold text-slate-600">Estado: {stockLabel(selected)}</p>{/if}
           <div class="mt-auto border-t border-slate-200 pt-4">
             <p class="text-2xl font-extrabold text-teal-800">{priceLabel(selected)}</p>
-            <button type="button" class="w-full rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold px-5 py-3.5 mt-4" onclick={() => consult(selected)}>Consultar este equipo →</button>
+            <button type="button" class="w-full rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold px-5 py-3.5 mt-4" onclick={() => { if (selected) consult(selected); }}>Consultar este equipo →</button>
             <p class="mt-3 text-xs text-slate-500">La disponibilidad y compatibilidad se confirman con el equipo de Bonaire.</p>
           </div>
         </div>
