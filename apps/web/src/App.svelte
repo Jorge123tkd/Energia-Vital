@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Nav from './components/Nav.svelte';
+  import NotificationsPage from './components/NotificationsPage.svelte';
   import Footer from './components/Footer.svelte';
   import Assistant from './components/Assistant.svelte';
   import CustomerAccess from './components/CustomerAccess.svelte';
@@ -33,7 +34,7 @@
     if (admin) {
       try {
         const result = await api.adminMe(admin);
-        user = { ...result.user, name: 'Administrador', account_type: 'admin' };
+        user = { ...result.user, name: result.user.role === 'operator' ? 'Moderador' : 'Administrador', account_type: 'admin' };
         checking = false;
         return;
       } catch { sessionStorage.removeItem(ADMIN_TOKEN_KEY); }
@@ -52,7 +53,7 @@
   }
 
   function openAssistant() {
-    if (user?.role === 'admin') {
+    if ((user?.account_type === 'admin' || user?.role === 'admin' || user?.role === 'operator')) {
       navigate('/perfil');
       return;
     }
@@ -65,7 +66,7 @@
   }
 
   function onAuthenticated(customer: any, token: string) {
-    if (customer.role === 'admin') {
+    if ((customer.account_type === 'admin' || customer.role === 'admin' || customer.role === 'operator')) {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
       setCustomerToken(null);
     } else {
@@ -80,8 +81,8 @@
       ? window.location.pathname + window.location.search : '/';
     const target = queryNext && queryNext.startsWith('/') && !queryNext.startsWith('//') && !queryNext.startsWith('/admin')
       ? queryNext : pending;
-    navigate(customer.role === 'admin' ? '/perfil' : target);
-    if (customer.role !== 'admin' && sessionStorage.getItem(LOGIN_ACTION_KEY) === 'assistant') {
+    navigate((customer.account_type === 'admin' || customer.role === 'admin' || customer.role === 'operator') ? '/perfil' : target);
+    if (customer.account_type !== 'admin' && customer.role !== 'admin' && customer.role !== 'operator' && sessionStorage.getItem(LOGIN_ACTION_KEY) === 'assistant') {
       sessionStorage.removeItem(LOGIN_ACTION_KEY);
       isAssistantOpen.set(true);
     }
@@ -108,7 +109,7 @@
 {:else if checking}
   <div class="min-h-screen flex justify-center items-center text-gray-600">Verificando tu sesión…</div>
 {:else}
-  <Nav {navigate} customerName={user?.name || (user?.role === 'admin' ? 'Administrador' : '')} userRole={user?.role || 'customer'} onLogout={signOut} onAssistant={openAssistant} />
+  <Nav {navigate} customerName={user?.name || ((user?.account_type === 'admin' || user?.role === 'admin' || user?.role === 'operator') ? 'Administrador' : '')} userRole={user?.role || 'customer'} onLogout={signOut} onAssistant={openAssistant} />
   {#if currentRoute === '/entrar' || currentRoute === '/registro' || (!user && !publicRoutes.has(currentRoute))}
     <CustomerAccess onSuccess={onAuthenticated} initialMode={currentRoute === '/registro' ? 'register' : 'login'} />
   {:else}
@@ -117,20 +118,21 @@
       {:else if currentRoute === '/catalogo'}<CatalogPage />
       {:else if currentRoute === '/servicios'}<ServicesPage />
       {:else if currentRoute === '/asesor-solar'}<SolarAdvisorPage />
+      {:else if currentRoute === '/notificaciones'}<NotificationsPage staff={user?.account_type === 'admin' || user?.role === 'admin' || user?.role === 'operator'} token={sessionStorage.getItem(ADMIN_TOKEN_KEY) || ''} />
       {:else if currentRoute === '/galeria'}<GalleryPage />
       {:else if currentRoute === '/contacto'}<ContactPage />
-      {:else if currentRoute === '/perfil' && user?.role === 'admin'}
+      {:else if currentRoute === '/perfil' && (user?.account_type === 'admin' || user?.role === 'admin' || user?.role === 'operator')}
         <section class="max-w-3xl mx-auto my-10 p-8 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-5">
           <span class="text-xs font-bold uppercase tracking-widest text-teal-700">Cuenta administrativa</span>
           <h1 class="text-3xl font-bold text-slate-900">Mi perfil</h1>
-          <p class="text-slate-600">Has iniciado sesión como administrador de Bonaire.</p>
+          <p class="text-slate-600">Has iniciado sesión como miembro del equipo de Bonaire.</p>
           <p class="text-sm text-slate-500">Correo: <strong>{user.email}</strong></p>
           <a class="inline-flex items-center rounded-xl bg-teal-700 text-white font-bold px-6 py-3 hover:bg-teal-800" href="/admin">
             Entrar al panel de administración →
           </a>
           <p class="text-sm text-slate-500">Por seguridad, las solicitudes y el asistente para clientes requieren una cuenta de cliente independiente.</p>
         </section>
-      {:else if user?.role === 'admin' && !publicRoutes.has(currentRoute)}
+      {:else if (user?.account_type === 'admin' || user?.role === 'admin' || user?.role === 'operator') && !publicRoutes.has(currentRoute)}
         <section class="max-w-xl mx-auto my-14 rounded-2xl bg-white border border-slate-200 p-8 text-center space-y-4">
           <h1 class="font-bold text-2xl">Área reservada para clientes</h1>
           <p class="text-slate-600">Tu cuenta administrativa tiene acceso al panel de gestión. Para crear solicitudes o pedir citas necesitas una cuenta de cliente.</p>
@@ -140,7 +142,7 @@
       {:else if currentRoute === '/mis-solicitudes'}<MyRequests />
       {:else}<HomePage onAssistant={openAssistant} />{/if}
     </main>
-    {#if user && user.role !== 'admin' && $isAssistantOpen}
+    {#if user && user.account_type !== 'admin' && user.role !== 'admin' && user.role !== 'operator' && $isAssistantOpen}
       <div class="fixed bottom-5 right-3 sm:right-6 z-[100]"><Assistant userId={user.id} onContact={() => navigate('/contacto')} onAdvisor={() => { isAssistantOpen.set(false); navigate('/asesor-solar'); }} /></div>
     {/if}
   {/if}
