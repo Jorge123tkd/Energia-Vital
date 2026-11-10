@@ -97,6 +97,11 @@ export const api = {
     body.append('file', file);
     return apiRequest(`/api/admin/services/${id}/image`, withAdmin(token, { method: 'POST', body }));
   },
+  uploadSiteMedia: (token: string, file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return apiRequest('/api/admin/site-media', withAdmin(token, { method: 'POST', body }));
+  },
   getAdminGallery: (token: string) => apiRequest('/api/admin/gallery', withAdmin(token)),
   createAdminGallery: (token: string, body: FormData) => apiRequest('/api/admin/gallery', withAdmin(token, { method: 'POST', body })),
   updateAdminGallery: (token: string, id: string, body: unknown) => patch(`/api/admin/gallery/${id}`, body, withAdmin(token)),
