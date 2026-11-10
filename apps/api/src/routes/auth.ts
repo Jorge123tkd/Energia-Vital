@@ -66,7 +66,7 @@ authRoutes.post('/sign-in', async c => {
 
   // Admin antes que cliente solo cuando su contraseña ha sido verificada.
   const admin = await c.env.DB.prepare(`SELECT id, email, role, password_hash FROM admin_users
-      WHERE LOWER(email) = ? AND is_active = 1 AND role IN ('admin','operator')`
+      WHERE LOWER(email) = ? AND is_active = 1 AND role IN ('admin','operator')`)
     .bind(email).first<any>();
   if (admin && await comparePassword(password, admin.password_hash)) {
     const tokens = await issue(c.env, admin.id, 'admin', admin.role);
