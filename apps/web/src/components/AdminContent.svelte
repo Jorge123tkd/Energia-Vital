@@ -450,7 +450,7 @@
           <label class="admin-label">Categoría<input class="admin-input" bind:value={galleryEdit.category} /></label>
           <label class="admin-label md:col-span-2">Descripción<textarea rows="3" class="admin-input" bind:value={galleryEdit.description}></textarea></label>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryEdit.is_active} /> Proyecto publicado</label>
-          <div class="flex gap-2"><button disabled={busy} class="admin-primary">Guardar proyecto</button><button type="button" class="admin-secondary" onclick={() => galleryEdit = null}>Cancelar</button></div>
+          <div class="flex gap-2"><button disabled={busy} class="admin-primary">Guardar proyecto</button><button type="button" class="admin-secondary" onclick={() => { galleryEdit = null; modal = null; }}>Cancelar</button></div>
         </form>
       {:else if modal === 'service'}
         <form class="space-y-4" onsubmit={saveService}>
