@@ -13,8 +13,14 @@ function audit(c: any, action: string, customerId: string) {
 
 
 adminCustomersRoutes.get('/customers', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT id, name, email, phone, address, city, province, phone_verified, is_active, created_at
-    FROM customers ORDER BY created_at DESC LIMIT 200`).all();
+  const query = (c.req.query('q') || '').trim().toLowerCase().slice(0, 120);
+  const base = 'SELECT id, name, email, phone, address, city, province, phone_verified, is_active, created_at FROM customers';
+  const matching = query
+    ? ` WHERE instr(lower(id), ?) > 0 OR instr(lower(name), ?) > 0
+      OR instr(lower(email), ?) > 0 OR instr(lower(coalesce(phone, '')), ?) > 0`
+    : '';
+  const statement = c.env.DB.prepare(base + matching + ' ORDER BY created_at DESC LIMIT 200');
+  const { results } = query ? await statement.bind(query, query, query, query).all() : await statement.all();
   return c.json({ customers: results ?? [] });
 });
 // Perfil comercial: no se permite editar contraseñas ni roles desde este módulo.
