@@ -15,7 +15,7 @@
 <section class="max-w-7xl mx-auto px-2 py-8">
   <div class="mb-9">
     <span class="text-xs font-bold tracking-widest uppercase text-teal-700">Asistencia especializada</span>
-    <h1 class="text-3xl sm:text-4xl font-bold text-slate-900 mt-2">Servicios de Energía Vital</h1>
+    <h1 class="text-3xl sm:text-4xl font-bold text-slate-900 mt-2">Servicios de Bonaire</h1>
     <p class="text-slate-600 mt-3 max-w-2xl">Desde la planificación hasta el mantenimiento. Te acompañamos para aprovechar al máximo tu inversión solar.</p>
   </div>
   {#if loading}<p class="text-slate-500">Cargando servicios…</p>
