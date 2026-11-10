@@ -29,7 +29,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phonePattern = /^\+?[0-9 ()-]{8,20}$/;
 
 adminCustomersRoutes.patch('/customers/:id', requireAdminAuth, async c => {
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const original = await c.env.DB.prepare('SELECT id, name, email, phone, address, city, province FROM customers WHERE id = ?').bind(id).first<any>();
   if (!original) return c.json({ error: 'Cliente no encontrado' }, 404);
   const body = await c.req.json<any>().catch(() => null);
@@ -64,7 +64,7 @@ adminCustomersRoutes.patch('/customers/:id', requireAdminAuth, async c => {
 });
 
 adminCustomersRoutes.patch('/customers/:id/status', requireAdminAuth, async c => {
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const b = await c.req.json<any>().catch(() => null);
   if (!b || typeof b.is_active !== 'boolean')
     return c.json({ error: 'Indica el estado activo o bloqueado' }, 400);
@@ -86,7 +86,7 @@ adminCustomersRoutes.patch('/customers/:id/status', requireAdminAuth, async c =>
 
 // La eliminación irreversible solo se permite si no existe historial asociado.
 adminCustomersRoutes.delete('/customers/:id', requireAdminAuth, async c => {
-  const id = c.req.param('id');
+  const id = c.req.param('id')!;
   const exists = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ?').bind(id).first();
   if (!exists) return c.json({ error: 'Cliente no encontrado' }, 404);
   const linked = ['requests', 'appointments', 'assistant_sessions', 'giveaway_participants',
