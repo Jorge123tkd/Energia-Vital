@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { requireAdminAuth } from '../middleware';
+import { requireAdminAuth, requireStaffAuth } from '../middleware';
 
 export const adminCustomersRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
-adminCustomersRoutes.use('*', requireAdminAuth);
+adminCustomersRoutes.use('*', requireStaffAuth);
 
 function audit(c: any, action: string, customerId: string) {
   return c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, entity_id, created_at)
@@ -28,7 +28,7 @@ const trim = (value: unknown, max: number) => typeof value === 'string' ? value.
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phonePattern = /^\+?[0-9 ()-]{8,20}$/;
 
-adminCustomersRoutes.patch('/customers/:id', async c => {
+adminCustomersRoutes.patch('/customers/:id', requireAdminAuth, async c => {
   const id = c.req.param('id');
   const original = await c.env.DB.prepare('SELECT id, name, email, phone, address, city, province FROM customers WHERE id = ?').bind(id).first<any>();
   if (!original) return c.json({ error: 'Cliente no encontrado' }, 404);
@@ -63,7 +63,7 @@ adminCustomersRoutes.patch('/customers/:id', async c => {
   return c.json({ message: 'Ficha de cliente actualizada' });
 });
 
-adminCustomersRoutes.patch('/customers/:id/status', async c => {
+adminCustomersRoutes.patch('/customers/:id/status', requireAdminAuth, async c => {
   const id = c.req.param('id');
   const b = await c.req.json<any>().catch(() => null);
   if (!b || typeof b.is_active !== 'boolean')
@@ -85,7 +85,7 @@ adminCustomersRoutes.patch('/customers/:id/status', async c => {
 });
 
 // La eliminación irreversible solo se permite si no existe historial asociado.
-adminCustomersRoutes.delete('/customers/:id', async c => {
+adminCustomersRoutes.delete('/customers/:id', requireAdminAuth, async c => {
   const id = c.req.param('id');
   const exists = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ?').bind(id).first();
   if (!exists) return c.json({ error: 'Cliente no encontrado' }, 404);
