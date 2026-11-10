@@ -6,13 +6,22 @@
 
   let query = $state('');
   let copiedId = $state('');
+  let remoteRows: any[] | null = $state(null);
+  let searching = $state(false);
   let edit: any = $state(null);
   let busy = $state(false);
   let error = $state('');
   let success = $state('');
-  let visible = $derived(customers.filter(c =>
+  let visible = $derived((remoteRows ?? customers).filter(c =>
     [c.id, c.name, c.email, c.phone, c.city, c.province].some(v =>
       String(v || '').toLowerCase().includes(query.toLowerCase().trim()))));
+  async function searchNow() {
+    error = ''; searching = true;
+    try { remoteRows = query.trim() ? (await api.adminCustomers(token, query.trim())).customers ?? [] : null; }
+    catch (e) { error = e instanceof Error ? e.message : 'No se pudo buscar el cliente'; }
+    finally { searching = false; }
+  }
+  function search(event: SubmitEvent) { event.preventDefault(); void searchNow(); }
   async function copyId(id: string) {
     try { await navigator.clipboard.writeText(id); copiedId = id; }
     catch { copiedId = 'error'; }
@@ -36,7 +45,7 @@
         name: edit.name, email: edit.email, phone: edit.phone,
         address: edit.address, city: edit.city, province: edit.province
       });
-      edit = null; await onRefresh(); success = 'Datos del cliente actualizados.';
+      edit = null; await onRefresh(); if (remoteRows !== null) await searchNow(); success = 'Datos del cliente actualizados.';
     });
   }
   async function setStatus(customer: any) {
@@ -45,7 +54,7 @@
     if (!window.confirm(`¿Quieres ${action} la cuenta de ${customer.name}?`)) return;
     await task(async () => {
       await api.setAdminCustomerStatus(token, customer.id, !active);
-      await onRefresh();
+      await onRefresh(); if (remoteRows !== null) await searchNow();
       success = active ? 'Cliente bloqueado: las sesiones activas se han cerrado.' : 'Cliente reactivado.';
     });
   }
@@ -53,7 +62,7 @@
     if (!window.confirm(`Eliminar definitivamente a ${customer.name}? Esta operación no se puede deshacer. Si tiene solicitudes o citas guardadas, el sistema impedirá eliminarlo.`)) return;
     await task(async () => {
       await api.deleteAdminCustomer(token, customer.id);
-      await onRefresh();
+      await onRefresh(); if (remoteRows !== null) await searchNow();
       success = 'Cuenta eliminada definitivamente.';
     });
   }
@@ -65,7 +74,13 @@
       <h2 class="text-2xl font-bold text-slate-900">Clientes registrados <span class="text-slate-400 text-lg">({customers.length})</span></h2>
       <p class="text-sm text-slate-500 mt-1">Gestiona sus datos, bloquea cuentas y protege el historial de solicitudes.</p>
     </div>
-    <input class="border border-slate-300 bg-white rounded-xl px-4 py-3 w-full sm:w-72" placeholder="Buscar por ID, nombre o correo…" aria-label="Buscar cliente por identificador, nombre o correo" bind:value={query} />
+    <form onsubmit={search} class="flex flex-wrap gap-2 w-full sm:w-auto">
+      <input class="border border-slate-300 bg-white rounded-xl px-4 py-2.5 flex-1 min-w-0 sm:w-72" placeholder="ID, nombre o correo…" aria-label="Buscar cliente por identificador, nombre o correo" bind:value={query} oninput={() => remoteRows = null} />
+      <button class="rounded-xl bg-teal-700 text-white font-semibold text-sm px-4 py-2.5" disabled={searching}>{searching ? 'Buscando…' : 'Buscar'}</button>
+      {#if remoteRows !== null}
+        <button type="button" class="rounded-xl border border-slate-200 text-slate-700 text-sm px-3 py-2.5" onclick={() => { query = ''; remoteRows = null; }}>Limpiar</button>
+      {/if}
+    </form>
   </header>
   {#if error}<p role="alert" class="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl">{error}</p>{/if}
   {#if success}<p role="status" class="p-4 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl">{success}</p>{/if}
