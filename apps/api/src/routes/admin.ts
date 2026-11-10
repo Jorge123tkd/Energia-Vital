@@ -9,7 +9,7 @@ const nullableNumber = (value: unknown): number | null => value === null || valu
 const validPrice = (value: number | null) => value === null || (Number.isFinite(value) && value >= 0);
 const mediaTypes: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
-async function uploadMedia(c: any, folder: 'products' | 'services', ownerId: string) {
+async function uploadMedia(c: any, folder: 'products' | 'services' | 'site', ownerId: string) {
   const form = await c.req.formData();
   const file = form.get('file');
   if (!(file instanceof File) || file.size === 0 || file.size > 8 * 1024 * 1024 || !mediaTypes[file.type]) {
@@ -31,6 +31,23 @@ async function uploadMedia(c: any, folder: 'products' | 'services', ownerId: str
 
 // Middleware de autenticación
 adminRoutes.use('*', requireAdminAuth);
+
+// --- IMÁGENES DEL SITIO EN R2 (no dependen de proyectos de galería) ---
+adminRoutes.post('/site-media', async c => {
+  const uploaded = await uploadMedia(c, 'site', 'slides');
+  if ('error' in uploaded) return c.json({ error: uploaded.error }, 400);
+  try {
+    await c.env.DB.prepare('INSERT INTO site_media (id, r2_key, uploaded_by, created_at) VALUES (?, ?, ?, ?)')
+      .bind(uploaded.id, uploaded.key, c.var.user?.user_id || 'admin', new Date().toISOString()).run();
+  } catch (e) {
+    await c.env.BUCKET.delete(uploaded.key).catch(() => {});
+    throw e;
+  }
+  return c.json({
+    message: 'Imagen guardada en Cloudflare R2',
+    image_url: new URL(c.req.url).origin + '/api/public/site/media/' + uploaded.id,
+  }, 201);
+});
 
 // --- LISTAR USUARIOS (admin) ---
 adminRoutes.get('/users', async (c) => {
@@ -492,7 +509,7 @@ adminRoutes.delete('/settings/:id', async (c) => {
 
 // Configuración pública editable sin exponer secretos ni aceptar HTML arbitrario.
 const allowedSiteFields = ['home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links',
-  'business_phone', 'business_email', 'business_address', 'business_hours',
+  'business_phone', 'business_phones', 'business_email', 'business_address', 'business_hours',
   'youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url'] as const;
 adminRoutes.put('/site-settings', async c => {
   const b = await c.req.json<Record<string, unknown>>();
@@ -507,6 +524,16 @@ adminRoutes.put('/site-settings', async c => {
     let value = (b[key] as string).trim();
     if (socialKeys.has(key) && value && !/^https:\/\/[^\s]+$/i.test(value))
       return c.json({ error: `Utiliza una dirección HTTPS válida en ${key}` }, 400);
+    if (key === 'business_phones') {
+      let phones: unknown;
+      try { phones = JSON.parse(value || '[]'); } catch { return c.json({ error: 'Lista de teléfonos inválida' }, 400); }
+      if (!Array.isArray(phones) || phones.length > 8 || !phones.every((p: any) =>
+        p && typeof p.label === 'string' && p.label.trim().length <= 60 &&
+        typeof p.number === 'string' && /^\\+?[0-9 ()-]{8,25}$/.test(p.number.trim()) &&
+        (p.number.match(/\\d/g) || []).length >= 8))
+        return c.json({ error: 'Añade hasta ocho contactos con teléfonos válidos' }, 400);
+      value = JSON.stringify(phones.map((p: any) => ({ label: p.label.trim(), number: p.number.trim() })));
+    }
     if (key === 'home_slides') {
       let slides: unknown;
       try { slides = JSON.parse(value); } catch {
