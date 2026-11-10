@@ -89,12 +89,18 @@
   {#if checking}
     <p>Verificando acceso…</p>
   {:else if !token}
-    <form onsubmit={login} class="max-w-md bg-white border rounded-xl p-6 space-y-4">
-      <h2 class="text-xl font-semibold">Acceso de administrador</h2>
-      <label class="block">Correo<input required type="email" autocomplete="username" bind:value={email} class="block border rounded-lg p-3 mt-1 w-full" /></label>
-      <label class="block">Contraseña<input required type="password" autocomplete="current-password" bind:value={password} class="block border rounded-lg p-3 mt-1 w-full" /></label>
-      {#if error}<p role="alert" class="text-red-700">{error}</p>{/if}
-      <button disabled={loading} class="bg-energia-600 text-white py-3 px-5 rounded-lg">{loading ? 'Entrando…' : 'Iniciar sesión'}</button>
+    <form onsubmit={login} class="max-w-lg mx-auto bg-white border border-slate-200 rounded-3xl p-6 sm:p-9 space-y-5 shadow-xl shadow-slate-200/50">
+      <span class="inline-flex items-center justify-center bg-teal-700 text-white rounded-xl w-12 h-12 font-black text-xl">B</span>
+      <div><h2 class="text-2xl font-extrabold text-slate-900">Acceso al equipo Bonaire</h2>
+        <p class="text-sm text-slate-500 mt-2">Administradores y moderadores pueden entrar con las credenciales asignadas.</p></div>
+      <label class="block text-sm font-semibold text-slate-700">Correo electrónico
+        <input required type="email" autocomplete="username" bind:value={email} class="block border border-slate-300 rounded-xl px-4 py-3 mt-2 w-full focus:outline-teal-600" />
+      </label>
+      <label class="block text-sm font-semibold text-slate-700">Contraseña
+        <input required type="password" autocomplete="current-password" bind:value={password} class="block border border-slate-300 rounded-xl px-4 py-3 mt-2 w-full focus:outline-teal-600" />
+      </label>
+      {#if error}<p role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>{/if}
+      <button disabled={loading} class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white py-3.5 px-5 rounded-xl font-bold">{loading ? 'Entrando…' : 'Entrar en administración'}</button>
     </form>
   {:else}
     <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6" aria-label="Resumen de operaciones">
