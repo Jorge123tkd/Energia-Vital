@@ -40,6 +40,20 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
     { email: adminEmail, password: adminPassword });
   assert.ok(adminSession.access_token, 'admin returns a signed access token');
   const adminToken = adminSession.access_token;
+  const staffEmail = 'operator-' + uid + '@example.invalid';
+  const createdStaff = await request('Admin creates moderator account', '/api/admin/users', 'POST',
+    { email: staffEmail, password: 'Operador!Seguro2026', role: 'operator' }, adminToken, 201);
+  assert.ok(createdStaff.id);
+  const staffLogin = await request('Moderator uses unified login', '/api/auth/sign-in', 'POST',
+    { email: staffEmail, password: 'Operador!Seguro2026' });
+  assert.equal(staffLogin.user.role, 'operator');
+  const staffToken = staffLogin.access_token;
+  await request('Moderator cannot change site content', '/api/admin/site-settings', 'PUT',
+    { home_title: 'Attempted overwrite' }, staffToken, 403);
+  await request('Moderator cannot change staff roles', '/api/admin/users/' + createdStaff.id, 'PATCH',
+    { role: 'admin' }, staffToken, 403);
+  await request('Moderator can read staff notifications', '/api/notifications/inbox', 'GET', null, staffToken);
+
   const unifiedAdmin = await request('Unified sign-in recognizes an administrator', '/api/auth/sign-in',
     'POST', { email: adminEmail, password: adminPassword });
   assert.equal(unifiedAdmin.user.role, 'admin');
@@ -116,6 +130,9 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
 
 
   const ar = await request('Register customer A', '/api/auth/register', 'POST', a, null, 201);
+  await request('Moderator cannot send mass notifications', '/api/notifications/admin/send-all', 'POST',
+    { title: 'No autorizado', message: 'Esto no debe enviarse' }, staffToken, 403);
+
   const br = await request('Register customer B', '/api/auth/register', 'POST', b, null, 201);
   const at = ar.access_token, bt = br.access_token;
   assert.ok(at && bt, 'registration returns tokens');
