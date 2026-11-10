@@ -136,6 +136,7 @@
       gallery = g.gallery ?? [];
       const next = siteDefaults();
       for (const item of cfg.settings ?? []) if (item.key in next) next[item.key] = String(item.value ?? '');
+      if (next.home_title === 'Energía Vital') next.home_title = 'Bonaire';
       site = next;
       const row = (cfg.settings ?? []).find((x: any) => x.key === 'footer_links');
       let links: any[] = [];
@@ -146,13 +147,13 @@
         const parsed = JSON.parse(slidesRow?.value || 'null');
         if (Array.isArray(parsed) && parsed.length === 3) {
           slides = parsed.map((s: any) => ({
-            title: String(s.title || ''), subtitle: String(s.subtitle || ''),
+            title: String(s.title === 'Energía Vital' ? 'Bonaire' : s.title || ''), subtitle: String(s.subtitle || ''),
             image_url: String(s.image_url || ''), link_label: String(s.link_label || ''),
             link_url: String(s.link_url || '')
           }));
         } else {
           slides = defaultSlides();
-          if (next.home_title) slides[0].title = next.home_title;
+          if (next.home_title) slides[0].title = next.home_title === 'Energía Vital' ? 'Bonaire' : next.home_title;
           if (next.home_subtitle) slides[0].subtitle = next.home_subtitle;
         }
       } catch { slides = defaultSlides(); }
