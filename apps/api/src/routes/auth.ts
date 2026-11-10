@@ -65,12 +65,12 @@ authRoutes.post('/sign-in', async c => {
     return c.json({ error: 'Credenciales inválidas' }, 401);
 
   // Admin antes que cliente solo cuando su contraseña ha sido verificada.
-  const admin = await c.env.DB.prepare('SELECT id, email, role, password_hash FROM admin_users WHERE LOWER(email) = ? AND is_active = 1 AND role = \'admin\'')
+  const admin = await c.env.DB.prepare('SELECT id, email, role, password_hash FROM admin_users WHERE LOWER(email) = ? AND is_active = 1 AND role IN (\'admin\',\'operator\'))
     .bind(email).first<any>();
   if (admin && await comparePassword(password, admin.password_hash)) {
     const tokens = await issue(c.env, admin.id, 'admin', admin.role);
     return c.json({
-      user: { id: admin.id, email: admin.email, name: 'Administrador', role: 'admin', account_type: 'admin' },
+      user: { id: admin.id, email: admin.email, name: admin.role === 'admin' ? 'Administrador' : 'Moderador', role: admin.role, account_type: 'admin' },
       ...tokens,
     });
   }
