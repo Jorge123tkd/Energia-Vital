@@ -32,8 +32,8 @@
 <div class="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
   <section class="w-full max-w-lg rounded-2xl bg-white border border-gray-200 shadow-sm p-7 sm:p-9">
     <div class="text-center mb-8">
-      <div class="inline-flex w-12 h-12 rounded-xl bg-energia-600 text-white font-bold items-center justify-center">EV</div>
-      <h1 class="text-3xl font-bold text-gray-900 mt-3">Energía Vital</h1>
+      <div class="inline-flex w-12 h-12 rounded-xl bg-energia-600 text-white font-bold items-center justify-center">B</div>
+      <h1 class="text-3xl font-bold text-gray-900 mt-3">Bonaire</h1>
       <p class="text-gray-600 mt-2">Accede con tu cuenta de cliente o administrador. El sistema reconocerá automáticamente tus permisos.</p>
     </div>
     <div class="flex gap-2 mb-6" role="group" aria-label="Acceso">
