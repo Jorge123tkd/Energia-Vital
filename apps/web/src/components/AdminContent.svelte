@@ -18,6 +18,8 @@
   let editingService = $state('');
   let productPhoto: File | null = $state(null);
   let servicePhoto: File | null = $state(null);
+  let productImageUrl = $state('');
+  let serviceImageUrl = $state('');
 
   function blankProduct() {
     return { category_id: '', name: '', brand: '', model: '', short_description: '', description: '',
@@ -34,16 +36,16 @@
   const slug = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-  function resetProduct() { editingProduct = ''; product = blankProduct(); product.category_id = categories[0]?.id || ''; productPhoto = null; }
-  function resetService() { editingService = ''; service = blankService(); servicePhoto = null; }
+  function resetProduct() { editingProduct = ''; product = blankProduct(); product.category_id = categories[0]?.id || ''; productPhoto = null; productImageUrl = ''; }
+  function resetService() { editingService = ''; service = blankService(); servicePhoto = null; serviceImageUrl = ''; }
   function editProduct(p: any) {
     editingProduct = p.id; product = { ...blankProduct(), ...p, price: p.price ?? undefined, stock_quantity: p.stock_quantity ?? undefined,
-      warranty_months: p.warranty_months ?? undefined }; productPhoto = null;
+      warranty_months: p.warranty_months ?? undefined }; productPhoto = null; productImageUrl = '';
     notice = ''; error = ''; modal = 'product';
   }
   function editService(s: any) {
     editingService = s.id; service = { ...blankService(), ...s, price: s.price ?? undefined, duration_minutes: s.duration_minutes ?? undefined };
-    servicePhoto = null; notice = ''; error = ''; modal = 'service';
+    servicePhoto = null; serviceImageUrl = ''; notice = ''; error = ''; modal = 'service';
   }
 
   async function execute(task: () => Promise<void>) {
@@ -74,6 +76,7 @@
         id = result.id;
       }
       if (productPhoto) await api.uploadProductImage(token, id, productPhoto, product.name);
+      else if (productImageUrl.trim()) await api.setProductImageUrl(token, id, productImageUrl.trim());
       await onRefresh(); resetProduct(); modal = null; notice = 'Producto guardado y visible según su estado de publicación.';
     });
   }
@@ -89,6 +92,7 @@
         id = result.id;
       }
       if (servicePhoto) await api.uploadServiceImage(token, id, servicePhoto);
+      else if (serviceImageUrl.trim()) await api.setServiceImageUrl(token, id, serviceImageUrl.trim());
       await onRefresh(); resetService(); modal = null; notice = 'Servicio guardado correctamente.';
     });
   }
@@ -478,6 +482,10 @@
             <label class="admin-label">Fotografía principal (JPG, PNG o WebP · máximo 8 MB)
               <input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => productPhoto = e.currentTarget.files?.[0] ?? null} />
             </label>
+            <label class="admin-label">O usar una URL HTTPS de imagen (opcional)
+              <input type="url" maxlength="600" class="admin-input" placeholder="https://…" bind:value={productImageUrl} />
+            </label>
+            <p class="text-xs text-slate-500">Si eliges un archivo y escribes una URL, tendrá prioridad el archivo guardado en Cloudflare R2. Las URLs son imágenes externas.</p>
             <div class="flex flex-wrap gap-4 py-2">
               <label class="flex gap-2 items-center text-sm"><input type="checkbox" bind:checked={product.is_featured} /> Destacar en inicio</label>
               <label class="flex gap-2 items-center text-sm"><input type="checkbox" bind:checked={product.is_active} /> Publicado</label>
@@ -515,6 +523,10 @@
             <label class="admin-label">Duración estimada (minutos)<input type="number" min="0" step="1" class="admin-input" bind:value={service.duration_minutes} /></label>
           </div>
           <label class="admin-label">Imagen del servicio (JPG, PNG o WebP · máximo 8 MB)<input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => servicePhoto = e.currentTarget.files?.[0] ?? null} /></label>
+          <label class="admin-label">O pegar una URL HTTPS de imagen (opcional)
+            <input type="url" maxlength="600" class="admin-input" placeholder="https://…" bind:value={serviceImageUrl} />
+          </label>
+          <p class="text-xs text-slate-500">Si seleccionas un archivo, lo guardaremos en Cloudflare R2 y tendrá prioridad sobre el enlace externo.</p>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={service.is_active} /> Publicado en la página de servicios</label>
           <button disabled={busy} class="admin-primary w-full">{busy ? 'Guardando…' : editingService ? 'Guardar cambios' : 'Crear servicio'}</button>
         </form>
