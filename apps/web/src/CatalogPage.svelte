@@ -45,7 +45,7 @@
         <div class="flex justify-between"><h2 class="text-xl font-bold">{selected.name}</h2><button aria-label="Cerrar detalles" onclick={() => selected = null}>✕</button></div>
         {#if selected.primary_image_url}<img src={selected.primary_image_url} alt={selected.name} class="w-full max-h-52 object-contain rounded-lg bg-slate-100" />{/if}
         {#if selected.brand || selected.model}<p class="text-sm text-slate-500">{selected.brand || ''} {selected.model || ''}</p>{/if}
-        <p class="text-slate-700 whitespace-pre-line">{selected.description || selected.short_description || 'Consulta especificaciones y disponibilidad con Energía Vital.'}</p>
+        <p class="text-slate-700 whitespace-pre-line">{selected.description || selected.short_description || 'Consulta especificaciones y disponibilidad con Bonaire.'}</p>
         {#if selected.specifications}<div class="rounded-xl bg-slate-50 p-4"><h3 class="font-semibold mb-2">Características técnicas</h3><p class="text-sm text-slate-700 whitespace-pre-line">{selected.specifications}</p></div>{/if}
         {#if selected.warranty_months}<p class="text-sm text-slate-600">Garantía: {selected.warranty_months} meses</p>{/if}
         <p class="font-bold text-teal-700">{selected.price == null ? 'Precio a consultar' : Number(selected.price).toLocaleString('es-CU') + ' ' + (selected.currency || 'USD')}</p>
