@@ -1,4 +1,6 @@
 <script lang="ts">
+  import NotificationBell from './NotificationBell.svelte';
+  import { ADMIN_TOKEN_KEY } from '../lib/api';
   let { navigate, customerName = '', userRole = 'customer', onLogout, onAssistant }: {
     navigate: (path: string) => void;
     customerName?: string;
@@ -52,6 +54,7 @@
     </div>
     <div class="flex items-center gap-2 shrink-0">
       {#if customerName}
+        <NotificationBell staff={userRole === 'admin' || userRole === 'operator'} token={(userRole === 'admin' || userRole === 'operator') ? sessionStorage.getItem(ADMIN_TOKEN_KEY) || '' : ''} onAll={() => visit('/notificaciones')} />
         <details bind:this={profileMenu} class="relative group">
           <summary class="list-none cursor-pointer select-none flex items-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 focus-visible:outline-2 focus-visible:outline-teal-600" aria-label="Abrir menú de usuario">
             <span class="inline-flex w-7 h-7 items-center justify-center rounded-full bg-teal-50 font-bold text-teal-800">{customerName.trim().charAt(0).toUpperCase() || 'U'}</span>
@@ -59,13 +62,14 @@
             <span aria-hidden="true" class="text-xs text-slate-500 transition group-open:rotate-180">▾</span>
           </summary>
           <div class="absolute right-0 mt-2 w-60 bg-white border border-slate-200 rounded-2xl p-2 shadow-xl z-[70]">
-            <p class="px-3 py-2 text-[11px] uppercase tracking-wide font-semibold text-slate-400">{userRole === 'admin' ? 'Cuenta administradora' : 'Mi cuenta'}</p>
+            <p class="px-3 py-2 text-[11px] uppercase tracking-wide font-semibold text-slate-400">{userRole === 'admin' ? 'Cuenta administradora' : userRole === 'operator' ? 'Cuenta moderadora' : 'Mi cuenta'}</p>
             <button type="button" onclick={() => visit('/perfil')} class="w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Mi perfil</button>
-            {#if userRole === 'admin'}
+            {#if userRole === 'admin' || userRole === 'operator'}
               <a href="/admin" class="block rounded-lg px-3 py-2.5 text-sm font-semibold text-teal-800 hover:bg-teal-50">Administración</a>
             {:else}
               <button type="button" onclick={() => visit('/mis-solicitudes')} class="w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Mis solicitudes</button>
             {/if}
+            <button type="button" onclick={() => visit('/notificaciones')} class="w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Notificaciones</button>
             <div class="border-t border-slate-100 my-1"></div>
             <button type="button" onclick={logout} class="w-full text-left rounded-lg px-3 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50">Cerrar sesión</button>
           </div>
