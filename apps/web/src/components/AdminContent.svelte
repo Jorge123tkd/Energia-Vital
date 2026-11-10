@@ -9,7 +9,7 @@
   } = $props();
 
   let busy = $state(false);
-  let modal = $state<'category' | 'product' | 'service' | null>(null);
+  let modal = $state<'category' | 'product' | 'service' | 'gallery' | 'gallery-edit' | null>(null);
   let notice = $state('');
   let error = $state('');
   let categoryName = $state('');
@@ -114,7 +114,7 @@
   let galleryEdit: any = $state(null);
 
   function siteDefaults(): Record<string, string> {
-    return { home_title: 'Energía Vital', home_subtitle: '', footer_description: '',
+    return { home_title: 'Bonaire', home_subtitle: '', footer_description: '',
       business_phone: '', business_email: '', business_address: '', business_hours: '',
       youtube_channel_url: '', facebook_url: '', instagram_url: '', telegram_public_url: '' };
   }
@@ -123,7 +123,7 @@
   type HomeSlide = { title: string; subtitle: string; image_url: string; link_label: string; link_url: string };
   function defaultSlides(): HomeSlide[] {
     return [
-      { title: 'Energía Vital', subtitle: 'Paneles solares, inversores, baterías y servicios de instalación y mantenimiento.', image_url: '', link_label: 'Explorar equipos', link_url: '/catalogo' },
+      { title: 'Bonaire', subtitle: 'Paneles solares, inversores, baterías y servicios de instalación y mantenimiento.', image_url: '', link_label: 'Explorar equipos', link_url: '/catalogo' },
       { title: 'Trabajos que hablan por nosotros', subtitle: 'Conoce nuestros proyectos e instalaciones de energía solar.', image_url: '', link_label: 'Ver nuestros trabajos', link_url: '/galeria' },
       { title: 'Novedades y soluciones solares', subtitle: 'Descubre equipos disponibles y las propuestas que mejor se adaptan a ti.', image_url: '', link_label: 'Ver catálogo', link_url: '/catalogo' },
     ];
@@ -173,7 +173,7 @@
       else data.append('url', galleryUrl.trim());
       await api.createAdminGallery(token, data);
       galleryTitle = ''; galleryDescription = ''; galleryCategory = ''; galleryUrl = ''; galleryFile = null;
-      gallery = (await api.getAdminGallery(token)).gallery ?? []; notice = 'Proyecto añadido a la galería.';
+      gallery = (await api.getAdminGallery(token)).gallery ?? []; modal = null; notice = 'Proyecto añadido a la galería.';
     });
   }
   async function updateGallery(event: SubmitEvent) {
@@ -182,7 +182,7 @@
     await execute(async () => {
       await api.updateAdminGallery(token, galleryEdit.id, { title: galleryEdit.title,
         description: galleryEdit.description, category: galleryEdit.category, is_active: Boolean(galleryEdit.is_active) });
-      galleryEdit = null; gallery = (await api.getAdminGallery(token)).gallery ?? [];
+      galleryEdit = null; modal = null; gallery = (await api.getAdminGallery(token)).gallery ?? [];
       notice = 'Proyecto actualizado.';
     });
   }
@@ -228,13 +228,13 @@
         {/each}
         {#if categories.length === 0}<p class="text-sm text-orange-700">Crea primero una categoría.</p>{/if}
       </div>
-      <div class="grid sm:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {#each products as p (p.id)}
             <article class="rounded-xl border border-slate-200 overflow-hidden bg-white">
-              {#if p.primary_image_url}<img src={p.primary_image_url} alt={p.name} class="h-40 w-full object-cover" />{:else}<div class="h-40 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400 text-sm">Sin fotografía</div>{/if}
-              <div class="p-4 space-y-2">
+              {#if p.primary_image_url}<img src={p.primary_image_url} alt={p.name} class="h-28 sm:h-32 w-full object-cover" />{:else}<div class="h-28 sm:h-32 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400 text-sm">Sin fotografía</div>{/if}
+              <div class="p-3 space-y-2">
                 <div class="flex justify-between gap-2"><h3 class="font-semibold text-slate-900">{p.name}</h3><span class="text-xs whitespace-nowrap {p.is_active ? 'text-emerald-700' : 'text-orange-600'}">{p.is_active ? 'Publicado' : 'Oculto'}</span></div>
-                <p class="text-sm text-slate-500 line-clamp-2">{p.short_description || p.description || 'Sin descripción'}</p>
+                <p class="text-xs text-slate-500 line-clamp-2">{p.short_description || p.description || 'Sin descripción'}</p>
                 <p class="font-bold">{p.price == null ? 'Consultar precio' : Number(p.price).toLocaleString('es-CU') + ' ' + (p.currency || 'USD')}</p>
                 <div class="flex flex-wrap gap-2"><button class="admin-secondary flex-1" onclick={() => editProduct(p)}>Editar</button><button disabled={busy} class="admin-link" onclick={() => toggleProduct(p)}>{p.is_active ? 'Ocultar' : 'Publicar'}</button></div>
               </div>
@@ -252,13 +252,13 @@
         </div>
         <button type="button" class="admin-primary" onclick={() => { resetService(); modal = 'service'; error = ''; }}>+ Nuevo servicio</button>
       </div>
-      <div class="grid sm:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {#each services as s (s.id)}
             <article class="border border-slate-200 rounded-xl overflow-hidden">
-              {#if s.image_url}<img class="w-full h-40 object-cover" src={s.image_url} alt={s.name} />{:else}<div class="h-40 bg-slate-100 flex items-center justify-center text-slate-400">Sin fotografía</div>{/if}
-              <div class="p-4 space-y-2">
+              {#if s.image_url}<img class="w-full h-28 sm:h-32 object-cover" src={s.image_url} alt={s.name} />{:else}<div class="h-28 sm:h-32 bg-slate-100 flex items-center justify-center text-slate-400">Sin fotografía</div>{/if}
+              <div class="p-3 space-y-2">
                 <h3 class="font-semibold">{s.name}</h3>
-                <p class="text-sm text-slate-500 line-clamp-3">{s.description || 'Sin descripción'}</p>
+                <p class="text-xs text-slate-500 line-clamp-2">{s.description || 'Sin descripción'}</p>
                 <p class="text-sm font-semibold">{s.price_type === 'fixed' && s.price != null ? Number(s.price).toLocaleString('es-CU') + ' USD' : s.price_type === 'free' ? 'Gratuito' : 'Bajo presupuesto'}</p>
                 <div class="flex gap-2"><button class="admin-secondary flex-1" onclick={() => editService(s)}>Editar</button><button disabled={busy} class="admin-link" onclick={() => toggleService(s)}>{s.is_active ? 'Ocultar' : 'Publicar'}</button></div>
               </div>
@@ -269,56 +269,46 @@
       {#if services.length === 0}<p class="text-slate-500">Aún no hay servicios publicados.</p>{/if}
     </section>
   {:else if tab === 'gallery'}
-    <div class="grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-6 items-start">
-      <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 class="text-xl font-bold mb-2">Añadir proyecto a la galería</h2>
-        <p class="text-sm text-slate-500 mb-5">Muestra instalaciones, resultados y trabajos reales de Energía Vital.</p>
-        <form class="space-y-4" onsubmit={saveGallery}>
-          <label class="admin-label">Título<input required class="admin-input" placeholder="Instalación solar residencial" bind:value={galleryTitle} /></label>
-          <label class="admin-label">Descripción<textarea rows="4" class="admin-input" placeholder="Qué se instaló, contexto del proyecto y resultado..." bind:value={galleryDescription}></textarea></label>
-          <label class="admin-label">Categoría<input class="admin-input" placeholder="Residencial, negocio, mantenimiento…" bind:value={galleryCategory} /></label>
-          <label class="admin-label">Foto del trabajo<input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => galleryFile = e.currentTarget.files?.[0] ?? null} /></label>
-          <p class="text-xs text-slate-500">Si no subes un archivo, puedes utilizar una imagen HTTPS externa.</p>
-          <label class="admin-label">URL de imagen (opcional)<input type="url" class="admin-input" placeholder="https://..." bind:value={galleryUrl} /></label>
-          <button disabled={busy} class="admin-primary w-full">{busy ? 'Subiendo…' : 'Publicar proyecto'}</button>
-        </form>
-      </section>
-      <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-        <h2 class="text-xl font-bold mb-4">Proyectos ({gallery.length})</h2>
-        <div class="grid sm:grid-cols-2 gap-4">
-          {#each gallery as g (g.id)}
-            <article class="rounded-xl border border-slate-200 overflow-hidden">
-              {#if g.url}<img src={g.url} alt={g.title} class="w-full h-40 object-cover" />{:else}<div class="h-40 bg-slate-100"></div>{/if}
-              <div class="p-4 space-y-2">
-                <h3 class="font-bold">{g.title}</h3>
-                <p class="text-sm text-slate-500 line-clamp-3">{g.description || 'Sin descripción'}</p>
-                <div class="flex gap-2"><button class="admin-secondary flex-1" onclick={() => galleryEdit = { ...g }}>Editar</button><button disabled={busy} class="admin-link text-red-700" onclick={() => removeGallery(g)}>Eliminar</button></div>
-              </div>
-            </article>
-          {/each}
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm space-y-5 min-w-0">
+      <header class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900">Galería de proyectos ({gallery.length})</h2>
+          <p class="text-sm text-slate-500 mt-1">Trabajos, instalaciones y resultados en tarjetas compactas.</p>
         </div>
-        {#if gallery.length === 0}<p class="text-sm text-slate-500">Aquí aparecerán las fotografías de tus proyectos.</p>{/if}
-      </section>
-    </div>
-    {#if galleryEdit}
-      <section class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-        <h3 class="font-bold mb-4">Editar proyecto</h3>
-        <form onsubmit={updateGallery} class="grid md:grid-cols-2 gap-4">
-          <label class="admin-label">Título<input required class="admin-input" bind:value={galleryEdit.title} /></label>
-          <label class="admin-label">Categoría<input class="admin-input" bind:value={galleryEdit.category} /></label>
-          <label class="admin-label md:col-span-2">Descripción<textarea rows="3" class="admin-input" bind:value={galleryEdit.description}></textarea></label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryEdit.is_active} /> Proyecto publicado</label>
-          <div class="flex gap-2"><button disabled={busy} class="admin-primary">Guardar proyecto</button><button type="button" class="admin-secondary" onclick={() => galleryEdit = null}>Cancelar</button></div>
-        </form>
-      </section>
-    {/if}
+        <button type="button" class="admin-primary" onclick={() => { galleryEdit = null; galleryTitle = ''; galleryDescription = ''; galleryCategory = ''; galleryFile = null; galleryUrl = ''; error = ''; modal = 'gallery'; }}>
+          + Añadir proyecto
+        </button>
+      </header>
+      <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
+  {#each gallery as g (g.id)}
+    <article class="rounded-xl border border-slate-200 overflow-hidden bg-white min-w-0">
+      {#if g.url}
+        <img src={g.url} alt={g.title} loading="lazy" class="w-full h-32 sm:h-36 object-cover" />
+      {:else}<div class="h-32 sm:h-36 bg-slate-100 flex items-center justify-center text-slate-400">Sin foto</div>{/if}
+      <div class="p-3 space-y-2">
+        <div class="flex items-start justify-between gap-1">
+          <h3 class="font-semibold text-sm text-slate-900 line-clamp-2">{g.title}</h3>
+          <span class="text-[11px] shrink-0 {g.is_active ? 'text-emerald-700' : 'text-orange-700'}">{g.is_active ? 'Visible' : 'Oculto'}</span>
+        </div>
+        <p class="text-xs text-slate-500 line-clamp-2 min-h-[2rem]">{g.description || 'Sin descripción'}</p>
+        <div class="flex gap-1 pt-1">
+          <button class="admin-secondary text-xs flex-1" onclick={() => { galleryEdit = { ...g }; modal = 'gallery-edit'; error = ''; }}>Editar</button>
+          <button disabled={busy} class="admin-link text-xs text-red-700" onclick={() => removeGallery(g)}>Eliminar</button>
+        </div>
+      </div>
+    </article>
+  {/each}
+</div>
+      {#if gallery.length === 0}<p class="text-sm text-slate-500 py-8">Aquí aparecerán las fotografías de tus proyectos. Pulsa «Añadir proyecto».</p>{/if}
+    </section>
   {:else if tab === 'site'}
-    <section class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm max-w-4xl space-y-5">
+    <section class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm w-full min-w-0 max-w-none space-y-5">
       <div><h2 class="text-2xl font-bold text-slate-900">Personalizar la web</h2><p class="text-slate-500 mt-1">Controla los textos principales, el contacto, las redes sociales y los enlaces del pie de página sin editar código.</p></div>
-      <form onsubmit={saveSite} class="space-y-7">
-        <fieldset class="space-y-4">
+      <form onsubmit={saveSite} class="grid grid-cols-1 xl:grid-cols-12 gap-5 xl:gap-6 items-start min-w-0">
+        <fieldset class="space-y-4 min-w-0 xl:col-span-8">
           <legend class="text-lg font-semibold mb-3">Carrusel de portada · 3 diapositivas</legend>
           <p class="text-sm text-slate-500">Cada entrada puede mostrar un trabajo, la empresa o una promoción real. Para subir imágenes, entra en «Galería» y selecciona aquí la foto publicada.</p>
+          <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
           {#each slides as slide, index}
             <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-3">
               <h3 class="font-bold text-slate-900">Diapositiva {index + 1} · {index === 0 ? 'Presentación' : index === 1 ? 'Trabajos' : 'Novedades o promociones'}</h3>
@@ -351,8 +341,9 @@
               </div>
             </div>
           {/each}
+          </div>
         </fieldset>
-        <fieldset class="space-y-3"><legend class="text-lg font-semibold mb-3">Pie de página y contacto</legend>
+        <fieldset class="space-y-3 min-w-0 xl:col-span-4"><legend class="text-lg font-semibold mb-3">Pie de página y contacto</legend>
           <label class="admin-label">Texto sobre la empresa<textarea rows="3" class="admin-input" bind:value={site.footer_description}></textarea></label>
           <div class="grid sm:grid-cols-2 gap-3">
             <label class="admin-label">Teléfono / WhatsApp<input class="admin-input" placeholder="+53 ..." bind:value={site.business_phone} /></label>
@@ -361,7 +352,7 @@
             <label class="admin-label">Horario<input class="admin-input" bind:value={site.business_hours} /></label>
           </div>
         </fieldset>
-        <fieldset class="space-y-3"><legend class="text-lg font-semibold mb-3">Redes sociales</legend>
+        <fieldset class="space-y-3 min-w-0 xl:col-span-6"><legend class="text-lg font-semibold mb-3">Redes sociales</legend>
           <div class="grid sm:grid-cols-2 gap-3">
             <label class="admin-label">YouTube<input type="url" class="admin-input" placeholder="https://youtube.com/..." bind:value={site.youtube_channel_url} /></label>
             <label class="admin-label">Facebook<input type="url" class="admin-input" placeholder="https://facebook.com/..." bind:value={site.facebook_url} /></label>
@@ -369,11 +360,11 @@
             <label class="admin-label">Telegram<input type="url" class="admin-input" placeholder="https://t.me/..." bind:value={site.telegram_public_url} /></label>
           </div>
         </fieldset>
-        <fieldset class="space-y-3"><legend class="text-lg font-semibold mb-2">Enlaces del footer</legend>
+        <fieldset class="space-y-3 min-w-0 xl:col-span-6"><legend class="text-lg font-semibold mb-2">Enlaces del footer</legend>
           <p class="text-sm text-slate-500">Un enlace por línea con el formato «Texto | dirección». Puedes usar rutas internas o direcciones HTTPS.</p>
           <label class="admin-label">Páginas que quieres mostrar<textarea rows="6" class="admin-input font-mono" placeholder="Catálogo | /catalogo&#10;Servicios | /servicios&#10;Galería | /galeria&#10;Nuestro canal | https://youtube.com/..." bind:value={linksText}></textarea></label>
         </fieldset>
-        <button disabled={busy} class="admin-primary">{busy ? 'Publicando…' : 'Guardar y publicar cambios del sitio'}</button>
+        <div class="xl:col-span-12 flex justify-end pt-2 border-t border-slate-100"><button disabled={busy} class="admin-primary">{busy ? 'Publicando…' : 'Guardar y publicar cambios del sitio'}</button></div>
       </form>
     </section>
   {/if}
@@ -381,12 +372,12 @@
 
 {#if modal}
   <div class="fixed inset-0 z-[180] bg-slate-950/70 flex justify-center items-center p-4">
-    <dialog open aria-label={modal === 'category' ? 'Nueva categoría' : modal === 'product' ? 'Datos del equipo' : 'Datos del servicio'}
+    <dialog open aria-label={modal === 'category' ? 'Nueva categoría' : modal === 'product' ? 'Datos del equipo' : modal === 'service' ? 'Datos del servicio' : 'Proyecto de galería'}
       class="relative m-0 bg-white rounded-2xl shadow-2xl w-full {modal === 'category' ? 'max-w-lg' : 'max-w-3xl'} max-h-[92vh] overflow-y-auto p-5 sm:p-7">
       <header class="flex items-start justify-between gap-3 mb-5">
         <div>
           <h2 class="text-2xl font-bold text-slate-900">
-            {modal === 'category' ? 'Nueva categoría' : modal === 'product' ? (editingProduct ? 'Editar equipo' : 'Nuevo equipo') : (editingService ? 'Editar servicio' : 'Nuevo servicio')}
+            {modal === 'category' ? 'Nueva categoría' : modal === 'product' ? (editingProduct ? 'Editar equipo' : 'Nuevo equipo') : modal === 'service' ? (editingService ? 'Editar servicio' : 'Nuevo servicio') : modal === 'gallery' ? 'Añadir proyecto' : 'Editar proyecto'}
           </h2>
           <p class="text-sm text-slate-500 mt-1">Completa la información y pulsa guardar para publicar los cambios.</p>
         </div>
@@ -440,6 +431,26 @@
             </div>
             <button disabled={busy} class="admin-primary">{busy ? 'Guardando…' : editingProduct ? 'Guardar cambios del producto' : 'Publicar producto'}</button>
           </form>
+      {:else if modal === 'gallery'}
+        <p class="text-sm text-slate-500 mb-4">Sube una fotografía de un trabajo real de Bonaire o utiliza una imagen HTTPS.</p>
+        <form class="space-y-4" onsubmit={saveGallery}>
+          <label class="admin-label">Título<input required class="admin-input" placeholder="Instalación solar residencial" bind:value={galleryTitle} /></label>
+          <label class="admin-label">Descripción<textarea rows="4" class="admin-input" placeholder="Qué se instaló, contexto del proyecto y resultado..." bind:value={galleryDescription}></textarea></label>
+          <label class="admin-label">Categoría<input class="admin-input" placeholder="Residencial, negocio, mantenimiento…" bind:value={galleryCategory} /></label>
+          <label class="admin-label">Foto del trabajo<input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => galleryFile = e.currentTarget.files?.[0] ?? null} /></label>
+          <p class="text-xs text-slate-500">Si no subes un archivo, puedes utilizar una imagen HTTPS externa.</p>
+          <label class="admin-label">URL de imagen (opcional)<input type="url" class="admin-input" placeholder="https://..." bind:value={galleryUrl} /></label>
+          <button disabled={busy} class="admin-primary w-full">{busy ? 'Subiendo…' : 'Publicar proyecto'}</button>
+        </form>
+      {:else if modal === 'gallery-edit' && galleryEdit}
+        <p class="text-sm text-slate-500 mb-4">Edita la información y el estado de publicación.</p>
+        <form onsubmit={updateGallery} class="grid md:grid-cols-2 gap-4">
+          <label class="admin-label">Título<input required class="admin-input" bind:value={galleryEdit.title} /></label>
+          <label class="admin-label">Categoría<input class="admin-input" bind:value={galleryEdit.category} /></label>
+          <label class="admin-label md:col-span-2">Descripción<textarea rows="3" class="admin-input" bind:value={galleryEdit.description}></textarea></label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryEdit.is_active} /> Proyecto publicado</label>
+          <div class="flex gap-2"><button disabled={busy} class="admin-primary">Guardar proyecto</button><button type="button" class="admin-secondary" onclick={() => galleryEdit = null}>Cancelar</button></div>
+        </form>
       {:else if modal === 'service'}
         <form class="space-y-4" onsubmit={saveService}>
           <label class="admin-label">Nombre del servicio<input required maxlength="120" class="admin-input" placeholder="Instalación de paneles solares" bind:value={service.name} /></label>
