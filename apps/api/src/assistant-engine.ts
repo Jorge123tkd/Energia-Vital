@@ -308,7 +308,7 @@ export function generateResponse(
     case 'greeting':
       return {
         text:
-          ctx.config.welcome_message ||
+          (ctx.config.welcome_message || '').replaceAll('Energía Vital', 'Bonaire') ||
           '¡Hola! Soy el asistente de Bonaire. ¿En qué puedo ayudarte hoy?\n\n' +
             'Puedo ayudarte con:\n' +
             '- Equipos solares (inversores, paneles, baterías)\n' +
@@ -472,7 +472,7 @@ export function generateResponse(
 
 /** Construye el prompt de sistema con el contexto real del negocio. */
 export function buildSystemPrompt(ctx: AssistantContext): string {
-  const business = ctx.config.business_name || 'Bonaire';
+  const business = ctx.config.business_name === 'Energía Vital' ? 'Bonaire' : ctx.config.business_name || 'Bonaire';
   const catalog = ctx.products
     .map((p) => `- ${p.name} (${formatPrice(p)}, ${stockLabel(p.stock_status)})`)
     .join('\n');
