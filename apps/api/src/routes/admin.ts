@@ -50,7 +50,7 @@ adminRoutes.post('/site-media', async c => {
 });
 
 // --- PERSONAL Y PERMISOS ---
-const emailValid = (email: string) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);
+const emailValid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validStaffRole = (role: unknown): role is 'admin' | 'operator' => role === 'admin' || role === 'operator';
 async function auditStaff(c: any, action: string, target: string, details: Record<string, unknown> = {}) {
   await c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, entity_id, details, created_at)
@@ -572,8 +572,8 @@ adminRoutes.put('/site-settings', async c => {
       try { phones = JSON.parse(value || '[]'); } catch { return c.json({ error: 'Lista de teléfonos inválida' }, 400); }
       if (!Array.isArray(phones) || phones.length > 8 || !phones.every((p: any) =>
         p && typeof p.label === 'string' && p.label.trim().length <= 60 &&
-        typeof p.number === 'string' && /^\\+?[0-9 ()-]{8,25}$/.test(p.number.trim()) &&
-        (p.number.match(/\\d/g) || []).length >= 8))
+        typeof p.number === 'string' && /^\+?[0-9 ()-]{8,25}$/.test(p.number.trim()) &&
+        (p.number.match(/\d/g) || []).length >= 8))
         return c.json({ error: 'Añade hasta ocho contactos con teléfonos válidos' }, 400);
       value = JSON.stringify(phones.map((p: any) => ({ label: p.label.trim(), number: p.number.trim() })));
     }
