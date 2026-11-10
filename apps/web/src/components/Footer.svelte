@@ -27,7 +27,17 @@
     { label: 'Instagram', url: site.instagram_url },
     { label: 'Telegram', url: site.telegram_public_url }
   ].filter(link => link.url && /^https:\/\/[^\s]+$/i.test(link.url)));
-  let whatsapp = $derived((site.business_phone || '+5356085711').replace(/\D/g, ''));
+  let phones = $derived.by(() => {
+    let additional: { label: string; number: string }[] = [];
+    try {
+      const parsed = JSON.parse(site.business_phones || '[]');
+      if (Array.isArray(parsed)) additional = parsed.filter((p: any) =>
+        typeof p?.number === 'string' && (p.number.match(/\\d/g) || []).length >= 8)
+        .map((p: any) => ({ label: String(p.label || 'Contacto'), number: String(p.number) }));
+    } catch { /* Sin números adicionales configurados */ }
+    const main = site.business_phone?.trim() ? [{ label: 'WhatsApp principal', number: site.business_phone.trim() }] : [];
+    return [...main, ...additional];
+  });
 </script>
 
 <footer class="bg-slate-950 text-slate-100 mt-auto border-t border-slate-800">
@@ -46,8 +56,15 @@
       <div>
         <h3 class="text-white font-semibold mb-5">Contacto</h3>
         <ul class="space-y-3 text-sm text-slate-400">
-          {#if site.business_phone || whatsapp}<li><a href={'https://wa.me/' + whatsapp} target="_blank" rel="noopener noreferrer" class="hover:text-teal-300">WhatsApp: {site.business_phone || '+53 5608 5711'}</a></li>{/if}
-          <li><a href={'mailto:' + (site.business_email || 'info@energiavital.com')} class="hover:text-teal-300">{site.business_email || 'info@energiavital.com'}</a></li>
+          {#each phones as contact}
+            <li><a href={'https://wa.me/' + contact.number.replace(/\\D/g, '')}
+                target="_blank" rel="noopener noreferrer" class="hover:text-teal-300">
+              {contact.label || 'Teléfono'}: {contact.number}
+            </a></li>
+          {/each}
+          {#if site.business_email}
+            <li><a href={'mailto:' + site.business_email} class="hover:text-teal-300">{site.business_email}</a></li>
+          {/if}
           {#if site.business_address}<li>{site.business_address}</li>{/if}
           {#if site.business_hours}<li>{site.business_hours}</li>{/if}
         </ul>
