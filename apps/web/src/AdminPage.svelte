@@ -65,9 +65,9 @@
 
 </script>
 
-<div class="max-w-screen-2xl mx-auto px-4 sm:px-6 py-8 min-h-screen bg-slate-50">
+<div class="w-full min-w-0 max-w-none mx-auto px-3 sm:px-5 xl:px-8 py-5 xl:py-7 min-h-screen bg-slate-50">
   <header class="flex flex-wrap items-center justify-between gap-3 mb-7 rounded-2xl bg-gradient-to-r from-slate-950 via-teal-950 to-teal-800 text-white p-6 sm:p-8 shadow-lg">
-    <div><p class="uppercase text-xs font-semibold tracking-widest text-teal-200 mb-2">Centro de operaciones</p><h1 class="text-3xl sm:text-4xl font-bold">Administración de Energía Vital</h1><p class="text-teal-100 mt-2">Gestiona el catálogo, los clientes y el contenido de tu sitio desde un solo lugar.</p></div>
+    <div><p class="uppercase text-xs font-semibold tracking-widest text-teal-200 mb-2">Centro de operaciones</p><h1 class="text-3xl sm:text-4xl font-bold">Administración de Bonaire</h1><p class="text-teal-100 mt-2">Gestiona el catálogo, los clientes y el contenido de tu sitio desde un solo lugar.</p></div>
     <div class="flex gap-3 items-center"><a class="rounded-xl border border-teal-300 px-4 py-2 hover:bg-white/10" href="/">Ver sitio público</a>{#if token}<button class="rounded-xl bg-white text-slate-950 px-4 py-2" onclick={logout}>Cerrar sesión</button>{/if}</div>
   </header>
   {#if checking}
