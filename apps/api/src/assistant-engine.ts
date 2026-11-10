@@ -28,7 +28,7 @@ export type AssistantIntent =
   | 'general';
 
 const DEFAULT_WELCOME =
-  '¡Hola! Soy el asistente de Energía Vital. ¿En qué puedo ayudarte hoy?';
+  '¡Hola! Soy el asistente de Bonaire. ¿En qué puedo ayudarte hoy?';
 
 export function detectIntent(message: string): AssistantIntent {
   const m = normalizeWithTypos(message);
@@ -309,7 +309,7 @@ export function generateResponse(
       return {
         text:
           ctx.config.welcome_message ||
-          '¡Hola! Soy el asistente de Energía Vital. ¿En qué puedo ayudarte hoy?\n\n' +
+          '¡Hola! Soy el asistente de Bonaire. ¿En qué puedo ayudarte hoy?\n\n' +
             'Puedo ayudarte con:\n' +
             '- Equipos solares (inversores, paneles, baterías)\n' +
             '- Precios y disponibilidad del catálogo\n' +
@@ -459,7 +459,7 @@ export function generateResponse(
       const catLine = cats.length ? `\n\nTrabajamos con: ${cats.join(', ')}.` : '';
       return {
         text:
-          'Gracias por tu mensaje. Soy el asistente de Energía Vital. Puedo ayudarte con consultas de ' +
+          'Gracias por tu mensaje. Soy el asistente de Bonaire. Puedo ayudarte con consultas de ' +
           'productos, precios, asesoría solar, citas, mantenimiento y reparaciones.' +
           catLine +
           '\n\n¿Sobre qué te gustaría saber?',
@@ -472,7 +472,7 @@ export function generateResponse(
 
 /** Construye el prompt de sistema con el contexto real del negocio. */
 export function buildSystemPrompt(ctx: AssistantContext): string {
-  const business = ctx.config.business_name || 'Energía Vital';
+  const business = ctx.config.business_name || 'Bonaire';
   const catalog = ctx.products
     .map((p) => `- ${p.name} (${formatPrice(p)}, ${stockLabel(p.stock_status)})`)
     .join('\n');
