@@ -109,6 +109,10 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   await request('Admin changes customer address', '/api/admin-customers/customers/' + br.user.id,
     'PATCH', { name: b.name, email: b.email, phone: b.phone, address: 'Nueva avenida 123', city: b.city, province: b.province }, adminToken);
 
+  const byId = await request('Admin searches customer by full identifier', '/api/admin-customers/customers?q=' + encodeURIComponent(ar.user.id),
+    'GET', null, adminToken);
+  assert.equal(byId.customers.length, 1);
+  assert.equal(byId.customers[0].id, ar.user.id);
   const me = await request('Profile belongs to A', '/api/auth/me', 'GET', null, at);
   assert.equal(me.user.email, a.email);
   assert.equal(me.user.address, a.address);
