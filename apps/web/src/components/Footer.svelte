@@ -34,7 +34,7 @@
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-7">
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
       <div class="lg:col-span-1">
-        <a href="/" class="font-bold text-xl text-white flex items-center gap-2 mb-4"><span class="h-10 w-10 rounded-xl bg-teal-600 flex items-center justify-center text-sm">EV</span> Energía Vital</a>
+        <a href="/" class="font-bold text-xl text-white flex items-center gap-2 mb-4"><span class="h-10 w-10 rounded-xl bg-teal-600 flex items-center justify-center text-sm">B</span> Bonaire</a>
         <p class="text-slate-400 text-sm leading-relaxed">{site.footer_description || 'Soluciones de energía solar para tu hogar y negocio. Venta de equipos, instalación, mantenimiento y asesoría personalizada.'}</p>
       </div>
       <div>
@@ -62,7 +62,7 @@
       </div>
     </div>
     <div class="border-t border-slate-800 pt-6 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-      <span>© {new Date().getFullYear()} Energía Vital. Todos los derechos reservados.</span>
+      <span>© {new Date().getFullYear()} Bonaire. Todos los derechos reservados.</span>
       <span>Energía para avanzar.</span>
     </div>
   </div>
