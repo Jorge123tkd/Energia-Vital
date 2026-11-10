@@ -130,6 +130,25 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const followUp = await request('Assistant preserves topic in follow-up', '/api/assistant/message', 'POST',
     { session_id: chat.session_id, message: '¿Y a 48 voltios?' }, at);
   assert.equal(followUp.intent, 'solar_advice');
+  const guidedStart = await request('Solar guide starts from chat', '/api/assistant/message', 'POST',
+    { session_id: chat.session_id, message: 'Quiero un asesoramiento solar' }, at);
+  assert.match(guidedStart.response, /tipo de instalaci[oó]n/i);
+  for (const [answer, expectedText] of [
+    ['1', 'datos de consumo'],
+    ['1', 'vatios'],
+    ['800 W', 'horas al día'],
+    ['6', 'autonomía'],
+    ['5', 'horas solares pico'],
+  ]) {
+    const guidedNext = await request('Solar guide accepts step ' + answer, '/api/assistant/message', 'POST',
+      { session_id: chat.session_id, message: answer }, at);
+    assert.ok(guidedNext.response.toLowerCase().includes(expectedText.toLowerCase()), 'Solar guide progression: ' + expectedText);
+  }
+  const guidedResult = await request('Solar guide calculates recommendation', '/api/assistant/message', 'POST',
+    { session_id: chat.session_id, message: '4,5' }, at);
+  assert.match(guidedResult.response, /consumo diario/i);
+  assert.match(guidedResult.response, /batería nominal/i);
+  assert.match(guidedResult.response, /paneles/i);
   const commercial = await request('Assistant understands catalog availability', '/api/assistant/message', 'POST',
     { message: '¿Tienen disponibilidad de baterías?' }, at);
   assert.equal(commercial.intent, 'product_inquiry');
