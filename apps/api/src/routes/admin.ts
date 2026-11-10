@@ -271,6 +271,30 @@ adminRoutes.post('/products/:id/image', async c => {
   return c.json({ message: 'Foto añadida al producto', image_url: url }, 201);
 });
 
+// URL externa opcional: no se copia a R2 y se valida antes de usarla públicamente.
+function imageHttpsUrl(input: unknown): string | null {
+  if (typeof input !== 'string' || input.length > 600) return null;
+  try {
+    const u = new URL(input.trim());
+    return u.protocol === 'https:' && u.hostname && !u.username && !u.password ? u.toString() : null;
+  } catch { return null; }
+}
+adminRoutes.post('/products/:id/image-url', async c => {
+  const id = c.req.param('id');
+  const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(id).first();
+  if (!product) return c.notFound();
+  const data = await c.req.json<any>().catch(() => null);
+  const url = imageHttpsUrl(data?.url);
+  if (!url) return c.json({ error: 'Introduce una URL HTTPS válida para la imagen.' }, 400);
+  const mediaId = crypto.randomUUID(), now = new Date().toISOString();
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE product_images SET is_primary = 0 WHERE product_id = ?').bind(id),
+    c.env.DB.prepare(`INSERT INTO product_images (id, product_id, r2_key, url, is_primary, created_at)
+      VALUES (?, ?, '', ?, 1, ?)`).bind(mediaId, id, url, now),
+  ]);
+  return c.json({ image_url: url, message: 'Enlace externo guardado como imagen principal.' }, 201);
+});
+
 adminRoutes.delete('/products/:id', async (c) => {
   const { DB } = c.env;
   await DB.prepare('DELETE FROM products WHERE id = ?').bind(c.req.param('id')).run();
@@ -364,6 +388,20 @@ adminRoutes.post('/services/:id/image', async c => {
   }
   if (service.image_r2_key) await c.env.BUCKET.delete(service.image_r2_key).catch(() => {});
   return c.json({ message: 'Foto del servicio actualizada', image_url: url }, 201);
+});
+
+adminRoutes.post('/services/:id/image-url', async c => {
+  const id = c.req.param('id');
+  const service = await c.env.DB.prepare('SELECT image_r2_key FROM services WHERE id = ?')
+    .bind(id).first<{ image_r2_key: string | null }>();
+  if (!service) return c.notFound();
+  const data = await c.req.json<any>().catch(() => null);
+  const url = imageHttpsUrl(data?.url);
+  if (!url) return c.json({ error: 'Introduce una URL HTTPS válida para la imagen.' }, 400);
+  await c.env.DB.prepare('UPDATE services SET image_r2_key = NULL, image_url = ?, updated_at = ? WHERE id = ?')
+    .bind(url, new Date().toISOString(), id).run();
+  if (service.image_r2_key) await c.env.BUCKET.delete(service.image_r2_key).catch(() => {});
+  return c.json({ image_url: url, message: 'Enlace externo del servicio guardado.' }, 201);
 });
 
 adminRoutes.delete('/services/:id', async (c) => {
