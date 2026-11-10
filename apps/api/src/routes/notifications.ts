@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { getUser, requireAdminAuth, requireCustomerAuth } from '../middleware';
+import { getUser, requireAdminAuth, requireCustomerAuth, requireStaffAuth } from '../middleware';
 
 export const notificationsRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 notificationsRoutes.get('/', requireCustomerAuth, async c => {
@@ -12,6 +12,21 @@ notificationsRoutes.get('/', requireCustomerAuth, async c => {
 notificationsRoutes.patch('/:id/read', requireCustomerAuth, async c => {
   const user = getUser(c)!;
   await c.env.DB.prepare("UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ? AND user_type = 'customer'")
+    .bind(c.req.param('id'), user.user_id).run();
+  return c.json({ message: 'Notificación leída' });
+});
+// Bandeja privada del personal, separada de los mensajes de los clientes.
+notificationsRoutes.get('/inbox', requireStaffAuth, async c => {
+  const user = getUser(c)!;
+  const { results } = await c.env.DB.prepare(`SELECT id, type, title, message, is_read, created_at FROM notifications
+    WHERE user_id = ? AND user_type = 'admin' ORDER BY created_at DESC LIMIT 100`)
+    .bind(user.user_id).all();
+  return c.json({ notifications: results ?? [] });
+});
+notificationsRoutes.patch('/inbox/:id/read', requireStaffAuth, async c => {
+  const user = getUser(c)!;
+  await c.env.DB.prepare(`UPDATE notifications SET is_read = 1
+    WHERE id = ? AND user_id = ? AND user_type = 'admin'`)
     .bind(c.req.param('id'), user.user_id).run();
   return c.json({ message: 'Notificación leída' });
 });
