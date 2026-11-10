@@ -12,7 +12,7 @@
   function request(work: any) { window.location.href = `/contacto?reference=${encodeURIComponent(work.title)}`; }
 </script>
 <div class="max-w-7xl mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold mb-2">Trabajos de Energía Vital</h1>
+  <h1 class="text-3xl font-bold mb-2">Trabajos de Bonaire</h1>
   <p class="text-gray-600 mb-8">Proyectos e instalaciones publicados por el equipo.</p>
   {#if loading}<p>Cargando…</p>
   {:else if error}<p role="alert" class="text-red-700">{error}</p>
