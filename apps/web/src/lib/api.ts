@@ -114,6 +114,10 @@ export const api = {
     body.append('file', file);
     return apiRequest(`/api/admin/services/${id}/image`, withAdmin(token, { method: 'POST', body }));
   },
+  setProductImageUrl: (token: string, id: string, url: string) =>
+    post(`/api/admin/products/${encodeURIComponent(id)}/image-url`, { url }, withAdmin(token)),
+  setServiceImageUrl: (token: string, id: string, url: string) =>
+    post(`/api/admin/services/${encodeURIComponent(id)}/image-url`, { url }, withAdmin(token)),
   uploadSiteMedia: (token: string, file: File) => {
     const body = new FormData();
     body.append('file', file);
