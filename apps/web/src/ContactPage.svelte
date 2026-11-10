@@ -36,33 +36,62 @@
     finally { busy = false; }
   }
 </script>
-<div class="max-w-5xl mx-auto px-4 py-8">
-  <h1 class="text-3xl font-bold mb-3">Contactar a Bonaire</h1>
-  <p class="text-gray-600 mb-7">Tu solicitud quedará vinculada a tu cuenta, teléfono y dirección guardados en «Mi perfil».</p>
-  <div class="grid lg:grid-cols-2 gap-8">
-    <form onsubmit={submit} class="bg-white border rounded-xl p-6 space-y-4">
-      <label class="block font-medium">Tipo de solicitud
-        <select bind:value={type} class="mt-1 block w-full border rounded-lg p-3">
-          <option value="consultation">Consulta</option><option value="installation">Instalación solar</option>
-          <option value="repair">Reparación</option><option value="maintenance">Mantenimiento</option>
-          <option value="complaint">Reclamación</option><option value="suggestion">Sugerencia</option>
-        </select>
-      </label>
-      <label class="block font-medium">Asunto<input required minlength="3" maxlength="180" bind:value={title} class="mt-1 block w-full border rounded-lg p-3" /></label>
-      <label class="block font-medium">Descripción<textarea required minlength="6" maxlength="3000" rows="5" bind:value={description} class="mt-1 block w-full border rounded-lg p-3"></textarea></label>
-      <label class="block font-medium">Fecha preferida (opcional)<input type="date" bind:value={preferredDate} class="mt-1 block w-full border rounded-lg p-3" /></label>
-      {#if error}<p role="alert" class="text-red-700">{error}</p>{/if}
-      {#if message}<p role="status" class="text-green-700 break-words">{message}</p>{/if}
-      <button disabled={busy} type="submit" class="bg-energia-600 hover:bg-energia-700 text-white px-5 py-3 rounded-lg w-full">{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
-    </form>
-    <aside class="bg-white border rounded-xl p-6 space-y-4">
-      <h2 class="text-xl font-semibold">Información comercial</h2>
-      <p>Atendemos consultas sobre paneles, baterías, inversores, instalación y mantenimiento.</p>
-      {#if settings.business_phone}<p>Teléfono: {settings.business_phone}</p>{/if}
-      {#if settings.business_email}<p>Correo: {settings.business_email}</p>{/if}
-      {#if settings.business_address}<p>Dirección: {settings.business_address}</p>{/if}
-      {#if settings.youtube_channel_url}<a target="_blank" rel="noopener noreferrer" class="text-energia-600 underline" href={settings.youtube_channel_url}>Nuestro canal de YouTube</a>{/if}
-      <p class="text-sm text-gray-600">La visita técnica y los precios finales se confirmarán individualmente.</p>
-    </aside>
+
+<div class="min-h-[calc(100vh-6rem)] bg-gradient-to-b from-teal-50 via-slate-50 to-slate-100 py-8 sm:py-12 px-3 sm:px-6">
+  <div class="max-w-6xl mx-auto space-y-7">
+    <header class="max-w-3xl">
+      <span class="text-xs uppercase tracking-[.2em] font-extrabold text-teal-700">Bonaire · Atención personalizada</span>
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-2">¿En qué podemos ayudarte?</h1>
+      <p class="text-slate-600 mt-3 leading-relaxed">Solicita una instalación, consulta sobre equipos o pide una visita técnica. Tu solicitud quedará vinculada a los datos de tu perfil.</p>
+    </header>
+    <div class="grid lg:grid-cols-[minmax(0,1.45fr)_minmax(0,0.85fr)] gap-5 lg:gap-7 items-start">
+      <form onsubmit={submit} class="bg-white rounded-3xl border border-slate-200 shadow-lg shadow-slate-200/50 p-5 sm:p-8 space-y-5 min-w-0">
+        <div class="flex items-center gap-3 mb-2"><span class="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-extrabold">01</span><div><h2 class="text-xl font-bold text-slate-900">Cuéntanos tu solicitud</h2><p class="text-xs text-slate-500">Los campos obligatorios están señalados.</p></div></div>
+        <label class="contact-label">Tipo de solicitud *
+          <select bind:value={type} class="contact-control">
+            <option value="consultation">Consulta sobre equipos</option>
+            <option value="installation">Instalación solar</option>
+            <option value="repair">Reparación</option>
+            <option value="maintenance">Mantenimiento</option>
+            <option value="complaint">Reclamación</option>
+            <option value="suggestion">Sugerencia</option>
+          </select>
+        </label>
+        <label class="contact-label">Asunto *
+          <input required minlength="3" maxlength="180" bind:value={title} class="contact-control" placeholder="Ej. Instalación solar para mi vivienda" />
+        </label>
+        <label class="contact-label">Descripción *
+          <textarea required minlength="6" maxlength="3000" rows="5" bind:value={description} class="contact-control resize-y" placeholder="Cuéntanos lo que necesitas, tus equipos y cualquier detalle importante…"></textarea>
+        </label>
+        <label class="contact-label">Fecha preferida (opcional)
+          <input type="date" bind:value={preferredDate} class="contact-control" />
+        </label>
+        {#if error}<p role="alert" class="text-red-700 bg-red-50 border border-red-200 rounded-xl p-3 text-sm">{error}</p>{/if}
+        {#if message}<p role="status" class="text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm font-semibold break-words">{message}</p>{/if}
+        <button disabled={busy} type="submit" class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white px-5 py-3.5 font-extrabold rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600">
+          {busy ? 'Enviando solicitud…' : 'Enviar mi solicitud →'}
+        </button>
+        <p class="text-xs text-slate-500">No se confirma una cita automáticamente. Nuestro equipo revisará tu solicitud.</p>
+      </form>
+      <aside class="bg-slate-950 text-white rounded-3xl p-5 sm:p-7 space-y-5 shadow-lg min-w-0">
+        <div><span class="text-xs font-bold uppercase tracking-wider text-teal-300">Estamos para ayudarte</span><h2 class="text-2xl font-bold mt-2">Contacta a Bonaire</h2></div>
+        <p class="text-sm text-slate-300 leading-relaxed">Asesoramiento para paneles solares, baterías, inversores, instalaciones y mantenimiento.</p>
+        {#if settings.business_phone}
+          <div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Teléfono / WhatsApp</p><a class="text-white font-semibold hover:text-teal-200 break-words" href={'https://wa.me/' + settings.business_phone.replace(/\D/g,'')} target="_blank" rel="noopener noreferrer">{settings.business_phone}</a></div>
+        {/if}
+        {#if settings.business_email}
+          <div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Correo electrónico</p><a href={'mailto:' + settings.business_email} class="text-white hover:text-teal-200 break-all">{settings.business_email}</a></div>
+        {/if}
+        {#if settings.business_address}<div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Dirección</p><p class="text-sm text-slate-100">{settings.business_address}</p></div>{/if}
+        {#if settings.business_hours}<div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Horario</p><p class="text-sm text-slate-100">{settings.business_hours}</p></div>{/if}
+        {#if settings.youtube_channel_url}<a target="_blank" rel="noopener noreferrer" class="inline-block text-teal-300 font-semibold underline text-sm" href={settings.youtube_channel_url}>Nuestro canal de YouTube</a>{/if}
+        <a class="block text-center w-full rounded-xl border border-teal-400/50 text-teal-100 hover:bg-teal-950 px-4 py-3 text-sm font-bold" href="/asesor-solar">¿No sabes qué sistema necesitas? Prueba el asesor solar</a>
+      </aside>
+    </div>
   </div>
 </div>
+<style>
+  .contact-label { display:block; color:#334155; font-size:.875rem; font-weight:650; }
+  .contact-control { display:block; width:100%; min-width:0; margin-top:.45rem; padding:.88rem 1rem; border:1px solid #cbd5e1; border-radius:.85rem; background:#fff; color:#0f172a; outline:none; }
+  .contact-control:focus-visible { border-color:#0f766e; box-shadow:0 0 0 3px #ccfbf1; }
+</style>
