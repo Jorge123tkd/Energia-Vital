@@ -32,7 +32,7 @@
     try {
       const parsed = JSON.parse(site.business_phones || '[]');
       if (Array.isArray(parsed)) additional = parsed.filter((p: any) =>
-        typeof p?.number === 'string' && (p.number.match(/\\d/g) || []).length >= 8)
+        typeof p?.number === 'string' && (p.number.match(/\d/g) || []).length >= 8)
         .map((p: any) => ({ label: String(p.label || 'Contacto'), number: String(p.number) }));
     } catch { /* Sin números adicionales configurados */ }
     const main = site.business_phone?.trim() ? [{ label: 'WhatsApp principal', number: site.business_phone.trim() }] : [];
@@ -57,7 +57,7 @@
         <h3 class="text-white font-semibold mb-5">Contacto</h3>
         <ul class="space-y-3 text-sm text-slate-400">
           {#each phones as contact}
-            <li><a href={'https://wa.me/' + contact.number.replace(/\\D/g, '')}
+            <li><a href={'https://wa.me/' + contact.number.replace(/\D/g, '')}
                 target="_blank" rel="noopener noreferrer" class="hover:text-teal-300">
               {contact.label || 'Teléfono'}: {contact.number}
             </a></li>
