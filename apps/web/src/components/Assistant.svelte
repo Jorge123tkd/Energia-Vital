@@ -5,15 +5,15 @@
   import { assistantSessionId, assistantMessages, isAssistantOpen } from '../lib/store';
 
   type ChatMessage = { role: 'user' | 'assistant'; content: string };
-  let { userId, onContact }: { userId: string; onContact: () => void } = $props();
+  let { userId, onContact, onAdvisor }: { userId: string; onContact: () => void; onAdvisor: () => void } = $props();
   let inputMessage = $state('');
   let isSending = $state(false);
   let loadingHistory = $state(true);
   let sessionId = $state<string | null>(null);
   let messages = $state<ChatMessage[]>([]);
   let scrollBox: HTMLDivElement;
-  const suggestions = ['Necesito paneles o baterías', 'Quiero conocer precios', 'Necesito mantenimiento', 'Quiero una visita técnica'];
-  const welcome = '¡Hola! Soy el asistente de Energía Vital. Puedo orientarte sobre el catálogo, las baterías, los paneles solares y los servicios. ¿Qué necesitas resolver primero?';
+  const suggestions = ['Quiero un asesoramiento solar', 'Necesito paneles o baterías', 'Quiero conocer precios', 'Necesito mantenimiento'];
+  const welcome = '¡Hola! Soy el asistente de Bonaire. Puedo orientarte sobre el catálogo, las baterías, los paneles solares y los servicios. ¿Qué necesitas resolver primero?';
 
   async function scrollToEnd() {
     await tick();
@@ -96,11 +96,12 @@
   }
   function close() { isAssistantOpen.set(false); }
   function requestConsultation() { close(); onContact(); }
+  function openAdvisor() { close(); onAdvisor(); }
 </script>
 
-<section aria-label="Asistente de Energía Vital" class="w-[calc(100vw-1.5rem)] sm:w-[27rem] h-[min(35rem,calc(100vh-7rem))] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col">
+<section aria-label="Asistente de Bonaire" class="w-[calc(100vw-1.5rem)] sm:w-[27rem] h-[min(35rem,calc(100vh-7rem))] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col">
   <header class="bg-energia-600 text-white p-4 flex justify-between items-center">
-    <div><h2 class="font-semibold">Asistente Energía Vital</h2><p class="text-xs text-white/85">Orientación solar y consultas comerciales</p></div>
+    <div><h2 class="font-semibold">Asistente Bonaire</h2><p class="text-xs text-white/85">Orientación solar y consultas comerciales</p></div>
     <button type="button" onclick={close} class="text-white hover:opacity-80 px-2" aria-label="Cerrar asistente">✕</button>
   </header>
   <div bind:this={scrollBox} class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50" role="log" aria-label="Conversación" aria-live="polite" aria-relevant="additions">
@@ -123,7 +124,10 @@
     </div>
   {/if}
   <div class="px-3 pt-2">
-    <button type="button" class="text-sm text-energia-700 underline" onclick={requestConsultation}>Solicitar cotización o visita técnica</button>
+    <div class="flex items-center flex-wrap gap-x-4 gap-y-2 pb-2">
+      <button type="button" class="text-sm text-teal-700 font-semibold underline" onclick={openAdvisor}>Abrir asesor solar paso a paso</button>
+      <button type="button" class="text-sm text-energia-700 underline" onclick={requestConsultation}>Solicitar visita técnica</button>
+    </div>
   </div>
   <form onsubmit={sendMessage} class="p-3 border-t border-gray-200 bg-white flex items-end gap-2">
     <label for="assistant-input" class="sr-only">Mensaje para el asistente</label>
