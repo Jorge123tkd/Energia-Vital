@@ -25,6 +25,17 @@ export async function requireCustomerAuth(c: AppContext, next: Next) {
   c.set('user', user);
   await next();
 }
+/** Personal autorizado: administra solicitudes y notificaciones, no roles ni contenido sensible. */
+export async function requireStaffAuth(c: AppContext, next: Next) {
+  const user = await currentUser(c);
+  if (!user || user.type !== 'admin') return c.json({ error: 'No autorizado' }, 401);
+  const account = await c.env.DB.prepare("SELECT id FROM admin_users WHERE id = ? AND is_active = 1 AND role IN ('admin','operator')")
+    .bind(user.user_id).first();
+  if (!account) return c.json({ error: 'Sin permisos de personal' }, 403);
+  c.set('user', user);
+  await next();
+}
+
 export async function requireAdminAuth(c: AppContext, next: Next) {
   const user = await currentUser(c);
   if (!user || user.type !== 'admin') return c.json({ error: 'No autorizado' }, 401);
