@@ -62,7 +62,8 @@ const withoutPanels=estimateSolar({...input,autonomyHours:6,outageStartHour:9,
   hasPanels:false,maxPanels:10});
 assert.equal(withoutPanels.plannedPanels,0);
 assert.equal(withoutPanels.pvDailyKWh,0);
-assert.equal(withoutPanels.batteryWithSolar,withoutPanels.battery);
+assert.ok(Math.abs(withoutPanels.batteryWithSolar-withoutPanels.battery)<1e-8,
+  'Sin paneles, la demanda de batería debe coincidir dentro de la precisión numérica');
 
 const cloudy=estimateSolar({...input,autonomyHours:6,outageStartHour:9,
   maxPanels:10,cloudFactor:.35});

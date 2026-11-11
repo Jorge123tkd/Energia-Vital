@@ -207,7 +207,7 @@ adminRoutes.get('/notifications', async (c) => {
 async function canFeature(c: any, table: 'products' | 'services' | 'work_gallery', id?: string) {
   const sql = 'SELECT COUNT(*) AS n FROM ' + table +
     ' WHERE is_active = 1 AND is_featured = 1' + (id ? ' AND id != ?' : '');
-  const row = await c.env.DB.prepare(sql).bind(...(id ? [id] : [])).first<{n:number}>();
+  const row = await c.env.DB.prepare(sql).bind(...(id ? [id] : [])).first() as { n: number } | null;
   return (row?.n ?? 0) < 5;
 }
 const featuredLimitResponse = (c: any) => c.json({
