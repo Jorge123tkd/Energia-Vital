@@ -45,7 +45,7 @@ export type SolarInput = {
   existingBatteryKWh:number; panelDetails?:PvDetails;
 };
 export type SolarOutput = {
-  power:number; daily:number; backupWatts:number; backupEnergy:number; battery:number;
+  power:number; daily:number; backupWatts:number; criticalPeakWatts:number; backupEnergy:number; battery:number;
   inverter:number; pv:number; panelCount:number; panelWatts:number;
   guideBattery:number; guideFits:boolean; guideHours:number; maxCriticalWatts:number;
   existingHours:number|null; candidateStrings:StringCandidate[];
@@ -92,10 +92,13 @@ export function estimateSolar(input:SolarInput):SolarOutput {
   const backupWatts=isLoads
     ?loads.filter(l=>l.critical).reduce((sum,l)=>sum+l.watts*l.units*l.backupDuty,0)
     :power*input.essentialPercent/100;
+  const criticalPeakWatts=isLoads
+    ?loads.filter(l=>l.critical).reduce((sum,l)=>sum+l.watts*l.units,0)
+    :power*input.essentialPercent/100;
   const backupEnergy=backupWatts*input.autonomyHours/1000;
   // Ejemplo de litio: 80% DoD y 90% eficiencia; los datos reales dependen de la batería.
   const battery=backupEnergy/(0.8*0.9);
-  const inverter=power*1.25; // No contempla corrientes de arranque ni requisitos de conmutación.
+  const inverter=criticalPeakWatts*1.25; // No contempla corrientes de arranque ni requisitos de conmutación.
   const pv=daily/(input.peakSunHours*0.75);
   const panelCount=Math.ceil(pv*1000/input.panelWatts);
   const tiers=SECTOR_CAPACITY_GUIDE[input.sector];
@@ -107,7 +110,7 @@ export function estimateSolar(input:SolarInput):SolarOutput {
     input.existingBatteryKWh*1000*.8*.9/backupWatts:null;
   const candidateStrings=candidatePvStrings(panelCount,input.panelWatts,input.panelDetails);
   return {
-    power:safe(power),daily:safe(daily),backupWatts:safe(backupWatts),backupEnergy:safe(backupEnergy),
+    power:safe(power),daily:safe(daily),backupWatts:safe(backupWatts),criticalPeakWatts:safe(criticalPeakWatts),backupEnergy:safe(backupEnergy),
     battery:safe(battery),inverter:safe(inverter),pv:safe(pv),panelCount,panelWatts:input.panelWatts,
     guideBattery,guideFits,guideHours, maxCriticalWatts,
     existingHours,candidateStrings,requiresElectricalReview:true,
