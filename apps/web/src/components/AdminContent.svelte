@@ -22,11 +22,8 @@
   let galleryPage = $state(1);
   const itemPageSize = 12;
   let servicePageCount = $derived(Math.max(1, Math.ceil(services.length / itemPageSize)));
-  let galleryPageCount = $derived(Math.max(1, Math.ceil(gallery.length / itemPageSize)));
   let visibleServices = $derived(services.slice((Math.min(servicePage,servicePageCount)-1)*itemPageSize,
     Math.min(servicePage,servicePageCount)*itemPageSize));
-  let visibleGallery = $derived(gallery.slice((Math.min(galleryPage,galleryPageCount)-1)*itemPageSize,
-    Math.min(galleryPage,galleryPageCount)*itemPageSize));
   const productPageSize = 20;
   let visibleProducts = $derived.by(() => {
     const term = productSearch.trim().toLocaleLowerCase('es');
@@ -201,6 +198,9 @@
   }
 
   let gallery: any[] = $state([]);
+  let galleryPageCount = $derived(Math.max(1, Math.ceil(gallery.length / itemPageSize)));
+  let visibleGallery = $derived(gallery.slice((Math.min(galleryPage,galleryPageCount)-1)*itemPageSize,
+    Math.min(galleryPage,galleryPageCount)*itemPageSize));
   let galleryFeatured = $state(false);
   let galleryTitle = $state('');
   let galleryDescription = $state('');

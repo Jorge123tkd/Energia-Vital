@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
   import CardImage from './components/CardImage.svelte';
+  import Pagination from './components/Pagination.svelte';
   let { featured = false }: { featured?: boolean } = $props();
   import ProductReviews from './components/ProductReviews.svelte';
 
@@ -19,6 +20,8 @@
   let category = $state('');
   let search = $state('');
   let order = $state<'recommended' | 'name' | 'price_asc' | 'price_desc'>('recommended');
+  let page = $state(1);
+  const perPage = featured ? 8 : 12;
   let loading = $state(true);
   let error = $state('');
   let selected: Product | null = $state(null);
@@ -48,6 +51,8 @@
     return items;
   });
 
+  let pageCount = $derived(Math.max(1, Math.ceil(filtered.length / perPage)));
+  let pageItems = $derived(filtered.slice((Math.min(page,pageCount)-1)*perPage,Math.min(page,pageCount)*perPage));
   async function loadCatalog() {
     loading = true;
     error = '';
@@ -105,6 +110,7 @@
     loadingDetails = false;
   }
   function resetFilters() {
+    page = 1;
     search = '';
     category = '';
     order = 'recommended';
@@ -135,12 +141,12 @@
         Buscar en el catálogo
         <div class="flex items-center gap-2 border border-slate-300 rounded-xl bg-white px-3 mt-2 focus-within:ring-2 focus-within:ring-teal-200 focus-within:border-teal-600">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 text-slate-400" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input type="search" bind:value={search} aria-label="Buscar equipos por nombre, marca o categoría" placeholder="Ej. panel 550 W, batería, inversor…" class="w-full min-w-0 py-3 outline-none text-sm text-slate-900 placeholder:text-slate-400" />
+          <input type="search" bind:value={search} oninput={() => page = 1} aria-label="Buscar equipos por nombre, marca o categoría" placeholder="Ej. panel 550 W, batería, inversor…" class="w-full min-w-0 py-3 outline-none text-sm text-slate-900 placeholder:text-slate-400" />
         </div>
       </label>
       <label class="text-xs uppercase tracking-wide font-bold text-slate-500 lg:w-52">
         Ordenar por
-        <select bind:value={order} class="block bg-white border border-slate-300 rounded-xl w-full px-3 py-3 mt-2 text-sm text-slate-800 font-medium focus:outline-teal-600">
+        <select bind:value={order} onchange={() => page = 1} class="block bg-white border border-slate-300 rounded-xl w-full px-3 py-3 mt-2 text-sm text-slate-800 font-medium focus:outline-teal-600">
           <option value="recommended">Recomendados</option>
           <option value="name">Nombre (A–Z)</option>
           <option value="price_asc">Menor precio</option>
@@ -151,10 +157,10 @@
     <div class="space-y-2">
       <p class="text-xs uppercase tracking-wide font-bold text-slate-500">Categorías</p>
       <div class="flex flex-wrap gap-2" role="group" aria-label="Filtrar por categoría">
-        <button type="button" aria-pressed={category === ''} onclick={() => category = ''}
+        <button type="button" aria-pressed={category === ''} onclick={() => { category = ''; page = 1; }}
           class="rounded-full px-4 py-2 text-xs sm:text-sm font-bold border transition {category === '' ? 'bg-teal-700 text-white border-teal-700 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-teal-300'}">Todos los equipos</button>
         {#each categories as c (c.id)}
-          <button type="button" aria-pressed={category === c.id} onclick={() => category = c.id}
+          <button type="button" aria-pressed={category === c.id} onclick={() => { category = c.id; page = 1; }}
             class="rounded-full px-4 py-2 text-xs sm:text-sm font-semibold border transition {category === c.id ? 'bg-teal-700 text-white border-teal-700 shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:border-teal-300'}">{c.name}</button>
         {/each}
       </div>
@@ -201,7 +207,7 @@
     </div>
   {:else}
     <div class="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
-      {#each filtered as product (product.id)}
+      {#each pageItems as product (product.id)}
         <article class="min-w-0 flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-teal-200 transition">
           <button type="button" class="relative block w-full text-left bg-gradient-to-br from-teal-50 to-slate-100 overflow-hidden" onclick={() => details(product)} aria-label={'Ver detalles de ' + product.name}>
             <CardImage src={imageOf(product)} alt={product.name} />
@@ -232,6 +238,8 @@
         </article>
       {/each}
     </div>
+    <Pagination page={Math.min(page,pageCount)} total={filtered.length} perPage={perPage}
+      label="equipos" onPage={n => page = n} />
   {/if}
 
   <aside class="mt-9 rounded-2xl border border-teal-100 bg-teal-50/70 px-5 py-6 sm:px-7 flex flex-wrap items-center justify-between gap-4">

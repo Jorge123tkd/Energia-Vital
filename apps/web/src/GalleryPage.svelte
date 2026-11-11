@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
   import CardImage from './components/CardImage.svelte';
+  import Pagination from './components/Pagination.svelte';
   let { featured = false }: { featured?: boolean } = $props();
   type Project = {id:string;title:string;description?:string;category?:string;url?:string;image_count?:number};
   type Photo = {id:string;url:string};
@@ -9,6 +10,8 @@
   let categories:{id:string;name:string}[]=$state([]);
   let category=$state('');
   let search=$state('');
+  let page=$state(1);
+  const perPage = featured ? 8 : 12;
   let loading=$state(true),error=$state('');
   let selected:Project|null=$state(null);
   let images:Photo[]=$state([]),photoIndex=$state(0),loadingPhotos=$state(false);
@@ -16,6 +19,8 @@
     (!category || p.category===category) &&
     (!search || [p.title,p.description,p.category].some(x=>(x||'').toLowerCase().includes(search.toLowerCase().trim())))
   ));
+  let pages=$derived(Math.max(1,Math.ceil(filtered.length/perPage)));
+  let visibleProjects=$derived(filtered.slice((Math.min(page,pages)-1)*perPage,Math.min(page,pages)*perPage));
   onMount(async()=>{
     try{
       const [g,c]=await Promise.all([api.getGallery(featured),featured ? Promise.resolve({categories:[]}) : api.getGalleryCategories()]);
@@ -52,11 +57,11 @@
     </header>
 
     <section class="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 space-y-4" aria-label="Buscar proyectos">
-      <input type="search" aria-label="Buscar proyectos" bind:value={search} placeholder="Buscar por proyecto o descripción…" class="block w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-teal-600"/>
+      <input type="search" aria-label="Buscar proyectos" bind:value={search} oninput={() => page = 1} placeholder="Buscar por proyecto o descripción…" class="block w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-teal-600"/>
       <div class="flex flex-wrap gap-2">
-        <button type="button" aria-pressed={category===''} onclick={()=>category=''} class="rounded-full px-4 py-2 text-sm font-semibold {category===''?'bg-teal-700 text-white':'bg-slate-100 text-slate-600 hover:bg-teal-50'}">Todos</button>
+        <button type="button" aria-pressed={category===''} onclick={()=>{ category=''; page=1; }} class="rounded-full px-4 py-2 text-sm font-semibold {category===''?'bg-teal-700 text-white':'bg-slate-100 text-slate-600 hover:bg-teal-50'}">Todos</button>
         {#each categories as cat (cat.id)}
-          <button type="button" aria-pressed={category===cat.name} onclick={()=>category=cat.name}
+          <button type="button" aria-pressed={category===cat.name} onclick={()=>{ category=cat.name; page=1; }}
             class="rounded-full px-4 py-2 text-sm font-semibold {category===cat.name?'bg-teal-700 text-white':'bg-slate-100 text-slate-600 hover:bg-teal-50'}">{cat.name}</button>
         {/each}
       </div>
@@ -69,7 +74,7 @@
     {:else if !filtered.length}<div class="rounded-2xl bg-white border border-slate-200 p-8 text-center text-slate-600">{featured ? "Pronto publicaremos proyectos destacados." : "No encontramos proyectos con esos filtros."}</div>
     {:else}
       <div class="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
-        {#each filtered as work (work.id)}
+        {#each visibleProjects as work (work.id)}
           <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition">
             <button type="button" class="block relative w-full bg-slate-100 overflow-hidden" onclick={()=>show(work)} aria-label={'Ver fotografías de '+work.title}>
               <CardImage src={work.url} alt={work.title} />
@@ -87,6 +92,8 @@
           </article>
         {/each}
       </div>
+      <Pagination page={Math.min(page,pages)} total={filtered.length} perPage={perPage}
+        label="proyectos" onPage={n => page = n} />
     {/if}
   </div>
 </div>

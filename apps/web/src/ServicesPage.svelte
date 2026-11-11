@@ -2,8 +2,13 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
   import CardImage from './components/CardImage.svelte';
+  import Pagination from './components/Pagination.svelte';
   let { featured = false }: { featured?: boolean } = $props();
   let services:any[]=$state([]);
+  let page=$state(1);
+  const perPage = featured ? 8 : 12;
+  let pages=$derived(Math.max(1,Math.ceil(services.length/perPage)));
+  let visibleServices=$derived(services.slice((Math.min(page,pages)-1)*perPage,Math.min(page,pages)*perPage));
   let loading=$state(true),error=$state('');
   let selected:any=$state(null),images:{id:string;url:string}[]=$state([]);
   let photoIndex=$state(0),loadingPhotos=$state(false);
@@ -50,7 +55,7 @@
   {:else if !services.length}<div class="rounded-2xl bg-white p-8 border border-slate-200 text-slate-600">{featured ? "Pronto publicaremos servicios destacados." : "Pronto publicaremos nuestros servicios."}</div>
   {:else}
     <div class="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
-      {#each services as service (service.id)}
+      {#each visibleServices as service (service.id)}
         <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-lg transition">
           <button type="button" onclick={()=>details(service)} class="w-full relative overflow-hidden bg-teal-50" aria-label={'Ver fotos de '+service.name}>
             <CardImage src={service.image_url} alt={service.name} />
@@ -67,6 +72,8 @@
         </article>
       {/each}
     </div>
+    <Pagination page={Math.min(page,pages)} total={services.length} perPage={perPage}
+      label="servicios" onPage={n => page = n} />
   {/if}
 </section>
 {#if selected}
