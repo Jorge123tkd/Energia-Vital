@@ -22,6 +22,37 @@
   let accountMenu = $state(false);
   let syncBusy = $state(false);
   let requestPhotosOpen = $state('');
+  let requestQuery = $state('');
+  let appointmentQuery = $state('');
+  let requestPage = $state(1);
+  let appointmentPage = $state(1);
+  let requestTotal = $state(0);
+  let appointmentTotal = $state(0);
+  let pagingBusy = $state(false);
+  let copiedReference = $state('');
+  const pageSize = 20;
+  async function copyReference(id: string) {
+    try { await navigator.clipboard.writeText(id); copiedReference = id; }
+    catch { error = 'No se pudo copiar el ID. Selecciónalo manualmente.'; }
+  }
+  async function loadRequestPage(page = 1) {
+    pagingBusy = true;error = '';
+    try {
+      const data = await api.adminRequests(token, requestQuery, page, pageSize);
+      requests = data.requests ?? []; requestTotal = data.total ?? requests.length; requestPage = page;
+    } catch (e) { error = e instanceof Error ? e.message : 'No se pudieron buscar las solicitudes.'; }
+    finally { pagingBusy = false; }
+  }
+  async function loadAppointmentPage(page = 1) {
+    pagingBusy = true;error = '';
+    try {
+      const data = await api.adminAppointments(token, appointmentQuery, page, pageSize);
+      appointments = data.appointments ?? []; appointmentTotal = data.total ?? appointments.length; appointmentPage = page;
+    } catch (e) { error = e instanceof Error ? e.message : 'No se pudieron buscar las citas.'; }
+    finally { pagingBusy = false; }
+  }
+  function searchRequest(event: SubmitEvent) { event.preventDefault(); void loadRequestPage(1); }
+  function searchAppointment(event: SubmitEvent) { event.preventDefault(); void loadAppointmentPage(1); }
   let menuItems = $derived([
     { id: 'requests', title: 'Solicitudes' },
     { id: 'appointments', title: 'Citas' },
@@ -37,6 +68,8 @@
   ]);
   function chooseTab(next: typeof tab) {
     tab = next;
+    if (token && next === 'requests') void loadRequestPage(1);
+    if (token && next === 'appointments') void loadAppointmentPage(1);
     mobileMenu = false;
     accountMenu = false;
   }
@@ -88,6 +121,7 @@
     if (staffRole === 'operator') {
       const [c, r, a] = await Promise.all([api.adminCustomers(t), api.adminRequests(t), api.adminAppointments(t)]);
       customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
+      requestTotal = requests.length; appointmentTotal = appointments.length;
       products = []; services = []; categories = [];
       return;
     }
@@ -95,16 +129,17 @@
       api.adminCustomers(t), api.adminRequests(t), api.adminAppointments(t), api.getAdminProducts(t), api.getAdminServices(t), api.getAdminCategories(t),
     ]);
     customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
+    requestTotal = requests.length; appointmentTotal = appointments.length;
     products = p.products ?? []; services = s.services ?? []; categories = cat.categories ?? [];
   }
   async function changeRequest(id: string, status: string) {
     error = ''; message = '';
-    try { await api.updateAdminRequest(token, id, status); await reload(); message = 'Solicitud actualizada.'; }
+    try { await api.updateAdminRequest(token, id, status); await loadRequestPage(requestPage); message = 'Solicitud actualizada.'; }
     catch (e) { error = e instanceof Error ? e.message : 'No se pudo actualizar'; }
   }
   async function changeAppointment(id: string, status: string) {
     error = ''; message = '';
-    try { await api.updateAdminAppointment(token, id, status); await reload(); message = 'Cita actualizada.'; }
+    try { await api.updateAdminAppointment(token, id, status); await loadAppointmentPage(appointmentPage); message = 'Cita actualizada.'; }
     catch (e) { error = e instanceof Error ? e.message : 'No se pudo actualizar'; }
   }
 
@@ -226,7 +261,14 @@
       <div class="space-y-5">
         {#if staffRole === 'admin'}<AdminRequestCategories {token}/>{/if}
         <section class="space-y-3">
-          <h2 class="text-xl font-extrabold text-slate-900">Solicitudes recibidas ({requests.length})</h2>
+          <h2 class="text-xl font-extrabold text-slate-900">Solicitudes recibidas ({requestTotal})</h2>
+          <form class="flex flex-col sm:flex-row gap-2 bg-white border border-slate-200 rounded-2xl p-3" onsubmit={searchRequest}>
+            <label class="flex-1 text-xs font-bold text-slate-600">Buscar por ID, cliente, asunto, teléfono o correo
+              <input type="search" bind:value={requestQuery} class="block w-full rounded-xl border border-slate-300 mt-1.5 px-3 py-3 text-sm font-normal" placeholder="Pega el ID completo o busca un nombre…" />
+            </label>
+            <div class="flex items-end gap-2"><button type="submit" disabled={pagingBusy} class="rounded-xl bg-teal-700 px-5 py-3 text-white font-bold text-sm">Buscar</button>
+              <button type="button" onclick={() => { requestQuery = ''; void loadRequestPage(1); }} class="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold">Limpiar</button></div>
+          </form>
           {#if requests.length===0}<p class="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">Todavía no hay solicitudes.</p>{/if}
           <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
             {#each requests as r (r.id)}
@@ -236,6 +278,9 @@
                     <p class="text-xs font-extrabold text-teal-700 uppercase">{r.category_name || r.type}</p>
                     <h3 class="text-base font-extrabold text-slate-900 mt-1 break-words">{r.title}</h3>
                     <p class="text-xs text-slate-500 mt-1">Ref. {r.id.slice(0,8).toUpperCase()} · {new Date(r.created_at).toLocaleString('es-CU')}</p>
+                    <button type="button" onclick={() => copyReference(r.id)} title={r.id} class="text-[11px] text-teal-800 underline break-all text-left">
+                      {copiedReference === r.id ? 'ID completo copiado ✓' : 'Copiar ID completo de solicitud'}
+                    </button>
                   </div>
                   <select aria-label={'Estado de '+r.title} value={r.status}
                     onchange={e=>void changeRequest(r.id,e.currentTarget.value)}
@@ -269,15 +314,63 @@
               </article>
             {/each}
           </div>
+          {#if requestTotal > pageSize}
+            <nav class="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-3" aria-label="Páginas de solicitudes">
+              <p class="text-xs text-slate-600">Página {requestPage} de {Math.ceil(requestTotal/pageSize)} · {requestTotal} registros</p>
+              <div class="flex gap-2">
+                <button type="button" class="rounded-lg border px-3 py-2 text-xs font-bold" disabled={pagingBusy||requestPage===1} onclick={() => loadRequestPage(requestPage-1)}>Anterior</button>
+                <button type="button" class="rounded-lg border px-3 py-2 text-xs font-bold" disabled={pagingBusy||requestPage>=Math.ceil(requestTotal/pageSize)} onclick={() => loadRequestPage(requestPage+1)}>Siguiente</button>
+              </div>
+            </nav>
+          {/if}
         </section>
       </div>
     {:else if tab === 'appointments'}
-      <h2 class="font-semibold text-xl mb-4">Citas ({appointments.length})</h2>
-      <div class="space-y-3">{#each appointments as a (a.id)}
-        <article class="bg-white border rounded-lg p-4 flex flex-wrap justify-between gap-3"><div><strong>{a.title}</strong><p>{a.customer_name} · {a.phone}</p><p>{new Date(a.starts_at).toLocaleString('es-CU')}</p></div><select aria-label="Estado de cita" value={a.status} onchange={e => void changeAppointment(a.id, e.currentTarget.value)} class="border rounded p-2 h-fit">
-          {#each ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'] as status}<option value={status}>{status}</option>{/each}
-        </select></article>
-      {/each}</div>
+      <section class="space-y-4">
+        <h2 class="font-extrabold text-xl text-slate-900">Citas ({appointmentTotal})</h2>
+        <form onsubmit={searchAppointment} class="flex flex-col sm:flex-row gap-2 rounded-2xl bg-white border border-slate-200 p-3">
+          <label class="flex-1 text-xs font-bold text-slate-600">Buscar cita por ID, cliente, asunto o teléfono
+            <input type="search" bind:value={appointmentQuery} class="block w-full rounded-xl border border-slate-300 mt-1.5 px-3 py-3 font-normal text-sm" placeholder="Buscar cita o pegar su ID…" />
+          </label>
+          <div class="flex items-end gap-2">
+            <button type="submit" disabled={pagingBusy} class="rounded-xl bg-teal-700 px-5 py-3 text-white font-bold text-sm">Buscar</button>
+            <button type="button" onclick={() => { appointmentQuery=''; void loadAppointmentPage(1); }} class="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold">Limpiar</button>
+          </div>
+        </form>
+        {#if !appointments.length}<p class="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">No hay citas con esos criterios.</p>{/if}
+        <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
+          {#each appointments as a (a.id)}
+            <article class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm min-w-0">
+              <div class="flex flex-wrap justify-between items-start gap-3">
+                <div class="min-w-0">
+                  <h3 class="font-extrabold text-slate-900">{a.title}</h3>
+                  <p class="text-xs text-slate-500 mt-1">{a.customer_name || 'Cliente'} · {a.phone || 'Sin teléfono'}</p>
+                  <p class="text-xs text-slate-500 mt-1">{new Date(a.starts_at).toLocaleString('es-CU')}</p>
+                  <p class="text-[11px] break-all text-slate-500 mt-2" title={a.id}>ID: {a.id}</p>
+                  <button type="button" onclick={() => copyReference(a.id)} class="text-xs text-teal-800 font-bold mt-1 underline">
+                    {copiedReference===a.id?'Copiado ✓':'Copiar ID de cita'}
+                  </button>
+                </div>
+                <select aria-label={'Estado de cita '+a.title} value={a.status} onchange={e=>void changeAppointment(a.id,e.currentTarget.value)}
+                  class="border border-slate-300 rounded-xl text-xs px-2 py-2 bg-slate-50">
+                  {#each ['pending','confirmed','in_progress','completed','cancelled'] as status}
+                    <option value={status}>{status}</option>
+                  {/each}
+                </select>
+              </div>
+            </article>
+          {/each}
+        </div>
+        {#if appointmentTotal > pageSize}
+          <nav class="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-3" aria-label="Páginas de citas">
+            <p class="text-xs text-slate-600">Página {appointmentPage} de {Math.ceil(appointmentTotal/pageSize)} · {appointmentTotal} citas</p>
+            <div class="flex gap-2">
+              <button type="button" class="rounded-lg border px-3 py-2 text-xs font-bold" disabled={pagingBusy||appointmentPage===1} onclick={() => loadAppointmentPage(appointmentPage-1)}>Anterior</button>
+              <button type="button" class="rounded-lg border px-3 py-2 text-xs font-bold" disabled={pagingBusy||appointmentPage>=Math.ceil(appointmentTotal/pageSize)} onclick={() => loadAppointmentPage(appointmentPage+1)}>Siguiente</button>
+            </div>
+          </nav>
+        {/if}
+      </section>
     {:else if staffRole === 'admin' && (tab === 'products' || tab === 'services' || tab === 'gallery' || tab === 'site')}
       <AdminContent {token} {tab} {products} {services} {categories} onRefresh={async () => { await reload(); }} />
     {:else if staffRole === 'admin' && tab === 'staff'}
