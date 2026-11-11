@@ -3,6 +3,14 @@
   import { api } from '../lib/api';
   let { token, products }: {token:string;products:any[]}=$props();
   let productId=$state('');
+  let productSearch=$state('');
+  let reviewSearch=$state('');
+  let filteredProducts=$derived(products.filter(p=>
+    !productSearch.trim()||[p.name,p.id,p.brand,p.model].some((value:unknown)=>
+      String(value||'').toLocaleLowerCase('es').includes(productSearch.trim().toLocaleLowerCase('es')))));
+  let filteredReviews=$derived(reviews.filter(r=>
+    !reviewSearch.trim()||[r.product_name,r.customer_name,r.comment,r.id].some((value:unknown)=>
+      String(value||'').toLocaleLowerCase('es').includes(reviewSearch.trim().toLocaleLowerCase('es')))));
   let customerId=$state('');
   let reference=$state('');
   let reviews:any[]=$state([]);
@@ -37,12 +45,17 @@
   {#if error}<p role="alert" class="rounded-xl bg-red-50 p-3 text-red-700 text-sm">{error}</p>{/if}
   {#if notice}<p role="status" class="rounded-xl bg-emerald-50 p-3 text-emerald-700 text-sm">{notice}</p>{/if}
   <form onsubmit={verify} class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end rounded-2xl bg-slate-50 border border-slate-100 p-4">
-    <label class="text-xs font-semibold text-slate-700">Producto
-      <select required bind:value={productId} class="block w-full mt-2 border border-slate-300 rounded-xl px-3 py-2.5 bg-white text-sm">
-        <option value="">Seleccionar producto</option>
-        {#each products as product (product.id)}<option value={product.id}>{product.name}</option>{/each}
-      </select>
-    </label>
+    <div class="space-y-2 min-w-0">
+      <label class="block text-xs font-semibold text-slate-700">Buscar producto por nombre, marca o ID
+        <input type="search" bind:value={productSearch} placeholder="Buscar equipo…" class="block w-full mt-2 border border-slate-300 rounded-xl px-3 py-2.5 bg-white text-sm"/>
+      </label>
+      <label class="block text-xs font-semibold text-slate-700">Producto seleccionado
+        <select required bind:value={productId} class="block w-full mt-2 border border-slate-300 rounded-xl px-3 py-2.5 bg-white text-sm">
+          <option value="">Seleccionar producto</option>
+          {#each filteredProducts as product (product.id)}<option value={product.id}>{product.name} · {product.id.slice(0,8)}</option>{/each}
+        </select>
+      </label>
+    </div>
     <label class="text-xs font-semibold text-slate-700">ID del cliente
       <input required bind:value={customerId} placeholder="Pega el ID de cliente" class="block w-full mt-2 border border-slate-300 rounded-xl px-3 py-2.5 bg-white text-sm"/>
     </label>
@@ -52,10 +65,13 @@
     <button disabled={busy} class="rounded-xl bg-teal-700 text-white font-bold px-4 py-3 text-sm">Verificar compra</button>
   </form>
   <div class="space-y-2">
-    <h3 class="text-sm font-extrabold text-slate-900">Reseñas recibidas ({reviews.length})</h3>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <h3 class="text-sm font-extrabold text-slate-900">Reseñas recibidas ({reviews.length})</h3>
+      <input type="search" aria-label="Buscar reseñas" bind:value={reviewSearch} placeholder="Buscar producto o cliente" class="rounded-xl border border-slate-300 p-2 text-xs w-full sm:w-56" />
+    </div>
     {#if loading}<p class="text-xs text-slate-500">Cargando…</p>{/if}
     {#if !loading && reviews.length===0}<p class="text-xs text-slate-500">Todavía no hay reseñas.</p>{/if}
-    {#each reviews as review (review.id)}
+    {#each filteredReviews as review (review.id)}
       <article class="rounded-xl border border-slate-200 p-3.5 flex flex-wrap gap-3 justify-between">
         <div class="flex-1 min-w-0">
           <strong class="text-sm text-slate-900">{review.product_name}</strong>
