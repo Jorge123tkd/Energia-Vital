@@ -167,6 +167,8 @@ export function advanceSolarGuidance(input:string,previous?:SolarState|null):Ste
     case 'essential':{
       if(previous.level==='basico'){
         if(message!=='1'&&message!=='2')return invalid('Responde 1 para solo cargas esenciales o 2 para todos los equipos.');
+        if(message==='1' && !(previous.simpleLoads||[]).some(x=>x.critical))
+          return invalid('De los aparatos que nombraste, ninguno está clasificado como esencial en esta guía. Responde 2 para respaldar los que anotaste, o usa el formulario para marcar los equipos indispensables.');
         return {handled:true,state:{...previous,onlyCritical:message==='1',stage:'inverter'},reply:inverterQuestion};
       }
       const v=numbers(message);
