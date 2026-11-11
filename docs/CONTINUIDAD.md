@@ -11,10 +11,10 @@ Actualizado: 11 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
-Confirmado con Texto pegado(1).txt: build Vite 5.4.21 correcto, 150 módulos, con VITE_API_URL del Worker. Exportación D1 remota descargada correctamente a Respaldos-Energia-Vital/energia-vital-20261111-011838.sql, 158917 bytes, 11/11/2026 01:18:51 (hora del usuario); existencia y tamaño comprobados, restauración no ensayada. Solo están pendientes 009_assistant_conversation_history.sql y 010_home_featured_content.sql. Versión Worker previa más reciente: d3daae7e-2a02-4f26-97d6-23553d894bb3. npm audit --omit=dev informa 0; audit completo informa 9 (1 baja, 6 moderadas, 2 altas). No se han aplicado aún las migraciones ni publicado este código.
+Confirmado mediante Texto pegado(2).txt: migraciones 009 y 010 aplicadas en D1 REMOTO; lista posterior "No migrations to apply". Worker desplegado, versión 07e2b3b8-0832-42d2-851c-fb401f142909. Desde PowerShell /health devuelve status ok; services?featured=true y gallery?featured=true responden con listas vacías. Pages publicado en Production, rama main, fuente 98011f0: ad66cfa7-024c-4935-aad9-f7f313404533, URL https://ad66cfa7.energia-vital-web.pages.dev. Despliegue técnico completado; validación visual y funcional completa pendiente. Peticiones HTTP independientes desde el entorno del agente recibieron 403; no se pudo corroborar el sitio desde aquí ni atribuir la causa. No invalidar la evidencia de éxito enviada desde PowerShell.
 
 ## Siguiente paso exacto
-Ejecutar en PowerShell, dentro de un bloque con detención por errores: migraciones D1 remotas 009/010, comprobar lista, desplegar Worker, comprobar /health y endpoints públicos de destacados; después publicar apps/web/dist en Pages con --branch=main y verificar listado Production. Enviar la salida para registrar versiones y URLs reales. No cambiar la rama Git de trabajo. No aplicar npm audit fix durante esta publicación ni recuperar el stash completo. Después validar web móvil/escritorio y seleccionar destacados en administración.
+Abrir https://energia-vital-web.pages.dev/admin y elegir servicios/proyectos publicados: Editar > Destacar en inicio > Guardar. Revisar Inicio, zoom y apertura de fotos en escritorio/móvil, y confirmar el resultado. Los endpoints vacíos indican que aún no hay servicios/proyectos publicados marcados como destacados en esa comprobación. Registrar cada resultado real. Luego completar pruebas de chat/notificaciones/citas/asesor, remediación de dependencias y recuperación selectiva del stash. No repetir el despliegue si no aparece un error nuevo.
 
 ## Trabajo completado y evidencia
 ### Cambios previos presentes en el repositorio
@@ -50,9 +50,11 @@ Ejecutar en PowerShell, dentro de un bloque con detención por errores: migracio
 | Dependencias en Windows | audit --omit=dev: 0; audit completo: 9, remediación pendiente |
 | Versión Pages anterior | 89031ae4-57c9-4fc8-907f-52d1eaba93d3, fuente a9a8a9c |
 | Respaldo D1 remoto para esta actualización | Exportado: energia-vital-20261111-011838.sql, 158917 bytes; no se ensayó restauración |
-| Migraciones D1 remotas, incluida 010 | Solo 009 y 010 pendientes, lista confirmada |
-| Desplegar Worker | Pendiente; versión previa d3daae7e-2a02-4f26-97d6-23553d894bb3 |
-| Compilar con VITE_API_URL y desplegar Pages | Build correcto en Windows; publicación pendiente |
+| Migraciones D1 remotas, incluida 010 | Completadas 009/010; ninguna pendiente |
+| Desplegar Worker | Completado: 07e2b3b8-0832-42d2-851c-fb401f142909; anterior d3daae7e-2a02-4f26-97d6-23553d894bb3 |
+| Compilar con VITE_API_URL y desplegar Pages | Completado Production/main: ad66cfa7-024c-4935-aad9-f7f313404533, fuente 98011f0 |
+| Health y API de destacados | Correctos desde PowerShell; destacados vacíos |
+| Comprobación HTTP desde el agente | 403; causa no determinada, revisión visual no realizada |
 | Activar destacados elegidos y probar web | Pendiente |
 | Auditoría completa y lanzamiento 1.0 | Pendiente |
 
@@ -66,6 +68,8 @@ Ejecutar en PowerShell, dentro de un bloque con detención por errores: migracio
 - 2026-11-11: paso 2 confirmado mediante archivo adjunto: stash con untracked, pull fast-forward a 98011f0, npm ci y ambos typechecks correctos. Pages Production usa main. Registradas 9 vulnerabilidades pendientes de detalle. Próximo: build, respaldo D1, lista de migraciones/versiones y audit; sin cambios remotos de producción.
 
 - 2026-11-11: build y respaldo D1 confirmados. Lista remota solo 009/010 pendientes; registrada versión previa Worker. npm audit: 0 omitiendo dev, 9 completo. El lockfile tiene Svelte 5.57.2 en apps/web y Svelte 4.2.20 en raíz; Undici 7.29.1 y Wrangler 4.151.2. Los hallazgos de herramientas/framework requieren revisión; omit=dev no certifica seguridad del bundle. No se guardó el enlace temporal firmado de descarga del respaldo. Preparado siguiente bloque de migraciones/API/Pages; todavía no ejecutado.
+
+- 2026-11-11: aplicadas 009/010 remotas y confirmado que no quedan migraciones. API publicada con versión 07e2b3b8-0832-42d2-851c-fb401f142909; health ok y endpoints de destacados correctos/vacíos. Pages Production/main publicado como ad66cfa7-024c-4935-aad9-f7f313404533 (fuente 98011f0). Peticiones del agente obtuvieron 403, por lo que no se presenta validación visual independiente como completada. Próximo paso: selección administrativa de destacados y pruebas visuales/funcionales.
 
 ## Cómo actualizar este registro
 Después de cada paso: añadir fecha, acción, resultado y evidencia breve a la bitácora; ajustar tabla, Último paso realizado y Siguiente paso exacto. Registrar fallos y bloqueos. Guardar y subir a la rama, sin declararlo actualizado si GitHub no confirmó el cambio. No marcar como realizado un comando solo porque se haya entregado al usuario.
