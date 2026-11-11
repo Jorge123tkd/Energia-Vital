@@ -3,6 +3,7 @@
   import { api } from '../lib/api';
   import RequestPhotoGallery from './RequestPhotoGallery.svelte';
   import Pagination from './Pagination.svelte';
+  import PageHero from './PageHero.svelte';
   let requests: any[] = $state([]);
   let appointments: any[] = $state([]);
   let requestPage = $state(1), appointmentPage = $state(1);
@@ -31,9 +32,11 @@
     finally { loading = false; }
   });
 </script>
-<div class="max-w-4xl mx-auto py-8">
-  <h1 class="text-3xl font-bold mb-3">Mis solicitudes y citas</h1>
-  <p class="text-gray-600 mb-8">Solo puedes consultar los registros vinculados a tu cuenta.</p>
+<div class="max-w-5xl mx-auto px-2 sm:px-4 py-8">
+  <div class="mb-8">
+    <PageHero eyebrow="Bonaire · Tu seguimiento" title="Mis solicitudes y citas"
+      description="Consulta el estado de tus servicios, revisa próximas visitas y encuentra tus referencias en un solo lugar." />
+  </div>
   {#if loading}<p>Cargando…</p>{/if}
   {#if error}<p role="alert" class="text-red-700">{error}</p>{/if}
   <h2 class="text-xl font-semibold mb-3">Solicitudes</h2>

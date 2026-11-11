@@ -577,7 +577,7 @@
       {#if gallery.length === 0}<p class="text-sm text-slate-500 py-8">Aquí aparecerán las fotografías de tus proyectos. Pulsa «Añadir proyecto».</p>{/if}
     </section>
   {:else if tab === 'site'}
-    <section class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm w-full min-w-0 max-w-none space-y-5">
+    <section class="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm w-full min-w-0 max-w-6xl mx-auto space-y-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div><h2 class="text-2xl font-bold text-slate-900">Personalizar la web</h2><p class="text-slate-500 mt-1">Controla los textos principales, el contacto, las redes sociales y los enlaces del pie de página sin editar código.</p></div>
         <div class="flex flex-wrap gap-2">
@@ -612,13 +612,13 @@
             <button type="button" class="admin-secondary" disabled={editingSlide !== null || slides.length >= MAX_SLIDES}
               onclick={newSlide}>＋ Crear diapositiva</button>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
             {#each slides as item, index (index)}
-              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3 min-w-0">
+              <article class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2 min-w-0">
                 {#if item.image_url && item.image_url.startsWith('https://')}
-                  <img src={item.image_url} alt={'Imagen de '+item.title} class="h-36 w-full object-cover rounded-xl"/>
+                  <img src={item.image_url} alt={'Imagen de '+item.title} class="h-24 sm:h-28 w-full object-cover rounded-lg"/>
                 {:else}
-                  <div class="h-36 w-full rounded-xl bg-gradient-to-br from-slate-900 to-teal-700 flex items-center justify-center text-white text-sm">Sin fotografía</div>
+                  <div class="h-24 sm:h-28 w-full rounded-lg bg-gradient-to-br from-slate-900 to-teal-700 flex items-center justify-center text-white text-sm">Sin fotografía</div>
                 {/if}
                 <div>
                   <span class="text-xs font-bold text-teal-700">Diapositiva {index + 1}</span>
@@ -733,10 +733,21 @@
         </fieldset>
         {/if}
         {#if siteSection === 'links'}
-        <fieldset class="space-y-3 min-w-0 xl:col-span-12"><legend class="text-lg font-semibold mb-2">Enlaces del pie de página</legend>
+        <fieldset class="space-y-3 min-w-0 xl:col-span-6"><legend class="text-lg font-semibold mb-2">Enlaces del pie de página</legend>
           <p class="text-sm text-slate-500">Un enlace por línea con el formato «Texto | dirección». Puedes usar rutas internas o direcciones HTTPS.</p>
           <label class="admin-label">Páginas que quieres mostrar<textarea rows="6" class="admin-input font-mono" placeholder="Catálogo | /catalogo&#10;Servicios | /servicios&#10;Galería | /galeria&#10;Nuestro canal | https://youtube.com/..." bind:value={linksText}></textarea></label>
         </fieldset>
+        <aside class="min-w-0 xl:col-span-6 rounded-2xl border border-teal-100 bg-teal-50/60 p-4 sm:p-5 space-y-3">
+          <h3 class="text-base font-extrabold text-slate-900">Estructura del pie de página</h3>
+          <p class="text-sm text-slate-700">Los enlaces aparecen junto a los datos públicos de contacto, los canales sociales y los accesos para solicitar servicios.</p>
+          <div class="rounded-xl bg-white border border-slate-200 p-3 text-sm space-y-2">
+            {#each linksText.split('\n').map(t => t.trim()).filter(Boolean).slice(0,8) as item, i}
+              <p class="text-slate-700 break-words">{i + 1}. {item.split('|')[0]?.trim() || 'Enlace'}</p>
+            {/each}
+            {#if !linksText.trim()}<p class="text-slate-500">Introduce al menos un enlace para ver el resumen.</p>{/if}
+          </div>
+          <p class="text-xs text-slate-600">Recomendación: mantén entre cuatro y ocho accesos claros. Las páginas de catálogo, servicios, proyectos y atención son las más importantes.</p>
+        </aside>
         {/if}
         <div class="xl:col-span-12 flex justify-end pt-2 border-t border-slate-100">
           <button disabled={busy || uploadingSlide} class="admin-primary">{busy ? 'Publicando…' : 'Guardar y publicar cambios del sitio'}</button>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHero from './components/PageHero.svelte';
   import { DEFAULT_LOADS, estimateSolar, type Load, type SolarOutput, type Sector,
     type Level, type Phase, type Origin, type PvDetails } from './lib/solar-estimator';
 
@@ -119,11 +120,10 @@
 </script>
 
 <div class="w-full max-w-5xl mx-auto px-1 sm:px-4 py-5 sm:py-9">
-  <header class="mb-6">
-    <span class="text-xs font-bold uppercase tracking-[.18em] text-teal-700">Bonaire · Asesoramiento solar</span>
-    <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-2">Calculemos tu sistema sin complicaciones</h1>
-    <p class="text-slate-600 mt-3 max-w-3xl">Puedes empezar sin saber de electricidad: dinos qué equipos tienes y estimaremos su consumo. Si ya conoces tus mediciones, utiliza el modo técnico.</p>
-  </header>
+  <div class="mb-6">
+    <PageHero eyebrow="Bonaire · Asesor solar" title="Planifica tu energía con confianza"
+      description="Compara consumos, horas sin red, paneles y baterías. Puedes empezar sin experiencia o introducir tus mediciones técnicas." />
+  </div>
   <section class="bg-white border border-slate-200 shadow-sm rounded-3xl overflow-hidden">
     <div class="px-4 sm:px-8 py-5 bg-slate-50 border-b border-slate-200">
       <div class="flex flex-wrap justify-between gap-3 text-sm font-bold">

@@ -3,6 +3,7 @@
   import { api } from './lib/api';
   import CardImage from './components/CardImage.svelte';
   import Pagination from './components/Pagination.svelte';
+  import PageHero from './components/PageHero.svelte';
   let { featured = false }: { featured?: boolean } = $props();
   let services:any[]=$state([]);
   let page=$state(1);
@@ -44,11 +45,10 @@
 }}/>
 <section class={featured ? "w-full" : "w-full max-w-[1600px] mx-auto px-2 sm:px-4 py-8"}>
   {#if !featured}
-  <header class="mb-8">
-    <span class="text-xs font-extrabold tracking-widest uppercase text-teal-700">Bonaire · Asistencia especializada</span>
-    <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-2">Servicios para tu tranquilidad</h1>
-    <p class="text-slate-600 mt-3 max-w-2xl">Desde la planificación hasta el mantenimiento. Te acompañamos para aprovechar al máximo tu inversión solar.</p>
-  </header>
+  <div class="mb-8">
+    <PageHero eyebrow="Bonaire · Servicios técnicos" title="Soluciones para cada necesidad"
+      description="Instalación, reparación, mantenimiento y asesoría. Consulta los servicios disponibles y solicita atención personalizada." />
+  </div>
   {/if}
   {#if loading}<p class="text-slate-500">Cargando servicios…</p>
   {:else if error}<p role="alert" class="text-red-700">{error}</p>

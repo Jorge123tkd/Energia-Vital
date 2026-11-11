@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import Pagination from './Pagination.svelte';
+  import PageHero from './PageHero.svelte';
   let { staff = false, token = '' }: { staff?: boolean; token?: string } = $props();
   let items: any[] = $state([]);
   let page = $state(1);
@@ -30,13 +31,14 @@
 </script>
 
 <section class="w-full max-w-5xl mx-auto px-2 sm:px-4 py-6 sm:py-10">
-  <header class="flex justify-between items-center gap-4 mb-6">
-    <div><span class="uppercase tracking-wider text-xs font-bold text-teal-700">Bonaire · Tu cuenta</span>
-      <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-1">Notificaciones</h1>
-      <p class="text-slate-600 mt-2">Avisos relacionados con tus solicitudes, citas y mensajes.</p>
-    </div>
-    <button type="button" onclick={() => load()} class="px-4 py-2.5 rounded-xl border border-teal-200 text-teal-800 font-bold bg-white">Actualizar</button>
-  </header>
+  <div class="mb-5">
+    <PageHero eyebrow="Bonaire · Tu cuenta" title="Notificaciones"
+      description="Revisa avisos de tus solicitudes, citas y comunicaciones recientes." />
+  </div>
+  <div class="mb-5 flex justify-end">
+    <button type="button" onclick={() => load()} disabled={busy}
+      class="px-4 py-2.5 rounded-xl border border-teal-200 text-teal-800 font-bold bg-white disabled:opacity-50">Actualizar</button>
+  </div>
   {#if error}<p class="bg-red-50 text-red-700 rounded-xl p-4 mb-4" role="alert">{error}</p>{/if}
   {#if busy}<p class="text-sm text-slate-500">Cargando avisos…</p>{/if}
   <div class="rounded-2xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-100 overflow-hidden">

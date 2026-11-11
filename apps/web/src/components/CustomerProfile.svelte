@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from '../lib/api';
+  import PageHero from './PageHero.svelte';
   let { user, onUpdate }: { user: any; onUpdate: (user: any) => void } = $props();
   let name = $state('');
   let phone = $state('');
@@ -40,10 +41,8 @@
 
 <div class="min-h-[calc(100vh-6rem)] bg-gradient-to-b from-teal-50 via-slate-50 to-slate-100 px-3 sm:px-6 py-8 sm:py-12">
   <div class="max-w-5xl mx-auto space-y-7">
-    <header><span class="text-xs font-bold uppercase tracking-[.2em] text-teal-700">Bonaire · Área personal</span>
-      <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-2">Mi perfil</h1>
-      <p class="text-slate-600 mt-2">Mantén al día tus datos para solicitudes, visitas y comunicaciones.</p>
-    </header>
+    <PageHero eyebrow="Bonaire · Área personal" title="Mi perfil"
+      description="Actualiza tus datos de contacto, protege tu cuenta y recibe información sobre tus solicitudes y visitas." />
     {#if error}<p role="alert" class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</p>{/if}
     {#if success}<p role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">{success}</p>{/if}
     <div class="grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-5 lg:gap-7 items-start">

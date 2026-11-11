@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
   import { messagingBotUrl } from './lib/messaging-links';
+  import PageHero from './components/PageHero.svelte';
   let settings: Record<string, string> = $state({});
   let botWhatsApp = $derived(messagingBotUrl(settings.bot_whatsapp_url, 'whatsapp'));
   let botTelegram = $derived(messagingBotUrl(settings.bot_telegram_url, 'telegram'));
@@ -100,11 +101,8 @@
 
 <div class="min-h-[calc(100vh-6rem)] bg-gradient-to-b from-teal-50 via-slate-50 to-slate-100 py-8 sm:py-12 px-3 sm:px-6">
   <div class="max-w-6xl mx-auto space-y-7">
-    <header class="max-w-3xl">
-      <span class="text-xs uppercase tracking-[.2em] font-extrabold text-teal-700">Bonaire · Atención personalizada</span>
-      <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-2">¿En qué podemos ayudarte?</h1>
-      <p class="text-slate-600 mt-3 leading-relaxed">Elige uno de los servicios publicados por Bonaire y descríbenos lo que necesitas. La solicitud quedará vinculada a tu cuenta.</p>
-    </header>
+    <PageHero eyebrow="Bonaire · Atención personalizada" title="Solicita el servicio que necesitas"
+      description="Elige un servicio publicado, explica tu caso y haz seguimiento desde tu cuenta. Nuestro equipo revisará los detalles antes de confirmarlo." />
     <div class="grid lg:grid-cols-[minmax(0,1.45fr)_minmax(0,0.85fr)] gap-5 lg:gap-7 items-start">
       <form onsubmit={submit} class="bg-white rounded-3xl border border-slate-200 shadow-lg shadow-slate-200/50 p-5 sm:p-8 space-y-5 min-w-0">
         <div class="flex items-center gap-3 mb-2"><span class="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-extrabold">01</span><div><h2 class="text-xl font-bold text-slate-900">Cuéntanos tu solicitud</h2><p class="text-xs text-slate-500">Los campos obligatorios están señalados.</p></div></div>
