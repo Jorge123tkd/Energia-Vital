@@ -118,7 +118,11 @@ export const api = {
     patch(`/api/admin-customers/customers/${encodeURIComponent(id)}/status`, { is_active }, withAdmin(token)),
   deleteAdminCustomer: (token: string, id: string) =>
     apiRequest(`/api/admin-customers/customers/${encodeURIComponent(id)}`, withAdmin(token, { method: 'DELETE' })),
-  adminRequests: (token: string) => apiRequest('/api/admin-customers/requests', withAdmin(token)),
+  adminRequests: (token: string, q = '', page?: number, pageSize = 20) =>
+    apiRequest('/api/admin-customers/requests' +
+      (page !== undefined || q ? '?' + new URLSearchParams({
+        q, page: String(page ?? 1), page_size: String(pageSize),
+      }).toString() : ''), withAdmin(token)),
   getStaffRequestImages: (token: string, id: string) =>
     apiRequest('/api/admin-customers/extras/requests/' + encodeURIComponent(id) + '/images', withAdmin(token)),
   listAdminRequestCategories: (token: string) => apiRequest('/api/admin/extras/request-categories', withAdmin(token)),
@@ -128,7 +132,11 @@ export const api = {
   deleteAdminRequestCategory: (token: string, id: string) =>
     apiRequest('/api/admin/extras/request-categories/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
 
-  adminAppointments: (token: string) => apiRequest('/api/admin-customers/appointments', withAdmin(token)),
+  adminAppointments: (token: string, q = '', page?: number, pageSize = 20) =>
+    apiRequest('/api/admin-customers/appointments' +
+      (page !== undefined || q ? '?' + new URLSearchParams({
+        q, page: String(page ?? 1), page_size: String(pageSize),
+      }).toString() : ''), withAdmin(token)),
   updateAdminRequest: (token: string, id: string, status: string) => patch(`/api/admin-customers/requests/${id}`, { status }, withAdmin(token)),
   updateAdminAppointment: (token: string, id: string, status: string) => patch(`/api/admin-customers/appointments/${id}`, { status }, withAdmin(token)),
   getAdminProducts: (token: string) => apiRequest('/api/admin/products', withAdmin(token)),
