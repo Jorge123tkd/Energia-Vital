@@ -152,6 +152,31 @@
       await onRefresh(); resetService(); modal = null; notice = 'Servicio guardado correctamente.';
     });
   }
+
+  async function removeProduct(p: any) {
+    if (!confirm('¿Eliminar definitivamente el producto «'+p.name+'» y sus fotografías? Si tiene compras verificadas o reseñas, Bonaire impedirá el borrado.')) return;
+    await execute(async () => {
+      await api.deleteAdminProduct(token, p.id);
+      await onRefresh();
+      notice='Producto eliminado correctamente.';
+    });
+  }
+  async function removeService(s: any) {
+    if (!confirm('¿Eliminar definitivamente el servicio «'+s.name+'» y sus fotografías? Si tiene citas vinculadas, Bonaire protegerá el historial.')) return;
+    await execute(async () => {
+      await api.deleteAdminService(token, s.id);
+      await onRefresh();
+      notice='Servicio eliminado correctamente.';
+    });
+  }
+  async function removeCategory(cat: any) {
+    if (!confirm('¿Eliminar la categoría «'+cat.name+'»? Solo se permitirá cuando no contenga equipos.')) return;
+    await execute(async () => {
+      await api.deleteAdminCategory(token, cat.id);
+      await onRefresh();
+      notice='Categoría eliminada.';
+    });
+  }
   async function toggleProduct(p: any) {
     await execute(async () => {
       await api.updateAdminProduct(token, p.id, { is_active: !p.is_active });
@@ -363,8 +388,12 @@
                 </div>
                 <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
                   <span class="text-[11px] text-slate-500">{products.filter((p: any) => p.category_id === cat.id).length} equipos · Orden {cat.sort_order ?? 0}</span>
-                  <button type="button" class="text-xs rounded-lg border border-teal-200 bg-teal-50 text-teal-800 font-bold px-3 py-2 hover:bg-teal-100"
-                    onclick={() => editCategory(cat)} aria-label={'Editar categoría ' + cat.name}>Editar</button>
+                  <div class="flex gap-1.5 shrink-0">
+                    <button type="button" class="text-xs rounded-lg border border-teal-200 bg-teal-50 text-teal-800 font-bold px-3 py-2 hover:bg-teal-100"
+                      onclick={() => editCategory(cat)} aria-label={'Editar categoría ' + cat.name}>✎ Editar</button>
+                    <button type="button" disabled={busy} class="text-xs rounded-lg border border-red-200 bg-red-50 text-red-700 font-bold px-3 py-2 hover:bg-red-100"
+                      onclick={() => removeCategory(cat)} aria-label={'Eliminar categoría ' + cat.name}>✕</button>
+                  </div>
                 </div>
               </article>
             {/each}
@@ -391,7 +420,11 @@
                 <div class="flex justify-between gap-2"><h3 class="font-semibold text-slate-900">{p.name}</h3><span class="text-xs whitespace-nowrap {p.is_active ? 'text-emerald-700' : 'text-orange-600'}">{p.is_active ? 'Publicado' : 'Oculto'}</span></div>
                 <p class="text-xs text-slate-500 line-clamp-2">{p.short_description || p.description || 'Sin descripción'}</p>
                 <p class="font-bold">{p.price == null ? 'Consultar precio' : Number(p.price).toLocaleString('es-CU') + ' ' + (p.currency || 'USD')}</p>
-                <div class="flex flex-wrap gap-2"><button class="admin-secondary flex-1" onclick={() => editProduct(p)}>Editar</button><button disabled={busy} class="admin-link" onclick={() => toggleProduct(p)}>{p.is_active ? 'Ocultar' : 'Publicar'}</button></div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button" class="admin-secondary flex-1" onclick={() => editProduct(p)}>✎ Editar</button>
+                  <button type="button" disabled={busy} class="admin-link" onclick={() => toggleProduct(p)}>{p.is_active ? 'Ocultar' : 'Publicar'}</button>
+                  <button type="button" disabled={busy} class="rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-bold px-3 py-2" onclick={() => removeProduct(p)} aria-label={'Eliminar producto '+p.name} title="Eliminar producto">✕ Borrar</button>
+                </div>
               </div>
             </article>
           {/each}
@@ -430,7 +463,11 @@
                 <h3 class="font-semibold">{s.name}</h3>
                 <p class="text-xs text-slate-500 line-clamp-2">{s.description || 'Sin descripción'}</p>
                 <p class="text-sm font-semibold">{s.price_type === 'fixed' && s.price != null ? Number(s.price).toLocaleString('es-CU') + ' USD' : s.price_type === 'free' ? 'Gratuito' : 'Bajo presupuesto'}</p>
-                <div class="flex gap-2"><button class="admin-secondary flex-1" onclick={() => editService(s)}>Editar</button><button disabled={busy} class="admin-link" onclick={() => toggleService(s)}>{s.is_active ? 'Ocultar' : 'Publicar'}</button></div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button" class="admin-secondary flex-1" onclick={() => editService(s)}>✎ Editar</button>
+                  <button type="button" disabled={busy} class="admin-link" onclick={() => toggleService(s)}>{s.is_active ? 'Ocultar' : 'Publicar'}</button>
+                  <button type="button" disabled={busy} class="rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-bold px-3 py-2" onclick={() => removeService(s)} aria-label={'Eliminar servicio '+s.name} title="Eliminar servicio">✕ Borrar</button>
+                </div>
               </div>
             </article>
           {/each}
