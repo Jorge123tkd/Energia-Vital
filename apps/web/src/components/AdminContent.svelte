@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import ImagePicker from './ImagePicker.svelte';
+  import AdminMediaGallery from './AdminMediaGallery.svelte';
+  import AdminGalleryCategories from './AdminGalleryCategories.svelte';
 
   type Section = 'products' | 'services' | 'gallery' | 'site';
   let { token, tab, products, services, categories, onRefresh }: {
@@ -41,6 +44,8 @@
   let editingService = $state('');
   let productPhoto: File | null = $state(null);
   let servicePhoto: File | null = $state(null);
+  let productPhotos: File[] = $state([]);
+  let servicePhotos: File[] = $state([]);
   let productImageUrl = $state('');
   let serviceImageUrl = $state('');
 
@@ -59,16 +64,16 @@
   const slug = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-  function resetProduct() { editingProduct = ''; product = blankProduct(); product.category_id = categories[0]?.id || ''; productPhoto = null; productImageUrl = ''; }
-  function resetService() { editingService = ''; service = blankService(); servicePhoto = null; serviceImageUrl = ''; }
+  function resetProduct() { editingProduct = ''; product = blankProduct(); product.category_id = categories[0]?.id || ''; productPhoto = null; productPhotos = []; productImageUrl = ''; }
+  function resetService() { editingService = ''; service = blankService(); servicePhoto = null; servicePhotos = []; serviceImageUrl = ''; }
   function editProduct(p: any) {
     editingProduct = p.id; product = { ...blankProduct(), ...p, price: p.price ?? undefined, stock_quantity: p.stock_quantity ?? undefined,
-      warranty_months: p.warranty_months ?? undefined }; productPhoto = null; productImageUrl = '';
+      warranty_months: p.warranty_months ?? undefined }; productPhoto = null; productPhotos = []; productImageUrl = '';
     notice = ''; error = ''; modal = 'product';
   }
   function editService(s: any) {
     editingService = s.id; service = { ...blankService(), ...s, price: s.price ?? undefined, duration_minutes: s.duration_minutes ?? undefined };
-    servicePhoto = null; serviceImageUrl = ''; notice = ''; error = ''; modal = 'service';
+    servicePhoto = null; servicePhotos = []; serviceImageUrl = ''; notice = ''; error = ''; modal = 'service';
   }
 
   async function execute(task: () => Promise<void>) {
@@ -100,7 +105,7 @@
     event.preventDefault();
     await execute(async () => {
       if (!product.category_id) throw new Error('Crea o selecciona una categoría.');
-      if (productPhoto && productPhoto.size > 8 * 1024 * 1024) throw new Error('La foto debe ocupar menos de 8 MB.');
+      if (productPhotos.some(f => f.size > 8*1024*1024)) throw new Error('Las fotografías deben ocupar menos de 8 MB.');
       const data = { ...product, price: product.price ?? null, stock_quantity: product.stock_quantity ?? null,
         warranty_months: product.warranty_months ?? null };
       let id = editingProduct;
@@ -109,15 +114,16 @@
         const result = await api.createAdminProduct(token, { ...data, slug: slug(product.name) + '-' + Date.now() });
         id = result.id;
       }
-      if (productPhoto) await api.uploadProductImage(token, id, productPhoto, product.name);
-      else if (productImageUrl.trim()) await api.setProductImageUrl(token, id, productImageUrl.trim());
+      if (productPhotos.length) {
+        for (const photo of productPhotos) await api.uploadProductImage(token, id, photo, product.name);
+      } else if (productImageUrl.trim()) await api.setProductImageUrl(token, id, productImageUrl.trim());
       await onRefresh(); resetProduct(); modal = null; notice = 'Producto guardado y visible según su estado de publicación.';
     });
   }
   async function saveService(event: SubmitEvent) {
     event.preventDefault();
     await execute(async () => {
-      if (servicePhoto && servicePhoto.size > 8 * 1024 * 1024) throw new Error('La foto debe ocupar menos de 8 MB.');
+      if (servicePhotos.some(f => f.size > 8*1024*1024)) throw new Error('Las fotografías deben ocupar menos de 8 MB.');
       const data = { ...service, price: service.price ?? null, duration_minutes: service.duration_minutes ?? null };
       let id = editingService;
       if (id) await api.updateAdminService(token, id, data);
@@ -125,8 +131,9 @@
         const result = await api.createAdminService(token, { ...data, slug: slug(service.name) + '-' + Date.now() });
         id = result.id;
       }
-      if (servicePhoto) await api.uploadServiceImage(token, id, servicePhoto);
-      else if (serviceImageUrl.trim()) await api.setServiceImageUrl(token, id, serviceImageUrl.trim());
+      if (servicePhotos.length) {
+        for (const photo of servicePhotos) await api.uploadAdminServiceImage(token, id, photo);
+      } else if (serviceImageUrl.trim()) await api.setServiceImageUrl(token, id, serviceImageUrl.trim());
       await onRefresh(); resetService(); modal = null; notice = 'Servicio guardado correctamente.';
     });
   }
@@ -149,6 +156,12 @@
   let galleryCategory = $state('');
   let galleryUrl = $state('');
   let galleryFile: File | null = $state(null);
+  let galleryPhotos: File[] = $state([]);
+  let galleryCategories: {id:string;name:string;is_active:number|boolean}[] = $state([]);
+  async function loadGalleryCategories() {
+    try { galleryCategories = (await api.listAdminGalleryCategories(token)).categories || []; }
+    catch (e) { error = e instanceof Error ? e.message : 'No se pudieron cargar categorías de la galería.'; }
+  }
   let galleryEdit: any = $state(null);
 
   function siteDefaults(): Record<string, string> {
@@ -190,7 +203,10 @@
   let linksText = $state('');
   async function loadExtra() {
     try {
-      const [g, cfg] = await Promise.all([api.getAdminGallery(token), api.getAdminConfig(token)]);
+      const [g, cfg, cats] = await Promise.all([
+        api.getAdminGallery(token), api.getAdminConfig(token), api.listAdminGalleryCategories(token)
+      ]);
+      galleryCategories = cats.categories || [];
       gallery = g.gallery ?? [];
       const next = siteDefaults();
       for (const item of cfg.settings ?? []) if (item.key in next) next[item.key] = String(item.value ?? '');
@@ -228,17 +244,32 @@
   async function saveGallery(event: SubmitEvent) {
     event.preventDefault();
     await execute(async () => {
-      if (!galleryFile && !galleryUrl.trim()) throw new Error('Selecciona una foto o proporciona su URL HTTPS.');
-      if (galleryFile && galleryFile.size > 8 * 1024 * 1024) throw new Error('La foto debe ocupar menos de 8 MB.');
-      if (!galleryFile && !/^https:\/\//i.test(galleryUrl.trim())) throw new Error('La URL de la imagen debe comenzar por https://');
+      if (!galleryPhotos.length && !galleryUrl.trim())
+        throw new Error('Selecciona fotos del proyecto o proporciona una URL HTTPS.');
+      if (galleryPhotos.length > 15) throw new Error('Máximo 15 fotografías por proyecto.');
+      if (!galleryPhotos.length && !/^https:\/\//i.test(galleryUrl.trim()))
+        throw new Error('La URL de imagen debe comenzar por https://');
       const data = new FormData();
-      data.append('title', galleryTitle.trim()); data.append('description', galleryDescription.trim());
-      data.append('category', galleryCategory.trim()); data.append('is_active', 'true');
-      if (galleryFile) data.append('file', galleryFile);
+      data.append('title', galleryTitle.trim());
+      data.append('description', galleryDescription.trim());
+      data.append('category', galleryCategory.trim());
+      data.append('is_active', 'true');
+      if (galleryPhotos.length) data.append('file', galleryPhotos[0]);
       else data.append('url', galleryUrl.trim());
-      await api.createAdminGallery(token, data);
-      galleryTitle = ''; galleryDescription = ''; galleryCategory = ''; galleryUrl = ''; galleryFile = null;
-      gallery = (await api.getAdminGallery(token)).gallery ?? []; modal = null; notice = 'Proyecto añadido a la galería.';
+      const created = await api.createAdminGallery(token, data);
+      let saved = galleryPhotos.length ? 1 : 0;
+      let partialError = '';
+      for (const file of galleryPhotos.slice(1)) {
+        try { await api.uploadAdminGalleryImage(token, created.id, file); saved += 1; }
+        catch (e) { partialError = e instanceof Error ? e.message : 'Error de almacenamiento'; break; }
+      }
+      galleryTitle = ''; galleryDescription = ''; galleryCategory = ''; galleryUrl = '';
+      galleryFile = null; galleryPhotos = [];
+      gallery = (await api.getAdminGallery(token)).gallery ?? [];
+      modal = null;
+      notice = partialError
+        ? `Proyecto creado; se guardaron ${saved} fotos. Añade las restantes desde Editar. ${partialError}`
+        : 'Proyecto publicado con ' + (saved || 1) + ' foto(s).';
     });
   }
   async function updateGallery(event: SubmitEvent) {
@@ -370,7 +401,7 @@
           <h2 class="text-2xl font-bold text-slate-900">Galería de proyectos ({gallery.length})</h2>
           <p class="text-sm text-slate-500 mt-1">Trabajos, instalaciones y resultados en tarjetas compactas.</p>
         </div>
-        <button type="button" class="admin-primary" onclick={() => { galleryEdit = null; galleryTitle = ''; galleryDescription = ''; galleryCategory = ''; galleryFile = null; galleryUrl = ''; error = ''; modal = 'gallery'; }}>
+        <button type="button" class="admin-primary" onclick={() => { galleryEdit = null; galleryTitle = ''; galleryDescription = ''; galleryCategory = ''; galleryFile = null; galleryPhotos = []; galleryUrl = ''; error = ''; modal = 'gallery'; }}>
           + Añadir proyecto
         </button>
       </header>
