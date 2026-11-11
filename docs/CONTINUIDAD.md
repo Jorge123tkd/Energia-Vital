@@ -11,10 +11,10 @@ Actualizado: 11 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
-Salida de PowerShell recibida en Texto pegado.txt: stash creado con archivos sin seguimiento y etiqueta "Respaldo local antes del despliegue Bonaire"; árbol limpio antes de actualizar; pull fast-forward de a9a8a9c a 98011f0. npm ci correcto (164 paquetes). Typecheck API correcto; Svelte 0 errores y 0 advertencias. npm informa 9 vulnerabilidades (1 baja, 6 moderadas, 2 altas) y advertencias de scripts de instalación; falta revisar el detalle. Listado Pages confirma Production en main; publicación previa 89031ae4-57c9-4fc8-907f-52d1eaba93d3 con fuente a9a8a9c. Esta actualización aún no se desplegó.
+Confirmado con Texto pegado(1).txt: build Vite 5.4.21 correcto, 150 módulos, con VITE_API_URL del Worker. Exportación D1 remota descargada correctamente a Respaldos-Energia-Vital/energia-vital-20261111-011838.sql, 158917 bytes, 11/11/2026 01:18:51 (hora del usuario); existencia y tamaño comprobados, restauración no ensayada. Solo están pendientes 009_assistant_conversation_history.sql y 010_home_featured_content.sql. Versión Worker previa más reciente: d3daae7e-2a02-4f26-97d6-23553d894bb3. npm audit --omit=dev informa 0; audit completo informa 9 (1 baja, 6 moderadas, 2 altas). No se han aplicado aún las migraciones ni publicado este código.
 
 ## Siguiente paso exacto
-En PowerShell: compilar con VITE_API_URL del Worker, exportar D1 remoto a un respaldo fuera del repositorio y comprobar archivo no vacío; listar migraciones remotas y versiones del Worker; obtener npm audit y npm audit --omit=dev para distinguir dependencias de producción/desarrollo. Compartir salida sin SQL ni secretos. No aplicar migraciones hasta conocer el respaldo y los pendientes. Para Pages usar --branch=main al publicar, conservando la rama Git de trabajo. El stash sigue pendiente de recuperación selectiva (imagen y revisión del lockfile); no hacer stash pop indiscriminadamente.
+Ejecutar en PowerShell, dentro de un bloque con detención por errores: migraciones D1 remotas 009/010, comprobar lista, desplegar Worker, comprobar /health y endpoints públicos de destacados; después publicar apps/web/dist en Pages con --branch=main y verificar listado Production. Enviar la salida para registrar versiones y URLs reales. No cambiar la rama Git de trabajo. No aplicar npm audit fix durante esta publicación ni recuperar el stash completo. Después validar web móvil/escritorio y seleccionar destacados en administración.
 
 ## Trabajo completado y evidencia
 ### Cambios previos presentes en el repositorio
@@ -47,12 +47,12 @@ En PowerShell: compilar con VITE_API_URL del Worker, exportar D1 remoto a un res
 | Autenticación Cloudflare del usuario | Confirmada por whoami; permisos D1, Workers y Pages |
 | Proyecto Pages | energia-vital-web.pages.dev; sin proveedor Git |
 | Rama de producción Pages | main, confirmada por listado Production; Git sigue en la rama de trabajo |
-| Dependencias en Windows | npm ci correcto; 9 vulnerabilidades por analizar |
+| Dependencias en Windows | audit --omit=dev: 0; audit completo: 9, remediación pendiente |
 | Versión Pages anterior | 89031ae4-57c9-4fc8-907f-52d1eaba93d3, fuente a9a8a9c |
-| Respaldo D1 remoto para esta actualización | Pendiente |
-| Migraciones D1 remotas, incluida 010 | Pendiente |
-| Desplegar Worker | Pendiente |
-| Compilar con VITE_API_URL y desplegar Pages | Pendiente |
+| Respaldo D1 remoto para esta actualización | Exportado: energia-vital-20261111-011838.sql, 158917 bytes; no se ensayó restauración |
+| Migraciones D1 remotas, incluida 010 | Solo 009 y 010 pendientes, lista confirmada |
+| Desplegar Worker | Pendiente; versión previa d3daae7e-2a02-4f26-97d6-23553d894bb3 |
+| Compilar con VITE_API_URL y desplegar Pages | Build correcto en Windows; publicación pendiente |
 | Activar destacados elegidos y probar web | Pendiente |
 | Auditoría completa y lanzamiento 1.0 | Pendiente |
 
@@ -64,6 +64,8 @@ En PowerShell: compilar con VITE_API_URL del Worker, exportar D1 remoto a un res
 - 2026-11-11: paso 1 confirmado con salida del usuario: sesión Cloudflare activa, rama correcta y proyecto Pages encontrado. Cambios locales detectados; preparado paso 2 para conservarlos antes de actualizar. No se guardan correo, identificadores de cuenta ni credenciales. Rama de producción aún no confirmada.
 
 - 2026-11-11: paso 2 confirmado mediante archivo adjunto: stash con untracked, pull fast-forward a 98011f0, npm ci y ambos typechecks correctos. Pages Production usa main. Registradas 9 vulnerabilidades pendientes de detalle. Próximo: build, respaldo D1, lista de migraciones/versiones y audit; sin cambios remotos de producción.
+
+- 2026-11-11: build y respaldo D1 confirmados. Lista remota solo 009/010 pendientes; registrada versión previa Worker. npm audit: 0 omitiendo dev, 9 completo. El lockfile tiene Svelte 5.57.2 en apps/web y Svelte 4.2.20 en raíz; Undici 7.29.1 y Wrangler 4.151.2. Los hallazgos de herramientas/framework requieren revisión; omit=dev no certifica seguridad del bundle. No se guardó el enlace temporal firmado de descarga del respaldo. Preparado siguiente bloque de migraciones/API/Pages; todavía no ejecutado.
 
 ## Cómo actualizar este registro
 Después de cada paso: añadir fecha, acción, resultado y evidencia breve a la bitácora; ajustar tabla, Último paso realizado y Siguiente paso exacto. Registrar fallos y bloqueos. Guardar y subir a la rama, sin declararlo actualizado si GitHub no confirmó el cambio. No marcar como realizado un comando solo porque se haya entregado al usuario.
