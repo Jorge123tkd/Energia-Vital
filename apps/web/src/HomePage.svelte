@@ -99,7 +99,7 @@
     <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
       {#each products as p (p.id)}
         <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
-          {#if p.primary_image_url}<img class="w-full h-52 object-cover" src={p.primary_image_url} alt={p.name} />{:else}<div class="h-52 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400">Fotografía próximamente</div>{/if}
+          {#if p.primary_image_url}<img class="w-full h-52 object-cover object-center" src={p.primary_image_url} alt={p.name} />{:else}<div class="h-52 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400">Fotografía próximamente</div>{/if}
           <div class="p-5 space-y-3">
             <p class="text-xs font-semibold text-teal-700">{p.category_name || 'Energía solar'}</p>
             <h3 class="font-semibold text-xl">{p.name}</h3>
