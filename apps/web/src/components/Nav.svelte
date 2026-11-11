@@ -9,7 +9,7 @@
     onAssistant: () => void;
   } = $props();
   let mobileOpen = $state(false);
-  let profileMenu: HTMLDetailsElement;
+  let profileMenu: HTMLDetailsElement | undefined = $state();
   const publicPages = [
     { path: '/', label: 'Inicio' },
     { path: '/catalogo', label: 'Catálogo' },
@@ -68,6 +68,9 @@
               <a href="/admin" class="block rounded-lg px-3 py-2.5 text-sm font-semibold text-teal-800 hover:bg-teal-50">Administración</a>
             {:else}
               <button type="button" onclick={() => visit('/mis-solicitudes')} class="w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Mis solicitudes</button>
+            {/if}
+            {#if userRole !== 'admin' && userRole !== 'operator'}
+              <button type="button" onclick={() => visit('/asistente')} class="w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium text-teal-800 hover:bg-teal-50">Asistente e historial</button>
             {/if}
             <button type="button" onclick={() => visit('/notificaciones')} class="w-full text-left rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Notificaciones</button>
             <div class="border-t border-slate-100 my-1"></div>
