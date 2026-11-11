@@ -34,6 +34,16 @@
     voc:0,vmp:0,isc:0,vocCoeffPct:0,vmpCoeffPct:0,minAirC:10,maxCellC:65,
   });
   let result:SolarOutput|null=$state(null),error=$state(''),copied=$state(false);
+  const batteryOptions = [5,10,12,15] as const;
+  let selectedBatteryKWh = $state<number>(5);
+  // El 72 % se conserva del cálculo preliminar: 80 % DoD × 90 % eficiencia.
+  // Comparamos energía y potencia *media*; no certificamos potencia pico ni autonomía garantizada.
+  let batteryUsableKWh = $derived(selectedBatteryKWh * .8 * .9);
+  let selectedBatteryHours = $derived(result && result.backupWatts > 0
+    ? batteryUsableKWh * 1000 / result.backupWatts : 0);
+  let selectedBatteryMaxWatts = $derived(autonomyHours > 0
+    ? batteryUsableKWh * 1000 / autonomyHours : 0);
+  let selectedBatteryFits = $derived(Boolean(result && result.backupEnergy <= batteryUsableKWh + 1e-9));
   let solarInputs=$derived({
     sector,level,origin:level==='basico'?'equipos' as Origin:origin,phase,
     loads:devices,voltage,amps,powerFactor,hoursDaily,
@@ -185,7 +195,9 @@
       hasPanels
         ?'Batería nominal con aporte solar (escenario técnico o ejemplo diurno): '+(level==='basico'?daylightExample.batteryWithSolar:result.batteryWithSolar).toFixed(2)+' kWh'
         :'No se solicitó una comparación con paneles solares.',
-      'Banco de referencia: '+result.guideBattery+' kWh ('+(result.guideFits?'cubre escenario estimado':'no cubre todas las cargas')+')',
+      'Referencia de batería elegida: '+selectedBatteryKWh+' kWh',
+      'Autonomía teórica con esa referencia y las cargas declaradas: '+selectedBatteryHours.toFixed(1)+' horas',
+      'Potencia media máxima para '+autonomyHours+' horas: '+selectedBatteryMaxWatts.toFixed(0)+' W',
       level==='basico'
         ?'Sin hora declarada de apagón: comparación de batería sin aporte FV; ejemplo con sol separado.'
         :'Escenario técnico desde las '+outageStartHour+':00 · Sol dentro del corte '+result.outageSunHours.toFixed(1)+' h',
@@ -549,7 +561,7 @@
             {label:'Potencia simultánea total',value:result.power.toFixed(0)+' W'},
             {label:'Energía diaria',value:result.daily.toFixed(2)+' kWh/día'},
             {label:'Potencia media esencial',value:result.backupWatts.toFixed(0)+' W'},
-            {label:sector==='residencial'?'Banco doméstico de referencia':'Banco comercial de referencia',value:result.guideBattery.toFixed(2)+' kWh'},
+            {label:'Batería que estás comparando',value:selectedBatteryKWh.toFixed(0)+' kWh'},
             {label:'Inversor para cargas esenciales',value:result.inverter.toFixed(0)+' W'},
             {label:'Paneles de referencia para empezar',value:daylightExample.plannedPanels+' de '+result.panelWatts+' W'},
           ] as box}
@@ -579,16 +591,37 @@
             <p class="text-sm text-slate-700">En el escenario comparativo los paneles podrían suministrar alrededor de {(level==='basico'?daylightExample.pvDirectKWh:result.pvDirectKWh).toFixed(1)} kWh directamente a los equipos y generar hasta {(level==='basico'?daylightExample.pvSurplusKWh:result.pvSurplusKWh).toFixed(1)} kWh de excedente potencial de recarga, antes de pérdidas. Eso solo ocurre durante horas con producción y depende de la instalación.</p>
           {/if}
           <p class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">Para prepararte ante un apagón que puede ocurrir de noche, toma como referencia conservadora la batería <strong>sin aporte solar</strong>. Los paneles ayudan a consumir y recargar de día, pero no sustituyen el almacenamiento nocturno.</p>
-          <p class="text-sm text-slate-600">Para {sectorOptions.find(x=>x.id===sector)?.label.toLowerCase()}, usamos {sector==='residencial'?'5, 10, 12 y 15 kWh':'varias capacidades comerciales'} como referencias, <strong>no como límites técnicos ni legales</strong>.</p>
-          <div class="rounded-xl p-4 {result.guideFits?'bg-emerald-50 border border-emerald-100':'bg-amber-50 border border-amber-200'}">
-            <p class="font-bold text-slate-900">Referencia: {result.guideBattery} kWh nominales</p>
-            {#if result.guideFits}
-              <p class="text-sm text-slate-700 mt-2">Podría cubrir la energía estimada del respaldo, sujeto al modelo real, potencia, BMS y pérdidas.</p>
-            {:else}
-              <p class="text-sm text-slate-800 mt-2">No alcanza las {autonomyHours} horas para todas las cargas esenciales indicadas: sin apoyo solar, ese banco duraría aproximadamente <strong>{result.guideHours.toFixed(1)} horas</strong>.</p>
-              <p class="text-sm text-slate-800 mt-2">Para aspirar a {autonomyHours} horas con {result.guideBattery} kWh, el consumo medio durante el corte tendría que bajar a aproximadamente <strong>{result.maxCriticalWatts.toFixed(0)} W</strong>. Prioriza nevera, pocas luces y comunicaciones; apaga aire acondicionado, bombas y otras cargas prescindibles si están incluidas.</p>
-              <p class="text-xs text-slate-700 mt-2">Otra opción es estudiar un banco mayor o un sistema por etapas. No recomendamos automáticamente comprar {result.battery.toFixed(1)} kWh solo por el número calculado.</p>
-            {/if}
+          <div class="rounded-2xl border border-teal-200 bg-teal-50/70 p-4 sm:p-5 space-y-3">
+            <div>
+              <h4 class="font-extrabold text-slate-900 text-base">Elige una capacidad de batería para comparar</h4>
+              <p class="text-sm text-slate-700 mt-1">Selecciona 5, 10, 12 o 15 kWh y descubre cómo ajustar el consumo para alcanzar tus <strong>{autonomyHours} horas</strong> sin red. No cambia los equipos que seleccionaste ni la estimación original.</p>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Seleccionar batería nominal de referencia">
+              {#each batteryOptions as amount}
+                <button type="button" aria-pressed={selectedBatteryKWh===amount}
+                  onclick={() => selectedBatteryKWh = amount}
+                  class="rounded-xl border-2 px-3 py-3 text-sm font-extrabold transition
+                    {selectedBatteryKWh===amount?'bg-teal-700 text-white border-teal-700 shadow-sm':'bg-white text-teal-900 border-teal-200 hover:border-teal-500'}">
+                  {amount} kWh
+                </button>
+              {/each}
+            </div>
+            <div aria-live="polite" class="rounded-xl bg-white border {selectedBatteryFits?'border-emerald-200':'border-amber-200'} p-4 space-y-2">
+              <p class="font-extrabold text-slate-900">Batería nominal de {selectedBatteryKWh} kWh</p>
+              <p class="text-sm text-slate-700">Con las cargas esenciales que seleccionaste (media estimada de <strong>{result.backupWatts.toFixed(0)} W</strong>), la autonomía teórica sería de unas <strong>{selectedBatteryHours.toFixed(1)} horas</strong> sin producción solar.</p>
+              {#if selectedBatteryFits}
+                <p class="text-sm text-emerald-900 font-semibold">La energía almacenada podría alcanzar las {autonomyHours} horas que buscas, según el consumo indicado.</p>
+              {:else}
+                <p class="text-sm text-amber-900 font-semibold">No alcanzaría las {autonomyHours} horas con todas esas cargas esenciales. Podrías reducir el consumo medio durante el corte o estudiar otro banco.</p>
+              {/if}
+              <p class="text-sm text-slate-800">Para aspirar a <strong>{autonomyHours} horas</strong> con {selectedBatteryKWh} kWh nominales, el consumo medio de los equipos durante el apagón debería ser aproximadamente <strong>{selectedBatteryMaxWatts.toFixed(0)} W como máximo</strong>.</p>
+              {#if result.backupWatts>selectedBatteryMaxWatts}
+                <p class="text-xs text-slate-600">Con tu selección actual necesitarías reducir unos <strong>{(result.backupWatts-selectedBatteryMaxWatts).toFixed(0)} W de consumo medio</strong>. Puedes regresar a «Tus equipos» y dejar solo los imprescindibles durante el corte.</p>
+              {:else}
+                <p class="text-xs text-slate-600">Todavía hay margen energético en este ejemplo. La potencia simultánea y los picos del inversor pueden limitar qué equipos funcionan a la vez.</p>
+              {/if}
+              <p class="text-xs text-slate-500">Se calcula con batería cargada, 80 % de profundidad de descarga y 90 % de eficiencia. El valor de W es una potencia media a lo largo del corte, no la potencia nominal que necesariamente debe tener tu inversor.</p>
+            </div>
           </div>
           {#if existingInverter}
             <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-2">
