@@ -93,7 +93,8 @@
       if(level==='basico'||origin==='equipos'){
         if(!devices.length){error='Selecciona al menos un electrodoméstico o añade un equipo.';return false;}
         if(devices.some(d=>!d.name.trim()||!valid(d.watts,1,50000)||!valid(d.units,1,100)||
-          !Number.isInteger(d.units)||!valid(d.hours,0.1,24)||!valid(d.backupDuty,0.05,1))){
+          !Number.isInteger(d.units)||!valid(d.hours,0.1,24)||!valid(d.backupDuty,0.05,1)||
+          (d.critical && d.backupHours!==undefined && !valid(d.backupHours,0.5,autonomyHours)))){
           error='Revisa nombre, potencia, cantidad y horas de cada equipo.';return false;
         }
         if(!devices.some(d=>d.critical)){
@@ -472,7 +473,7 @@
             <div class="rounded-xl bg-teal-50 border border-teal-100 p-4">
               <p class="text-xs font-semibold text-teal-800">Con {result.plannedPanels} paneles en este escenario</p>
               <p class="text-2xl font-extrabold text-teal-950 mt-1">{result.batteryWithSolar.toFixed(2)} kWh</p>
-              <p class="text-xs text-slate-600 mt-2">Solo hay beneficio cuando el corte coincide con producción solar capaz de alimentar cargas o recargar batería.</p>
+              <p class="text-xs text-slate-600 mt-2">Solo hay beneficio cuando el corte coincide con producción solar y la batería puede aceptar recarga. Se supone batería cargada al inicio.</p>
             </div>
           </div>
           <p class="text-sm text-slate-700">De las {autonomyHours} horas de corte, <strong>{result.outageSunHours.toFixed(1)} h</strong> coinciden con la ventana de producción y <strong>{result.outageNoSunHours.toFixed(1)} h</strong> quedan fuera. Los paneles aportarían aproximadamente {result.pvOutageKWh.toFixed(1)} kWh durante el corte: {result.pvDirectKWh.toFixed(1)} kWh cubrirían cargas directamente y hasta {result.pvSurplusKWh.toFixed(1)} kWh serían excedente potencial de recarga, antes de pérdidas.</p>
@@ -493,7 +494,7 @@
           {#if result.existingHours!==null}
             <p class="text-sm text-teal-900 bg-teal-50 rounded-xl p-3">Con tu batería actual declarada ({existingBatteryKWh} kWh nominales), la autonomía de esas cargas sería aproximadamente <strong>{result.existingHours.toFixed(1)} horas</strong> bajo los supuestos del cálculo.</p>
           {/if}
-          <p class="text-xs text-slate-500">Supuestos ilustrativos: 80 % de descarga utilizable, 90 % de eficiencia y paneles con 75 % de rendimiento global. El clima se simula con factores simplificados; para dimensionar por ubicación y estación se necesitan datos horarios. Ninguna cifra garantiza autonomía real.</p>
+          <p class="text-xs text-slate-500">Supuestos ilustrativos: batería inicialmente cargada, 80 % de descarga utilizable, 90 % de eficiencia y paneles al 75 % de rendimiento global. Producción promediada en intervalos de 15 minutos dentro de 9:00–16:00; no sustituye irradiancia horaria, curva de carga, límites BMS ni estudios por ubicación. Ninguna cifra garantiza autonomía real.</p>
         </section>
         <section class="rounded-2xl p-4 sm:p-5 bg-slate-950 text-white mt-5 space-y-3">
           <h3 class="text-lg font-extrabold">Paneles y compatibilidad con el inversor</h3>
