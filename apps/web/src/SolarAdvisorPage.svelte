@@ -662,7 +662,7 @@
           {#if inventoryError}<p class="text-sm text-amber-800">{inventoryError}</p>{/if}
           {#if !inventoryLoading && recommendedProducts.length}
             <p class="text-xs text-slate-500 sm:hidden">Desliza hacia los lados para explorar →</p>
-            <div role="region" tabindex="0" aria-label="Productos recomendados; desplaza horizontalmente"
+            <div role="region" aria-label="Productos recomendados; desplaza horizontalmente"
               class="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]">
               {#each recommendedProducts as recommendation (recommendation.item.id)}
                 <article class="min-w-0 shrink-0 flex flex-col w-[78vw] sm:w-[44vw] md:w-[30vw] lg:w-[calc(20%_-_0.6rem)] snap-start rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition">
