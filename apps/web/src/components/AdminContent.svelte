@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import Pagination from './Pagination.svelte';
   import ImagePicker from './ImagePicker.svelte';
   import AdminMediaGallery from './AdminMediaGallery.svelte';
   import AdminGalleryCategories from './AdminGalleryCategories.svelte';
@@ -17,6 +18,15 @@
   let productSearch = $state('');
   let productCategory = $state('');
   let productPage = $state(1);
+  let servicePage = $state(1);
+  let galleryPage = $state(1);
+  const itemPageSize = 12;
+  let servicePageCount = $derived(Math.max(1, Math.ceil(services.length / itemPageSize)));
+  let galleryPageCount = $derived(Math.max(1, Math.ceil(gallery.length / itemPageSize)));
+  let visibleServices = $derived(services.slice((Math.min(servicePage,servicePageCount)-1)*itemPageSize,
+    Math.min(servicePage,servicePageCount)*itemPageSize));
+  let visibleGallery = $derived(gallery.slice((Math.min(galleryPage,galleryPageCount)-1)*itemPageSize,
+    Math.min(galleryPage,galleryPageCount)*itemPageSize));
   const productPageSize = 20;
   let visibleProducts = $derived.by(() => {
     const term = productSearch.trim().toLocaleLowerCase('es');
@@ -502,7 +512,7 @@
         <button type="button" class="admin-primary" onclick={() => { resetService(); modal = 'service'; error = ''; }}>+ Nuevo servicio</button>
       </div>
       <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-          {#each services as s (s.id)}
+          {#each visibleServices as s (s.id)}
             <article class="group border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-teal-200 transition">
               {#if s.image_url}<div class="overflow-hidden"><img class="w-full h-32 sm:h-36 object-cover object-center group-hover:scale-110 transition-transform duration-300" src={s.image_url} alt={s.name} /></div>{:else}<div class="h-28 sm:h-32 bg-slate-100 flex items-center justify-center text-slate-400">Sin fotografía</div>{/if}
               <div class="p-3 space-y-2">
@@ -520,6 +530,8 @@
           {/each}
         </div>
         
+      <Pagination page={Math.min(servicePage,servicePageCount)} total={services.length} perPage={itemPageSize}
+        label="servicios" onPage={n => servicePage = n} />
       {#if services.length === 0}<p class="text-slate-500">Aún no hay servicios publicados.</p>{/if}
     </section>
   {:else if tab === 'gallery'}
@@ -535,7 +547,7 @@
       </header>
       <AdminGalleryCategories {token} onUpdate={loadGalleryCategories} />
       <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
-  {#each gallery as g (g.id)}
+  {#each visibleGallery as g (g.id)}
     <article class="group rounded-xl border border-slate-200 overflow-hidden bg-white min-w-0 hover:shadow-lg hover:border-teal-200 transition">
       {#if g.url}
         <div class="overflow-hidden"><img src={g.url} alt={g.title} loading="lazy" class="w-full h-32 sm:h-36 object-cover object-center group-hover:scale-110 transition-transform duration-300" /></div>
@@ -555,6 +567,8 @@
     </article>
   {/each}
 </div>
+      <Pagination page={Math.min(galleryPage,galleryPageCount)} total={gallery.length} perPage={itemPageSize}
+        label="proyectos" onPage={n => galleryPage = n} />
       {#if gallery.length === 0}<p class="text-sm text-slate-500 py-8">Aquí aparecerán las fotografías de tus proyectos. Pulsa «Añadir proyecto».</p>{/if}
     </section>
   {:else if tab === 'site'}

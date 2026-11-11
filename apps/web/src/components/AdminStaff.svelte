@@ -1,8 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import Pagination from './Pagination.svelte';
   let { token, ownId }: { token: string; ownId: string } = $props();
   let users: any[] = $state([]);
+  let page = $state(1);
+  const perPage = 12;
+  let pageCount = $derived(Math.max(1, Math.ceil(users.length / perPage)));
+  let pageRows = $derived(users.slice((Math.min(page,pageCount)-1)*perPage,Math.min(page,pageCount)*perPage));
   let loading = $state(false);
   let busy = $state(false);
   let error = $state('');
@@ -56,7 +61,7 @@
   {#if success}<p role="status" class="bg-emerald-50 text-emerald-800 p-4 rounded-xl">{success}</p>{/if}
   {#if loading}<p class="text-slate-500 text-sm">Cargando miembros…</p>{/if}
   <div class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-    {#each users as u (u.id)}
+    {#each pageRows as u (u.id)}
       <article class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3 min-w-0">
         <p class="text-sm font-bold text-slate-900 break-all">{u.email}</p>
         <div class="flex gap-2 items-center justify-between">
@@ -76,6 +81,8 @@
       </article>
     {/each}
   </div>
+  <Pagination page={Math.min(page,pageCount)} total={users.length} perPage={perPage}
+    label="miembros del equipo" onPage={n => page = n} />
   {#if !users.length && !loading}<p class="text-sm text-slate-500">No hay usuarios del personal que mostrar.</p>{/if}
 </section>
 {#if showCreate}

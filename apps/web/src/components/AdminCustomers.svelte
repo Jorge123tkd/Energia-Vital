@@ -1,10 +1,13 @@
 <script lang="ts">
   import { api } from '../lib/api';
+  import Pagination from './Pagination.svelte';
   let { token, customers, onRefresh, canManage = true }: {
     token: string; customers: any[]; onRefresh: () => Promise<void>; canManage?: boolean;
   } = $props();
 
   let query = $state('');
+  let page = $state(1);
+  const perPage = 12;
   let copiedId = $state('');
   let remoteRows: any[] | null = $state(null);
   let searching = $state(false);
@@ -15,13 +18,15 @@
   let visible = $derived((remoteRows ?? customers).filter(c =>
     [c.id, c.name, c.email, c.phone, c.city, c.province].some(v =>
       String(v || '').toLowerCase().includes(query.toLowerCase().trim()))));
+  let pageCount = $derived(Math.max(1, Math.ceil(visible.length / perPage)));
+  let pageRows = $derived(visible.slice((Math.min(page,pageCount)-1)*perPage, Math.min(page,pageCount)*perPage));
   async function searchNow() {
     error = ''; searching = true;
     try { remoteRows = query.trim() ? (await api.adminCustomers(token, query.trim())).customers ?? [] : null; }
     catch (e) { error = e instanceof Error ? e.message : 'No se pudo buscar el cliente'; }
     finally { searching = false; }
   }
-  function search(event: SubmitEvent) { event.preventDefault(); void searchNow(); }
+  function search(event: SubmitEvent) { event.preventDefault(); page = 1; void searchNow(); }
   async function copyId(id: string) {
     try { await navigator.clipboard.writeText(id); copiedId = id; }
     catch { copiedId = 'error'; }
@@ -75,7 +80,7 @@
       <p class="text-sm text-slate-500 mt-1">Gestiona sus datos, bloquea cuentas y protege el historial de solicitudes.</p>
     </div>
     <form onsubmit={search} class="flex flex-wrap gap-2 w-full sm:w-auto">
-      <input class="border border-slate-300 bg-white rounded-xl px-4 py-2.5 flex-1 min-w-0 sm:w-72" placeholder="ID, nombre o correo…" aria-label="Buscar cliente por identificador, nombre o correo" bind:value={query} oninput={() => remoteRows = null} />
+      <input class="border border-slate-300 bg-white rounded-xl px-4 py-2.5 flex-1 min-w-0 sm:w-72" placeholder="ID, nombre o correo…" aria-label="Buscar cliente por identificador, nombre o correo" bind:value={query} oninput={() => { remoteRows = null; page = 1; }} />
       <button class="rounded-xl bg-teal-700 text-white font-semibold text-sm px-4 py-2.5" disabled={searching}>{searching ? 'Buscando…' : 'Buscar'}</button>
       {#if remoteRows !== null}
         <button type="button" class="rounded-xl border border-slate-200 text-slate-700 text-sm px-3 py-2.5" onclick={() => { query = ''; remoteRows = null; }}>Limpiar</button>
@@ -87,7 +92,7 @@
 
   {#if visible.length}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-      {#each visible as c (c.id)}
+      {#each pageRows as c (c.id)}
         <article class="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm space-y-2.5 min-w-0">
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0"><h3 class="font-bold text-sm text-slate-900 truncate" title={c.name}>{c.name}</h3><p class="text-xs text-slate-500 break-all">{c.email || 'Sin correo'}</p></div>
@@ -118,6 +123,8 @@
   {:else}
     <p class="rounded-2xl border border-slate-200 bg-white p-8 text-slate-500">{customers.length ? 'No hay clientes con esos datos.' : 'Todavía no se han registrado clientes.'}</p>
   {/if}
+  <Pagination page={Math.min(page,pageCount)} total={visible.length} perPage={perPage}
+    label="clientes" onPage={n => page = n} />
 </section>
 
 {#if edit}

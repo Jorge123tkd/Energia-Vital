@@ -1,8 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import Pagination from './Pagination.svelte';
   let { staff = false, token = '' }: { staff?: boolean; token?: string } = $props();
   let items: any[] = $state([]);
+  let page = $state(1);
+  const perPage = 10;
+  let pageCount = $derived(Math.max(1, Math.ceil(items.length / perPage)));
+  let pageRows = $derived(items.slice((Math.min(page,pageCount)-1)*perPage, Math.min(page,pageCount)*perPage));
   let error = $state('');
   let busy = $state(false);
   async function load() {
@@ -32,7 +37,7 @@
   {#if error}<p class="bg-red-50 text-red-700 rounded-xl p-4 mb-4" role="alert">{error}</p>{/if}
   {#if busy}<p class="text-sm text-slate-500">Cargando avisos…</p>{/if}
   <div class="rounded-2xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-100 overflow-hidden">
-    {#each items as n (n.id)}
+    {#each pageRows as n (n.id)}
       <article class="p-4 sm:p-5 flex flex-wrap justify-between items-start gap-3 {n.is_read ? '' : 'bg-teal-50'}">
         <div class="flex-1 min-w-0 space-y-2">
           <div class="flex flex-wrap gap-2 items-center">
@@ -47,4 +52,6 @@
     {/each}
     {#if !items.length && !busy}<p class="p-8 text-center text-slate-500">No hay notificaciones todavía.</p>{/if}
   </div>
+  <Pagination page={Math.min(page,pageCount)} total={items.length} perPage={perPage}
+    label="notificaciones" onPage={n => page = n} />
 </section>
