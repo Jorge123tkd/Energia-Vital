@@ -13,6 +13,20 @@
   } = $props();
 
   let busy = $state(false);
+  let showPurchaseModal = $state(false);
+  let productSearch = $state('');
+  let productCategory = $state('');
+  let productPage = $state(1);
+  const productPageSize = 20;
+  let visibleProducts = $derived.by(() => {
+    const term = productSearch.trim().toLocaleLowerCase('es');
+    return products.filter(p => (!productCategory || p.category_id === productCategory) &&
+      (!term || [p.id, p.name, p.brand, p.model, p.short_description].some(v =>
+        String(v || '').toLocaleLowerCase('es').includes(term))));
+  });
+  let productPages = $derived(Math.max(1, Math.ceil(visibleProducts.length / productPageSize)));
+  let pagedProducts = $derived(visibleProducts.slice((Math.min(productPage,productPages)-1)*productPageSize,
+    Math.min(productPage,productPages)*productPageSize));
   let modal = $state<'category' | 'product' | 'service' | 'gallery' | 'gallery-edit' | null>(null);
   let notice = $state('');
   let error = $state('');
@@ -318,6 +332,7 @@
         <div class="flex flex-wrap gap-2">
           <button type="button" class="admin-secondary" onclick={newCategory}>+ Nueva categoría</button>
           <button type="button" class="admin-primary" onclick={() => { resetProduct(); modal = 'product'; error = ''; }}>+ Nuevo equipo</button>
+          <button type="button" class="admin-secondary border border-teal-200" onclick={() => showPurchaseModal = true}>★ Compras y valoraciones</button>
         </div>
       </div>
       <section aria-label="Administrar categorías" class="rounded-2xl bg-slate-50 border border-slate-200 p-3 sm:p-4 space-y-3">
@@ -355,10 +370,22 @@
           </div>
         {/if}
       </section>
+      <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-end p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200">
+        <label class="text-xs font-bold text-slate-600 flex-1">Buscar equipos por nombre, marca o ID
+          <input class="admin-input" type="search" bind:value={productSearch} placeholder="Buscar entre todos los productos…" oninput={() => productPage = 1}/>
+        </label>
+        <label class="text-xs font-bold text-slate-600 md:w-60">Categoría
+          <select class="admin-input" bind:value={productCategory} onchange={() => productPage = 1}>
+            <option value="">Todas las categorías</option>
+            {#each categories as cat (cat.id)}<option value={cat.id}>{cat.name}</option>{/each}
+          </select>
+        </label>
+        <span class="text-sm text-slate-500 whitespace-nowrap py-2">{visibleProducts.length} resultados</span>
+      </div>
       <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-          {#each products as p (p.id)}
-            <article class="rounded-xl border border-slate-200 overflow-hidden bg-white">
-              {#if p.primary_image_url}<img src={p.primary_image_url} alt={p.name} class="h-32 sm:h-36 w-full object-cover object-center" />{:else}<div class="h-28 sm:h-32 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400 text-sm">Sin fotografía</div>{/if}
+          {#each pagedProducts as p (p.id)}
+            <article class="group rounded-xl border border-slate-200 overflow-hidden bg-white hover:shadow-lg hover:border-teal-200 transition">
+              {#if p.primary_image_url}<div class="overflow-hidden bg-teal-50"><img src={p.primary_image_url} alt={p.name} class="h-32 sm:h-36 w-full object-cover object-center transition-transform duration-300 group-hover:scale-110" /></div>{:else}<div class="h-28 sm:h-32 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400 text-sm">Sin fotografía</div>{/if}
               <div class="p-3 space-y-2">
                 <div class="flex justify-between gap-2"><h3 class="font-semibold text-slate-900">{p.name}</h3><span class="text-xs whitespace-nowrap {p.is_active ? 'text-emerald-700' : 'text-orange-600'}">{p.is_active ? 'Publicado' : 'Oculto'}</span></div>
                 <p class="text-xs text-slate-500 line-clamp-2">{p.short_description || p.description || 'Sin descripción'}</p>
@@ -370,7 +397,21 @@
         </div>
         
       {#if products.length === 0}<p class="text-slate-500 text-sm py-8">Aún no hay equipos. Crea una categoría y añade el primer producto.</p>{/if}
-      <AdminProductReviews {token} {products} />
+      {#if visibleProducts.length}
+        <nav aria-label="Paginación de equipos" class="flex flex-wrap justify-between items-center gap-3 border-t border-slate-100 pt-4">
+          <p class="text-xs text-slate-500">Página {Math.min(productPage,productPages)} de {productPages} · {visibleProducts.length} equipos</p>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" class="admin-secondary text-xs" disabled={productPage<=1} onclick={() => productPage = Math.max(1,productPage-1)}>← Anterior</button>
+            <select aria-label="Ir a página" class="admin-input !mt-0 !w-auto text-xs" value={Math.min(productPage,productPages)} onchange={e=>productPage=Number(e.currentTarget.value)}>
+              {#each Array.from({length:productPages},(_,i)=>i+1) as page}
+                <option value={page}>Página {page}</option>
+              {/each}
+            </select>
+            <button type="button" class="admin-secondary text-xs" disabled={productPage>=productPages} onclick={() => productPage = Math.min(productPages,productPage+1)}>Siguiente →</button>
+          </div>
+        </nav>
+      {/if}
+      {#if !visibleProducts.length && products.length}<p class="text-sm text-slate-500">No hay equipos que coincidan con la búsqueda.</p>{/if}
     </section>
   {:else if tab === 'services'}
     <section class="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
@@ -524,6 +565,18 @@
   {/if}
 </div>
 
+{#if showPurchaseModal}
+  <div class="fixed inset-0 z-[210] bg-slate-950/75 p-3 sm:p-6 flex items-center justify-center">
+    <button type="button" class="absolute inset-0" aria-label="Cerrar verificación de compras" onclick={() => showPurchaseModal = false}></button>
+    <dialog open aria-label="Compras verificadas y valoraciones" class="relative m-0 w-full max-w-6xl max-h-[92vh] overflow-y-auto rounded-3xl bg-slate-50 shadow-2xl p-4 sm:p-6">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <div><h2 class="text-xl font-extrabold text-slate-900">Compras verificadas y valoraciones</h2><p class="text-xs text-slate-500 mt-1">Registra una compra y modera las valoraciones desde aquí, sin desplazarte por el catálogo.</p></div>
+        <button type="button" aria-label="Cerrar ventana" class="rounded-xl bg-white border border-slate-200 px-3 py-2 font-bold text-slate-700" onclick={() => showPurchaseModal = false}>✕ Cerrar</button>
+      </div>
+      <AdminProductReviews {token} {products}/>
+    </dialog>
+  </div>
+{/if}
 {#if modal}
   <div class="fixed inset-0 z-[180] bg-slate-950/70 flex justify-center items-center p-4">
     <dialog open aria-label={modal === 'category' ? (editingCategory ? 'Editar categoría' : 'Nueva categoría') : modal === 'product' ? 'Datos del equipo' : modal === 'service' ? 'Datos del servicio' : 'Proyecto de galería'}
