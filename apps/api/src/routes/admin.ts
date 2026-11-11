@@ -544,10 +544,11 @@ adminRoutes.post('/gallery', async (c) => {
   }
 
   if (!title || !cleanText(title,160)) return c.json({ error: 'El proyecto necesita un título.' },400);
-  if (url) {
+  if (url && !r2_key) {
     try {
       const parsed = new URL(url);
-      if (parsed.protocol !== 'https:' || !parsed.hostname) return c.json({error:'La imagen necesita una URL HTTPS válida.'},400);
+      if (parsed.protocol !== 'https:' || !parsed.hostname)
+        return c.json({error:'La imagen externa necesita una URL HTTPS válida.'},400);
     } catch { return c.json({error:'URL de imagen inválida.'},400); }
   }
   await DB.prepare(
