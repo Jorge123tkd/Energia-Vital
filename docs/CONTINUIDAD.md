@@ -11,17 +11,16 @@ Actualizado: 11 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
-Preparada en la rama una segunda actualización del código: gestión por botones del carrusel de Inicio con entre 1 y 6 diapositivas (conservando inicialmente las 3 existentes). Formulario individual para crear y editar, confirmación de eliminación, imágenes R2/galería/HTTPS y publicación solo con el botón de guardar del sitio. HomePage cambia el contador y el ciclo de forma dinámica; API permite 1–6. No hay pruebas locales ni despliegue de esta modificación confirmados.
+2026-11-11: usuario confirmó por salida de PowerShell la actualización de la rama de trabajo a `4d8ca8f` mediante `git pull --ff-only`; `npm ci` instaló 164 paquetes; `npm run typecheck --workspace=apps/api` terminó sin errores, `npm run typecheck --workspace=apps/web` indicó explícitamente **0 errores y 0 advertencias**, y `npm run build:web` con Vite 5.4.21 terminó correctamente (150 módulos transformados). La salida mostró 9 alertas de dependencias (1 baja, 6 moderadas, 2 altas); pendientes de auditoría/remediación. Advertencias de allowScripts para esbuild/workerd, sin fallo de build. Estas pruebas se ejecutaron en el equipo del usuario, no en el entorno del agente; no hay confirmación de prueba visual, prueba end-to-end ni despliegue de esta actualización.
 
-Actualización de código de la rama: ruta /asistente ahora oculta Nav del sitio para clientes autenticados y utiliza el alto completo de pantalla; el componente Assistant deja de reservar 4.5rem, redondear esquinas o forzar altura mínima. Conserva su propia barra con botón Atrás, historial, nuevo chat y compartir. Esta corrección se guardó en GitHub, pero aún no se compiló, validó visualmente ni desplegó en producción.
-
-Historial de producción anterior a esta corrección:
-Confirmado mediante Texto pegado(2).txt: migraciones 009 y 010 aplicadas en D1 REMOTO; lista posterior "No migrations to apply". Worker desplegado, versión 07e2b3b8-0832-42d2-851c-fb401f142909. Desde PowerShell /health devuelve status ok; services?featured=true y gallery?featured=true responden con listas vacías. Pages publicado en Production, rama main, fuente 98011f0: ad66cfa7-024c-4935-aad9-f7f313404533, URL https://ad66cfa7.energia-vital-web.pages.dev. Despliegue técnico completado; validación visual y funcional completa pendiente. Peticiones HTTP independientes desde el entorno del agente recibieron 403; no se pudo corroborar el sitio desde aquí ni atribuir la causa. No invalidar la evidencia de éxito enviada desde PowerShell.
+Código funcional en la rama: corrección de `/asistente` a altura completa sin navegación pública (`fa2b1db`) y gestor de diapositivas por botones, carrusel de 1 a 6 y validación API (`4d8ca8f`). Se conserva el último despliegue de producción confirmado: Worker versión 07e2b3b8-0832-42d2-851c-fb401f142909, Pages Production/main ad66cfa7-024c-4935-aad9-f7f313404533, fuente 98011f0; migraciones D1 remotas 009/010 aplicadas. El build recién ejecutado **no confirma** que VITE_API_URL estuviese definida; revisarlo antes de desplegar Pages. No guardar ni subir respaldos o credenciales.
 
 ## Siguiente paso exacto
-Verificar también en /admin > Sitio las acciones Crear/Editar/Eliminar diapositiva, guardar y comprobar que Inicio presenta de 1 a 6 correctamente después de recargar; ejecutar typechecks y build, y validar escritorio/móvil antes de desplegar. Después:
-PRIORIDAD NUEVA: ejecutar typecheck y build de web, probar /asistente en escritorio y móvil antes del siguiente deploy; validar Atrás, historial y nueva conversación. Mantener sin cambio el estado de producción hasta la prueba. Después:
-Abrir https://energia-vital-web.pages.dev/admin y elegir servicios/proyectos publicados: Editar > Destacar en inicio > Guardar. Revisar Inicio, zoom y apertura de fotos en escritorio/móvil, y confirmar el resultado. Los endpoints vacíos indican que aún no hay servicios/proyectos publicados marcados como destacados en esa comprobación. Registrar cada resultado real. Luego completar pruebas de chat/notificaciones/citas/asesor, remediación de dependencias y recuperación selectiva del stash. No repetir el despliegue si no aparece un error nuevo.
+1. En PowerShell verificar `$env:VITE_API_URL` antes de la compilación para producción; usar la URL HTTPS real del Worker (`https://energia-vital-api.astrustrus.workers.dev`, si sigue siendo la correcta), reconstruir si no se estableció antes del build.
+2. Ejecutar pruebas del API (`npm test`) y comprobar la interfaz local del frontend (asistente pantalla completa sin nav pública, Atrás, historial, nuevo chat; en /admin > sitio, crear/editar/eliminar diapositivas y validar publicación/persistencia).
+3. Revisar `npm audit` para clasificar las 9 vulnerabilidades; no aplicar arreglos automáticos de versiones importantes sin evaluación.
+4. Solo después de las pruebas: confirmar respaldo D1 remoto, migraciones pendientes y la rama de producción Pages (históricamente main); desplegar API y frontend con los comandos de docs/DESPLIEGUE-ACTUAL.md, conservando el mismo destino y VITE_API_URL. Registrar evidencia de cada despliegue y de las pruebas visuales en producción.
+5. Mantener pendientes selección administrativa de servicios/proyectos destacados, auditoría general 1.0 y recuperación selectiva del stash.
 
 ## Trabajo completado y evidencia
 ### Cambios previos presentes en el repositorio
@@ -46,11 +45,11 @@ Abrir https://energia-vital-web.pages.dev/admin y elegir servicios/proyectos pub
 ## Estado del despliegue
 | Paso | Estado |
 |---|---|
-| Código funcional en GitHub | Completado: b56a0e9 |
-| Instalación y checks locales del agente | Completados |
+| Código funcional en GitHub | Nuevos commits: fa2b1db (asistente) y 4d8ca8f (diapositivas); sin despliegue de estos cambios |
+| Instalación y checks locales del usuario | Completados en PowerShell para la versión 4d8ca8f; build correcto, falta verificación visual |
 | Registro de continuidad e instrucciones | Creados en esta actualización |
 | Autenticación Cloudflare en entorno del agente | No disponible |
-| Estado del repositorio Windows | Actualizado a 98011f0; cambios conservados en stash; instalación y tipos correctos |
+| Estado del repositorio Windows | Usuario confirmó pull hasta 4d8ca8f; instalación, typecheck API/web y build web correctos; stash previo no modificado |
 | Autenticación Cloudflare del usuario | Confirmada por whoami; permisos D1, Workers y Pages |
 | Proyecto Pages | energia-vital-web.pages.dev; sin proveedor Git |
 | Rama de producción Pages | main, confirmada por listado Production; Git sigue en la rama de trabajo |
@@ -66,6 +65,8 @@ Abrir https://energia-vital-web.pages.dev/admin y elegir servicios/proyectos pub
 | Auditoría completa y lanzamiento 1.0 | Pendiente |
 
 ## Bitácora
+- 2026-11-11: evidencia del usuario: PowerShell aplicó fast-forward 98011f0..4d8ca8f, `npm ci` completó con 9 avisos de seguridad, typecheck API sin errores, Svelte 0 errores/0 warnings y Vite build exitoso (150 módulos, 22.80 s). Pendiente confirmar VITE_API_URL, ejecutar pruebas funcionales y publicación. No se ejecutaron órdenes Cloudflare de esta actualización.
+
 - 2026-11-11: preparado gestor de diapositivas por botones y soporte frontend/API para 1–6 diapositivas. Pendiente compilación, pruebas de interfaz y despliegue.
 - 2026-11-11: corrección del alto real de /asistente y ocultación de navegación pública preparada en rama, sin deploy ni test visual de esta modificación.
 - 2026-11-11: publicado b56a0e9 en la rama de trabajo; comprobaciones locales superadas.
