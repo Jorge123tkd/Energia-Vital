@@ -60,6 +60,11 @@
       const [p, c] = await Promise.all([api.getProducts(featured ? { featured: 'true' } : undefined), featured ? Promise.resolve({ categories: [] }) : api.getCategories()]);
       products = p.products ?? [];
       categories = c.categories ?? [];
+      if (!featured) {
+        const linkedId = new URLSearchParams(window.location.search).get('product');
+        const match = products.find(p => p.id === linkedId);
+        if (match) void details(match);
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : 'No se pudo cargar el catálogo.';
     } finally {
