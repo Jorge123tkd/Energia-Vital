@@ -535,13 +535,21 @@ adminRoutes.post('/gallery', async (c) => {
     title = b.title ?? null;
     description = b.description ?? null;
     url = b.url ?? null;
-    r2_key = b.r2_key ?? null;
+    // Nunca aceptar una clave R2 arbitraria desde el navegador.
+    r2_key = null;
     video_url = b.video_url ?? null;
     category = b.category ?? null;
     is_active = b.is_active !== false;
     sort_order = b.sort_order || 0;
   }
 
+  if (!title || !cleanText(title,160)) return c.json({ error: 'El proyecto necesita un título.' },400);
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'https:' || !parsed.hostname) return c.json({error:'La imagen necesita una URL HTTPS válida.'},400);
+    } catch { return c.json({error:'URL de imagen inválida.'},400); }
+  }
   await DB.prepare(
     'INSERT INTO work_gallery (id, title, description, url, r2_key, video_url, category, is_active, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
@@ -549,6 +557,12 @@ adminRoutes.post('/gallery', async (c) => {
     category, is_active ? 1 : 0, sort_order, now
   ).run();
 
+  if (url) {
+    try {
+      await DB.prepare(`INSERT INTO work_gallery_images (id,project_id,r2_key,url,sort_order)
+        VALUES (?,?,?,?,0)`).bind(crypto.randomUUID(),id,r2_key,url).run();
+    } catch (e) { console.error('No se pudo indexar la primera foto de proyecto',e); }
+  }
   return c.json({ id, message: 'Imagen de galería creada', url, r2_key }, 201);
 });
 
