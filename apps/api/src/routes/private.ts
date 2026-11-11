@@ -39,7 +39,8 @@ privateRoutes.post('/requests', async c => {
   if (requestedCategory && !chosen) return c.json({ error: 'El tipo de solicitud seleccionado no está disponible.' },400);
   const type = chosen?.legacy_type || (allowedTypes.has(b.type) ? b.type : 'consultation');
   const categoryId = chosen?.id || type;
-  if (title.length < 3 || description.length < 6) return c.json({ error: 'Escribe un título y una descripción' }, 400);
+  if (requestedTitle.length < 3 || requestedDescription.length < 6)
+    return c.json({ error: 'Escribe un título y una descripción' }, 400);
   const customer = await c.env.DB.prepare('SELECT address, city, province FROM customers WHERE id = ?').bind(user.user_id).first<any>();
   const location = [customer?.address, customer?.city, customer?.province].filter(Boolean).join(', ');
   const id = crypto.randomUUID(), now = new Date().toISOString();

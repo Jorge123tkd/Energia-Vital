@@ -694,7 +694,7 @@
             <label class="admin-label">YouTube<input type="url" class="admin-input" placeholder="https://youtube.com/..." bind:value={site.youtube_channel_url} /></label>
             <label class="admin-label">Facebook<input type="url" class="admin-input" placeholder="https://facebook.com/..." bind:value={site.facebook_url} /></label>
             <label class="admin-label">Instagram<input type="url" class="admin-input" placeholder="https://instagram.com/..." bind:value={site.instagram_url} /></label>
-            <label class="admin-label">Telegram<input type="url" class="admin-input" placeholder="https://t.me/..." bind:value={site.telegram_public_url} /></label>
+            <label class="admin-label">Canal de Telegram (red social, no chatbot)<input type="url" class="admin-input" placeholder="https://t.me/..." bind:value={site.telegram_public_url} /></label>
           </div>
         </fieldset>
         <fieldset class="space-y-3 min-w-0 xl:col-span-6">

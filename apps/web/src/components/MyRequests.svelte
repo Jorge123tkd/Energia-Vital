@@ -19,6 +19,10 @@
     catch{error='No se pudo copiar. Selecciona el ID completo.';}
   }
   let error = $state('');
+  const statusText: Record<string, string> = {
+    pending: 'Pendiente', quoted: 'Presupuestada', approved: 'Aprobada', scheduled: 'Programada',
+    confirmed: 'Confirmada', in_progress: 'En proceso', completed: 'Completada', cancelled: 'Cancelada'
+  };
   onMount(async () => {
     try {
       const [a, b] = await Promise.all([api.getMyRequests(), api.getMyAppointments()]);
@@ -37,7 +41,7 @@
   <div class="space-y-3 mb-10">
     {#each pagedRequests as item (item.id)}
       <article class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-          <div class="flex flex-wrap justify-between gap-3 items-start"><strong class="text-slate-900">{item.title}</strong><span class="text-xs font-bold rounded-full px-2 py-1 bg-teal-50 text-teal-800">{item.status}</span></div>
+          <div class="flex flex-wrap justify-between gap-3 items-start"><strong class="text-slate-900">{item.title}</strong><span class="text-xs font-bold rounded-full px-2 py-1 bg-teal-50 text-teal-800">{statusText[item.status] || item.status}</span></div>
           <p class="text-sm text-slate-600 whitespace-pre-line">{item.description}</p>
           <div class="flex flex-wrap justify-between gap-2 items-center">
             <div class="min-w-0">
@@ -61,7 +65,7 @@
   <div class="space-y-3">
     {#each pagedAppointments as item (item.id)}
       <article class="bg-white border border-slate-200 rounded-2xl p-4 space-y-2">
-          <div class="flex flex-wrap justify-between gap-3"><strong class="text-slate-900">{item.title}</strong><span class="rounded-full bg-teal-50 text-teal-800 px-2 py-1 text-xs font-bold">{item.status}</span></div>
+          <div class="flex flex-wrap justify-between gap-3"><strong class="text-slate-900">{item.title}</strong><span class="rounded-full bg-teal-50 text-teal-800 px-2 py-1 text-xs font-bold">{statusText[item.status] || item.status}</span></div>
           <p class="text-sm text-slate-600">{new Date(item.starts_at).toLocaleString('es-CU')}</p>
           <p class="text-[11px] text-slate-500 break-all">ID completo: {item.id}</p>
           <button type="button" onclick={() => copyReference(item.id)} class="text-xs text-teal-800 underline font-bold text-left">{copiedId===item.id?'Copiado ✓':'Copiar ID de cita'}</button>

@@ -25,7 +25,7 @@
     { label: 'YouTube', url: site.youtube_channel_url },
     { label: 'Facebook', url: site.facebook_url },
     { label: 'Instagram', url: site.instagram_url },
-    { label: 'Telegram', url: site.telegram_public_url }
+    { label: 'Canal de Telegram', url: site.telegram_public_url }
   ].filter(link => link.url && /^https:\/\/[^\s]+$/i.test(link.url)));
   let bots = $derived([
     { label: 'WhatsApp · Asistente', url: site.bot_whatsapp_url, icon: '◉' },

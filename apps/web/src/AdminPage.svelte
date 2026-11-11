@@ -32,6 +32,14 @@
   let pagingBusy = $state(false);
   let copiedReference = $state('');
   const pageSize = 20;
+  const requestStatusLabels: Record<string, string> = {
+    pending: 'Pendiente', quoted: 'Presupuestada', approved: 'Aprobada',
+    scheduled: 'Programada', completed: 'Completada', cancelled: 'Cancelada'
+  };
+  const appointmentStatusLabels: Record<string, string> = {
+    pending: 'Pendiente', confirmed: 'Confirmada', in_progress: 'En proceso',
+    completed: 'Completada', cancelled: 'Cancelada'
+  };
   async function copyReference(id: string) {
     try { await navigator.clipboard.writeText(id); copiedReference = id; }
     catch { error = 'No se pudo copiar el ID. Selecciónalo manualmente.'; }
@@ -292,7 +300,7 @@
                     onchange={e=>void changeRequest(r.id,e.currentTarget.value)}
                     class="border border-slate-300 bg-slate-50 rounded-xl text-xs px-2 py-2">
                     {#each ['pending','quoted','approved','scheduled','completed','cancelled'] as status}
-                      <option value={status}>{status}</option>
+                      <option value={status}>{requestStatusLabels[status] || status}</option>
                     {/each}
                   </select>
                 </div>
@@ -361,7 +369,7 @@
                 <select aria-label={'Estado de cita '+a.title} value={a.status} onchange={e=>void changeAppointment(a.id,e.currentTarget.value)}
                   class="border border-slate-300 rounded-xl text-xs px-2 py-2 bg-slate-50">
                   {#each ['pending','confirmed','in_progress','completed','cancelled'] as status}
-                    <option value={status}>{status}</option>
+                    <option value={status}>{appointmentStatusLabels[status] || status}</option>
                   {/each}
                 </select>
               </div>
