@@ -5,9 +5,16 @@ import { getUser, requireAdminAuth, requireCustomerAuth, requireStaffAuth } from
 export const notificationsRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 notificationsRoutes.get('/', requireCustomerAuth, async c => {
   const user = getUser(c)!;
+  const paged = c.req.query('page') !== undefined;
+  const page = Math.max(1, Math.min(100000, Number.parseInt(c.req.query('page') || '1', 10) || 1));
+  const pageSize = Math.max(1, Math.min(100, Number.parseInt(c.req.query('page_size') || '10', 10) || 10));
   const { results } = await c.env.DB.prepare(`SELECT id, type, title, message, is_read, created_at FROM notifications
-    WHERE user_id = ? AND user_type = 'customer' ORDER BY created_at DESC LIMIT 50`).bind(user.user_id).all();
-  return c.json({ notifications: results ?? [] });
+    WHERE user_id = ? AND user_type = 'customer' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
+    .bind(user.user_id, paged ? pageSize : 50, paged ? (page - 1) * pageSize : 0).all();
+  if (!paged) return c.json({ notifications: results ?? [] });
+  const count = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND user_type = 'customer'`)
+    .bind(user.user_id).first<{n:number}>();
+  return c.json({ notifications: results ?? [], total: count?.n || 0, page, page_size: pageSize });
 });
 notificationsRoutes.patch('/:id/read', requireCustomerAuth, async c => {
   const user = getUser(c)!;
@@ -18,10 +25,16 @@ notificationsRoutes.patch('/:id/read', requireCustomerAuth, async c => {
 // Bandeja privada del personal, separada de los mensajes de los clientes.
 notificationsRoutes.get('/inbox', requireStaffAuth, async c => {
   const user = getUser(c)!;
+  const paged = c.req.query('page') !== undefined;
+  const page = Math.max(1, Math.min(100000, Number.parseInt(c.req.query('page') || '1', 10) || 1));
+  const pageSize = Math.max(1, Math.min(100, Number.parseInt(c.req.query('page_size') || '10', 10) || 10));
   const { results } = await c.env.DB.prepare(`SELECT id, type, title, message, is_read, created_at FROM notifications
-    WHERE user_id = ? AND user_type = 'admin' ORDER BY created_at DESC LIMIT 100`)
-    .bind(user.user_id).all();
-  return c.json({ notifications: results ?? [] });
+    WHERE user_id = ? AND user_type = 'admin' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
+    .bind(user.user_id, paged ? pageSize : 100, paged ? (page - 1) * pageSize : 0).all();
+  if (!paged) return c.json({ notifications: results ?? [] });
+  const count = await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND user_type = 'admin'`)
+    .bind(user.user_id).first<{n:number}>();
+  return c.json({ notifications: results ?? [], total: count?.n || 0, page, page_size: pageSize });
 });
 notificationsRoutes.patch('/inbox/:id/read', requireStaffAuth, async c => {
   const user = getUser(c)!;

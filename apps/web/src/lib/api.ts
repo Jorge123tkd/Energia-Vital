@@ -90,14 +90,14 @@ export const api = {
   getMyAppointments: () => apiRequest('/api/private/appointments'),
   createAppointment: (body: { title: string; starts_at: string; ends_at: string }) => post('/api/private/appointments', body),
   getCalendarSlots: (date: string, minutes = 60) => apiRequest(`/api/calendar/slots?date=${encodeURIComponent(date)}&duration_minutes=${minutes}`),
-  getNotifications: () => apiRequest('/api/notifications'),
+  getNotifications: (page?: number, size = 10) => apiRequest('/api/notifications' + (page ? '?page=' + page + '&page_size=' + size : '')),
   markNotificationRead: (id: string) => patch('/api/notifications/' + encodeURIComponent(id) + '/read', {}),
   getWelcomeAutomation: (token: string) => apiRequest('/api/notifications/admin/automation', withAdmin(token)),
   saveWelcomeAutomation: (token: string, enabled: boolean, title: string, message: string) =>
     apiRequest('/api/notifications/admin/automation', withAdmin(token, {
       method: 'PUT', body: JSON.stringify({enabled,title,message}),
     })),
-  getStaffInbox: (token: string) => apiRequest('/api/notifications/inbox', withAdmin(token)),
+  getStaffInbox: (token: string, page?: number, size = 10) => apiRequest('/api/notifications/inbox' + (page ? '?page=' + page + '&page_size=' + size : ''), withAdmin(token)),
   markStaffNotificationRead: (token: string, id: string) =>
     patch('/api/notifications/inbox/' + encodeURIComponent(id) + '/read', {}, withAdmin(token)),
   sendCustomerNotification: (token: string, customer_ids: string[], title: string, message: string) =>
