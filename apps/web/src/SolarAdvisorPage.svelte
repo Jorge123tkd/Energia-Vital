@@ -39,12 +39,19 @@
   // El 72 % se conserva del cálculo preliminar: 80 % DoD × 90 % eficiencia.
   // Comparamos energía y potencia *media*; no certificamos potencia pico ni autonomía garantizada.
   let batteryUsableKWh = $derived(selectedBatteryKWh * .8 * .9);
-  let selectedBatteryHours = $derived(result && result.backupWatts > 0
-    ? batteryUsableKWh * 1000 / result.backupWatts : 0);
+  // Las funciones tipadas leen el estado reactivo sin estrecharlo a null en su inicialización.
+  function batteryHoursFor(current: SolarOutput | null, usableKWh: number): number {
+    if (!current || current.backupWatts <= 0) return 0;
+    return usableKWh * 1000 / current.backupWatts;
+  }
+  function batteryFitsFor(current: SolarOutput | null, usableKWh: number): boolean {
+    return current !== null && current.backupWatts > 0 &&
+      current.backupEnergy <= usableKWh + 1e-9;
+  }
+  let selectedBatteryHours = $derived(batteryHoursFor(result,batteryUsableKWh));
   let selectedBatteryMaxWatts = $derived(autonomyHours > 0
     ? batteryUsableKWh * 1000 / autonomyHours : 0);
-  let selectedBatteryFits = $derived(Boolean(result && result.backupWatts > 0 &&
-    result.backupEnergy <= batteryUsableKWh + 1e-9));
+  let selectedBatteryFits = $derived(batteryFitsFor(result,batteryUsableKWh));
   let solarInputs=$derived({
     sector,level,origin:level==='basico'?'equipos' as Origin:origin,phase,
     loads:devices,voltage,amps,powerFactor,hoursDaily,
