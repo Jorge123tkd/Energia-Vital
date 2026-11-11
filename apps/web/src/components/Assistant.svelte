@@ -341,7 +341,7 @@
       <form onsubmit={saveTitle} class="space-y-4">
         <h2 class="text-lg font-extrabold text-slate-900">Renombrar conversación</h2>
         <label class="block text-sm text-slate-700 font-semibold">Título
-          <input autofocus minlength="2" maxlength="90" required bind:value={newTitle}
+          <input minlength="2" maxlength="90" required bind:value={newTitle}
             class="block w-full rounded-xl border border-slate-300 p-3 mt-2 font-normal"/>
         </label>
         <div class="flex justify-end gap-2">
