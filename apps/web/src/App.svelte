@@ -22,6 +22,8 @@
   let currentRoute = $state(window.location.pathname || '/');
   let user: any = $state(null);
   let checking = $state(true);
+  let assistantFullScreen = $derived(currentRoute === '/asistente' && Boolean(user) &&
+    user.account_type !== 'admin' && user.role !== 'admin' && user.role !== 'operator');
 
   onMount(() => {
     const handler = () => { currentRoute = window.location.pathname || '/'; };
@@ -115,12 +117,14 @@
 {:else if checking}
   <div class="min-h-screen flex justify-center items-center text-gray-600">Verificando tu sesión…</div>
 {:else}
+  {#if !assistantFullScreen}
   <Nav {navigate} customerName={user?.name || ((user?.account_type === 'admin' || user?.role === 'admin' || user?.role === 'operator') ? 'Administrador' : '')} userRole={user?.role || 'customer'} onLogout={signOut} onAssistant={openAssistant} />
+  {/if}
   {#if currentRoute === '/entrar' || currentRoute === '/registro' || (!user && !publicRoutes.has(currentRoute))}
     <CustomerAccess onSuccess={onAuthenticated} initialMode={currentRoute === '/registro' ? 'register' : 'login'} />
   {:else}
-    <main class={currentRoute==='/asistente'
-      ? 'w-full max-w-none min-h-[calc(100dvh-4.5rem)] px-0 py-0'
+    <main class={assistantFullScreen
+      ? 'w-full h-[100dvh] max-w-none overflow-hidden m-0 p-0'
       : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 min-h-screen'}>
       {#if currentRoute === '/'}<HomePage onAssistant={openAssistant} />
       {:else if currentRoute === '/catalogo'}<CatalogPage />

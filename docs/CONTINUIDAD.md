@@ -11,9 +11,13 @@ Actualizado: 11 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
+Actualización de código de la rama: ruta /asistente ahora oculta Nav del sitio para clientes autenticados y utiliza el alto completo de pantalla; el componente Assistant deja de reservar 4.5rem, redondear esquinas o forzar altura mínima. Conserva su propia barra con botón Atrás, historial, nuevo chat y compartir. Esta corrección se guardó en GitHub, pero aún no se compiló, validó visualmente ni desplegó en producción.
+
+Historial de producción anterior a esta corrección:
 Confirmado mediante Texto pegado(2).txt: migraciones 009 y 010 aplicadas en D1 REMOTO; lista posterior "No migrations to apply". Worker desplegado, versión 07e2b3b8-0832-42d2-851c-fb401f142909. Desde PowerShell /health devuelve status ok; services?featured=true y gallery?featured=true responden con listas vacías. Pages publicado en Production, rama main, fuente 98011f0: ad66cfa7-024c-4935-aad9-f7f313404533, URL https://ad66cfa7.energia-vital-web.pages.dev. Despliegue técnico completado; validación visual y funcional completa pendiente. Peticiones HTTP independientes desde el entorno del agente recibieron 403; no se pudo corroborar el sitio desde aquí ni atribuir la causa. No invalidar la evidencia de éxito enviada desde PowerShell.
 
 ## Siguiente paso exacto
+PRIORIDAD NUEVA: ejecutar typecheck y build de web, probar /asistente en escritorio y móvil antes del siguiente deploy; validar Atrás, historial y nueva conversación. Mantener sin cambio el estado de producción hasta la prueba. Después:
 Abrir https://energia-vital-web.pages.dev/admin y elegir servicios/proyectos publicados: Editar > Destacar en inicio > Guardar. Revisar Inicio, zoom y apertura de fotos en escritorio/móvil, y confirmar el resultado. Los endpoints vacíos indican que aún no hay servicios/proyectos publicados marcados como destacados en esa comprobación. Registrar cada resultado real. Luego completar pruebas de chat/notificaciones/citas/asesor, remediación de dependencias y recuperación selectiva del stash. No repetir el despliegue si no aparece un error nuevo.
 
 ## Trabajo completado y evidencia
@@ -59,6 +63,7 @@ Abrir https://energia-vital-web.pages.dev/admin y elegir servicios/proyectos pub
 | Auditoría completa y lanzamiento 1.0 | Pendiente |
 
 ## Bitácora
+- 2026-11-11: corrección del alto real de /asistente y ocultación de navegación pública preparada en rama, sin deploy ni test visual de esta modificación.
 - 2026-11-11: publicado b56a0e9 en la rama de trabajo; comprobaciones locales superadas.
 - 2026-11-11: el usuario autorizó preparar y realizar todos los pasos de despliegue y pidió documentación permanente después de cada paso.
 - 2026-11-11: comprobado acceso a GitHub. Wrangler indica que no hay sesión Cloudflare en este entorno. Preparada guía de PowerShell y punto de reanudación; producción sin modificar.

@@ -192,7 +192,7 @@
 
 <section aria-label="Asistente Bonaire"
   class="bg-white border border-slate-200 shadow-2xl overflow-hidden flex flex-col {fullPage
-    ? 'w-full h-[calc(100dvh-4.5rem)] min-h-[430px] md:rounded-2xl'
+    ? 'w-full h-full min-h-0 rounded-none border-0 shadow-none'
     : 'w-[calc(100vw-1.5rem)] sm:w-[29rem] h-[min(38rem,calc(100dvh-6rem))] rounded-2xl'}">
   <header class="bg-gradient-to-r from-slate-950 to-teal-900 text-white px-3.5 py-3 flex gap-2 items-center justify-between">
     <div class="flex gap-2 items-center min-w-0">
