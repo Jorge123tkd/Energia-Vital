@@ -405,6 +405,7 @@
           + Añadir proyecto
         </button>
       </header>
+      <AdminGalleryCategories {token} onUpdate={loadGalleryCategories} />
       <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
   {#each gallery as g (g.id)}
     <article class="rounded-xl border border-slate-200 overflow-hidden bg-white min-w-0">
@@ -586,9 +587,8 @@
               <label class="admin-label">Existencias<input type="number" min="0" step="1" class="admin-input" bind:value={product.stock_quantity} /></label>
               <label class="admin-label">Garantía (meses)<input type="number" min="0" step="1" class="admin-input" bind:value={product.warranty_months} /></label>
             </div>
-            <label class="admin-label">Fotografía principal (JPG, PNG o WebP · máximo 8 MB)
-              <input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => productPhoto = e.currentTarget.files?.[0] ?? null} />
-            </label>
+            <ImagePicker max={15} label="Imágenes del equipo · selecciona varias fotos"
+              onFiles={(files) => productPhotos = files} />
             <label class="admin-label">O usar una URL HTTPS de imagen (opcional)
               <input type="url" maxlength="600" class="admin-input" placeholder="https://…" bind:value={productImageUrl} />
             </label>
@@ -599,13 +599,25 @@
             </div>
             <button disabled={busy} class="admin-primary">{busy ? 'Guardando…' : editingProduct ? 'Guardar cambios del producto' : 'Publicar producto'}</button>
           </form>
+          {#if editingProduct}
+            <div class="mt-5">
+              <AdminMediaGallery {token} id={editingProduct} kind="product" onUpdated={onRefresh} />
+            </div>
+          {/if}
       {:else if modal === 'gallery'}
         <p class="text-sm text-slate-500 mb-4">Sube una fotografía de un trabajo real de Bonaire o utiliza una imagen HTTPS.</p>
         <form class="space-y-4" onsubmit={saveGallery}>
           <label class="admin-label">Título<input required class="admin-input" placeholder="Instalación solar residencial" bind:value={galleryTitle} /></label>
           <label class="admin-label">Descripción<textarea rows="4" class="admin-input" placeholder="Qué se instaló, contexto del proyecto y resultado..." bind:value={galleryDescription}></textarea></label>
-          <label class="admin-label">Categoría<input class="admin-input" placeholder="Residencial, negocio, mantenimiento…" bind:value={galleryCategory} /></label>
-          <label class="admin-label">Foto del trabajo<input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => galleryFile = e.currentTarget.files?.[0] ?? null} /></label>
+          <label class="admin-label">Categoría del proyecto
+            <select bind:value={galleryCategory} class="admin-input">
+              <option value="">Sin categoría</option>
+              {#each galleryCategories.filter(x=>x.is_active) as cat (cat.id)}
+                <option value={cat.name}>{cat.name}</option>
+              {/each}
+            </select>
+          </label>
+          <ImagePicker max={15} label="Fotografías del proyecto" onFiles={(files)=>galleryPhotos=files}/>
           <p class="text-xs text-slate-500">Si no subes un archivo, puedes utilizar una imagen HTTPS externa.</p>
           <label class="admin-label">URL de imagen (opcional)<input type="url" class="admin-input" placeholder="https://..." bind:value={galleryUrl} /></label>
           <button disabled={busy} class="admin-primary w-full">{busy ? 'Subiendo…' : 'Publicar proyecto'}</button>
@@ -614,11 +626,20 @@
         <p class="text-sm text-slate-500 mb-4">Edita la información y el estado de publicación.</p>
         <form onsubmit={updateGallery} class="grid md:grid-cols-2 gap-4">
           <label class="admin-label">Título<input required class="admin-input" bind:value={galleryEdit.title} /></label>
-          <label class="admin-label">Categoría<input class="admin-input" bind:value={galleryEdit.category} /></label>
+          <label class="admin-label">Categoría
+            <select bind:value={galleryEdit.category} class="admin-input">
+              <option value="">Sin categoría</option>
+              {#each galleryCategories as cat (cat.id)}<option value={cat.name}>{cat.name}</option>{/each}
+            </select>
+          </label>
           <label class="admin-label md:col-span-2">Descripción<textarea rows="3" class="admin-input" bind:value={galleryEdit.description}></textarea></label>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryEdit.is_active} /> Proyecto publicado</label>
           <div class="flex gap-2"><button disabled={busy} class="admin-primary">Guardar proyecto</button><button type="button" class="admin-secondary" onclick={() => { galleryEdit = null; modal = null; }}>Cancelar</button></div>
         </form>
+        <div class="mt-5">
+          <AdminMediaGallery {token} id={galleryEdit.id} kind="gallery"
+            onUpdated={async()=>{gallery=(await api.getAdminGallery(token)).gallery??[];}} />
+        </div>
       {:else if modal === 'service'}
         <form class="space-y-4" onsubmit={saveService}>
           <label class="admin-label">Nombre del servicio<input required maxlength="120" class="admin-input" placeholder="Instalación de paneles solares" bind:value={service.name} /></label>
@@ -629,7 +650,7 @@
             <label class="admin-label">Precio (si es fijo)<input type="number" min="0" step="0.01" class="admin-input" bind:value={service.price} /></label>
             <label class="admin-label">Duración estimada (minutos)<input type="number" min="0" step="1" class="admin-input" bind:value={service.duration_minutes} /></label>
           </div>
-          <label class="admin-label">Imagen del servicio (JPG, PNG o WebP · máximo 8 MB)<input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input" onchange={e => servicePhoto = e.currentTarget.files?.[0] ?? null} /></label>
+          <ImagePicker max={10} label="Fotografías del servicio" onFiles={(files)=>servicePhotos=files}/>
           <label class="admin-label">O pegar una URL HTTPS de imagen (opcional)
             <input type="url" maxlength="600" class="admin-input" placeholder="https://…" bind:value={serviceImageUrl} />
           </label>
@@ -637,6 +658,9 @@
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={service.is_active} /> Publicado en la página de servicios</label>
           <button disabled={busy} class="admin-primary w-full">{busy ? 'Guardando…' : editingService ? 'Guardar cambios' : 'Crear servicio'}</button>
         </form>
+        {#if editingService}
+          <div class="mt-5"><AdminMediaGallery {token} id={editingService} kind="service" onUpdated={onRefresh}/></div>
+        {/if}
       {/if}
     </dialog>
   </div>
