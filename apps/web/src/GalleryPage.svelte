@@ -20,7 +20,7 @@
   {:else}<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
     {#each gallery as work (work.id)}
       <article class="bg-white border rounded-xl overflow-hidden">
-        {#if work.url}<img class="w-full h-48 object-cover" src={work.url} alt={work.title} />{:else}<div class="h-48 bg-gray-100"></div>{/if}
+        {#if work.url}<img class="w-full h-48 object-cover object-center" src={work.url} alt={work.title} />{:else}<div class="h-48 bg-gray-100"></div>{/if}
         <div class="p-5 space-y-2"><h2 class="font-semibold">{work.title}</h2><p class="text-sm text-gray-600">{work.description || ''}</p>
           <button class="bg-energia-600 text-white rounded-lg px-4 py-3 w-full" onclick={() => request(work)}>Quiero algo parecido</button>
         </div>
