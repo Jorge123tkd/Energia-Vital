@@ -40,14 +40,25 @@ export async function authorizedImageBlob(path: string, token?: string): Promise
   return blob;
 }
 
+async function getAllPublic(path: string, key: 'products' | 'services' | 'gallery', params: Record<string, string> = {}): Promise<any> {
+  const all: any[] = [];
+  for (let page = 1; page <= 200; page++) {
+    const query = new URLSearchParams({ ...params, page: String(page), page_size: '200' });
+    const result = await apiRequest(path + '?' + query.toString());
+    all.push(...(Array.isArray(result[key]) ? result[key] : []));
+    if (!result.has_more) return { [key]: all };
+  }
+  throw new Error('La lista es muy extensa. Ajusta los filtros o consulta al equipo.');
+}
+
 export const api = {
-  getProducts: (params?: Record<string, string>) => apiRequest(`/api/public/products${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  getProducts: (params?: Record<string, string>) => getAllPublic('/api/public/products', 'products', params),
   getProduct: (id: string) => apiRequest(`/api/public/products/${encodeURIComponent(id)}`),
   getCategories: () => apiRequest('/api/public/categories'),
-  getServices: (featured = false) => apiRequest('/api/public/services' + (featured ? '?featured=true' : '')),
+  getServices: (featured = false) => getAllPublic('/api/public/services', 'services', featured ? { featured: 'true' } : {}),
   getService: (id: string) => apiRequest(`/api/public/services/${encodeURIComponent(id)}`),
   getFAQ: (params?: Record<string, string>) => apiRequest(`/api/public/faq${params ? '?' + new URLSearchParams(params).toString() : ''}`),
-  getGallery: (featured = false) => apiRequest('/api/public/gallery' + (featured ? '?featured=true' : '')),
+  getGallery: (featured = false) => getAllPublic('/api/public/gallery', 'gallery', featured ? { featured: 'true' } : {}),
   getGalleryCategories: () => apiRequest('/api/public/extras/gallery/categories'),
   getGalleryImages: (id: string) => apiRequest('/api/public/extras/gallery/' + encodeURIComponent(id) + '/images'),
   getServiceImages: (id: string) => apiRequest('/api/public/extras/services/' + encodeURIComponent(id) + '/images'),

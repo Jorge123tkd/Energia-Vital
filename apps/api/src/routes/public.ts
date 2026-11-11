@@ -3,6 +3,13 @@ import type { Env } from '../types';
 
 export const publicRoutes = new Hono<{ Bindings: Env }>();
 
+function listPaging(c: any) {
+  const requested = c.req.query('page') !== undefined;
+  const page = Math.max(1, Math.min(100000, Number.parseInt(c.req.query('page') || '1', 10) || 1));
+  const size = Math.max(1, Math.min(200, Number.parseInt(c.req.query('page_size') || '100', 10) || 100));
+  return { requested, page, size, limit: requested ? size + 1 : 200, offset: requested ? (page - 1) * size : 0 };
+}
+
 publicRoutes.get('/products', async c => {
   const category = c.req.query('category_id'), search = c.req.query('search'), featured = c.req.query('featured');
   let sql = `SELECT p.*, cat.name AS category_name, cat.slug AS category_slug,
@@ -14,9 +21,12 @@ publicRoutes.get('/products', async c => {
   if (featured === 'true') sql += ' AND p.is_featured = 1';
   if (search) { sql += ' AND (p.name LIKE ? OR p.brand LIKE ? OR p.model LIKE ?)';
     const match = `%${search.slice(0, 100)}%`; params.push(match, match, match); }
-  sql += ' ORDER BY p.sort_order, p.created_at DESC LIMIT 200';
-  const { results } = await c.env.DB.prepare(sql).bind(...params).all();
-  return c.json({ products: results ?? [] });
+  const paging = listPaging(c);
+  sql += ' ORDER BY p.sort_order, p.created_at DESC LIMIT ? OFFSET ?';
+  const { results } = await c.env.DB.prepare(sql).bind(...params, paging.limit, paging.offset).all();
+  const rows = results ?? [];
+  return c.json({ products: paging.requested ? rows.slice(0, paging.size) : rows,
+    ...(paging.requested ? { page: paging.page, has_more: rows.length > paging.size } : {}) });
 });
 // R2 se sirve por identificador de imagen; no se expone el nombre del objeto.
 publicRoutes.get('/products/image/:id', async c => {
@@ -45,8 +55,12 @@ publicRoutes.get('/categories', async c => {
   return c.json({ categories: results ?? [] });
 });
 publicRoutes.get('/services', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT * FROM services WHERE is_active = 1 ${c.req.query('featured') === 'true' ? 'AND is_featured = 1' : ''} ORDER BY sort_order, id LIMIT 200`).all();
-  return c.json({ services: results ?? [] });
+  const paging = listPaging(c);
+  const { results } = await c.env.DB.prepare(`SELECT * FROM services WHERE is_active = 1 ${c.req.query('featured') === 'true' ? 'AND is_featured = 1' : ''} ORDER BY sort_order, id LIMIT ? OFFSET ?`)
+    .bind(paging.limit, paging.offset).all();
+  const rows = results ?? [];
+  return c.json({ services: paging.requested ? rows.slice(0, paging.size) : rows,
+    ...(paging.requested ? { page: paging.page, has_more: rows.length > paging.size } : {}) });
 });
 publicRoutes.get('/services/image/:id', async c => {
   const service = await c.env.DB.prepare('SELECT image_r2_key FROM services WHERE id = ? AND is_active = 1')
@@ -113,8 +127,12 @@ publicRoutes.get('/gallery/media/:id', async c => {
   return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
 publicRoutes.get('/gallery', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT w.*, (SELECT COUNT(*) FROM work_gallery_images im WHERE im.project_id=w.id) AS image_count FROM work_gallery w WHERE w.is_active = 1 ${c.req.query('featured') === 'true' ? 'AND w.is_featured = 1' : ''} ORDER BY w.sort_order, w.id LIMIT 200`).all();
-  return c.json({ gallery: results ?? [] });
+  const paging = listPaging(c);
+  const { results } = await c.env.DB.prepare(`SELECT w.*, (SELECT COUNT(*) FROM work_gallery_images im WHERE im.project_id=w.id) AS image_count FROM work_gallery w WHERE w.is_active = 1 ${c.req.query('featured') === 'true' ? 'AND w.is_featured = 1' : ''} ORDER BY w.sort_order, w.id LIMIT ? OFFSET ?`)
+    .bind(paging.limit, paging.offset).all();
+  const rows = results ?? [];
+  return c.json({ gallery: paging.requested ? rows.slice(0, paging.size) : rows,
+    ...(paging.requested ? { page: paging.page, has_more: rows.length > paging.size } : {}) });
 });
 // Solo configuración comercial publicada; nunca claves internas ni datos privados.
 const publicSettingKeys = ['youtube_channel_url', 'facebook_url', 'instagram_url', 'business_phone',
