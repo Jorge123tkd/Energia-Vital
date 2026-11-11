@@ -332,7 +332,7 @@ adminRoutes.post('/categories', async c => {
     if (/UNIQUE|constraint/i.test(String(e))) return c.json({ error: 'Ya existe esa categoría o su identificador.' }, 409);
     throw e;
   }
-  return c.json({ id, message: 'Categoría creada' }, 201);
+  return c.json({ id, message: 'Categoría creada' });
 });
 
 adminRoutes.patch('/categories/:id', async c => {
