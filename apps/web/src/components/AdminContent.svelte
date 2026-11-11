@@ -525,6 +525,16 @@
         </fieldset>
         <fieldset class="space-y-3 min-w-0 xl:col-span-4"><legend class="text-lg font-semibold mb-3">Pie de página y contacto</legend>
           <label class="admin-label">Texto sobre la empresa<textarea rows="3" class="admin-input" bind:value={site.footer_description}></textarea></label>
+          <div class="rounded-2xl border border-teal-100 bg-teal-50/40 p-4 space-y-3">
+            <h3 class="font-extrabold text-slate-900 text-sm">Recuadro de asesoría del pie de página</h3>
+            <p class="text-xs text-slate-500">Puedes personalizar el mensaje que invita a los visitantes a consultar con Bonaire.</p>
+            <label class="admin-label">Título del recuadro
+              <input class="admin-input" maxlength="160" placeholder="¿Necesitas una solución solar?" bind:value={site.footer_cta_title} />
+            </label>
+            <label class="admin-label">Descripción breve
+              <textarea rows="2" maxlength="450" class="admin-input" bind:value={site.footer_cta_description}></textarea>
+            </label>
+          </div>
           <div class="grid sm:grid-cols-2 gap-3">
             <label class="admin-label">Teléfono / WhatsApp principal
               <input class="admin-input" type="tel" placeholder="+53 ..." bind:value={site.business_phone} />
