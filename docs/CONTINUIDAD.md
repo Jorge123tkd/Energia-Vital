@@ -11,10 +11,10 @@ Actualizado: 11 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
-Preparación del despliegue y del registro permanente. Se verificó el código remoto b56a0e9a7a3b35fe20bcf2f4c2bed7f5ddd497de y se comprobó la autenticación con wrangler whoami: este entorno NO está autenticado. No se ejecutaron migraciones remotas ni despliegues.
+El usuario compartió la salida de PowerShell: rama correcta feat/cloudflare-customer-accounts-hardening; package-lock.json modificado y una imagen WebP sin seguimiento. Wrangler 4.151.2 tiene sesión OAuth activa en su equipo con permisos D1, Workers y Pages. Existe energia-vital-web, dominio energia-vital-web.pages.dev, sin proveedor Git conectado. No se han ejecutado migraciones remotas ni despliegues de esta actualización.
 
 ## Siguiente paso exacto
-El usuario debe ejecutar el bloque 1 de docs/DESPLIEGUE-ACTUAL.md en PowerShell y compartir la salida de git status, rama actual, wrangler whoami y listado de proyectos Pages. Confirmar la rama de producción de Pages en el panel Cloudflare. Con esa evidencia actualizar este registro y continuar con copia de seguridad, migraciones, Worker, Pages y comprobaciones.
+Conservar los cambios locales con git stash push --include-untracked y una etiqueta reconocible; comprobar que el árbol queda limpio; ejecutar git pull --ff-only origin feat/cloudflare-customer-accounts-hardening, npm ci y comprobaciones de API/web. No aplicar todavía el stash: contiene un lockfile anterior que podría sobrescribir la corrección remota. Recuperar la imagen y revisar el lockfile separadamente después. Obtener también el listado de despliegues Pages y confirmar su rama de producción antes de publicar. Esperar la salida del usuario y registrar resultados reales.
 
 ## Trabajo completado y evidencia
 ### Cambios previos presentes en el repositorio
@@ -43,7 +43,7 @@ El usuario debe ejecutar el bloque 1 de docs/DESPLIEGUE-ACTUAL.md en PowerShell 
 | Instalación y checks locales del agente | Completados |
 | Registro de continuidad e instrucciones | Creados en esta actualización |
 | Autenticación Cloudflare en entorno del agente | No disponible |
-| Estado del repositorio Windows | Por comprobar; previamente hubo cambios locales |
+| Estado del repositorio Windows | Rama correcta; lockfile modificado y WebP nueva por conservar |\n| Autenticación Cloudflare del usuario | Confirmada por whoami; permisos D1, Workers y Pages |\n| Proyecto Pages | energia-vital-web.pages.dev; sin proveedor Git |
 | Rama de producción Pages | Por confirmar |
 | Respaldo D1 remoto para esta actualización | Pendiente |
 | Migraciones D1 remotas, incluida 010 | Pendiente |
@@ -57,5 +57,5 @@ El usuario debe ejecutar el bloque 1 de docs/DESPLIEGUE-ACTUAL.md en PowerShell 
 - 2026-11-11: el usuario autorizó preparar y realizar todos los pasos de despliegue y pidió documentación permanente después de cada paso.
 - 2026-11-11: comprobado acceso a GitHub. Wrangler indica que no hay sesión Cloudflare en este entorno. Preparada guía de PowerShell y punto de reanudación; producción sin modificar.
 
-## Cómo actualizar este registro
+- 2026-11-11: paso 1 confirmado con salida del usuario: sesión Cloudflare activa, rama correcta y proyecto Pages encontrado. Cambios locales detectados; preparado paso 2 para conservarlos antes de actualizar. No se guardan correo, identificadores de cuenta ni credenciales. Rama de producción aún no confirmada.\n\n## Cómo actualizar este registro
 Después de cada paso: añadir fecha, acción, resultado y evidencia breve a la bitácora; ajustar tabla, Último paso realizado y Siguiente paso exacto. Registrar fallos y bloqueos. Guardar y subir a la rama, sin declararlo actualizado si GitHub no confirmó el cambio. No marcar como realizado un comando solo porque se haya entregado al usuario.
