@@ -161,6 +161,8 @@ export const api = {
   getAdminCategories: (token: string) => apiRequest('/api/admin/categories', withAdmin(token)),
   createAdminCategory: (token: string, body: unknown) => post('/api/admin/categories', body, withAdmin(token)),
   updateAdminCategory: (token: string, id: string, body: unknown) => patch(`/api/admin/categories/${id}`, body, withAdmin(token)),
+  deleteAdminCategory: (token: string, id: string) =>
+    apiRequest('/api/admin/categories/' + encodeURIComponent(id), withAdmin(token, {method:'DELETE'})),
   uploadProductImage: (token: string, id: string, file: File, altText = '') => {
     const body = new FormData();
     body.append('file', file); body.append('alt_text', altText);
