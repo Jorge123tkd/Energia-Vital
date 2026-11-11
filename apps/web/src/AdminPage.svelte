@@ -16,6 +16,34 @@
   let error = $state('');
   let message = $state('');
   let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'notifications'>('requests');
+  let mobileMenu = $state(false);
+  let accountMenu = $state(false);
+  let syncBusy = $state(false);
+  let menuItems = $derived([
+    { id: 'requests', title: 'Solicitudes' },
+    { id: 'appointments', title: 'Citas' },
+    { id: 'customers', title: 'Clientes' },
+    ...(staffRole === 'admin' ? [
+      { id: 'products', title: 'Productos' },
+      { id: 'services', title: 'Servicios' },
+      { id: 'gallery', title: 'Galería' },
+      { id: 'site', title: 'Mi sitio web' },
+      { id: 'staff', title: 'Personal y permisos' },
+    ] : []),
+    { id: 'notifications', title: 'Notificaciones' }
+  ]);
+  function chooseTab(next: typeof tab) {
+    tab = next;
+    mobileMenu = false;
+    accountMenu = false;
+  }
+  async function syncNow() {
+    syncBusy = true;
+    error = ''; message = '';
+    try { await reload(); message = 'Datos sincronizados correctamente.'; }
+    catch (e) { error = e instanceof Error ? e.message : 'No se pudieron sincronizar los datos.'; }
+    finally { syncBusy = false; mobileMenu = false; accountMenu = false; }
+  }
   let customers: any[] = $state([]);
   let requests: any[] = $state([]);
   let appointments: any[] = $state([]);
@@ -49,6 +77,7 @@
   async function logout() {
     try { await apiRequest('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: '{}' }); } catch { /* Limpiar sesión local. */ }
     token = ''; sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    mobileMenu = false; accountMenu = false;
     customers = []; requests = []; appointments = []; products = []; services = []; categories = [];
   }
   async function reload(t = token) {
@@ -79,12 +108,76 @@
 </script>
 
 <div class="w-full min-w-0 max-w-none mx-auto px-3 sm:px-5 xl:px-8 py-5 xl:py-7 min-h-screen bg-slate-50">
-  <header class="flex flex-wrap items-center justify-between gap-3 mb-7 rounded-2xl bg-gradient-to-r from-slate-950 via-teal-950 to-teal-800 text-white p-6 sm:p-8 shadow-lg">
-    <div><p class="uppercase text-xs font-semibold tracking-widest text-teal-200 mb-2">Centro de operaciones</p><h1 class="text-3xl sm:text-4xl font-bold">Administración de Bonaire</h1><p class="text-teal-100 mt-2">Gestiona el catálogo, los clientes y el contenido de tu sitio desde un solo lugar.</p></div>
-    <div class="flex gap-3 items-center"><a class="rounded-xl border border-teal-300 px-4 py-2 hover:bg-white/10" href="/">Ver sitio público</a>{#if token}
-      <NotificationBell staff {token} onAll={() => tab = 'notifications'} />
-      <button class="rounded-xl bg-white text-slate-950 px-4 py-2" onclick={logout}>Cerrar sesión</button>
-    {/if}</div>
+  <header class="sticky top-0 z-[90] -mx-3 sm:-mx-5 xl:-mx-8 -mt-5 xl:-mt-7 mb-6 border-b border-slate-200 bg-white/95 backdrop-blur shadow-sm">
+    <div class="w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-5 xl:px-8 py-2.5 min-w-0">
+      <button type="button" class="flex items-center gap-2.5 shrink-0 rounded-xl hover:bg-slate-50 pr-2" aria-label="Panel principal de Bonaire"
+        onclick={() => chooseTab('requests')}>
+        <span class="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-black text-xl">B</span>
+        <span class="text-left leading-tight">
+          <span class="block text-base sm:text-lg font-extrabold text-slate-900">Bonaire</span>
+          <span class="block text-[10px] uppercase font-bold tracking-wider text-teal-700">Administración</span>
+        </span>
+      </button>
+
+      {#if token}
+        <nav aria-label="Secciones del panel" class="hidden xl:flex flex-1 min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap py-1">
+          {#each menuItems as item (item.id)}
+            <button type="button" onclick={() => chooseTab(item.id as typeof tab)}
+              aria-current={tab === item.id ? 'page' : undefined}
+              class="shrink-0 rounded-lg px-2.5 py-2 text-xs 2xl:text-sm font-semibold transition-colors {tab === item.id ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-teal-50 hover:text-teal-900'}">{item.title}</button>
+          {/each}
+        </nav>
+      {:else}
+        <span class="flex-1"></span>
+      {/if}
+
+      <div class="flex items-center justify-end gap-2 ml-auto shrink-0">
+        {#if token}
+          <NotificationBell staff {token} onAll={() => chooseTab('notifications')} />
+          <div class="hidden xl:block relative">
+            <button type="button" class="flex items-center gap-2 rounded-xl border border-slate-200 text-slate-700 px-3 py-2.5 text-sm font-bold bg-white hover:bg-slate-50"
+              aria-label="Abrir menú de mi cuenta" aria-expanded={accountMenu} onclick={() => accountMenu = !accountMenu}>
+              <span class="w-6 h-6 rounded-full bg-teal-50 text-teal-800 flex items-center justify-center text-xs font-extrabold">{staffRole === 'admin' ? 'A' : 'M'}</span>
+              Mi cuenta <span aria-hidden="true">▾</span>
+            </button>
+            {#if accountMenu}
+              <div class="absolute right-0 top-full mt-2 bg-white w-60 border border-slate-200 rounded-2xl p-2 shadow-xl z-[110]">
+                <p class="text-xs px-3 py-2 font-bold text-slate-400">{staffRole === 'admin' ? 'Administrador' : 'Moderador'}</p>
+                <a href="/perfil" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Mi perfil</a>
+                <a href="/" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Ver sitio público</a>
+                <button type="button" disabled={syncBusy} onclick={syncNow} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">{syncBusy ? 'Sincronizando…' : '↻ Sincronizar datos'}</button>
+                <div class="border-t border-slate-100 my-1"></div>
+                <button type="button" onclick={logout} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-red-700 hover:bg-red-50">Cerrar sesión</button>
+              </div>
+            {/if}
+          </div>
+          <button type="button" aria-label={mobileMenu ? 'Cerrar menú de administración' : 'Abrir menú de administración'} aria-expanded={mobileMenu}
+            aria-controls="admin-mobile-menu" onclick={() => { mobileMenu = !mobileMenu; accountMenu = false; }}
+            class="xl:hidden flex items-center justify-center w-11 h-11 rounded-xl border border-slate-200 text-slate-800 bg-white hover:bg-slate-50 text-xl font-bold">
+            {mobileMenu ? '✕' : '☰'}
+          </button>
+        {:else}
+          <a href="/" class="text-xs sm:text-sm font-semibold text-teal-800 rounded-lg border border-teal-200 px-3 py-2.5 hover:bg-teal-50">Ver sitio público</a>
+        {/if}
+      </div>
+    </div>
+    {#if token && mobileMenu}
+      <nav id="admin-mobile-menu" aria-label="Menú móvil de administración" class="xl:hidden border-t border-slate-200 bg-white px-3 sm:px-5 py-3 shadow-md max-h-[75vh] overflow-y-auto">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {#each menuItems as item (item.id)}
+            <button type="button" onclick={() => chooseTab(item.id as typeof tab)}
+              aria-current={tab === item.id ? 'page' : undefined}
+              class="text-left rounded-xl px-3 py-3 text-sm font-semibold {tab === item.id ? 'bg-teal-700 text-white' : 'bg-slate-50 text-slate-700 hover:bg-teal-50'}">{item.title}</button>
+          {/each}
+        </div>
+        <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <a href="/perfil" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Mi perfil</a>
+          <a href="/" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Ver sitio público</a>
+          <button type="button" disabled={syncBusy} onclick={syncNow} class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700">{syncBusy ? 'Actualizando…' : '↻ Sincronizar'}</button>
+          <button type="button" onclick={logout} class="rounded-xl bg-red-50 border border-red-100 px-3 py-3 text-sm font-semibold text-red-700">Cerrar sesión</button>
+        </div>
+      </nav>
+    {/if}
   </header>
   {#if checking}
     <p>Verificando acceso…</p>
@@ -103,6 +196,16 @@
       <button disabled={loading} class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white py-3.5 px-5 rounded-xl font-bold">{loading ? 'Entrando…' : 'Entrar en administración'}</button>
     </form>
   {:else}
+    <div class="mb-5 flex items-center gap-3 justify-between">
+      <div>
+        <p class="text-xs font-extrabold uppercase tracking-wider text-teal-700">Centro de operaciones</p>
+        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">{menuItems.find(item => item.id === tab)?.title || 'Panel de gestión'}</h1>
+      </div>
+      <button type="button" disabled={syncBusy} onclick={syncNow}
+        class="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-600 hover:text-teal-700 hover:border-teal-300 disabled:opacity-50">
+        {syncBusy ? 'Sincronizando…' : '↻ Sincronizar'}
+      </button>
+    </div>
     <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6" aria-label="Resumen de operaciones">
       {#each [{label:'Solicitudes',count:requests.length,id:'requests'}, {label:'Citas',count:appointments.length,id:'appointments'},
         {label:'Clientes',count:customers.length,id:'customers'}, {label:'Productos',count:products.length,id:'products'}] as item}
@@ -112,23 +215,6 @@
         </button>
       {/each}
     </section>
-    <nav class="flex flex-wrap items-center gap-2 mb-6 border-b border-slate-200 pb-4" aria-label="Secciones de administración">
-      {#each [
-        { id: 'requests', title: 'Solicitudes' }, { id: 'appointments', title: 'Citas' },
-        { id: 'customers', title: 'Clientes' },
-        ...(staffRole === 'admin' ? [{ id: 'products', title: 'Productos' }] : []),
-        ...(staffRole === 'admin' ? [
-          { id: 'services', title: 'Servicios' }, { id: 'gallery', title: 'Galería' },
-          { id: 'site', title: 'Mi sitio web' }, { id: 'staff', title: 'Personal y permisos' },
-        ] : []),
-        { id: 'notifications', title: 'Notificaciones' },
-      ] as item}
-        <button class="rounded-xl px-4 py-2.5 text-sm font-semibold transition {tab === item.id ? 'bg-teal-700 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:border-teal-400'}"
-          onclick={() => { tab = item.id as typeof tab; }}>{item.title}</button>
-      {/each}
-      <button title="Consultar nuevamente cambios que hayan realizado otras personas" class="ml-auto px-3 py-2.5 text-sm text-slate-500 hover:text-teal-700"
-        onclick={() => { void reload().then(() => message = 'Datos sincronizados.').catch(e => error = String(e)); }}>↻ Sincronizar</button>
-    </nav>
     {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
     {#if tab === 'customers'}
