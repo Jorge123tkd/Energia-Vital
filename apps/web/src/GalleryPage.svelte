@@ -77,20 +77,22 @@
       <div aria-label={featured ? 'Proyectos destacados, desplazamiento horizontal' : 'Listado de proyectos'}
         class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
         {#each visibleProjects as work (work.id)}
-          <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
-            <button type="button" class="block relative w-full bg-slate-100 overflow-hidden" onclick={()=>show(work)} aria-label={'Ver fotografías de '+work.title}>
+          <article class="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
+            <div class="block relative w-full bg-slate-100 overflow-hidden">
               <CardImage src={work.url} alt={work.title} />
               {#if work.image_count}<span class="absolute right-2 bottom-2 bg-slate-950/80 text-white rounded-full px-2.5 py-1 text-[11px] font-bold">▧ {work.image_count} fotos</span>{/if}
-            </button>
+            </div>
             <div class="flex flex-col flex-1 p-4 gap-2">
               <p class="text-xs text-teal-700 font-bold uppercase">{work.category||'Proyecto Bonaire'}</p>
               <h3 class="font-extrabold text-slate-900 text-sm sm:text-base line-clamp-2">{work.title}</h3>
               <p class="text-xs text-slate-600 line-clamp-2 flex-1">{work.description||'Trabajo realizado por nuestro equipo.'}</p>
-              <div class="grid grid-cols-2 gap-2 mt-2">
-                <button type="button" onclick={()=>show(work)} class="rounded-xl border border-teal-200 bg-teal-50 text-teal-800 text-xs font-bold p-2.5">Ver fotos</button>
-                <button type="button" onclick={()=>request(work)} class="rounded-xl bg-teal-700 text-white text-xs font-bold p-2.5">Consultar</button>
+              <div class="mt-2">
+                <button type="button" onclick={()=>request(work)}
+                  class="relative z-20 w-full rounded-xl bg-teal-700 text-white text-xs font-bold p-2.5">Consultar proyecto similar</button>
               </div>
             </div>
+            <button type="button" class="absolute inset-0 z-10 rounded-2xl cursor-pointer focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-[-4px] focus-visible:outline-teal-700"
+              onclick={()=>show(work)} aria-label={'Abrir proyecto '+work.title}></button>
           </article>
         {/each}
       </div>

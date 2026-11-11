@@ -58,19 +58,21 @@
     <div aria-label={featured ? 'Servicios destacados, desplazamiento horizontal' : 'Listado de servicios'}
       class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
       {#each visibleServices as service (service.id)}
-        <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
-          <button type="button" onclick={()=>details(service)} class="w-full relative overflow-hidden bg-teal-50" aria-label={'Ver fotos de '+service.name}>
+        <article class="group relative bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
+          <div class="w-full relative overflow-hidden bg-teal-50">
             <CardImage src={service.image_url} alt={service.name} />
-          </button>
+          </div>
           <div class="p-4 flex flex-col flex-1 space-y-2">
             <h2 class="font-extrabold text-sm sm:text-base text-slate-900 line-clamp-2">{service.name}</h2>
             <p class="text-xs text-slate-600 line-clamp-3 flex-1">{service.description||'Consulta los detalles del servicio con nuestro equipo.'}</p>
             <p class="font-bold text-sm text-teal-800">{price(service)}</p>
-            <div class="grid grid-cols-2 gap-2 pt-2">
-              <button type="button" onclick={()=>details(service)} class="rounded-xl border border-teal-200 text-teal-800 text-xs font-bold px-2 py-2.5">Detalles</button>
-              <button type="button" onclick={()=>request(service)} class="rounded-xl bg-teal-700 text-white text-xs font-bold px-2 py-2.5 hover:bg-teal-800">Solicitar</button>
+            <div class="pt-2">
+              <button type="button" onclick={()=>request(service)}
+                class="relative z-20 w-full rounded-xl bg-teal-700 text-white text-xs font-bold px-3 py-2.5 hover:bg-teal-800">Solicitar servicio</button>
             </div>
           </div>
+          <button type="button" class="absolute inset-0 z-10 rounded-2xl cursor-pointer focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-[-4px] focus-visible:outline-teal-700"
+            onclick={()=>details(service)} aria-label={'Abrir detalles de '+service.name}></button>
         </article>
       {/each}
     </div>
