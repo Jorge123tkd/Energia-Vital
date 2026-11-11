@@ -147,11 +147,30 @@ adminCustomersRoutes.get('/requests', async c => {
   return c.json({requests:results||[],page,page_size:pageSize,total:total?.n||0});
 });
 adminCustomersRoutes.patch('/requests/:id', async c => {
-  const b = await c.req.json<any>();
-  if (!['pending', 'quoted', 'approved', 'scheduled', 'completed', 'cancelled'].includes(b.status)) return c.json({ error: 'Estado inválido' }, 400);
-  const result = await c.env.DB.prepare('UPDATE requests SET status = ?, updated_at = ? WHERE id = ?')
-    .bind(b.status, new Date().toISOString(), c.req.param('id')).run();
-  return result.meta?.changes ? c.json({ message: 'Solicitud actualizada' }) : c.json({ error: 'No encontrada' }, 404);
+  const b = await c.req.json<any>().catch(()=>null);
+  if (!b || !['pending', 'quoted', 'approved', 'scheduled', 'completed', 'cancelled'].includes(b.status))
+    return c.json({ error: 'Estado inválido' }, 400);
+  const id=c.req.param('id');
+  const prior=await c.env.DB.prepare('SELECT customer_id,status,title FROM requests WHERE id=?').bind(id).first<any>();
+  if(!prior)return c.json({error:'No encontrada'},404);
+  if(prior.status===b.status)return c.json({message:'Sin cambios'});
+  const now=new Date().toISOString();
+  const result=await c.env.DB.prepare('UPDATE requests SET status=?,updated_at=? WHERE id=? AND status=?')
+    .bind(b.status,now,id,prior.status).run();
+  if(!result.meta?.changes)return c.json({error:'La solicitud fue modificada. Actualiza el panel.'},409);
+  if(prior.customer_id){
+    try {
+      const labels:Record<string,string>={pending:'pendiente',quoted:'presupuestada',approved:'aprobada',
+        scheduled:'programada',completed:'terminada',cancelled:'cancelada'};
+      await c.env.DB.prepare(`INSERT INTO notifications
+        (id,user_id,user_type,type,title,message,is_read,created_at)
+        VALUES (?,?,'customer','system',?,?,0,?)`).bind(
+        crypto.randomUUID(),prior.customer_id,'Actualización de tu solicitud',
+        'Tu solicitud «'+prior.title+'» (ref. '+id+') ahora está '+labels[b.status]+'.',now
+      ).run();
+    }catch(e){console.error('No se pudo avisar al cliente del cambio de solicitud',e);}
+  }
+  return c.json({message:'Solicitud actualizada'});
 });
 adminCustomersRoutes.get('/appointments', async c => {
   const {page,pageSize,q,advanced}=paging(c);
@@ -171,9 +190,28 @@ adminCustomersRoutes.get('/appointments', async c => {
   return c.json({appointments:results||[],page,page_size:pageSize,total:total?.n||0});
 });
 adminCustomersRoutes.patch('/appointments/:id', async c => {
-  const b = await c.req.json<any>();
-  if (!['pending', 'confirmed', 'in_progress', 'completed', 'cancelled'].includes(b.status)) return c.json({ error: 'Estado inválido' }, 400);
-  const result = await c.env.DB.prepare('UPDATE appointments SET status = ?, updated_at = ? WHERE id = ?')
-    .bind(b.status, new Date().toISOString(), c.req.param('id')).run();
-  return result.meta?.changes ? c.json({ message: 'Cita actualizada' }) : c.json({ error: 'No encontrada' }, 404);
+  const b=await c.req.json<any>().catch(()=>null);
+  if(!b || !['pending','confirmed','in_progress','completed','cancelled'].includes(b.status))
+    return c.json({error:'Estado inválido'},400);
+  const id=c.req.param('id'),now=new Date().toISOString();
+  const prior=await c.env.DB.prepare('SELECT customer_id,status,title,starts_at FROM appointments WHERE id=?')
+    .bind(id).first<any>();
+  if(!prior)return c.json({error:'Cita no encontrada'},404);
+  if(prior.status===b.status)return c.json({message:'Sin cambios'});
+  const changed=await c.env.DB.prepare('UPDATE appointments SET status=?,updated_at=? WHERE id=? AND status=?')
+    .bind(b.status,now,id,prior.status).run();
+  if(!changed.meta?.changes)return c.json({error:'La cita cambió. Actualiza el panel.'},409);
+  if(prior.customer_id){
+    try {
+      const labels:Record<string,string>={pending:'pendiente',confirmed:'confirmada',in_progress:'en proceso',
+        completed:'finalizada',cancelled:'cancelada'};
+      await c.env.DB.prepare(`INSERT INTO notifications
+        (id,user_id,user_type,type,title,message,is_read,created_at)
+        VALUES (?,?,'customer','system',?,?,0,?)`).bind(
+        crypto.randomUUID(),prior.customer_id,'Estado de tu cita',
+        'Tu cita «'+prior.title+'» (ref. '+id+') está '+labels[b.status]+'.',now
+      ).run();
+    }catch(e){console.error('No se pudo avisar cambio de cita',e);}
+  }
+  return c.json({message:'Cita actualizada'});
 });
