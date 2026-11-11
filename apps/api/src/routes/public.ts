@@ -140,7 +140,7 @@ publicRoutes.get('/gallery', async c => {
 });
 // Solo configuración comercial publicada; nunca claves internas ni datos privados.
 const publicSettingKeys = ['youtube_channel_url', 'facebook_url', 'instagram_url', 'business_phone',
-  'business_phones', 'business_email', 'business_address', 'business_hours', 'telegram_public_url',
+  'business_phones', 'sales_managers', 'business_email', 'business_address', 'business_hours', 'telegram_public_url',
   'bot_whatsapp_url', 'bot_telegram_url',
   'home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links',
   'footer_cta_title', 'footer_cta_description'];

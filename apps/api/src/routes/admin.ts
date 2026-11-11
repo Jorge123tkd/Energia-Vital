@@ -712,7 +712,7 @@ adminRoutes.delete('/settings/:id', async (c) => {
 
 // Configuración pública editable sin exponer secretos ni aceptar HTML arbitrario.
 const allowedSiteFields = ['home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links', 'footer_cta_title', 'footer_cta_description',
-  'business_phone', 'business_phones', 'business_email', 'business_address', 'business_hours',
+  'business_phone', 'business_phones', 'sales_managers', 'business_email', 'business_address', 'business_hours',
   'youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url', 'bot_whatsapp_url', 'bot_telegram_url'] as const;
 adminRoutes.put('/site-settings', async c => {
   const b = await c.req.json<Record<string, unknown>>();
@@ -749,6 +749,19 @@ adminRoutes.put('/site-settings', async c => {
         (p.number.match(/\d/g) || []).length >= 8))
         return c.json({ error: 'Añade hasta ocho contactos con teléfonos válidos' }, 400);
       value = JSON.stringify(phones.map((p: any) => ({ label: p.label.trim(), number: p.number.trim() })));
+    }
+    if (key === 'sales_managers') {
+      let managers: unknown;
+      try { managers = JSON.parse(value || '[]'); }
+      catch { return c.json({ error: 'Lista de gestores de ventas inválida.' }, 400); }
+      if (!Array.isArray(managers) || managers.length > 6 || !managers.every((m: any) =>
+        m && typeof m.name === 'string' && m.name.trim().length >= 1 && m.name.trim().length <= 60 &&
+        typeof m.phone === 'string' && /^\+?[0-9 ()-]{8,25}$/.test(m.phone.trim()) &&
+        (m.phone.match(/\d/g) || []).length >= 8 && (m.phone.match(/\d/g) || []).length <= 15)) {
+        return c.json({ error: 'Configura hasta seis gestores, cada uno con nombre y WhatsApp internacional de 8 a 15 dígitos.' }, 400);
+      }
+      value = JSON.stringify(managers.map((m: any) =>
+        ({ name: m.name.trim(), phone: m.phone.trim() })));
     }
     if (key === 'home_slides') {
       let slides: unknown;
