@@ -1,7 +1,31 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import NotificationsPage from './NotificationsPage.svelte';
   let { token, customers, canSend }: { token: string; customers: any[]; canSend: boolean } = $props();
+  let welcomeEnabled = $state(true);
+  let welcomeTitle = $state('¡Bienvenido a Bonaire!');
+  let welcomeMessage = $state('Gracias por registrarte. Desde tu cuenta puedes solicitar servicios, consultar tus citas y recibir notificaciones.');
+  let welcomeBusy = $state(false);
+  let welcomeStatus = $state('');
+  let welcomeError = $state('');
+  onMount(() => {
+    if (!canSend) return;
+    void api.getWelcomeAutomation(token).then((data:any) => {
+      welcomeEnabled = Boolean(data.enabled);
+      welcomeTitle = data.title;
+      welcomeMessage = data.message;
+    }).catch((e:Error) => { welcomeError = e.message; });
+  });
+  async function saveWelcome(e: SubmitEvent) {
+    e.preventDefault();
+    welcomeBusy = true; welcomeStatus = ''; welcomeError = '';
+    try {
+      await api.saveWelcomeAutomation(token,welcomeEnabled,welcomeTitle,welcomeMessage);
+      welcomeStatus = 'Configuración guardada. Se aplicará a los próximos registros.';
+    }catch(e){welcomeError=e instanceof Error?e.message:'No se pudo guardar';}
+    finally{welcomeBusy=false;}
+  }
   let title = $state('');
   let message = $state('');
   let target = $state('all');
@@ -32,6 +56,32 @@
     <NotificationsPage staff {token} />
   </div>
   {#if canSend}
+    <div class="space-y-5">
+      <section class="bg-white border border-teal-100 rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-widest text-teal-700">Automatizaciones</p>
+          <h2 class="text-xl font-extrabold text-slate-900 mt-1">Bienvenida para clientes nuevos</h2>
+          <p class="text-sm text-slate-500 mt-2">El aviso se guardará automáticamente en la campanita cuando un cliente termine de registrarse. No envía WhatsApp, SMS ni correos.</p>
+        </div>
+        {#if welcomeError}<p role="alert" class="text-sm text-red-700 rounded-xl bg-red-50 p-3">{welcomeError}</p>{/if}
+        {#if welcomeStatus}<p role="status" class="text-sm text-emerald-800 rounded-xl bg-emerald-50 p-3">{welcomeStatus}</p>{/if}
+        <form onsubmit={saveWelcome} class="space-y-4">
+          <label class="flex items-center gap-3 text-sm font-semibold text-slate-700">
+            <input type="checkbox" bind:checked={welcomeEnabled} /> Activar bienvenida automática
+          </label>
+          <label class="block text-sm font-semibold text-slate-700">Título
+            <input required minlength="3" maxlength="120" class="form-input" bind:value={welcomeTitle}/>
+          </label>
+          <label class="block text-sm font-semibold text-slate-700">Mensaje de bienvenida
+            <textarea required minlength="10" maxlength="800" rows="4" class="form-input" bind:value={welcomeMessage}></textarea>
+          </label>
+          <button disabled={welcomeBusy} class="w-full rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold py-3">{welcomeBusy?'Guardando…':'Guardar bienvenida automática'}</button>
+        </form>
+        <div class="border-t border-slate-200 pt-4">
+          <p class="text-sm font-bold text-slate-900">Otros avisos automáticos ya preparados</p>
+          <p class="text-xs sm:text-sm text-slate-600 mt-2">Confirmación de solicitud con su referencia y avisos cuando el equipo cambia el estado de solicitudes o citas.</p>
+        </div>
+      </section>
     <section class="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
       <h2 class="text-xl font-bold text-slate-900">Enviar aviso a clientes</h2>
       <p class="text-sm text-slate-500">El aviso aparecerá en su campanita de notificaciones cuando entren en Bonaire.</p>
@@ -57,6 +107,7 @@
         <button disabled={busy} class="rounded-xl px-5 py-3 bg-teal-700 text-white font-semibold w-full">{busy ? 'Enviando…' : 'Enviar notificación'}</button>
       </form>
     </section>
+    </div>
   {/if}
 </div>
 <style>.form-input { display:block; width:100%; margin-top:.45rem; padding:.75rem; border:1px solid #cbd5e1; border-radius:.75rem; background:white; }</style>
