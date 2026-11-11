@@ -323,8 +323,14 @@ publicExtrasRoutes.get('/products/:id/reviews', async c => {
     JOIN customers c ON c.id=r.customer_id
     WHERE r.product_id=? AND r.status='published' ORDER BY r.created_at DESC LIMIT 100`).bind(id).all();
   const reviews=results||[];
-  const sum=reviews.reduce((total,r:any)=>total+Number(r.rating),0);
-  return c.json({reviews,average:reviews.length?Number((sum/reviews.length).toFixed(2)):null,count:reviews.length});
+  const summary=await c.env.DB.prepare(`SELECT COUNT(*) AS count, AVG(rating) AS average
+    FROM product_reviews WHERE product_id=? AND status='published'`).bind(id)
+    .first<{count:number;average:number|null}>();
+  return c.json({
+    reviews,
+    average:summary?.average==null?null:Number(summary.average.toFixed(2)),
+    count:summary?.count||0,
+  });
 });
 privateExtrasRoutes.get('/products/:id/review-eligibility', async c => {
   const id=c.req.param('id'),customerId=getUser(c)!.user_id;
