@@ -85,11 +85,15 @@
       paneles:choose('panel',panelWatts)
     };
   });
-  let recommendedProducts=$derived([
-    ...recommendations.baterias.map(item=>({item,family:'Batería',reason:'Alternativa de almacenamiento; revisa capacidad y compatibilidad.'})),
-    ...recommendations.paneles.map(item=>({item,family:'Panel solar',reason:'Opción para producir energía durante las horas de sol.'})),
-    ...recommendations.inversores.map(item=>({item,family:'Inversor',reason:existingInverter?'Opción de ampliación; comprueba primero si el tuyo sirve.':'Alternativa para las cargas esenciales estimadas.'})),
-  ].slice(0,6));
+  let recommendedProducts=$derived.by(() => {
+    const choices = [
+      ...recommendations.baterias.map(item=>({item,family:'Batería',reason:'Alternativa de almacenamiento; confirma voltaje, química y compatibilidad.'})),
+      ...recommendations.paneles.map(item=>({item,family:'Panel solar',reason:'Opción para producir energía durante las horas de sol.'})),
+      ...recommendations.inversores.map(item=>({item,family:'Inversor',reason:existingInverter?'Opción de ampliación: comprueba primero tu inversor actual.':'Alternativa para alimentar las cargas esenciales estimadas.'})),
+    ];
+    return choices.filter((entry,index) =>
+      choices.findIndex(other => other.item.id===entry.item.id)===index).slice(0,6);
+  });
   function addLoad(item?:Omit<Load,'id'>){
     devices=[...devices,item?{...item,id:nextId++}:{
       id:nextId++,name:'',watts:100,units:1,hours:4,critical:false,backupDuty:1,estimate:true,
