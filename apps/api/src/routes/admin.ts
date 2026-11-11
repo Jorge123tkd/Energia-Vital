@@ -690,7 +690,7 @@ adminRoutes.put('/site-settings', async c => {
   const records: Array<{ key: string; value: string }> = [];
   const socialKeys = new Set(['youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url']);
   for (const key of keys) {
-    if (typeof b[key] !== 'string' || (b[key] as string).length > (key === 'home_slides' ? 9000 : 3500))
+    if (typeof b[key] !== 'string' || (b[key] as string).length > (key === 'home_slides' ? 14000 : 3500))
       return c.json({ error: `Valor inválido en ${key}` }, 400);
     let value = (b[key] as string).trim();
     if (socialKeys.has(key) && value && !/^https:\/\/[^\s]+$/i.test(value))
@@ -716,7 +716,7 @@ adminRoutes.put('/site-settings', async c => {
       };
       const isSafeLink = (address: string) =>
         (address.startsWith('/') && !address.startsWith('//') && !address.includes('\\')) || isHttps(address);
-      if (!Array.isArray(slides) || slides.length !== 3 || !slides.every((s: any) =>
+      if (!Array.isArray(slides) || slides.length < 1 || slides.length > 6 || !slides.every((s: any) =>
         s && typeof s.title === 'string' && s.title.trim().length > 0 && s.title.length <= 120 &&
         typeof s.subtitle === 'string' && s.subtitle.length <= 450 &&
         typeof s.image_url === 'string' && s.image_url.length <= 600 &&
@@ -724,7 +724,7 @@ adminRoutes.put('/site-settings', async c => {
         typeof s.link_label === 'string' && s.link_label.length <= 60 &&
         typeof s.link_url === 'string' && s.link_url.length <= 500 &&
         isSafeLink(s.link_url))) {
-        return c.json({ error: 'El carrusel necesita tres diapositivas válidas con enlaces seguros.' }, 400);
+        return c.json({ error: 'El carrusel necesita entre una y seis diapositivas válidas con enlaces seguros.' }, 400);
       }
       value = JSON.stringify(slides.map((s: any) => ({
         title: s.title.trim(), subtitle: s.subtitle.trim(), image_url: s.image_url.trim(),

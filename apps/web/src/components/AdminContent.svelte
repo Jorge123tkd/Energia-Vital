@@ -221,26 +221,69 @@
       { title: 'Novedades y soluciones solares', subtitle: 'Descubre equipos disponibles y las propuestas que mejor se adaptan a ti.', image_url: '', link_label: 'Ver catálogo', link_url: '/catalogo' },
     ];
   }
+  const MAX_SLIDES = 6;
   let slides = $state<HomeSlide[]>(defaultSlides());
-  let slideFiles = $state<(File | null)[]>([null, null, null]);
-  let uploadingSlide = $state(-1);
+  let editingSlide = $state<number | null>(null);
+  let draftSlide = $state<HomeSlide>({ ...defaultSlides()[0] });
+  let slideFile = $state<File | null>(null);
+  let uploadingSlide = $state(false);
+  function editSlide(index: number) {
+    if (editingSlide !== null) return;
+    editingSlide = index;
+    draftSlide = { ...slides[index] };
+    slideFile = null; error = ''; notice = '';
+  }
+  function newSlide() {
+    if (editingSlide !== null || slides.length >= MAX_SLIDES) return;
+    editingSlide = slides.length;
+    draftSlide = { title: '', subtitle: '', image_url: '', link_label: 'Conocer más', link_url: '/catalogo' };
+    slideFile = null; error = ''; notice = '';
+  }
+  function cancelSlide() {
+    if (uploadingSlide) return;
+    editingSlide = null; slideFile = null; error = '';
+  }
+  function applySlide() {
+    if (editingSlide === null || uploadingSlide) return;
+    const title = draftSlide.title.trim();
+    const link = draftSlide.link_url.trim();
+    const image = draftSlide.image_url.trim();
+    const https = (value: string) => {
+      try { const url = new URL(value); return url.protocol === 'https:' && Boolean(url.hostname); }
+      catch { return false; }
+    };
+    if (!title || !link || !((link.startsWith('/') && !link.startsWith('//') && !link.includes(String.fromCharCode(92))) || https(link)) || (image && !https(image))) {
+      error = 'Introduce un título, un enlace interno o HTTPS válido y una imagen HTTPS si corresponde.';
+      return;
+    }
+    const item = { ...draftSlide, title, link_url: link, image_url: image };
+    slides = editingSlide === slides.length ? [...slides, item] : slides.map((s, i) => i === editingSlide ? item : s);
+    editingSlide = null; slideFile = null; error = '';
+    notice = 'Cambio preparado. Pulsa «Guardar y publicar cambios del sitio» para publicarlo.';
+  }
+  function removeSlide(index: number) {
+    if (editingSlide !== null || slides.length <= 1) return;
+    if (!confirm('¿Quitar esta diapositiva? El cambio se publicará al guardar el sitio.')) return;
+    slides = slides.filter((_, i) => i !== index);
+    notice = 'Diapositiva retirada. Guarda los cambios para publicar.';
+  }
   let phoneRows = $state<{ label: string; number: string }[]>([]);
   function addPhone() { phoneRows = [...phoneRows, { label: '', number: '' }]; }
   function removePhone(index: number) { phoneRows = phoneRows.filter((_, i) => i !== index); }
-  async function uploadSlide(index: number) {
-    const file = slideFiles[index];
-    if (!file) { error = 'Selecciona primero una fotografía.'; return; }
+  async function uploadSlide() {
+    if (editingSlide === null || !slideFile) { error = 'Selecciona primero una fotografía.'; return; }
+    const file = slideFile;
     if (file.size > 8 * 1024 * 1024 || !['image/jpeg','image/png','image/webp'].includes(file.type)) {
       error = 'Utiliza JPG, PNG o WebP de hasta 8 MB.'; return;
     }
-    error = ''; notice = ''; uploadingSlide = index;
+    error = ''; notice = ''; uploadingSlide = true;
     try {
       const result = await api.uploadSiteMedia(token, file);
-      slides[index].image_url = result.image_url;
-      slideFiles[index] = null;
-      notice = 'Fotografía guardada en R2. Pulsa «Guardar y publicar cambios del sitio» para mostrarla en la portada.';
+      draftSlide.image_url = result.image_url;
+      slideFile = null;
+      notice = 'Imagen subida a R2. Aplica la edición y publica los cambios del sitio.';
     } catch (e) { error = e instanceof Error ? e.message : 'No se pudo subir la imagen'; }
-    finally { uploadingSlide = -1; }
+    finally { uploadingSlide = false; }
   }
   let linksText = $state('');
   async function loadExtra() {
@@ -267,7 +310,7 @@
       const slidesRow = (cfg.settings ?? []).find((x: any) => x.key === 'home_slides');
       try {
         const parsed = JSON.parse(slidesRow?.value || 'null');
-        if (Array.isArray(parsed) && parsed.length === 3) {
+        if (Array.isArray(parsed) && parsed.length >= 1 && parsed.length <= MAX_SLIDES) {
           slides = parsed.map((s: any) => ({
             title: String(s.title === 'Energía Vital' ? 'Bonaire' : s.title || ''), subtitle: String(s.subtitle || ''),
             image_url: String(s.image_url || ''), link_label: String(s.link_label || ''),
@@ -335,6 +378,7 @@
   async function saveSite(event: SubmitEvent) {
     event.preventDefault();
     await execute(async () => {
+      if (editingSlide !== null) throw new Error('Aplica o cancela la edición antes de publicar.');
       const links = linksText.split('\n').map(s => s.trim()).filter(Boolean).map(line => {
         const pos = line.indexOf('|');
         if (pos < 1) throw new Error('Enlaces: escribe una línea como Catálogo | /catalogo');
@@ -527,51 +571,73 @@
       </div>
       <form onsubmit={saveSite} class="grid grid-cols-1 xl:grid-cols-12 gap-5 xl:gap-6 items-start min-w-0">
         <fieldset class="space-y-4 min-w-0 xl:col-span-8">
-          <legend class="text-lg font-semibold mb-3">Carrusel de portada · 3 diapositivas</legend>
-          <p class="text-sm text-slate-500">Elige tus fotografías y súbelas directamente al almacenamiento R2 de Cloudflare. También puedes usar una imagen de la galería o pegar una URL HTTPS.</p>
-          <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
-          {#each slides as slide, index}
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-3">
-              <h3 class="font-bold text-slate-900">Diapositiva {index + 1} · {index === 0 ? 'Presentación' : index === 1 ? 'Trabajos' : 'Novedades o promociones'}</h3>
-              <label class="admin-label">Título
-                <input required maxlength="120" class="admin-input" bind:value={slide.title} />
-              </label>
-              <label class="admin-label">Descripción
-                <textarea maxlength="450" rows="3" class="admin-input" bind:value={slide.subtitle}></textarea>
-              </label>
-              <div class="space-y-2 rounded-xl border border-teal-100 bg-white p-3">
+          <legend class="text-lg font-semibold mb-3">Carrusel de portada · {slides.length} diapositivas</legend>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <p class="text-sm text-slate-500">Conserva tus tres diapositivas actuales y añade hasta tres más. Edita o elimina con botones.</p>
+            <button type="button" class="admin-secondary" disabled={editingSlide !== null || slides.length >= MAX_SLIDES}
+              onclick={newSlide}>＋ Crear diapositiva</button>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-3">
+            {#each slides as item, index (index)}
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3 min-w-0">
+                {#if item.image_url && item.image_url.startsWith('https://')}
+                  <img src={item.image_url} alt={'Imagen de '+item.title} class="h-36 w-full object-cover rounded-xl"/>
+                {:else}
+                  <div class="h-36 w-full rounded-xl bg-gradient-to-br from-slate-900 to-teal-700 flex items-center justify-center text-white text-sm">Sin fotografía</div>
+                {/if}
+                <div>
+                  <span class="text-xs font-bold text-teal-700">Diapositiva {index + 1}</span>
+                  <h3 class="font-bold text-slate-900 break-words">{item.title}</h3>
+                  <p class="text-xs text-slate-500 line-clamp-2">{item.subtitle || 'Sin descripción'}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" class="admin-secondary text-sm" disabled={editingSlide !== null} onclick={() => editSlide(index)}>✎ Editar</button>
+                  <button type="button" class="admin-link text-sm text-red-700" disabled={editingSlide !== null || slides.length <= 1}
+                    onclick={() => removeSlide(index)}>Eliminar</button>
+                </div>
+              </article>
+            {/each}
+          </div>
+          {#if editingSlide !== null}
+            <div class="rounded-2xl border-2 border-teal-300 bg-white p-4 sm:p-6 space-y-4" aria-label="Editor de diapositivas">
+              <div class="flex flex-wrap justify-between items-center gap-2">
+                <h3 class="font-bold text-lg">{editingSlide === slides.length ? 'Crear diapositiva' : 'Editar diapositiva '+(editingSlide + 1)}</h3>
+                <button type="button" class="admin-secondary" disabled={uploadingSlide} onclick={cancelSlide}>Cancelar</button>
+              </div>
+              <label class="admin-label">Título<input required maxlength="120" class="admin-input" bind:value={draftSlide.title}/></label>
+              <label class="admin-label">Descripción<textarea maxlength="450" rows="3" class="admin-input" bind:value={draftSlide.subtitle}></textarea></label>
+              <div class="space-y-2 rounded-xl border border-teal-100 p-3">
                 <label class="admin-label">Subir imagen a Cloudflare R2
                   <input type="file" accept="image/jpeg,image/png,image/webp" class="admin-input"
-                    onchange={e => slideFiles[index] = e.currentTarget.files?.[0] ?? null} />
+                    onchange={e => slideFile = e.currentTarget.files?.[0] ?? null}/>
                 </label>
-                <button type="button" class="admin-secondary w-full" disabled={uploadingSlide >= 0 || !slideFiles[index]}
-                  onclick={() => uploadSlide(index)}>{uploadingSlide === index ? 'Subiendo imagen…' : 'Subir foto a Cloudflare'}</button>
-                <p class="text-xs text-slate-500">JPG, PNG o WebP hasta 8 MB. Después guarda los cambios del sitio.</p>
+                <button type="button" class="admin-secondary w-full" disabled={uploadingSlide || !slideFile}
+                  onclick={uploadSlide}>{uploadingSlide ? 'Subiendo imagen…' : 'Subir fotografía'}</button>
+                <p class="text-xs text-slate-500">JPG, PNG o WebP, máximo 8 MB.</p>
               </div>
-              <label class="admin-label">O seleccionar una imagen de la galería
-                <select class="admin-input" bind:value={slide.image_url}>
-                  <option value="">Sin imagen (usar fondo de color)</option>
+              <label class="admin-label">O elegir fotografía de la galería
+                <select class="admin-input" bind:value={draftSlide.image_url}>
+                  <option value="">Sin imagen (fondo de color)</option>
                   {#each gallery.filter((g: any) => g.url && g.is_active) as g (g.id)}
                     <option value={g.url}>{g.title || 'Trabajo sin título'}</option>
                   {/each}
-                  {#if slide.image_url && !gallery.some((g: any) => g.url === slide.image_url)}
-                    <option value={slide.image_url}>Imagen externa / guardada</option>
+                  {#if draftSlide.image_url && !gallery.some((g: any) => g.url === draftSlide.image_url)}
+                    <option value={draftSlide.image_url}>Imagen guardada o externa</option>
                   {/if}
                 </select>
               </label>
-              <label class="admin-label">O pegar una URL HTTPS de imagen
-                <input type="url" maxlength="600" class="admin-input" placeholder="https://..." bind:value={slide.image_url} />
-              </label>
-              {#if slide.image_url && slide.image_url.startsWith('https://')}
-                <img src={slide.image_url} alt="Vista previa de la diapositiva" class="rounded-xl max-h-44 w-full object-cover" />
+              <label class="admin-label">O introducir URL HTTPS<input type="url" maxlength="600" class="admin-input" placeholder="https://..." bind:value={draftSlide.image_url}/></label>
+              {#if draftSlide.image_url && draftSlide.image_url.startsWith('https://')}
+                <img src={draftSlide.image_url} alt="Vista previa de la diapositiva" class="rounded-xl max-h-52 w-full object-cover"/>
               {/if}
               <div class="grid sm:grid-cols-2 gap-3">
-                <label class="admin-label">Texto del botón<input maxlength="60" class="admin-input" bind:value={slide.link_label} /></label>
-                <label class="admin-label">Enlace del botón<input required maxlength="500" class="admin-input" placeholder="/galeria" bind:value={slide.link_url} /></label>
+                <label class="admin-label">Texto del botón<input maxlength="60" class="admin-input" bind:value={draftSlide.link_label}/></label>
+                <label class="admin-label">Enlace del botón<input required maxlength="500" class="admin-input" placeholder="/galeria" bind:value={draftSlide.link_url}/></label>
               </div>
+              <button type="button" class="rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-5 py-3"
+                disabled={uploadingSlide} onclick={applySlide}>{editingSlide === slides.length ? '＋ Añadir diapositiva' : 'Aplicar edición'}</button>
             </div>
-          {/each}
-          </div>
+          {/if}
         </fieldset>
         <fieldset class="space-y-3 min-w-0 xl:col-span-4"><legend class="text-lg font-semibold mb-3">Pie de página y contacto</legend>
           <label class="admin-label">Texto sobre la empresa<textarea rows="3" class="admin-input" bind:value={site.footer_description}></textarea></label>

@@ -13,7 +13,7 @@
       catch { /* The home banner keeps its defaults if settings are unavailable. */ }
     })();
     const interval = window.setInterval(() => {
-      if (!document.hidden) activeSlide = (activeSlide + 1) % 3;
+      if (!document.hidden && slides.length > 1) activeSlide = (activeSlide + 1) % slides.length;
     }, 7500);
     return () => window.clearInterval(interval);
   });
@@ -27,7 +27,7 @@
   let slides = $derived.by((): Slide[] => {
     try {
       const parsed = JSON.parse(settings.home_slides || '');
-      if (Array.isArray(parsed) && parsed.length === 3 && parsed.every((s: any) =>
+      if (Array.isArray(parsed) && parsed.length >= 1 && parsed.length <= 6 && parsed.every((s: any) =>
         typeof s.title === 'string' && typeof s.subtitle === 'string' &&
         typeof s.image_url === 'string' && typeof s.link_label === 'string' &&
         typeof s.link_url === 'string')) return parsed.map((s: Slide) => ({
@@ -38,7 +38,7 @@
       subtitle: settings.home_subtitle || intro }, defaults[1], defaults[2]];
   });
   let slide = $derived(slides[activeSlide] || slides[0]);
-  function selectSlide(index: number) { activeSlide = (index + 3) % 3; }
+  function selectSlide(index: number) { activeSlide = ((index % slides.length) + slides.length) % slides.length; }
 </script>
 
 <section aria-label="Presentación de Bonaire" class="relative rounded-3xl overflow-hidden min-h-[440px] sm:min-h-[500px] bg-slate-950 text-white flex flex-col justify-between shadow-xl">
@@ -50,7 +50,7 @@
     <div class="absolute -right-20 -top-20 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl"></div>
   {/if}
   <div class="relative px-6 py-16 sm:px-14 sm:py-20 max-w-3xl flex-1">
-    <span class="inline-flex items-center px-4 py-2 border border-white/25 bg-white/10 rounded-full text-sm text-teal-50 mb-7">☀ Bonaire · {activeSlide + 1} de 3</span>
+    <span class="inline-flex items-center px-4 py-2 border border-white/25 bg-white/10 rounded-full text-sm text-teal-50 mb-7">☀ Bonaire · {activeSlide + 1} de {slides.length}</span>
     <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight mb-6">{slide.title}</h1>
     <p class="text-lg sm:text-xl text-teal-50 leading-relaxed mb-8 max-w-2xl">{slide.subtitle}</p>
     <div class="flex flex-wrap gap-3">
