@@ -297,7 +297,11 @@ adminRoutes.post('/products/:id/image-url', async c => {
 
 adminRoutes.delete('/products/:id', async (c) => {
   const { DB } = c.env;
-  await DB.prepare('DELETE FROM products WHERE id = ?').bind(c.req.param('id')).run();
+  const id = c.req.param('id');
+  const { results } = await DB.prepare('SELECT r2_key FROM product_images WHERE product_id = ?').bind(id).all<{r2_key:string}>();
+  await DB.prepare('DELETE FROM products WHERE id = ?').bind(id).run();
+  for (const image of results || []) if (image.r2_key)
+    await c.env.BUCKET.delete(image.r2_key).catch(() => {});
   return c.json({ message: 'Producto eliminado' });
 });
 
@@ -443,9 +447,12 @@ adminRoutes.post('/services/:id/image-url', async c => {
 
 adminRoutes.delete('/services/:id', async (c) => {
   const { DB } = c.env;
-  const row = await DB.prepare('SELECT image_r2_key FROM services WHERE id = ?').bind(c.req.param('id')).first<{ image_r2_key: string | null }>();
-  await DB.prepare('DELETE FROM services WHERE id = ?').bind(c.req.param('id')).run();
-  if (row?.image_r2_key) await c.env.BUCKET.delete(row.image_r2_key).catch(() => {});
+  const id = c.req.param('id');
+  const {results} = await DB.prepare('SELECT r2_key FROM service_images WHERE service_id=?').bind(id).all<{r2_key:string|null}>();
+  const row = await DB.prepare('SELECT image_r2_key FROM services WHERE id = ?').bind(id).first<{ image_r2_key: string | null }>();
+  await DB.prepare('DELETE FROM services WHERE id = ?').bind(id).run();
+  const keys = new Set([row?.image_r2_key,...(results||[]).map(x=>x.r2_key)].filter(Boolean));
+  for(const key of keys) await c.env.BUCKET.delete(key!).catch(()=>{});
   return c.json({ message: 'Servicio eliminado' });
 });
 
@@ -583,11 +590,11 @@ adminRoutes.delete('/gallery/:id', async (c) => {
   const { DB, BUCKET } = c.env;
   const id = c.req.param('id');
   const row = await DB.prepare('SELECT r2_key FROM work_gallery WHERE id = ?').bind(id).first<{ r2_key: string | null }>();
-  if (row?.r2_key) {
-    try { await BUCKET.delete(row.r2_key); } catch (e) { console.error('Error borrando de R2:', e); }
-  }
+  const {results} = await DB.prepare('SELECT r2_key FROM work_gallery_images WHERE project_id=?').bind(id).all<{r2_key:string|null}>();
   await DB.prepare('DELETE FROM work_gallery WHERE id = ?').bind(id).run();
-  return c.json({ message: 'Imagen de galería eliminada' });
+  const keys = new Set([row?.r2_key,...(results||[]).map(x=>x.r2_key)].filter(Boolean));
+  for(const key of keys) await BUCKET.delete(key!).catch(()=>{});
+  return c.json({ message: 'Proyecto eliminado' });
 });
 
 
