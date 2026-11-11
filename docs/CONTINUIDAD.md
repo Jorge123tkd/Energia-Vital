@@ -11,10 +11,10 @@ Actualizado: 11 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
-El usuario compartió la salida de PowerShell: rama correcta feat/cloudflare-customer-accounts-hardening; package-lock.json modificado y una imagen WebP sin seguimiento. Wrangler 4.151.2 tiene sesión OAuth activa en su equipo con permisos D1, Workers y Pages. Existe energia-vital-web, dominio energia-vital-web.pages.dev, sin proveedor Git conectado. No se han ejecutado migraciones remotas ni despliegues de esta actualización.
+Salida de PowerShell recibida en Texto pegado.txt: stash creado con archivos sin seguimiento y etiqueta "Respaldo local antes del despliegue Bonaire"; árbol limpio antes de actualizar; pull fast-forward de a9a8a9c a 98011f0. npm ci correcto (164 paquetes). Typecheck API correcto; Svelte 0 errores y 0 advertencias. npm informa 9 vulnerabilidades (1 baja, 6 moderadas, 2 altas) y advertencias de scripts de instalación; falta revisar el detalle. Listado Pages confirma Production en main; publicación previa 89031ae4-57c9-4fc8-907f-52d1eaba93d3 con fuente a9a8a9c. Esta actualización aún no se desplegó.
 
 ## Siguiente paso exacto
-Conservar los cambios locales con git stash push --include-untracked y una etiqueta reconocible; comprobar que el árbol queda limpio; ejecutar git pull --ff-only origin feat/cloudflare-customer-accounts-hardening, npm ci y comprobaciones de API/web. No aplicar todavía el stash: contiene un lockfile anterior que podría sobrescribir la corrección remota. Recuperar la imagen y revisar el lockfile separadamente después. Obtener también el listado de despliegues Pages y confirmar su rama de producción antes de publicar. Esperar la salida del usuario y registrar resultados reales.
+En PowerShell: compilar con VITE_API_URL del Worker, exportar D1 remoto a un respaldo fuera del repositorio y comprobar archivo no vacío; listar migraciones remotas y versiones del Worker; obtener npm audit y npm audit --omit=dev para distinguir dependencias de producción/desarrollo. Compartir salida sin SQL ni secretos. No aplicar migraciones hasta conocer el respaldo y los pendientes. Para Pages usar --branch=main al publicar, conservando la rama Git de trabajo. El stash sigue pendiente de recuperación selectiva (imagen y revisión del lockfile); no hacer stash pop indiscriminadamente.
 
 ## Trabajo completado y evidencia
 ### Cambios previos presentes en el repositorio
@@ -43,8 +43,12 @@ Conservar los cambios locales con git stash push --include-untracked y una etiqu
 | Instalación y checks locales del agente | Completados |
 | Registro de continuidad e instrucciones | Creados en esta actualización |
 | Autenticación Cloudflare en entorno del agente | No disponible |
-| Estado del repositorio Windows | Rama correcta; lockfile modificado y WebP nueva por conservar |\n| Autenticación Cloudflare del usuario | Confirmada por whoami; permisos D1, Workers y Pages |\n| Proyecto Pages | energia-vital-web.pages.dev; sin proveedor Git |
-| Rama de producción Pages | Por confirmar |
+| Estado del repositorio Windows | Actualizado a 98011f0; cambios conservados en stash; instalación y tipos correctos |
+| Autenticación Cloudflare del usuario | Confirmada por whoami; permisos D1, Workers y Pages |
+| Proyecto Pages | energia-vital-web.pages.dev; sin proveedor Git |
+| Rama de producción Pages | main, confirmada por listado Production; Git sigue en la rama de trabajo |
+| Dependencias en Windows | npm ci correcto; 9 vulnerabilidades por analizar |
+| Versión Pages anterior | 89031ae4-57c9-4fc8-907f-52d1eaba93d3, fuente a9a8a9c |
 | Respaldo D1 remoto para esta actualización | Pendiente |
 | Migraciones D1 remotas, incluida 010 | Pendiente |
 | Desplegar Worker | Pendiente |
@@ -57,5 +61,9 @@ Conservar los cambios locales con git stash push --include-untracked y una etiqu
 - 2026-11-11: el usuario autorizó preparar y realizar todos los pasos de despliegue y pidió documentación permanente después de cada paso.
 - 2026-11-11: comprobado acceso a GitHub. Wrangler indica que no hay sesión Cloudflare en este entorno. Preparada guía de PowerShell y punto de reanudación; producción sin modificar.
 
-- 2026-11-11: paso 1 confirmado con salida del usuario: sesión Cloudflare activa, rama correcta y proyecto Pages encontrado. Cambios locales detectados; preparado paso 2 para conservarlos antes de actualizar. No se guardan correo, identificadores de cuenta ni credenciales. Rama de producción aún no confirmada.\n\n## Cómo actualizar este registro
+- 2026-11-11: paso 1 confirmado con salida del usuario: sesión Cloudflare activa, rama correcta y proyecto Pages encontrado. Cambios locales detectados; preparado paso 2 para conservarlos antes de actualizar. No se guardan correo, identificadores de cuenta ni credenciales. Rama de producción aún no confirmada.
+
+- 2026-11-11: paso 2 confirmado mediante archivo adjunto: stash con untracked, pull fast-forward a 98011f0, npm ci y ambos typechecks correctos. Pages Production usa main. Registradas 9 vulnerabilidades pendientes de detalle. Próximo: build, respaldo D1, lista de migraciones/versiones y audit; sin cambios remotos de producción.
+
+## Cómo actualizar este registro
 Después de cada paso: añadir fecha, acción, resultado y evidencia breve a la bitácora; ajustar tabla, Último paso realizado y Siguiente paso exacto. Registrar fallos y bloqueos. Guardar y subir a la rama, sin declararlo actualizado si GitHub no confirmó el cambio. No marcar como realizado un comando solo porque se haya entregado al usuario.
