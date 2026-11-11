@@ -116,16 +116,35 @@ adminCustomersRoutes.delete('/customers/:id', requireAdminAuth, async c => {
   return c.json({ message: 'Cliente eliminado definitivamente' });
 });
 
+function paging(c: any) {
+  const page = Math.max(1, Math.min(100000, Number.parseInt(c.req.query('page') || '1', 10) || 1));
+  const pageSize = Math.max(5, Math.min(100, Number.parseInt(c.req.query('page_size') || '20', 10) || 20));
+  const q = (c.req.query('q') || '').trim().toLowerCase().slice(0, 120);
+  const advanced = c.req.query('page') !== undefined || c.req.query('page_size') !== undefined || q.length > 0;
+  return { page, pageSize, q, advanced };
+}
+
 adminCustomersRoutes.get('/requests', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT r.id, r.customer_id, r.type, r.request_category_id, r.title, r.description,
+  const {page, pageSize, q, advanced} = paging(c);
+  const where = q ? ` WHERE instr(lower(r.id), ?) > 0
+    OR instr(lower(r.title), ?) > 0
+    OR instr(lower(COALESCE(r.description,'')), ?) > 0
+    OR instr(lower(COALESCE(cu.name,'')), ?) > 0
+    OR instr(lower(COALESCE(cu.phone,'')), ?) > 0
+    OR instr(lower(COALESCE(cu.email,'')), ?) > 0` : '';
+  const args = q ? [q,q,q,q,q,q] : [];
+  const joins = ` FROM requests r
+    LEFT JOIN customers cu ON cu.id = r.customer_id
+    LEFT JOIN request_categories rc ON rc.id = r.request_category_id`;
+  const query = `SELECT r.id, r.customer_id, r.type, r.request_category_id, r.title, r.description,
     r.status, r.location, r.preferred_date, r.created_at, cu.name AS customer_name,
     cu.email, cu.phone, COALESCE(rc.name, r.type) AS category_name,
-    (SELECT COUNT(*) FROM request_images im WHERE im.request_id = r.id) AS image_count
-    FROM requests r
-    LEFT JOIN customers cu ON cu.id = r.customer_id
-    LEFT JOIN request_categories rc ON rc.id = r.request_category_id
-    ORDER BY r.created_at DESC LIMIT 200`).all();
-  return c.json({ requests: results ?? [] });
+    (SELECT COUNT(*) FROM request_images im WHERE im.request_id = r.id) AS image_count`
+    + joins + where + ' ORDER BY r.created_at DESC LIMIT ? OFFSET ?';
+  const {results} = await c.env.DB.prepare(query).bind(...args,advanced?pageSize:200,advanced?(page-1)*pageSize:0).all();
+  if (!advanced) return c.json({requests:results||[]});
+  const total = await c.env.DB.prepare('SELECT COUNT(*) AS n'+joins+where).bind(...args).first<{n:number}>();
+  return c.json({requests:results||[],page,page_size:pageSize,total:total?.n||0});
 });
 adminCustomersRoutes.patch('/requests/:id', async c => {
   const b = await c.req.json<any>();
@@ -135,10 +154,21 @@ adminCustomersRoutes.patch('/requests/:id', async c => {
   return result.meta?.changes ? c.json({ message: 'Solicitud actualizada' }) : c.json({ error: 'No encontrada' }, 404);
 });
 adminCustomersRoutes.get('/appointments', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT a.id, a.title, a.starts_at, a.ends_at, a.status, cu.name AS customer_name, cu.phone,
-    cu.address, cu.city, cu.province FROM appointments a LEFT JOIN customers cu ON cu.id = a.customer_id
-    ORDER BY a.starts_at DESC LIMIT 200`).all();
-  return c.json({ appointments: results ?? [] });
+  const {page,pageSize,q,advanced}=paging(c);
+  const joins=' FROM appointments a LEFT JOIN customers cu ON cu.id = a.customer_id';
+  const where = q ? ` WHERE instr(lower(a.id), ?) > 0
+    OR instr(lower(a.title), ?) > 0
+    OR instr(lower(COALESCE(cu.name,'')), ?) > 0
+    OR instr(lower(COALESCE(cu.phone,'')), ?) > 0
+    OR instr(lower(COALESCE(cu.email,'')), ?) > 0` : '';
+  const args=q?[q,q,q,q,q]:[];
+  const {results}=await c.env.DB.prepare(`SELECT a.id,a.title,a.starts_at,a.ends_at,a.status,
+    cu.name AS customer_name,cu.phone,cu.email,cu.address,cu.city,cu.province`+joins+where+
+    ' ORDER BY a.starts_at DESC LIMIT ? OFFSET ?')
+    .bind(...args,advanced?pageSize:200,advanced?(page-1)*pageSize:0).all();
+  if(!advanced)return c.json({appointments:results||[]});
+  const total=await c.env.DB.prepare('SELECT COUNT(*) AS n'+joins+where).bind(...args).first<{n:number}>();
+  return c.json({appointments:results||[],page,page_size:pageSize,total:total?.n||0});
 });
 adminCustomersRoutes.patch('/appointments/:id', async c => {
   const b = await c.req.json<any>();
