@@ -359,6 +359,7 @@ adminExtrasRoutes.post('/products/:id/verify-purchase', async c => {
   const id=c.req.param('id'),body=await c.req.json<any>().catch(()=>null);
   const customerId=text(body?.customer_id,80),reference=text(body?.reference,200);
   if(!customerId)return c.json({error:'Introduce el ID del cliente.'},400);
+  if(reference.length<3)return c.json({error:'Escribe una referencia de factura o comprobante real para verificar esta compra.'},400);
   const [product,customer]=await Promise.all([
     c.env.DB.prepare('SELECT id FROM products WHERE id=?').bind(id).first(),
     c.env.DB.prepare('SELECT id FROM customers WHERE id=?').bind(customerId).first(),
