@@ -244,6 +244,7 @@
     return { home_title: 'Bonaire', home_subtitle: '', footer_description: '',
       footer_cta_title: '', footer_cta_description: '',
       business_phone: '', business_email: '', business_address: '', business_hours: '',
+      sales_managers: '[]',
       youtube_channel_url: '', facebook_url: '', instagram_url: '', telegram_public_url: '',
       bot_whatsapp_url: '', bot_telegram_url: '' };
   }
@@ -306,6 +307,14 @@
   let phoneRows = $state<{ label: string; number: string }[]>([]);
   function addPhone() { phoneRows = [...phoneRows, { label: '', number: '' }]; }
   function removePhone(index: number) { phoneRows = phoneRows.filter((_, i) => i !== index); }
+  // Gestores de ventas, separados del teléfono general y de los enlaces de chatbots.
+  let salesRows = $state<{ name: string; phone: string }[]>([]);
+  function addSalesManager() {
+    if (salesRows.length < 6) salesRows = [...salesRows, {name:'',phone:''}];
+  }
+  function removeSalesManager(index:number) {
+    salesRows = salesRows.filter((_,i)=>i!==index);
+  }
   async function uploadSlide() {
     if (editingSlide === null || !slideFile) { error = 'Selecciona primero una fotografía.'; return; }
     const file = slideFile;
@@ -339,6 +348,13 @@
         phoneRows = Array.isArray(value) ? value.filter((p: any) => p && typeof p.number === 'string')
           .map((p: any) => ({ label: String(p.label || ''), number: String(p.number || '') })) : [];
       } catch { phoneRows = []; }
+      try {
+        const parsed = JSON.parse(next.sales_managers || '[]');
+        salesRows = Array.isArray(parsed)
+          ? parsed.filter((m: any)=>m && typeof m.name === 'string' && typeof m.phone === 'string')
+              .slice(0,6).map((m:any)=>({name:m.name,phone:m.phone}))
+          : [];
+      } catch { salesRows = []; }
       const row = (cfg.settings ?? []).find((x: any) => x.key === 'footer_links');
       let links: any[] = [];
       try { links = JSON.parse(row?.value || '[]'); } catch { /* configuración antigua */ }
@@ -420,7 +436,13 @@
         if (pos < 1) throw new Error('Enlaces: escribe una línea como Catálogo | /catalogo');
         return { label: line.slice(0, pos).trim(), url: line.slice(pos + 1).trim() };
       });
+      const managers = salesRows.filter(row => row.name.trim() || row.phone.trim());
+      if (managers.length>6 || !managers.every(row=>row.name.trim().length>0 && row.name.trim().length<=60 &&
+          /^[+]?[0-9 ()-]{8,25}$/.test(row.phone.trim()) &&
+          row.phone.replace(/\D/g,'').length>=8 && row.phone.replace(/\D/g,'').length<=15))
+        throw new Error('Gestores: escribe un nombre y un WhatsApp con prefijo internacional válido (8 a 15 dígitos).');
       await api.saveSiteSettings(token, { ...site, footer_links: JSON.stringify(links), home_slides: JSON.stringify(slides),
+        sales_managers: JSON.stringify(managers.map(row=>({name:row.name.trim(),phone:row.phone.trim()}))),
         business_phones: JSON.stringify(phoneRows.filter(p => p.number.trim()).map(p => ({ label: p.label.trim(), number: p.number.trim() }))) });
       notice = 'Contenido de la portada y el pie de página publicado.';
     });
@@ -724,6 +746,32 @@
             <label class="admin-label">Correo público<input class="admin-input" type="email" placeholder="info@..." bind:value={site.business_email} /></label>
             <label class="admin-label">Dirección<input class="admin-input" bind:value={site.business_address} /></label>
             <label class="admin-label">Horario<input class="admin-input" bind:value={site.business_hours} /></label>
+          </div>
+          <div class="rounded-2xl bg-teal-50/50 border border-teal-200 p-3 sm:p-4 space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h3 class="font-extrabold text-slate-900 text-sm">Gestores de ventas por WhatsApp</h3>
+                <p class="text-xs text-slate-600 mt-1">Solo estos números recibirán las consultas del botón «Comprar». No se confunden con el teléfono general ni con los bots.</p>
+              </div>
+              <button type="button" disabled={salesRows.length >= 6}
+                class="admin-secondary text-xs shrink-0 disabled:opacity-50" onclick={addSalesManager}>+ Gestor</button>
+            </div>
+            {#each salesRows as row, i}
+              <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] gap-2 items-end rounded-xl bg-white border border-teal-100 p-3">
+                <label class="admin-label">Nombre o área de ventas
+                  <input class="admin-input" maxlength="60" placeholder="Ej. Ventas de equipos" bind:value={row.name}/>
+                </label>
+                <label class="admin-label">WhatsApp con código de país
+                  <input class="admin-input" type="tel" maxlength="25" placeholder="+53 5..." bind:value={row.phone}/>
+                </label>
+                <button type="button" class="admin-secondary" onclick={() => removeSalesManager(i)}
+                  aria-label={'Quitar gestor '+(i+1)}>Quitar</button>
+              </div>
+            {/each}
+            {#if !salesRows.length}
+              <p class="text-xs text-amber-800">Todavía no hay gestores configurados. «Comprar» mostrará cómo contactar a Bonaire, pero no enviará mensajes a números personales.</p>
+            {/if}
+            <p class="text-xs text-slate-600">Hasta seis gestores. Con uno, el botón dirigirá a su WhatsApp. Con varios, el cliente podrá escoger uno antes de escribir. Guardar no registra una venta ni valida pagos.</p>
           </div>
           <div class="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-3">
             <div class="flex justify-between items-center gap-2">
