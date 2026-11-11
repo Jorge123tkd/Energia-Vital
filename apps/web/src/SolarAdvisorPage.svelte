@@ -365,28 +365,47 @@
                   <input class="solar-input" maxlength="100" bind:value={d.name} placeholder="Ej. Refrigerador"/>
                 </label>
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <label class="solar-label">Potencia (W)
-                    <input type="number" min="1" max="50000" bind:value={d.watts} class="solar-input"/>
-                  </label>
-                  <label class="solar-label">Cantidad
+                  {#if level==='tecnico'}
+                    <label class="solar-label">Potencia (W)
+                      <input type="number" min="1" max="50000" bind:value={d.watts} class="solar-input"/>
+                    </label>
+                  {/if}
+                  <label class="solar-label">¿Cuántos tienes?
                     <input type="number" min="1" max="100" step="1" bind:value={d.units} class="solar-input"/>
                   </label>
-                  <label class="solar-label">Horas equivalentes/día
+                  <label class="solar-label">Horas al día
                     <input type="number" min="0.1" max="24" step="0.5" bind:value={d.hours} class="solar-input"/>
                   </label>
                 </div>
+                {#if level==='basico'}
+                  <details class="rounded-xl border border-slate-200 bg-white p-3">
+                    <summary class="cursor-pointer text-xs font-bold text-teal-800">Opcional: modificar la potencia estimada ({d.watts} W)</summary>
+                    <label class="solar-label mt-3">Potencia real del equipo (W), si la sabes
+                      <input type="number" min="1" max="50000" bind:value={d.watts} class="solar-input"/>
+                    </label>
+                  </details>
+                {/if}
                 <label class="flex gap-3 items-center text-sm text-slate-700">
                   <input type="checkbox" bind:checked={d.critical}/>
                   Debe funcionar durante los apagones
                 </label>
                 {#if d.critical}
-                  <label class="solar-label">Horas de uso durante el apagón (opcional)
-                    <input type="number" min="0.5" max={autonomyHours} step="0.5"
-                      value={d.backupHours ?? autonomyHours}
-                      onchange={e => d.backupHours=Number(e.currentTarget.value)}
-                      class="solar-input" />
-                    <span class="block mt-1 text-xs text-slate-500 font-normal">El aparato no tiene que estar encendido durante todo el corte si lo usarás menos horas.</span>
-                  </label>
+                  {#if level==='basico'}
+                    <details class="rounded-xl border border-slate-200 bg-white p-3">
+                      <summary class="cursor-pointer text-xs font-bold text-teal-800">Opcional: menos horas de uso durante el corte</summary>
+                      <label class="solar-label mt-3">Horas de uso de este equipo en el apagón
+                        <input type="number" min="0.5" max={autonomyHours} step="0.5"
+                          value={d.backupHours ?? autonomyHours}
+                          onchange={e => d.backupHours=Number(e.currentTarget.value)} class="solar-input"/>
+                      </label>
+                    </details>
+                  {:else}
+                    <label class="solar-label">Horas de uso durante el apagón
+                      <input type="number" min="0.5" max={autonomyHours} step="0.5"
+                        value={d.backupHours ?? autonomyHours}
+                        onchange={e => d.backupHours=Number(e.currentTarget.value)} class="solar-input"/>
+                    </label>
+                  {/if}
                 {/if}
                 {#if d.name==='Refrigerador'}
                   <p class="text-xs text-slate-500">Para el respaldo suponemos que el compresor funciona aproximadamente el 40% del tiempo. Compruébalo con tus mediciones reales.</p>
@@ -397,13 +416,13 @@
           {#if !devices.length}<p class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900 mt-4">Selecciona al menos un equipo para continuar.</p>{/if}
         {/if}
       {:else if step===3}
-        <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">Autonomía y equipos existentes</h2>
+        <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">{level==='basico'?'¿Cuántas horas necesitas energía?':'Autonomía y generación solar'}</h2>
         <p class="text-sm text-slate-600 mt-2">Calcularemos el respaldo para las cargas imprescindibles, no necesariamente para toda la vivienda o negocio.</p>
         {#if level==='basico'}
           <div class="rounded-xl border border-teal-100 bg-teal-50 p-4 mt-4 text-sm text-slate-700 space-y-2">
             <p><strong>¿Qué significa autonomía?</strong> Es el tiempo que quieres que funcionen tus aparatos esenciales cuando se va la corriente.</p>
             <p><strong>¿Qué es kWh?</strong> Es la energía que puede almacenar una batería, distinta de la potencia (kW) que puede suministrar un inversor.</p>
-            <p>No necesitas conocer la potencia exacta de los paneles. Usaremos valores de referencia y te explicaremos las suposiciones al terminar.</p>
+            <p>Solo indica las horas que deseas tener energía. Explorar una opción con paneles es voluntario; no necesitas saber cuántos comprar.</p>
           </div>
         {/if}
         <div class="grid sm:grid-cols-2 gap-4 mt-5">
