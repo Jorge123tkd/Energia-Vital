@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import Pagination from './Pagination.svelte';
   let { token, customers, onRefresh, canManage = true }: {
@@ -10,6 +11,7 @@
   const perPage = 12;
   let copiedId = $state('');
   let remoteRows: any[] | null = $state(null);
+  let remoteTotal = $state(0);
   let searching = $state(false);
   let edit: any = $state(null);
   let busy = $state(false);
@@ -18,14 +20,22 @@
   let visible = $derived((remoteRows ?? customers).filter(c =>
     [c.id, c.name, c.email, c.phone, c.city, c.province].some(v =>
       String(v || '').toLowerCase().includes(query.toLowerCase().trim()))));
-  let pageCount = $derived(Math.max(1, Math.ceil(visible.length / perPage)));
-  let pageRows = $derived(visible.slice((Math.min(page,pageCount)-1)*perPage, Math.min(page,pageCount)*perPage));
-  async function searchNow() {
+  let totalRows = $derived(remoteRows === null ? visible.length : remoteTotal);
+  let pageCount = $derived(Math.max(1, Math.ceil(totalRows / perPage)));
+  let pageRows = $derived(remoteRows === null
+    ? visible.slice((Math.min(page,pageCount)-1)*perPage, Math.min(page,pageCount)*perPage)
+    : visible);
+  async function searchNow(nextPage = 1) {
     error = ''; searching = true;
-    try { remoteRows = query.trim() ? (await api.adminCustomers(token, query.trim())).customers ?? [] : null; }
-    catch (e) { error = e instanceof Error ? e.message : 'No se pudo buscar el cliente'; }
+    try {
+      const result = await api.adminCustomers(token, query.trim(), nextPage, perPage);
+      remoteRows = result.customers ?? [];
+      remoteTotal = result.total ?? remoteRows.length;
+      page = nextPage;
+    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo buscar el cliente'; }
     finally { searching = false; }
   }
+  onMount(() => { void searchNow(1); });
   function search(event: SubmitEvent) { event.preventDefault(); page = 1; void searchNow(); }
   async function copyId(id: string) {
     try { await navigator.clipboard.writeText(id); copiedId = id; }
@@ -76,14 +86,14 @@
 <section class="space-y-5">
   <header class="flex flex-wrap items-end gap-3 justify-between">
     <div>
-      <h2 class="text-2xl font-bold text-slate-900">Clientes registrados <span class="text-slate-400 text-lg">({customers.length})</span></h2>
+      <h2 class="text-2xl font-bold text-slate-900">Clientes registrados <span class="text-slate-400 text-lg">({totalRows})</span></h2>
       <p class="text-sm text-slate-500 mt-1">Gestiona sus datos, bloquea cuentas y protege el historial de solicitudes.</p>
     </div>
     <form onsubmit={search} class="flex flex-wrap gap-2 w-full sm:w-auto">
       <input class="border border-slate-300 bg-white rounded-xl px-4 py-2.5 flex-1 min-w-0 sm:w-72" placeholder="ID, nombre o correo…" aria-label="Buscar cliente por identificador, nombre o correo" bind:value={query} oninput={() => { remoteRows = null; page = 1; }} />
       <button class="rounded-xl bg-teal-700 text-white font-semibold text-sm px-4 py-2.5" disabled={searching}>{searching ? 'Buscando…' : 'Buscar'}</button>
       {#if remoteRows !== null}
-        <button type="button" class="rounded-xl border border-slate-200 text-slate-700 text-sm px-3 py-2.5" onclick={() => { query = ''; remoteRows = null; }}>Limpiar</button>
+        <button type="button" class="rounded-xl border border-slate-200 text-slate-700 text-sm px-3 py-2.5" onclick={() => { query = ''; page = 1; void searchNow(1); }}>Limpiar</button>
       {/if}
     </form>
   </header>
@@ -123,8 +133,8 @@
   {:else}
     <p class="rounded-2xl border border-slate-200 bg-white p-8 text-slate-500">{customers.length ? 'No hay clientes con esos datos.' : 'Todavía no se han registrado clientes.'}</p>
   {/if}
-  <Pagination page={Math.min(page,pageCount)} total={visible.length} perPage={perPage}
-    label="clientes" onPage={n => page = n} />
+  <Pagination page={Math.min(page,pageCount)} total={totalRows} perPage={perPage}
+    label="clientes" onPage={searchNow} disabled={searching} />
 </section>
 
 {#if edit}

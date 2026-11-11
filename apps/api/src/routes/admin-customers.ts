@@ -14,14 +14,22 @@ function audit(c: any, action: string, customerId: string) {
 
 adminCustomersRoutes.get('/customers', async c => {
   const query = (c.req.query('q') || '').trim().toLowerCase().slice(0, 120);
+  const paged = c.req.query('page') !== undefined;
+  const page = Math.max(1, Math.min(100000, Number.parseInt(c.req.query('page') || '1', 10) || 1));
+  const pageSize = Math.max(1, Math.min(100, Number.parseInt(c.req.query('page_size') || '12', 10) || 12));
   const base = 'SELECT id, name, email, phone, address, city, province, phone_verified, is_active, created_at FROM customers';
   const matching = query
     ? ` WHERE instr(lower(id), ?) > 0 OR instr(lower(name), ?) > 0
-      OR instr(lower(email), ?) > 0 OR instr(lower(coalesce(phone, '')), ?) > 0`
+      OR instr(lower(email), ?) > 0 OR instr(lower(coalesce(phone, '')), ?) > 0
+      OR instr(lower(coalesce(city, '')), ?) > 0 OR instr(lower(coalesce(province, '')), ?) > 0`
     : '';
-  const statement = c.env.DB.prepare(base + matching + ' ORDER BY created_at DESC LIMIT 200');
-  const { results } = query ? await statement.bind(query, query, query, query).all() : await statement.all();
-  return c.json({ customers: results ?? [] });
+  const args = query ? [query, query, query, query, query, query] : [];
+  const { results } = await c.env.DB.prepare(base + matching + ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?')
+    .bind(...args, paged ? pageSize : 200, paged ? (page-1)*pageSize : 0).all();
+  if (!paged) return c.json({ customers: results ?? [] });
+  const count = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM customers' + matching)
+    .bind(...args).first<{n:number}>();
+  return c.json({ customers: results ?? [], total: count?.n || 0, page, page_size: pageSize });
 });
 // Perfil comercial: no se permite editar contraseñas ni roles desde este módulo.
 const trim = (value: unknown, max: number) => typeof value === 'string' ? value.trim().slice(0, max) : '';

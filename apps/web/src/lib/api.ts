@@ -133,7 +133,10 @@ export const api = {
   deactivateStaff: (token: string, id: string) =>
     apiRequest('/api/admin/users/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
 
-  adminCustomers: (token: string, query = '') => apiRequest('/api/admin-customers/customers' + (query ? '?q=' + encodeURIComponent(query) : ''), withAdmin(token)),
+  adminCustomers: (token: string, q = '', page?: number, pageSize = 12) =>
+    apiRequest('/api/admin-customers/customers' + (page !== undefined || q
+      ? '?' + new URLSearchParams({ q, page: String(page ?? 1), page_size: String(pageSize) }).toString() : ''),
+      withAdmin(token)),
   updateAdminCustomer: (token: string, id: string, body: Record<string, string>) =>
     patch(`/api/admin-customers/customers/${encodeURIComponent(id)}`, body, withAdmin(token)),
   setAdminCustomerStatus: (token: string, id: string, is_active: boolean) =>
