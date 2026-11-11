@@ -3,6 +3,7 @@
   import { api } from './lib/api';
   import CardImage from './components/CardImage.svelte';
   import Pagination from './components/Pagination.svelte';
+  import { parseSalesManagers, salesWhatsAppLink } from './lib/sales';
   let { featured = false }: { featured?: boolean } = $props();
   import ProductReviews from './components/ProductReviews.svelte';
 
@@ -28,6 +29,9 @@
   let selectedImages: string[] = $state([]);
   let selectedImageIndex = $state(0);
   let loadingDetails = $state(false);
+  let siteSettings: Record<string,string> = $state({});
+  let salesManagers = $derived(parseSalesManagers(siteSettings.sales_managers));
+  let pendingPurchase: Product | null = $state(null);
 
   function normalize(value: unknown) {
     return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -71,7 +75,10 @@
       loading = false;
     }
   }
-  onMount(() => { void loadCatalog(); });
+  onMount(() => {
+    void loadCatalog();
+    void api.getSettings().then(r => { siteSettings = r.settings ?? {}; }).catch(() => {});
+  });
 
   function imageOf(product: Product) {
     return product.primary_image_url || '';
@@ -87,8 +94,8 @@
     if (product.stock_status === 'on_order') return 'Bajo pedido';
     return '';
   }
-  function consult(product: Product) {
-    window.location.href = '/contacto?product=' + encodeURIComponent(product.name);
+  function openPurchaseOptions(product: Product) {
+    pendingPurchase = product;
   }
   async function details(product: Product) {
     selected = product;
@@ -215,13 +222,13 @@
     <div aria-label={featured ? 'Productos destacados, desliza horizontalmente' : 'Listado de productos'}
       class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
       {#each pageItems as product (product.id)}
-        <article class="min-w-0 flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-teal-200 transition {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
-          <button type="button" class="relative block w-full text-left bg-gradient-to-br from-teal-50 to-slate-100 overflow-hidden" onclick={() => details(product)} aria-label={'Ver detalles de ' + product.name}>
+        <article class="group relative min-w-0 flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-teal-200 transition {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
+          <div class="relative block w-full bg-gradient-to-br from-teal-50 to-slate-100 overflow-hidden">
             <CardImage src={imageOf(product)} alt={product.name} />
             {#if product.is_featured}
               <span class="absolute top-2 left-2 rounded-full bg-amber-100 text-amber-900 px-2.5 py-1 text-[10px] font-extrabold shadow-sm">Destacado</span>
             {/if}
-          </button>
+          </div>
           <div class="flex flex-col flex-1 p-3.5 sm:p-4">
             <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-2">
               <p class="text-[11px] font-bold uppercase tracking-wide text-teal-700 truncate">{product.category_name || 'Energía solar'}</p>
@@ -236,12 +243,23 @@
             <p class="text-xs text-slate-600 leading-relaxed mt-2 line-clamp-2 flex-1">{product.short_description || product.description || 'Consulta características, precio y compatibilidad con el equipo de Bonaire.'}</p>
             <div class="border-t border-slate-100 mt-4 pt-3">
               <p class="text-sm sm:text-base font-extrabold text-teal-800 break-words">{priceLabel(product)}</p>
-              <div class="grid grid-cols-2 gap-2 mt-3">
-                <button type="button" class="rounded-xl border border-teal-200 bg-teal-50 text-teal-900 px-2 py-2.5 font-bold text-xs hover:bg-teal-100" onclick={() => details(product)}>Detalles</button>
-                <button type="button" class="rounded-xl bg-teal-700 text-white px-2 py-2.5 font-bold text-xs hover:bg-teal-800" onclick={() => consult(product)}>Consultar</button>
+              <div class="mt-3">
+                {#if salesManagers.length===1}
+                  <a href={salesWhatsAppLink(salesManagers[0],product)} target="_blank" rel="noopener noreferrer"
+                    class="relative z-20 block rounded-xl bg-teal-700 text-white px-3 py-2.5 text-center font-extrabold text-xs hover:bg-teal-800">
+                    <span aria-hidden="true">◉</span> Comprar por WhatsApp
+                  </a>
+                {:else}
+                  <button type="button" class="relative z-20 w-full rounded-xl bg-teal-700 text-white px-3 py-2.5 font-extrabold text-xs hover:bg-teal-800"
+                    onclick={() => openPurchaseOptions(product)}>
+                    <span aria-hidden="true">◉</span> Comprar por WhatsApp
+                  </button>
+                {/if}
               </div>
             </div>
           </div>
+          <button type="button" class="absolute inset-0 z-10 rounded-2xl cursor-pointer focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-[-4px] focus-visible:outline-teal-700"
+            onclick={() => details(product)} aria-label={'Abrir detalles de ' + product.name}></button>
         </article>
       {/each}
     </div>
@@ -306,12 +324,55 @@
           {#if stockLabel(selected)}<p class="text-xs font-semibold text-slate-600">Estado: {stockLabel(selected)}</p>{/if}
           <div class="mt-auto border-t border-slate-200 pt-4">
             <p class="text-2xl font-extrabold text-teal-800">{priceLabel(selected)}</p>
-            <button type="button" class="w-full rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold px-5 py-3.5 mt-4" onclick={() => { if (selected) consult(selected); }}>Consultar este equipo →</button>
+            {#if salesManagers.length===1}
+              <a href={salesWhatsAppLink(salesManagers[0],selected)} target="_blank" rel="noopener noreferrer"
+                class="block w-full rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold px-5 py-3.5 mt-4 text-center">Comprar por WhatsApp →</a>
+            {:else}
+              <button type="button" class="w-full rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold px-5 py-3.5 mt-4"
+                onclick={() => openPurchaseOptions(selected)}>Comprar por WhatsApp →</button>
+            {/if}
             <p class="mt-3 text-xs text-slate-500">La disponibilidad y compatibilidad se confirman con el equipo de Bonaire.</p>
           </div>
         </div>
       </div>
       <div class="px-5 sm:px-7 pb-6"><ProductReviews productId={selected.id} /></div>
+    </dialog>
+  </div>
+{/if}
+
+{#if pendingPurchase}
+  <div class="fixed inset-0 z-[250] flex items-center justify-center p-4 sm:p-6">
+    <button type="button" class="absolute inset-0 bg-slate-950/75"
+      onclick={() => pendingPurchase=null} aria-label="Cerrar opciones de compra"></button>
+    <dialog open aria-label="Elegir gestor de ventas" class="relative m-0 w-full max-w-lg max-h-[88dvh] overflow-y-auto rounded-3xl bg-white shadow-2xl p-5 sm:p-7 space-y-4">
+      <div class="flex justify-between gap-3 items-start">
+        <div>
+          <p class="text-xs uppercase font-bold tracking-wide text-teal-700">Bonaire · Ventas</p>
+          <h2 class="text-xl font-extrabold text-slate-900 mt-1">Comprar por WhatsApp</h2>
+          <p class="text-sm text-slate-600 mt-2 break-words">{pendingPurchase.name}</p>
+          <p class="text-xs text-slate-500 mt-1">ID: {pendingPurchase.id}</p>
+        </div>
+        <button type="button" class="rounded-xl bg-slate-100 p-2.5 text-slate-700 font-bold"
+          onclick={() => pendingPurchase=null} aria-label="Cerrar">✕</button>
+      </div>
+      {#if salesManagers.length}
+        <p class="text-sm text-slate-700">Selecciona con quién quieres consultar la disponibilidad y las condiciones de compra:</p>
+        <div class="space-y-2">
+          {#each salesManagers as manager}
+            <a href={salesWhatsAppLink(manager,pendingPurchase)} target="_blank" rel="noopener noreferrer"
+              class="block rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 font-bold text-teal-900 hover:bg-teal-100">
+              ◉ Escribir a {manager.name}
+            </a>
+          {/each}
+        </div>
+      {:else}
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <p class="text-sm text-amber-900">Bonaire aún no ha configurado un gestor de ventas por WhatsApp. Puedes solicitar información mientras se habilita ese canal.</p>
+          <a href={'/contacto?product='+encodeURIComponent(pendingPurchase.name)}
+            class="inline-flex rounded-xl bg-teal-700 px-4 py-3 font-bold text-white text-sm">Solicitar información del equipo →</a>
+        </div>
+      {/if}
+      <p class="text-xs text-slate-500">WhatsApp inicia una conversación comercial; no registra una compra, no confirma stock y no genera comprobantes. La venta se verifica después en administración.</p>
     </dialog>
   </div>
 {/if}
