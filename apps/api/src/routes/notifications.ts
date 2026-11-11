@@ -35,6 +35,40 @@ notificationsRoutes.get('/admin', requireAdminAuth, async c => {
     LEFT JOIN customers cu ON cu.id = n.user_id WHERE n.user_type = 'customer' ORDER BY n.created_at DESC LIMIT 100`).all();
   return c.json({ notifications: results ?? [] });
 });
+const welcomeKeys=['welcome_notification_enabled','welcome_notification_title','welcome_notification_message'];
+notificationsRoutes.get('/admin/automation', requireAdminAuth, async c => {
+  const {results}=await c.env.DB.prepare(`SELECT key,value FROM system_settings WHERE key IN (?,?,?)`)
+    .bind(...welcomeKeys).all<{key:string;value:string}>();
+  const settings=Object.fromEntries((results||[]).map(x=>[x.key,x.value]));
+  return c.json({
+    enabled:settings.welcome_notification_enabled!=='false',
+    title:settings.welcome_notification_title||'¡Bienvenido a Bonaire!',
+    message:settings.welcome_notification_message||
+      'Gracias por registrarte. Desde tu cuenta puedes solicitar servicios, consultar tus citas y recibir notificaciones.',
+  });
+});
+notificationsRoutes.put('/admin/automation', requireAdminAuth, async c => {
+  const body=await c.req.json<any>().catch(()=>null);
+  if (!body || typeof body.enabled!=='boolean' || typeof body.title!=='string' || typeof body.message!=='string')
+    return c.json({error:'Configuración incompleta.'},400);
+  const title=body.title.trim(),message=body.message.trim();
+  if(title.length<3||title.length>120||message.length<10||message.length>800)
+    return c.json({error:'Título (3–120 caracteres) y mensaje (10–800 caracteres) requeridos.'},400);
+  const now=new Date().toISOString();
+  await c.env.DB.batch([
+    ...Object.entries({
+      welcome_notification_enabled:String(body.enabled),
+      welcome_notification_title:title,
+      welcome_notification_message:message,
+    }).map(([key,value])=>c.env.DB.prepare(`INSERT INTO system_settings (id,key,value,updated_at)
+      VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`)
+      .bind(crypto.randomUUID(),key,value,now)),
+    c.env.DB.prepare(`INSERT INTO audit_logs (id,admin_user_id,action,entity_type,details,created_at)
+      VALUES (?,?,'welcome_notification.configure','notification',?,?)`)
+      .bind(crypto.randomUUID(),getUser(c)!.user_id,JSON.stringify({enabled:body.enabled}),now),
+  ]);
+  return c.json({message:'Bienvenida automática configurada.'});
+});
 notificationsRoutes.post('/admin/send', requireAdminAuth, async c => {
   const user = getUser(c)!;
   const b = await c.req.json<any>();
