@@ -308,25 +308,62 @@ adminRoutes.get('/categories', async (c) => {
   return c.json({ categories: results ?? [] });
 });
 
-adminRoutes.post('/categories', async (c) => {
-  const { DB } = c.env;
-  const b = await c.req.json<any>();
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  await DB.prepare(
-    'INSERT INTO categories (id, name, slug, description, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(id, b.name, b.slug, b.description || null, 1, b.sort_order || 0, now, now).run();
-  return c.json({ id, message: 'Categoría creada' });
+adminRoutes.post('/categories', async c => {
+  const b = await c.req.json<any>().catch(() => null);
+  if (!b || typeof b !== 'object') return c.json({ error: 'Datos de categoría inválidos.' }, 400);
+  const name = cleanText(b.name, 120);
+  const description = cleanText(b.description, 1000);
+  const slug = cleanText(b.slug, 150);
+  const sortOrder = b.sort_order === undefined ? 0 : Number(b.sort_order);
+  if (name.length < 2 || name.length > 120 || !/^[a-z0-9][a-z0-9-]{0,149}$/.test(slug) ||
+      !Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 9999 ||
+      (b.is_active !== undefined && typeof b.is_active !== 'boolean'))
+    return c.json({ error: 'Comprueba nombre, identificador y orden de la categoría.' }, 400);
+  const duplicate = await c.env.DB.prepare('SELECT id FROM categories WHERE LOWER(name) = LOWER(?)')
+    .bind(name).first();
+  if (duplicate) return c.json({ error: 'Ya existe una categoría con ese nombre.' }, 409);
+  const id = crypto.randomUUID(), now = new Date().toISOString();
+  try {
+    await c.env.DB.prepare(`INSERT INTO categories
+      (id, name, slug, description, is_active, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(id, name, slug, description || null, b.is_active === false ? 0 : 1, sortOrder, now, now).run();
+  } catch (e) {
+    if (/UNIQUE|constraint/i.test(String(e))) return c.json({ error: 'Ya existe esa categoría o su identificador.' }, 409);
+    throw e;
+  }
+  return c.json({ id, message: 'Categoría creada' }, 201);
 });
 
-adminRoutes.patch('/categories/:id', async (c) => {
-  const { DB } = c.env;
+adminRoutes.patch('/categories/:id', async c => {
   const id = c.req.param('id');
-  const b = await c.req.json<any>();
-  const now = new Date().toISOString();
-  await DB.prepare(
-    'UPDATE categories SET name = COALESCE(?, name), slug = COALESCE(?, slug), description = COALESCE(?, description), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order), updated_at = ? WHERE id = ?'
-  ).bind(b.name || null, b.slug || null, b.description || null, b.is_active !== undefined ? (b.is_active ? 1 : 0) : null, b.sort_order !== undefined ? b.sort_order : null, now, id).run();
+  const current = await c.env.DB.prepare(
+    'SELECT id, name, description, is_active, sort_order FROM categories WHERE id = ?'
+  ).bind(id).first<any>();
+  if (!current) return c.json({ error: 'Categoría no encontrada.' }, 404);
+  const b = await c.req.json<any>().catch(() => null);
+  if (!b || typeof b !== 'object' || Array.isArray(b) ||
+      Object.keys(b).length === 0 ||
+      Object.keys(b).some(k => !['name', 'description', 'is_active', 'sort_order'].includes(k)))
+    return c.json({ error: 'Solo puedes editar el nombre, la descripción, el estado y el orden.' }, 400);
+  if ((b.name !== undefined && typeof b.name !== 'string') ||
+      (b.description !== undefined && typeof b.description !== 'string') ||
+      (b.is_active !== undefined && typeof b.is_active !== 'boolean') ||
+      (b.sort_order !== undefined && (typeof b.sort_order !== 'number' || !Number.isInteger(b.sort_order))))
+    return c.json({ error: 'Los campos de categoría tienen un formato inválido.' }, 400);
+  const name = b.name === undefined ? current.name : b.name.trim();
+  const description = b.description === undefined ? (current.description || '') : b.description.trim();
+  const active = b.is_active === undefined ? Boolean(current.is_active) : b.is_active;
+  const sortOrder = b.sort_order === undefined ? current.sort_order : b.sort_order;
+  if (name.length < 2 || name.length > 120 || description.length > 1000 ||
+      !Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 9999)
+    return c.json({ error: 'Revisa el nombre, la descripción y el orden (0–9999).' }, 400);
+  const duplicate = await c.env.DB.prepare('SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND id != ?')
+    .bind(name, id).first();
+  if (duplicate) return c.json({ error: 'Ya existe otra categoría con ese nombre.' }, 409);
+  await c.env.DB.prepare(`UPDATE categories
+    SET name = ?, description = ?, is_active = ?, sort_order = ?, updated_at = ? WHERE id = ?`)
+    .bind(name, description || null, active ? 1 : 0, sortOrder, new Date().toISOString(), id).run();
   return c.json({ message: 'Categoría actualizada' });
 });
 
