@@ -117,9 +117,14 @@ adminCustomersRoutes.delete('/customers/:id', requireAdminAuth, async c => {
 });
 
 adminCustomersRoutes.get('/requests', async c => {
-  const { results } = await c.env.DB.prepare(`SELECT r.id, r.customer_id, r.type, r.title, r.description, r.status, r.location,
-    r.preferred_date, r.created_at, cu.name AS customer_name, cu.email, cu.phone
-    FROM requests r LEFT JOIN customers cu ON cu.id = r.customer_id ORDER BY r.created_at DESC LIMIT 200`).all();
+  const { results } = await c.env.DB.prepare(`SELECT r.id, r.customer_id, r.type, r.request_category_id, r.title, r.description,
+    r.status, r.location, r.preferred_date, r.created_at, cu.name AS customer_name,
+    cu.email, cu.phone, COALESCE(rc.name, r.type) AS category_name,
+    (SELECT COUNT(*) FROM request_images im WHERE im.request_id = r.id) AS image_count
+    FROM requests r
+    LEFT JOIN customers cu ON cu.id = r.customer_id
+    LEFT JOIN request_categories rc ON rc.id = r.request_category_id
+    ORDER BY r.created_at DESC LIMIT 200`).all();
   return c.json({ requests: results ?? [] });
 });
 adminCustomersRoutes.patch('/requests/:id', async c => {
