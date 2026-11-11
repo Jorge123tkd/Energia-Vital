@@ -41,4 +41,39 @@ assert.ok(candidates.some(x=>x.inSeries===6&&x.strings===2&&x.total===12),
   '11 panels may require a compatible 2x6 design with one string per MPPT; not 11 in series');
 assert.deepEqual(candidatePvStrings(11,450,{...specs,maxDcVoltage:250}),[],
   'Cold Voc safety rules disallow otherwise incompatible 11-panel array patterns');
-console.log('PASS solar estimator: appliances, critical backup, residential storage and strict string limits');
+// Un apagón nocturno de 17:00 a 08:00 dura 15 horas sin aporte de paneles.
+const night = estimateSolar({...input,autonomyHours:15,outageStartHour:17,
+  hasPanels:true,maxPanels:10,cloudFactor:1});
+assert.equal(night.outageSunHours,0,'No se modela sol después de las 17 ni antes de las 09');
+assert.equal(night.pvOutageKWh,0,'No se promete energía FV nocturna');
+assert.ok(Math.abs(night.batteryWithSolar-night.battery)<1e-8,
+  'La batería necesaria no baja por poner paneles cuando no hay sol');
+assert.ok(night.plannedPanels<=10,'La propuesta inicial doméstica respeta el espacio disponible');
+
+// Un corte que sí atraviesa 09–16 puede aprovechar fotovoltaica para alimentar cargas.
+const daylight = estimateSolar({...input,autonomyHours:6,outageStartHour:9,
+  maxPanels:10,cloudFactor:1,hasPanels:true});
+assert.ok(daylight.outageSunHours>=5.99,'El intervalo 09–15 contiene ventana solar');
+assert.ok(daylight.pvDirectKWh>0,'Paneles producen energía útil durante corte diurno');
+assert.ok(daylight.batteryWithSolar<daylight.battery,
+  'Con producción en la ventana se reduce la exigencia energética de batería');
+
+const withoutPanels=estimateSolar({...input,autonomyHours:6,outageStartHour:9,
+  hasPanels:false,maxPanels:10});
+assert.equal(withoutPanels.plannedPanels,0);
+assert.equal(withoutPanels.pvDailyKWh,0);
+assert.equal(withoutPanels.batteryWithSolar,withoutPanels.battery);
+
+const cloudy=estimateSolar({...input,autonomyHours:6,outageStartHour:9,
+  maxPanels:10,cloudFactor:.35});
+const sunny=estimateSolar({...input,autonomyHours:6,outageStartHour:9,
+  maxPanels:10,cloudFactor:1});
+assert.ok(cloudy.pvDailyKWh<sunny.pvDailyKWh,'Nubosidad reduce la energía solar estimada');
+
+const reducedUse=estimateSolar({...input,autonomyHours:15,outageStartHour:17,
+  loads:loads.map(l=>({...l,backupHours:l.critical?5:undefined}))});
+assert.ok(reducedUse.battery<night.battery,
+  'Menos horas reales de carga esencial reducen la energía de respaldo');
+assert.equal(heavy.guideFits,false,'No se presenta falsamente una batería residencial de 15 kWh como suficiente');
+
+console.log('PASS solar estimator: loads, 15h night, daylight solar, cloudy scenarios, realistic tiers and MPPT limits');
