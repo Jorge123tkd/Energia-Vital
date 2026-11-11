@@ -487,7 +487,7 @@ adminRoutes.delete('/faq/:id', async (c) => {
 // --- GALERÍA ---
 adminRoutes.get('/gallery', async (c) => {
   const { DB } = c.env;
-  const { results } = await DB.prepare('SELECT * FROM work_gallery ORDER BY sort_order ASC').all();
+  const { results } = await DB.prepare('SELECT w.*, (SELECT COUNT(*) FROM work_gallery_images im WHERE im.project_id=w.id) AS image_count FROM work_gallery w ORDER BY w.sort_order ASC').all();
   return c.json({ gallery: results ?? [] });
 });
 
