@@ -14,6 +14,29 @@
   let error = $state('');
   let categoryName = $state('');
   let categoryDescription = $state('');
+  let editingCategory = $state('');
+  let categorySortOrder = $state(0);
+  let categoryActive = $state(true);
+  function newCategory() {
+    editingCategory = '';
+    categoryName = '';
+    categoryDescription = '';
+    categorySortOrder = 0;
+    categoryActive = true;
+    error = '';
+    notice = '';
+    modal = 'category';
+  }
+  function editCategory(cat: any) {
+    editingCategory = String(cat.id);
+    categoryName = cat.name || '';
+    categoryDescription = cat.description || '';
+    categorySortOrder = Number(cat.sort_order) || 0;
+    categoryActive = Boolean(cat.is_active);
+    error = '';
+    notice = '';
+    modal = 'category';
+  }
   let editingProduct = $state('');
   let editingService = $state('');
   let productPhoto: File | null = $state(null);
@@ -57,9 +80,20 @@
   async function saveCategory(event: SubmitEvent) {
     event.preventDefault();
     await execute(async () => {
-      await api.createAdminCategory(token, { name: categoryName.trim(), description: categoryDescription.trim(),
-        slug: slug(categoryName) + '-' + Date.now() });
-      categoryName = ''; categoryDescription = ''; await onRefresh(); modal = null; notice = 'Categoría creada correctamente.';
+      const name = categoryName.trim();
+      const body = { name, description: categoryDescription.trim(), sort_order: categorySortOrder, is_active: categoryActive };
+      if (editingCategory) {
+        await api.updateAdminCategory(token, editingCategory, body);
+      } else {
+        await api.createAdminCategory(token, { ...body, slug: slug(name) + '-' + Date.now() });
+      }
+      const wasEditing = !!editingCategory;
+      await onRefresh();
+      editingCategory = '';
+      categoryName = '';
+      categoryDescription = '';
+      modal = null;
+      notice = wasEditing ? 'Categoría actualizada correctamente.' : 'Categoría creada correctamente.';
     });
   }
   async function saveProduct(event: SubmitEvent) {
@@ -250,16 +284,45 @@
           <p class="text-sm text-slate-500 mt-1">Crea y edita sin abandonar el catálogo. Las fichas se abren en ventanas independientes.</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button type="button" class="admin-secondary" onclick={() => { modal = 'category'; error = ''; }}>+ Nueva categoría</button>
+          <button type="button" class="admin-secondary" onclick={newCategory}>+ Nueva categoría</button>
           <button type="button" class="admin-primary" onclick={() => { resetProduct(); modal = 'product'; error = ''; }}>+ Nuevo equipo</button>
         </div>
       </div>
-      <div class="flex flex-wrap gap-2">
-        {#each categories as cat (cat.id)}
-          <span class="text-xs px-3 py-1.5 bg-slate-100 rounded-full text-slate-700">{cat.name}</span>
-        {/each}
-        {#if categories.length === 0}<p class="text-sm text-orange-700">Crea primero una categoría.</p>{/if}
-      </div>
+      <section aria-label="Administrar categorías" class="rounded-2xl bg-slate-50 border border-slate-200 p-3 sm:p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 class="text-base font-extrabold text-slate-900">Categorías ({categories.length})</h3>
+            <p class="text-xs text-slate-500 mt-1">Las categorías existentes aparecen siempre aquí. Puedes editar nombre, descripción y orden.</p>
+          </div>
+          <button type="button" class="admin-secondary text-sm" onclick={newCategory}>+ Crear categoría</button>
+        </div>
+        {#if categories.length === 0}
+          <p class="bg-white rounded-xl p-4 border border-dashed border-slate-300 text-sm text-slate-600">
+            Todavía no hay categorías. Crea una para organizar tus equipos.
+          </p>
+        {:else}
+          <div class="grid grid-cols-1 min-[480px]:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5">
+            {#each categories as cat (cat.id)}
+              <article class="min-w-0 flex flex-col justify-between gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+                <div class="min-w-0">
+                  <div class="flex items-start justify-between gap-2">
+                    <strong class="text-sm text-slate-900 break-words">{cat.name}</strong>
+                    <span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold {cat.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
+                      {cat.is_active ? 'Visible' : 'Oculta'}
+                    </span>
+                  </div>
+                  <p class="mt-1 text-xs text-slate-500 line-clamp-2">{cat.description || 'Sin descripción'}</p>
+                </div>
+                <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                  <span class="text-[11px] text-slate-500">{products.filter((p: any) => p.category_id === cat.id).length} equipos · Orden {cat.sort_order ?? 0}</span>
+                  <button type="button" class="text-xs rounded-lg border border-teal-200 bg-teal-50 text-teal-800 font-bold px-3 py-2 hover:bg-teal-100"
+                    onclick={() => editCategory(cat)} aria-label={'Editar categoría ' + cat.name}>Editar</button>
+                </div>
+              </article>
+            {/each}
+          </div>
+        {/if}
+      </section>
       <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {#each products as p (p.id)}
             <article class="rounded-xl border border-slate-200 overflow-hidden bg-white">
@@ -429,12 +492,12 @@
 
 {#if modal}
   <div class="fixed inset-0 z-[180] bg-slate-950/70 flex justify-center items-center p-4">
-    <dialog open aria-label={modal === 'category' ? 'Nueva categoría' : modal === 'product' ? 'Datos del equipo' : modal === 'service' ? 'Datos del servicio' : 'Proyecto de galería'}
+    <dialog open aria-label={modal === 'category' ? (editingCategory ? 'Editar categoría' : 'Nueva categoría') : modal === 'product' ? 'Datos del equipo' : modal === 'service' ? 'Datos del servicio' : 'Proyecto de galería'}
       class="relative m-0 bg-white rounded-2xl shadow-2xl w-full {modal === 'category' ? 'max-w-lg' : 'max-w-3xl'} max-h-[92vh] overflow-y-auto p-5 sm:p-7">
       <header class="flex items-start justify-between gap-3 mb-5">
         <div>
           <h2 class="text-2xl font-bold text-slate-900">
-            {modal === 'category' ? 'Nueva categoría' : modal === 'product' ? (editingProduct ? 'Editar equipo' : 'Nuevo equipo') : modal === 'service' ? (editingService ? 'Editar servicio' : 'Nuevo servicio') : modal === 'gallery' ? 'Añadir proyecto' : 'Editar proyecto'}
+            {modal === 'category' ? (editingCategory ? 'Editar categoría' : 'Nueva categoría') : modal === 'product' ? (editingProduct ? 'Editar equipo' : 'Nuevo equipo') : modal === 'service' ? (editingService ? 'Editar servicio' : 'Nuevo servicio') : modal === 'gallery' ? 'Añadir proyecto' : 'Editar proyecto'}
           </h2>
           <p class="text-sm text-slate-500 mt-1">Completa la información y pulsa guardar para publicar los cambios.</p>
         </div>
@@ -447,9 +510,22 @@
               <input required maxlength="120" class="admin-input" placeholder="Ej. Paneles solares" bind:value={categoryName} />
             </label>
             <label class="block text-sm font-medium">Descripción breve
-              <textarea rows="2" class="admin-input" placeholder="Ej. Paneles monocristalinos para hogares y negocios" bind:value={categoryDescription}></textarea>
+              <textarea rows="3" maxlength="1000" class="admin-input" placeholder="Ej. Paneles monocristalinos para hogares y negocios" bind:value={categoryDescription}></textarea>
             </label>
-            <button disabled={busy} class="admin-secondary w-full">+ Añadir categoría</button>
+            <label class="block text-sm font-medium">Orden en el catálogo
+              <input type="number" min="0" max="9999" step="1" class="admin-input" bind:value={categorySortOrder} />
+            </label>
+            {#if editingCategory}
+              <label class="flex gap-3 items-center p-3 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700">
+                <input type="checkbox" bind:checked={categoryActive} />
+                Mostrar esta categoría en los filtros del catálogo
+              </label>
+              <p class="text-xs text-slate-500">Ocultar una categoría no borra sus equipos ni los oculta automáticamente.</p>
+            {/if}
+            <div class="flex gap-2">
+              <button disabled={busy} class="admin-primary flex-1">{busy ? 'Guardando…' : editingCategory ? 'Guardar cambios' : 'Crear categoría'}</button>
+              <button type="button" class="admin-secondary" onclick={() => modal = null}>Cancelar</button>
+            </div>
           </form>
       {:else if modal === 'product'}
         <form class="grid gap-3" onsubmit={saveProduct}>
