@@ -24,7 +24,7 @@
   {:else}<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
     {#each services as s (s.id)}
       <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-md transition">
-        {#if s.image_url}<img class="w-full h-52 object-cover" src={s.image_url} alt={s.name} />{:else}<div class="h-52 bg-gradient-to-br from-teal-50 to-slate-100 flex items-center justify-center text-slate-400">Servicio solar</div>{/if}
+        {#if s.image_url}<img class="w-full h-52 object-cover object-center" src={s.image_url} alt={s.name} />{:else}<div class="h-52 bg-gradient-to-br from-teal-50 to-slate-100 flex items-center justify-center text-slate-400">Servicio solar</div>{/if}
         <div class="p-6 space-y-3 flex-1 flex flex-col">
           <h2 class="text-xl font-bold text-slate-900">{s.name}</h2>
           <p class="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{s.description || 'Consulta todos los detalles del servicio con nuestro equipo.'}</p>
