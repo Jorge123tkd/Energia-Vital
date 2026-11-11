@@ -6,6 +6,11 @@
   let appointments: any[] = $state([]);
   let loading = $state(true);
   let expanded = $state('');
+  let copiedId=$state('');
+  async function copyReference(id:string){
+    try{await navigator.clipboard.writeText(id);copiedId=id;}
+    catch{error='No se pudo copiar. Selecciona el ID completo.';}
+  }
   let error = $state('');
   onMount(async () => {
     try {
@@ -28,7 +33,11 @@
           <div class="flex flex-wrap justify-between gap-3 items-start"><strong class="text-slate-900">{item.title}</strong><span class="text-xs font-bold rounded-full px-2 py-1 bg-teal-50 text-teal-800">{item.status}</span></div>
           <p class="text-sm text-slate-600 whitespace-pre-line">{item.description}</p>
           <div class="flex flex-wrap justify-between gap-2 items-center">
-            <p class="text-xs text-slate-500">{new Date(item.created_at).toLocaleDateString('es-CU')} · Ref. {item.id.slice(0,8).toUpperCase()}</p>
+            <div class="min-w-0">
+              <p class="text-xs text-slate-500">{new Date(item.created_at).toLocaleDateString('es-CU')} · Ref. {item.id.slice(0,8).toUpperCase()}</p>
+              <p class="mt-1 text-[11px] text-slate-500 break-all" title={item.id}>ID completo: {item.id}</p>
+              <button type="button" onclick={() => copyReference(item.id)} class="text-xs font-bold text-teal-800 underline mt-1">{copiedId===item.id?'Copiado ✓':'Copiar ID para seguimiento'}</button>
+            </div>
             <button type="button" class="rounded-xl border border-teal-200 px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-50"
               onclick={() => expanded = expanded === item.id ? '' : item.id}>
               {expanded===item.id?'Ocultar fotos':'Fotos ('+(item.image_count||0)+') · Ver o añadir'}
@@ -42,7 +51,12 @@
   {#if !loading && appointments.length === 0}<p class="text-gray-500">Todavía no tienes citas.</p>{/if}
   <div class="space-y-3">
     {#each appointments as item (item.id)}
-      <article class="bg-white border rounded-xl p-4"><div class="flex justify-between gap-4"><strong>{item.title}</strong><span>{item.status}</span></div><p class="text-sm text-gray-600 mt-2">{new Date(item.starts_at).toLocaleString('es-CU')}</p></article>
+      <article class="bg-white border border-slate-200 rounded-2xl p-4 space-y-2">
+          <div class="flex flex-wrap justify-between gap-3"><strong class="text-slate-900">{item.title}</strong><span class="rounded-full bg-teal-50 text-teal-800 px-2 py-1 text-xs font-bold">{item.status}</span></div>
+          <p class="text-sm text-slate-600">{new Date(item.starts_at).toLocaleString('es-CU')}</p>
+          <p class="text-[11px] text-slate-500 break-all">ID completo: {item.id}</p>
+          <button type="button" onclick={() => copyReference(item.id)} class="text-xs text-teal-800 underline font-bold text-left">{copiedId===item.id?'Copiado ✓':'Copiar ID de cita'}</button>
+        </article>
     {/each}
   </div>
 </div>
