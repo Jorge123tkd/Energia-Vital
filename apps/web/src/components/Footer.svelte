@@ -41,7 +41,20 @@
 </script>
 
 <footer class="bg-slate-950 text-slate-100 mt-auto border-t border-slate-800">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-7">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
+    <section class="flex flex-col lg:flex-row lg:items-center justify-between gap-5 rounded-3xl bg-gradient-to-r from-teal-900 to-teal-700 border border-teal-600/70 p-5 sm:p-7 shadow-xl">
+      <div class="max-w-2xl">
+        <p class="text-xs font-extrabold uppercase tracking-[.2em] text-teal-200">Bonaire · Atención a tu proyecto</p>
+        <h2 class="text-xl sm:text-2xl font-extrabold text-white mt-2">¿Necesitas una solución solar para tu vivienda o empresa?</h2>
+        <p class="text-sm text-teal-50 mt-2">Explora los equipos, calcula una orientación inicial o solicita a nuestro equipo una revisión de tus necesidades.</p>
+      </div>
+      <div class="flex flex-wrap gap-2 shrink-0">
+        <a href="/asesor-solar" class="rounded-xl bg-white text-teal-900 hover:bg-teal-50 px-4 py-3 text-sm font-extrabold text-center">Asesor solar</a>
+        <a href="/contacto" class="rounded-xl border border-white/50 bg-teal-950/20 text-white hover:bg-white/15 px-4 py-3 text-sm font-bold text-center">Solicitar servicio</a>
+      </div>
+    </section>
+  </div>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-7">
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
       <div class="lg:col-span-1">
         <a href="/" class="font-bold text-xl text-white flex items-center gap-2 mb-4"><span class="h-10 w-10 rounded-xl bg-teal-600 flex items-center justify-center text-sm">B</span> Bonaire</a>
@@ -80,7 +93,11 @@
     </div>
     <div class="border-t border-slate-800 pt-6 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
       <span>© {new Date().getFullYear()} Bonaire. Todos los derechos reservados.</span>
-      <span>Energía para avanzar.</span>
+      <span class="flex items-center flex-wrap gap-x-4 gap-y-2">
+        <a href="/contacto" class="text-slate-400 hover:text-teal-300">Ayuda y solicitudes</a>
+        <a href="/mis-solicitudes" class="text-slate-400 hover:text-teal-300">Seguimiento de solicitudes</a>
+        <span>Energía para avanzar.</span>
+      </span>
     </div>
   </div>
 </footer>
