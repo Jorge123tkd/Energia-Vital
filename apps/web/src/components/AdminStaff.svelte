@@ -5,7 +5,7 @@
   let { token, ownId }: { token: string; ownId: string } = $props();
   let users: any[] = $state([]);
   let page = $state(1);
-  const perPage = 12;
+  const perPage = 10;
   let pageCount = $derived(Math.max(1, Math.ceil(users.length / perPage)));
   let pageRows = $derived(users.slice((Math.min(page,pageCount)-1)*perPage,Math.min(page,pageCount)*perPage));
   let loading = $state(false);

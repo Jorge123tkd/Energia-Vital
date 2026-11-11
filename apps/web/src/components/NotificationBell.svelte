@@ -32,7 +32,7 @@
   }
 </script>
 
-<div class="relative">
+<div class="relative shrink-0">
   <button type="button" onclick={() => { open = !open; if (open) void refresh(); }}
     class="relative rounded-xl border border-slate-200 p-2.5 bg-white hover:bg-slate-50"
     aria-label={'Notificaciones' + (unread ? ', ' + unread + ' sin leer' : '')} aria-expanded={open}>
@@ -45,21 +45,21 @@
     {/if}
   </button>
   {#if open}
-    <div class="absolute right-0 mt-2 w-[min(22rem,calc(100vw-1.5rem))] max-h-[70vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden">
-      <div class="flex justify-between gap-2 items-center px-4 py-3 bg-slate-50 border-b">
-        <h3 class="font-bold text-slate-900">Notificaciones {unread ? '(' + unread + ')' : ''}</h3>
+    <div class="fixed inset-x-3 top-[4.35rem] w-auto max-h-[min(75dvh,34rem)] sm:absolute sm:inset-x-auto sm:top-full sm:right-0 sm:mt-2 sm:w-[min(22rem,calc(100vw-1.5rem))] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] overflow-hidden">
+      <div class="flex justify-between gap-2 items-center px-3 sm:px-4 py-3 bg-slate-50 border-b min-w-0">
+        <h3 class="font-bold text-slate-900 min-w-0 truncate">Notificaciones {unread ? '(' + unread + ')' : ''}</h3>
         <button class="text-xs text-teal-800 font-semibold" onclick={() => refresh()} disabled={loading}>{loading ? 'Cargando…' : 'Actualizar'}</button>
         <button aria-label="Cerrar avisos" class="text-slate-600" onclick={() => open = false}>✕</button>
       </div>
       {#if error}<p class="text-red-700 text-sm px-4 py-3" role="alert">{error}</p>{/if}
-      <div class="overflow-y-auto divide-y divide-slate-100">
+      <div class="min-w-0 overflow-y-auto divide-y divide-slate-100">
         {#each items.slice(0, 12) as n (n.id)}
           <div class="p-3.5 space-y-1 {n.is_read ? 'bg-white' : 'bg-teal-50/70'}">
             <div class="flex justify-between items-start gap-2">
-              <strong class="text-sm text-slate-900">{n.title}</strong>
+              <strong class="text-sm text-slate-900 min-w-0 break-words">{n.title}</strong>
               {#if !n.is_read}<button disabled={busyId === n.id} onclick={() => read(n)} class="text-[11px] font-bold text-teal-800 shrink-0">Marcar leída</button>{/if}
             </div>
-            <p class="text-xs text-slate-600 whitespace-pre-wrap break-words">{n.message}</p>
+            <p class="text-xs text-slate-600 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{n.message}</p>
             <p class="text-[11px] text-slate-400">{new Date(n.created_at).toLocaleString('es-CU')}</p>
           </div>
         {/each}

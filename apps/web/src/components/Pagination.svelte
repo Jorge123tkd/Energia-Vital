@@ -20,7 +20,7 @@
       Mostrando {start}–{end} de {total} {label}
     </p>
     {#if pages > 1}
-      <div class="flex flex-wrap items-center gap-1.5">
+      <div class="flex flex-wrap items-center gap-1.5" aria-label={'Controles de páginas de ' + label}>
         <button type="button" aria-label="Primera página" disabled={disabled || current === 1} onclick={() => go(1)}
           class="rounded-lg border border-slate-200 px-2.5 py-2 text-xs font-bold text-teal-800 disabled:opacity-35">«</button>
         <button type="button" disabled={disabled || current === 1} onclick={() => go(current - 1)}

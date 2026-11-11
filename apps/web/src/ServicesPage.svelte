@@ -6,7 +6,7 @@
   let { featured = false }: { featured?: boolean } = $props();
   let services:any[]=$state([]);
   let page=$state(1);
-  let perPage = $derived(featured ? 8 : 12);
+  let perPage = $derived(featured ? 5 : 10);
   let pages=$derived(Math.max(1,Math.ceil(services.length/perPage)));
   let visibleServices=$derived(services.slice((Math.min(page,pages)-1)*perPage,Math.min(page,pages)*perPage));
   let loading=$state(true),error=$state('');
@@ -54,9 +54,11 @@
   {:else if error}<p role="alert" class="text-red-700">{error}</p>
   {:else if !services.length}<div class="rounded-2xl bg-white p-8 border border-slate-200 text-slate-600">{featured ? "Pronto publicaremos servicios destacados." : "Pronto publicaremos nuestros servicios."}</div>
   {:else}
-    <div class="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
+    {#if featured}<p class="text-xs text-slate-500 mb-2 sm:hidden">Desliza para ver los cinco servicios destacados →</p>{/if}
+    <div aria-label={featured ? 'Servicios destacados, desplazamiento horizontal' : 'Listado de servicios'}
+      class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
       {#each visibleServices as service (service.id)}
-        <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-lg transition">
+        <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc((100%-3rem)/5)] snap-start' : ''}">
           <button type="button" onclick={()=>details(service)} class="w-full relative overflow-hidden bg-teal-50" aria-label={'Ver fotos de '+service.name}>
             <CardImage src={service.image_url} alt={service.name} />
           </button>
@@ -72,8 +74,10 @@
         </article>
       {/each}
     </div>
-    <Pagination page={Math.min(page,pages)} total={services.length} perPage={perPage}
-      label="servicios" onPage={n => page = n} />
+    {#if !featured}
+      <Pagination page={Math.min(page,pages)} total={services.length} perPage={perPage}
+        label="servicios" onPage={n => page = n} />
+    {/if}
   {/if}
 </section>
 {#if selected}

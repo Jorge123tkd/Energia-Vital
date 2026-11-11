@@ -8,7 +8,7 @@
 
   let query = $state('');
   let page = $state(1);
-  const perPage = 12;
+  const perPage = 10;
   let copiedId = $state('');
   let remoteRows: any[] | null = $state(null);
   let remoteTotal = $state(0);

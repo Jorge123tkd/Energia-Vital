@@ -21,7 +21,7 @@
   let search = $state('');
   let order = $state<'recommended' | 'name' | 'price_asc' | 'price_desc'>('recommended');
   let page = $state(1);
-  let perPage = $derived(featured ? 8 : 12);
+  let perPage = $derived(featured ? 5 : 10);
   let loading = $state(true);
   let error = $state('');
   let selected: Product | null = $state(null);
@@ -180,7 +180,7 @@
   {/if}
 
   {#if loading}
-    <div class="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4" aria-label="Cargando equipos">
+    <div class={featured ? 'flex overflow-x-auto gap-3 pb-4' : 'grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'} aria-label="Cargando equipos">
       {#each [1, 2, 3, 4, 5] as n}
         <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden animate-pulse" aria-hidden="true">
           <div class="h-40 bg-slate-100"></div>
@@ -206,9 +206,11 @@
       {/if}
     </div>
   {:else}
-    <div class="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
+    {#if featured}<p class="text-xs text-slate-500 mb-2 sm:hidden">Desliza hacia un lado para explorar los destacados →</p>{/if}
+    <div aria-label={featured ? 'Productos destacados, desliza horizontalmente' : 'Listado de productos'}
+      class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
       {#each pageItems as product (product.id)}
-        <article class="min-w-0 flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-teal-200 transition">
+        <article class="min-w-0 flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-teal-200 transition {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc((100%-3rem)/5)] snap-start' : ''}">
           <button type="button" class="relative block w-full text-left bg-gradient-to-br from-teal-50 to-slate-100 overflow-hidden" onclick={() => details(product)} aria-label={'Ver detalles de ' + product.name}>
             <CardImage src={imageOf(product)} alt={product.name} />
             {#if product.is_featured}
@@ -238,8 +240,10 @@
         </article>
       {/each}
     </div>
-    <Pagination page={Math.min(page,pageCount)} total={filtered.length} perPage={perPage}
-      label="equipos" onPage={n => page = n} />
+    {#if !featured}
+      <Pagination page={Math.min(page,pageCount)} total={filtered.length} perPage={perPage}
+        label="equipos" onPage={n => page = n} />
+    {/if}
   {/if}
 
   <aside class="mt-9 rounded-2xl border border-teal-100 bg-teal-50/70 px-5 py-6 sm:px-7 flex flex-wrap items-center justify-between gap-4">

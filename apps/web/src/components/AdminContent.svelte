@@ -21,11 +21,11 @@
   let productPage = $state(1);
   let servicePage = $state(1);
   let galleryPage = $state(1);
-  const itemPageSize = 12;
+  const itemPageSize = 10;
   let servicePageCount = $derived(Math.max(1, Math.ceil(services.length / itemPageSize)));
   let visibleServices = $derived(services.slice((Math.min(servicePage,servicePageCount)-1)*itemPageSize,
     Math.min(servicePage,servicePageCount)*itemPageSize));
-  const productPageSize = 20;
+  const productPageSize = 10;
   let visibleProducts = $derived.by(() => {
     const term = productSearch.trim().toLocaleLowerCase('es');
     return products.filter(p => (!productCategory || p.category_id === productCategory) &&

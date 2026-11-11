@@ -44,7 +44,7 @@
   function selectSlide(index: number) { activeSlide = ((index % slides.length) + slides.length) % slides.length; }
 </script>
 
-<section aria-label="Presentación de Bonaire" class="relative rounded-3xl overflow-hidden min-h-[440px] sm:min-h-[500px] bg-slate-950 text-white flex flex-col justify-between shadow-xl">
+<section aria-label="Presentación de Bonaire" class="relative rounded-3xl overflow-hidden h-[490px] sm:h-[520px] lg:h-[540px] bg-slate-950 text-white flex flex-col shadow-xl">
   {#if slide.image_url && /^https:\/\/[^\s]+$/i.test(slide.image_url)}
     <img src={slide.image_url} alt="" class="absolute inset-0 w-full h-full object-cover" />
     <div class="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/75 to-slate-900/25"></div>
@@ -52,10 +52,10 @@
     <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-teal-950 to-teal-700"></div>
     <div class="absolute -right-20 -top-20 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl"></div>
   {/if}
-  <div class="relative px-6 py-16 sm:px-14 sm:py-20 max-w-3xl flex-1">
-    <span class="inline-flex items-center px-4 py-2 border border-white/25 bg-white/10 rounded-full text-sm text-teal-50 mb-7">☀ Bonaire · {activeSlide + 1} de {slides.length}</span>
-    <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight leading-tight mb-6">{slide.title}</h1>
-    <p class="text-lg sm:text-xl text-teal-50 leading-relaxed mb-8 max-w-2xl">{slide.subtitle}</p>
+  <div class="relative min-h-0 overflow-y-auto overscroll-contain px-5 py-7 sm:px-14 sm:py-12 max-w-4xl flex-1">
+    <span class="inline-flex items-center px-3 py-1.5 border border-white/25 bg-white/10 rounded-full text-xs sm:text-sm text-teal-50 mb-5">☀ Bonaire · {activeSlide + 1} de {slides.length}</span>
+    <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight mb-4 line-clamp-2 break-words">{slide.title}</h1>
+    <p class="text-sm sm:text-lg text-teal-50 leading-relaxed mb-6 max-w-2xl line-clamp-3">{slide.subtitle}</p>
     <div class="flex flex-wrap gap-3">
       <a href={slide.link_url} target={slide.link_url.startsWith('https://') ? '_blank' : undefined}
         rel={slide.link_url.startsWith('https://') ? 'noopener noreferrer' : undefined}
@@ -77,7 +77,7 @@
       {/if}
     </div>
   </div>
-  <div class="relative px-6 pb-6 sm:px-14 flex items-center justify-between gap-4">
+  <div class="relative shrink-0 px-5 pb-5 pt-3 sm:px-14 flex items-center justify-between gap-4 border-t border-white/10">
     <div class="flex items-center gap-2" role="group" aria-label="Seleccionar diapositiva">
       {#each slides as item, index}
         <button type="button" aria-label={'Mostrar diapositiva ' + (index + 1) + ': ' + item.title}

@@ -11,7 +11,7 @@
   let category=$state('');
   let search=$state('');
   let page=$state(1);
-  let perPage = $derived(featured ? 8 : 12);
+  let perPage = $derived(featured ? 5 : 10);
   let loading=$state(true),error=$state('');
   let selected:Project|null=$state(null);
   let images:Photo[]=$state([]),photoIndex=$state(0),loadingPhotos=$state(false);
@@ -73,9 +73,11 @@
     {:else if error}<p role="alert" class="rounded-xl bg-red-50 text-red-700 p-4">{error}</p>
     {:else if !filtered.length}<div class="rounded-2xl bg-white border border-slate-200 p-8 text-center text-slate-600">{featured ? "Pronto publicaremos proyectos destacados." : "No encontramos proyectos con esos filtros."}</div>
     {:else}
-      <div class="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
+      {#if featured}<p class="text-xs text-slate-500 mb-2 sm:hidden">Desliza para ver los cinco proyectos destacados →</p>{/if}
+      <div aria-label={featured ? 'Proyectos destacados, desplazamiento horizontal' : 'Listado de proyectos'}
+        class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
         {#each visibleProjects as work (work.id)}
-          <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition">
+          <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc((100%-3rem)/5)] snap-start' : ''}">
             <button type="button" class="block relative w-full bg-slate-100 overflow-hidden" onclick={()=>show(work)} aria-label={'Ver fotografías de '+work.title}>
               <CardImage src={work.url} alt={work.title} />
               {#if work.image_count}<span class="absolute right-2 bottom-2 bg-slate-950/80 text-white rounded-full px-2.5 py-1 text-[11px] font-bold">▧ {work.image_count} fotos</span>{/if}
@@ -92,8 +94,10 @@
           </article>
         {/each}
       </div>
-      <Pagination page={Math.min(page,pages)} total={filtered.length} perPage={perPage}
-        label="proyectos" onPage={n => page = n} />
+      {#if !featured}
+        <Pagination page={Math.min(page,pages)} total={filtered.length} perPage={perPage}
+          label="proyectos" onPage={n => page = n} />
+      {/if}
     {/if}
   </div>
 </div>
