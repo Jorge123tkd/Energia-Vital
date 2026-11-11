@@ -15,8 +15,8 @@ telegramRoutes.post('/webhook', async c => {
   const firstName = typeof msg.from?.first_name === 'string' ? msg.from.first_name.slice(0, 60) : 'cliente';
   const text = typeof msg.text === 'string' ? msg.text : '';
   const reply = /^\/(start|help|login)\b/i.test(text)
-    ? `Hola, ${firstName}. Por seguridad, crea tu cuenta e inicia sesión con correo y contraseña en el sitio oficial de Energía Vital. Nunca compartas contraseñas por Telegram.`
-    : 'Gracias por contactar a Energía Vital. Para consultas, citas y seguimiento, inicia sesión en nuestra plataforma oficial.';
+    ? `Hola, ${firstName}. Por seguridad, crea tu cuenta e inicia sesión con correo y contraseña en el sitio oficial de Bonaire. Nunca compartas contraseñas por Telegram.`
+    : 'Gracias por contactar a Bonaire. Este canal todavía no está vinculado al asistente de tu cuenta. Para hablar con el asistente con historial privado, inicia sesión en nuestro sitio oficial.';
   if (c.env.TELEGRAM_BOT_TOKEN) {
     await fetch(`https://api.telegram.org/bot${c.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

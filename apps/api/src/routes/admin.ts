@@ -696,7 +696,9 @@ adminRoutes.put('/site-settings', async c => {
     if (socialKeys.has(key) && value && !/^https:\/\/[^\s]+$/i.test(value))
       return c.json({ error: `Utiliza una dirección HTTPS válida en ${key}` }, 400);
     if (value && (key === 'bot_whatsapp_url' || key === 'bot_telegram_url')) {
-      const host = new URL(value).hostname.toLowerCase();
+      let host = '';
+      try { host = new URL(value).hostname.toLowerCase(); }
+      catch { return c.json({ error: 'El enlace del bot debe ser una URL HTTPS válida' }, 400); }
       if (key === 'bot_whatsapp_url' && host !== 'wa.me' && host !== 'api.whatsapp.com')
         return c.json({ error: 'El bot de WhatsApp debe usar un enlace oficial wa.me o api.whatsapp.com' }, 400);
       if (key === 'bot_telegram_url' && host !== 't.me' && host !== 'telegram.me')
