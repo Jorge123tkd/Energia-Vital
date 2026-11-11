@@ -219,7 +219,8 @@
     return { home_title: 'Bonaire', home_subtitle: '', footer_description: '',
       footer_cta_title: '', footer_cta_description: '',
       business_phone: '', business_email: '', business_address: '', business_hours: '',
-      youtube_channel_url: '', facebook_url: '', instagram_url: '', telegram_public_url: '' };
+      youtube_channel_url: '', facebook_url: '', instagram_url: '', telegram_public_url: '',
+      bot_whatsapp_url: '', bot_telegram_url: '' };
   }
   let site = $state<Record<string, string>>(siteDefaults());
 
@@ -695,6 +696,16 @@
             <label class="admin-label">Instagram<input type="url" class="admin-input" placeholder="https://instagram.com/..." bind:value={site.instagram_url} /></label>
             <label class="admin-label">Telegram<input type="url" class="admin-input" placeholder="https://t.me/..." bind:value={site.telegram_public_url} /></label>
           </div>
+        </fieldset>
+        <fieldset class="space-y-3 min-w-0 xl:col-span-6">
+          <legend class="text-lg font-semibold mb-2">Canales del asistente automático</legend>
+          <p class="text-xs text-slate-500">Configura los enlaces de los bots, no los números o cuentas personales del equipo. Estos botones solo se mostrarán cuando haya URLs válidas. Añadir un enlace no activa por sí solo una integración con la plataforma.</p>
+          <label class="admin-label">Bot de WhatsApp (enlace directo)
+            <input type="url" class="admin-input" placeholder="https://wa.me/..." bind:value={site.bot_whatsapp_url} />
+          </label>
+          <label class="admin-label">Bot de Telegram (enlace al bot)
+            <input type="url" class="admin-input" placeholder="https://t.me/NombreDelBot" bind:value={site.bot_telegram_url} />
+          </label>
         </fieldset>
         <fieldset class="space-y-3 min-w-0 xl:col-span-6"><legend class="text-lg font-semibold mb-2">Enlaces del footer</legend>
           <p class="text-sm text-slate-500">Un enlace por línea con el formato «Texto | dirección». Puedes usar rutas internas o direcciones HTTPS.</p>

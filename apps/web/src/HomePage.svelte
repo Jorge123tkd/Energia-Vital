@@ -81,7 +81,15 @@
 </section>
 
 
-<section class="max-w-7xl mx-auto py-8" aria-label="Productos destacados">
+<nav class="mt-6 rounded-2xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center gap-2 sm:gap-3" aria-label="Explorar Bonaire">
+  <span class="text-xs uppercase font-extrabold tracking-wider text-slate-500 mr-1">Explora Bonaire</span>
+  <a href="#inicio-equipos" class="rounded-xl bg-teal-50 text-teal-800 px-3 py-2 text-sm font-semibold hover:bg-teal-100">Equipos</a>
+  <a href="#inicio-servicios" class="rounded-xl bg-teal-50 text-teal-800 px-3 py-2 text-sm font-semibold hover:bg-teal-100">Servicios</a>
+  <a href="#inicio-proyectos" class="rounded-xl bg-teal-50 text-teal-800 px-3 py-2 text-sm font-semibold hover:bg-teal-100">Proyectos</a>
+  <a href="/contacto" class="rounded-xl border border-slate-200 text-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-50">Solicitar servicio</a>
+</nav>
+
+<section id="inicio-equipos" class="max-w-7xl mx-auto py-8 scroll-mt-24" aria-label="Productos destacados">
   <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
     <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Productos destacados</h2>
     <a href="/catalogo" class="text-teal-800 font-semibold hover:underline">Ver catálogo completo →</a>
@@ -89,7 +97,7 @@
   <CatalogPage featured />
 </section>
 
-<section class="max-w-7xl mx-auto py-8" aria-label="Servicios destacados">
+<section id="inicio-servicios" class="max-w-7xl mx-auto py-8 scroll-mt-24" aria-label="Servicios destacados">
   <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
     <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Servicios destacados</h2>
     <a href="/servicios" class="text-teal-800 font-semibold hover:underline">Ver todos los servicios →</a>
@@ -97,7 +105,7 @@
   <ServicesPage featured />
 </section>
 
-<section class="max-w-7xl mx-auto py-8" aria-label="Galerías destacadas">
+<section id="inicio-proyectos" class="max-w-7xl mx-auto py-8 scroll-mt-24" aria-label="Galerías destacadas">
   <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
     <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Galerías destacadas</h2>
     <a href="/galeria" class="text-teal-800 font-semibold hover:underline">Ver todos los proyectos →</a>

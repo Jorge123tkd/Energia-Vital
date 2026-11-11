@@ -681,20 +681,27 @@ adminRoutes.delete('/settings/:id', async (c) => {
 // Configuración pública editable sin exponer secretos ni aceptar HTML arbitrario.
 const allowedSiteFields = ['home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links', 'footer_cta_title', 'footer_cta_description',
   'business_phone', 'business_phones', 'business_email', 'business_address', 'business_hours',
-  'youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url'] as const;
+  'youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url', 'bot_whatsapp_url', 'bot_telegram_url'] as const;
 adminRoutes.put('/site-settings', async c => {
   const b = await c.req.json<Record<string, unknown>>();
   const keys = Object.keys(b);
   if (keys.length === 0 || keys.some(k => !(allowedSiteFields as readonly string[]).includes(k)))
     return c.json({ error: 'Campos de configuración no permitidos.' }, 400);
   const records: Array<{ key: string; value: string }> = [];
-  const socialKeys = new Set(['youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url']);
+  const socialKeys = new Set(['youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url', 'bot_whatsapp_url', 'bot_telegram_url']);
   for (const key of keys) {
     if (typeof b[key] !== 'string' || (b[key] as string).length > (key === 'home_slides' ? 14000 : 3500))
       return c.json({ error: `Valor inválido en ${key}` }, 400);
     let value = (b[key] as string).trim();
     if (socialKeys.has(key) && value && !/^https:\/\/[^\s]+$/i.test(value))
       return c.json({ error: `Utiliza una dirección HTTPS válida en ${key}` }, 400);
+    if (value && (key === 'bot_whatsapp_url' || key === 'bot_telegram_url')) {
+      const host = new URL(value).hostname.toLowerCase();
+      if (key === 'bot_whatsapp_url' && host !== 'wa.me' && host !== 'api.whatsapp.com')
+        return c.json({ error: 'El bot de WhatsApp debe usar un enlace oficial wa.me o api.whatsapp.com' }, 400);
+      if (key === 'bot_telegram_url' && host !== 't.me' && host !== 'telegram.me')
+        return c.json({ error: 'El bot de Telegram debe usar un enlace oficial t.me o telegram.me' }, 400);
+    }
     if (key === 'business_phones') {
       let phones: unknown;
       try { phones = JSON.parse(value || '[]'); } catch { return c.json({ error: 'Lista de teléfonos inválida' }, 400); }

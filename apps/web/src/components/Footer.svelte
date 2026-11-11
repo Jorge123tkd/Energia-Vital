@@ -27,6 +27,10 @@
     { label: 'Instagram', url: site.instagram_url },
     { label: 'Telegram', url: site.telegram_public_url }
   ].filter(link => link.url && /^https:\/\/[^\s]+$/i.test(link.url)));
+  let bots = $derived([
+    { label: 'WhatsApp · Asistente', url: site.bot_whatsapp_url, icon: '◉' },
+    { label: 'Telegram · Asistente', url: site.bot_telegram_url, icon: '➤' }
+  ].filter(item => item.url && /^https:\/\/[^\s]+$/i.test(item.url)));
   let phones = $derived.by(() => {
     let additional: { label: string; number: string }[] = [];
     try {
@@ -35,7 +39,7 @@
         typeof p?.number === 'string' && (p.number.match(/\d/g) || []).length >= 8)
         .map((p: any) => ({ label: String(p.label || 'Contacto'), number: String(p.number) }));
     } catch { /* Sin números adicionales configurados */ }
-    const main = site.business_phone?.trim() ? [{ label: 'WhatsApp principal', number: site.business_phone.trim() }] : [];
+    const main = site.business_phone?.trim() ? [{ label: 'Atención del equipo', number: site.business_phone.trim() }] : [];
     return [...main, ...additional];
   });
 </script>
@@ -82,7 +86,21 @@
           {#if site.business_hours}<li>{site.business_hours}</li>{/if}
         </ul>
       </div>
-      <div>
+      <div class="space-y-6">
+        {#if bots.length}
+          <section>
+            <h3 class="text-white font-semibold mb-3">Habla con el asistente</h3>
+            <p class="text-xs text-slate-400 mb-3">Canales automáticos de Bonaire, separados de los contactos del equipo.</p>
+            <div class="flex flex-col gap-2">
+              {#each bots as bot}
+                <a href={bot.url} target="_blank" rel="noopener noreferrer"
+                  class="rounded-xl border border-teal-600/60 bg-teal-950/40 px-3 py-2.5 text-sm font-bold text-teal-100 hover:bg-teal-900">
+                  <span aria-hidden="true">{bot.icon}</span> {bot.label}
+                </a>
+              {/each}
+            </div>
+          </section>
+        {/if}
         <h3 class="text-white font-semibold mb-5">Síguenos</h3>
         {#if social.length}
           <div class="flex flex-wrap gap-2">{#each social as item}<a href={item.url} target="_blank" rel="noopener noreferrer" class="px-3 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:text-white hover:border-teal-500">{item.label}</a>{/each}</div>

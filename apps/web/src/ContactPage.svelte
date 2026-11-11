@@ -161,13 +161,20 @@
         <div><span class="text-xs font-bold uppercase tracking-wider text-teal-300">Estamos para ayudarte</span><h2 class="text-2xl font-bold mt-2">Contacta a Bonaire</h2></div>
         <p class="text-sm text-slate-300 leading-relaxed">Asesoramiento para paneles solares, baterías, inversores, instalaciones y mantenimiento.</p>
         {#if settings.business_phone}
-          <div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Teléfono / WhatsApp</p><a class="text-white font-semibold hover:text-teal-200 break-words" href={'https://wa.me/' + settings.business_phone.replace(/\D/g,'')} target="_blank" rel="noopener noreferrer">{settings.business_phone}</a></div>
+          <div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Atención del equipo · Teléfono / WhatsApp</p><a class="text-white font-semibold hover:text-teal-200 break-words" href={'https://wa.me/' + settings.business_phone.replace(/\D/g,'')} target="_blank" rel="noopener noreferrer">{settings.business_phone}</a></div>
         {/if}
         {#if settings.business_email}
           <div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Correo electrónico</p><a href={'mailto:' + settings.business_email} class="text-white hover:text-teal-200 break-all">{settings.business_email}</a></div>
         {/if}
         {#if settings.business_address}<div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Dirección</p><p class="text-sm text-slate-100">{settings.business_address}</p></div>{/if}
         {#if settings.business_hours}<div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Horario</p><p class="text-sm text-slate-100">{settings.business_hours}</p></div>{/if}
+        {#if settings.bot_whatsapp_url || settings.bot_telegram_url}
+          <section class="border-t border-white/15 pt-4 space-y-2">
+            <p class="text-xs text-teal-300 font-bold">Asistente automático (canal independiente)</p>
+            {#if settings.bot_whatsapp_url}<a class="block rounded-xl border border-teal-400/50 px-3 py-2.5 text-sm text-white font-semibold" href={settings.bot_whatsapp_url} target="_blank" rel="noopener noreferrer">Abrir bot de WhatsApp</a>{/if}
+            {#if settings.bot_telegram_url}<a class="block rounded-xl border border-teal-400/50 px-3 py-2.5 text-sm text-white font-semibold" href={settings.bot_telegram_url} target="_blank" rel="noopener noreferrer">Abrir bot de Telegram</a>{/if}
+          </section>
+        {/if}
         {#if settings.youtube_channel_url}<a target="_blank" rel="noopener noreferrer" class="inline-block text-teal-300 font-semibold underline text-sm" href={settings.youtube_channel_url}>Nuestro canal de YouTube</a>{/if}
         <a class="block text-center w-full rounded-xl border border-teal-400/50 text-teal-100 hover:bg-teal-950 px-4 py-3 text-sm font-bold" href="/asesor-solar">¿No sabes qué sistema necesitas? Prueba el asesor solar</a>
       </aside>
