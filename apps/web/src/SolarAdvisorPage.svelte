@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
   import PageHero from './components/PageHero.svelte';
+  import CardImage from './components/CardImage.svelte';
   import { DEFAULT_LOADS, estimateSolar, type Load, type SolarOutput, type Sector,
     type Level, type Phase, type Origin, type PvDetails } from './lib/solar-estimator';
 
@@ -18,11 +19,14 @@
   let devices:Load[]=$state([]);
   let nextId=1;
   let autonomyHours=$state(15),peakSunHours=$state(4.5),panelWatts=$state(450);
-  let outageStartHour=$state(17),hasPanels=$state(true),maxPanels=$state(10);
+  // Modo sencillo: se calculan horas solicitadas sin exigir al cliente conocer el horario del apagón.
+  // El escenario diurno se muestra por separado como un ejemplo, nunca como pronóstico.
+  let outageStartHour=$state(17),hasPanels=$state(false),maxPanels=$state(10);
   let solarWeather=$state<'soleado'|'variable'|'nublado'>('variable');
   let cloudFactor=$derived(solarWeather==='soleado'?1:solarWeather==='variable'?0.7:0.35);
   let essentialPercent=$state(35);
-  let existingInverter=$state(false),existingModel=$state('');
+  let existingInverter=$state(false),existingModel=$state(''),existingInverterKw=$state(0);
+  let existingPanelCount=$state(0);
   let existingBatteryKWh=$state(0);
   let showSpecs=$state(false);
   let pv: PvDetails=$state({
@@ -30,12 +34,20 @@
     voc:0,vmp:0,isc:0,vocCoeffPct:0,vmpCoeffPct:0,minAirC:10,maxCellC:65,
   });
   let result:SolarOutput|null=$state(null),error=$state(''),copied=$state(false);
-  let estimated=$derived(estimateSolar({
-    sector,level,origin:level==='basico'?'equipos':origin,phase,
+  let solarInputs=$derived({
+    sector,level,origin:level==='basico'?'equipos' as Origin:origin,phase,
     loads:devices,voltage,amps,powerFactor,hoursDaily,
-    autonomyHours,peakSunHours,panelWatts,essentialPercent,existingBatteryKWh,
-    outageStartHour,hasPanels,maxPanels,cloudFactor,
+    autonomyHours,peakSunHours,panelWatts,essentialPercent,
+    existingBatteryKWh,maxPanels,cloudFactor,
     panelDetails:existingInverter&&showSpecs?pv:undefined,
+  });
+  let estimated=$derived(estimateSolar({
+    ...solarInputs,hasPanels:level==='tecnico'&&hasPanels,
+    outageStartHour:level==='tecnico'?outageStartHour:17,
+  }));
+  // Ejemplo diurno independiente: no presupone que el usuario sabe a qué hora cortarán la red.
+  let daylightExample=$derived(estimateSolar({
+    ...solarInputs,hasPanels:true,outageStartHour:9,
   }));
   type StockItem = {id:string;name:string;category_name?:string;stock_status?:string;
     stock_quantity?:number|null;price?:number|null;currency?:string};
@@ -111,7 +123,8 @@
     }
     if(next===4 && (!valid(autonomyHours,.5,72)||!valid(peakSunHours,1,8)||
       !valid(panelWatts,100,900)||!valid(existingBatteryKWh,0,5000)||
-      !valid(outageStartHour,0,23)||!valid(maxPanels,1,200))){
+      !valid(outageStartHour,0,23)||!valid(maxPanels,1,200)||
+      !valid(existingInverterKw,0,250)||!valid(existingPanelCount,0,200))){
       error='Comprueba horas de respaldo, horas solares, potencia de panel y batería existente.';return false;
     }
     return true;
@@ -129,7 +142,9 @@
     }
     result=estimated;step=5;error='';window.scrollTo({top:0,behavior:'smooth'});
   }
-  function reset(){step=0;devices=[];result=null;error='';copied=false;}
+  function reset(){step=0;devices=[];result=null;error='';copied=false;
+    existingInverter=false;existingModel='';existingInverterKw=0;
+    existingBatteryKWh=0;existingPanelCount=0;hasPanels=false;outageStartHour=17;}
   function assessment(){
     if(!result)return;
     const query=new URLSearchParams({
@@ -137,7 +152,9 @@
       batteryCapacity:result.batteryWithSolar.toFixed(2),inverterMin:result.inverter.toFixed(0),
       pvPower:result.plannedPvKW.toFixed(2),panelCount:String(result.plannedPanels),
       sector,experience:level,criticalWatts:result.backupWatts.toFixed(0),
-      existingEquipment:existingModel||devices.map(d=>d.name).join(', ').slice(0,160),
+      existingEquipment:existingInverter
+        ?('Inversor existente '+(existingModel||'sin modelo')+' · '+(existingInverterKw||'potencia sin confirmar')+' kW · batería '+existingBatteryKWh+' kWh').slice(0,160)
+        :devices.map(d=>d.name).join(', ').slice(0,160),
     });
     window.location.href='/contacto?'+query;
   }
@@ -146,6 +163,8 @@
     const summary=[
       'Bonaire · Estimación solar preliminar',
       'Sector: '+sector+' · Nivel: '+level,
+      'Sistema previo: '+(existingInverter?'Sí, '+(existingModel||'modelo desconocido')+
+        ' · inversor '+(existingInverterKw||'potencia no indicada')+' kW · batería existente '+existingBatteryKWh+' kWh':'No dispone de inversor'),
       'Cargas estimadas simultáneas: '+result.power.toFixed(0)+' W',
       'Consumo diario total: '+result.daily.toFixed(2)+' kWh',
       'Potencia media de respaldo (cargas esenciales): '+result.backupWatts.toFixed(0)+' W',
@@ -153,8 +172,11 @@
       'Batería nominal sin aporte solar: '+result.battery.toFixed(2)+' kWh',
       'Batería nominal con aporte solar en el corte: '+result.batteryWithSolar.toFixed(2)+' kWh',
       'Banco de referencia: '+result.guideBattery+' kWh ('+(result.guideFits?'cubre escenario estimado':'no cubre todas las cargas')+')',
-      'Corte desde las '+outageStartHour+':00 · Ventana solar dentro del corte: '+result.outageSunHours.toFixed(1)+' h',
-      'Potencial FV con '+result.plannedPanels+' paneles: '+result.pvDailyKWh.toFixed(1)+' kWh/día',
+      level==='basico'
+        ?'Sin hora declarada de apagón: comparación de batería sin aporte FV; ejemplo con sol separado.'
+        :'Escenario técnico desde las '+outageStartHour+':00 · Sol dentro del corte '+result.outageSunHours.toFixed(1)+' h',
+      'Paneles sugeridos orientativamente: '+daylightExample.plannedPanels+' paneles; '+daylightExample.pvDailyKWh.toFixed(1)+' kWh/día de ejemplo',
+      'Ejemplo diurno: '+daylightExample.batteryWithSolar.toFixed(2)+' kWh de batería, no sustituye el escenario nocturno.',
       'Inversor preliminar para cargas esenciales: '+result.inverter.toFixed(0)+' W (revisar picos de arranque)',
       'Paneles calculados para energía diaria en condiciones base: '+result.panelCount+' de '+result.panelWatts+' W',
       'Conexión serie/paralelo: requiere ficha técnica y validación profesional.',
@@ -182,7 +204,49 @@
     </div>
     <div class="p-4 sm:p-8">
       {#if step===0}
-        <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">Primero, cuéntanos para quién es</h2>
+        <div class="rounded-2xl border border-teal-200 bg-teal-50/70 p-4 sm:p-5 space-y-4">
+          <div>
+            <p class="text-xs font-extrabold uppercase tracking-wide text-teal-800">Antes de comenzar</p>
+            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">¿Ya tienes un inversor?</h2>
+            <p class="text-sm text-slate-600 mt-1">Así sabremos si quieres empezar desde cero o mejorar un sistema que ya utilizas.</p>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <button type="button" aria-pressed={!existingInverter}
+              onclick={()=>existingInverter=false}
+              class="text-left rounded-xl border-2 p-4 {existingInverter?'border-slate-200 bg-white':'border-teal-700 bg-white'}">
+              <strong class="block text-slate-900">No, necesito un sistema nuevo</strong>
+              <span class="block text-xs text-slate-600 mt-1">Ayúdame a elegir batería, inversor y paneles.</span>
+            </button>
+            <button type="button" aria-pressed={existingInverter}
+              onclick={()=>existingInverter=true}
+              class="text-left rounded-xl border-2 p-4 {existingInverter?'border-teal-700 bg-white':'border-slate-200 bg-white'}">
+              <strong class="block text-slate-900">Sí, ya tengo un inversor</strong>
+              <span class="block text-xs text-slate-600 mt-1">Quiero más autonomía, agregar paneles o revisar mi sistema.</span>
+            </button>
+          </div>
+          {#if existingInverter}
+            <div class="rounded-xl border border-teal-100 bg-white p-4">
+              <p class="font-bold text-slate-900">Cuéntanos lo que ya tienes</p>
+              <p class="text-xs text-slate-600 mt-1">Puedes dejar en cero las capacidades que no conozcas. Un inversor de 5 kW no es una batería de 5 kWh.</p>
+              <div class="grid sm:grid-cols-2 gap-3 mt-3">
+                <label class="solar-label">Marca o modelo (si lo sabes)
+                  <input class="solar-input" maxlength="200" bind:value={existingModel} placeholder="Ej. marca y modelo"/>
+                </label>
+                <label class="solar-label">Potencia del inversor (kW, opcional)
+                  <input type="number" min="0" max="250" step="0.5" bind:value={existingInverterKw} class="solar-input"/>
+                </label>
+                <label class="solar-label">Baterías que ya tienes en total (kWh, opcional)
+                  <input type="number" min="0" max="5000" step="0.5" bind:value={existingBatteryKWh} class="solar-input"/>
+                </label>
+                <label class="solar-label">Paneles que ya tienes instalados (opcional)
+                  <input type="number" min="0" max="200" step="1" bind:value={existingPanelCount} class="solar-input"/>
+                </label>
+              </div>
+              <p class="text-xs text-slate-500 mt-3">Con estos datos podremos comparar cuánto cubre tu sistema actual y qué ampliación sería orientativa, sin asegurar compatibilidad sin ficha técnica.</p>
+            </div>
+          {/if}
+        </div>
+        <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-8">¿Para quién es el sistema?</h2>
         <p class="text-sm text-slate-600 mt-2">El sector nos ayuda a priorizar las cargas esenciales; no cambia las leyes físicas ni establece límites obligatorios de batería.</p>
         <div class="grid sm:grid-cols-3 gap-3 mt-5">
           {#each sectorOptions as option (option.id)}
@@ -363,49 +427,46 @@
               </details>
             </div>
           {/if}
-          <label class="solar-label">Hora aproximada de inicio del apagón (0–23)
-            <input type="number" min="0" max="23" step="1" bind:value={outageStartHour} class="solar-input"/>
-            <span class="block text-xs font-normal text-slate-500 mt-1">Ejemplo: 17 = 5 p. m.; 15 horas desde esa hora llegan a las 8 a. m. sin sol útil durante el corte.</span>
-          </label>
-          <label class="solar-label">Batería que ya tienes (kWh nominales; 0 si no tienes)
-            <input type="number" min="0" max="5000" step="0.5" bind:value={existingBatteryKWh} class="solar-input"/>
-          </label>
+
+
         </div>
         <div class="rounded-2xl border border-teal-100 bg-teal-50/40 p-4 mt-5 space-y-3">
           <label class="flex gap-3 items-center text-sm font-bold text-slate-800">
-            <input type="checkbox" bind:checked={hasPanels}/> Evaluar sistema con paneles solares
+            <input type="checkbox" bind:checked={hasPanels}/> También quiero explorar una solución con paneles solares (opcional)
           </label>
           {#if hasPanels}
-            <div class="grid sm:grid-cols-2 gap-3">
-              <label class="solar-label">Paneles previstos o disponibles
-                <input type="number" min="1" max="200" step="1" bind:value={maxPanels} class="solar-input"/>
-                <span class="block mt-1 text-xs font-normal text-slate-500">En vivienda partimos de diez como ejemplo de espacio, no como tope obligatorio.</span>
-              </label>
-              <label class="solar-label">Condiciones del cielo
-                <select bind:value={solarWeather} class="solar-input">
-                  <option value="soleado">Soleado · ejemplo 100 %</option>
-                  <option value="variable">Nubes variables · 70 %</option>
-                  <option value="nublado">Muy nublado · 35 %</option>
-                </select>
-              </label>
-            </div>
-            <p class="text-xs text-slate-600">Ventana simplificada: 9:00–16:00. Horas solares pico (4,5 por defecto) expresan energía equivalente, no siete horas a potencia máxima.</p>
+            <p class="text-xs text-slate-700">No tienes que saber cuántos paneles comprar. Bonaire calculará una cantidad orientativa según tus aparatos y podrá mostrarte una comparación durante un corte diurno hipotético.</p>
+            {#if level==='tecnico'}
+              <div class="grid sm:grid-cols-2 gap-3">
+                <label class="solar-label">Máximo de paneles que puedes instalar
+                  <input type="number" min="1" max="200" step="1" bind:value={maxPanels} class="solar-input"/>
+                </label>
+                <label class="solar-label">Escenario de cielo
+                  <select bind:value={solarWeather} class="solar-input">
+                    <option value="soleado">Soleado · 100 %</option>
+                    <option value="variable">Nubes variables · 70 %</option>
+                    <option value="nublado">Muy nublado · 35 %</option>
+                  </select>
+                </label>
+              </div>
+            {:else}
+              <p class="text-xs text-teal-900">Ejemplo inicial de vivienda: espacio para hasta diez paneles y cielo variable; el cálculo muestra si esa cantidad no alcanzaría. Un técnico verificará espacio, clima y capacidad del inversor.</p>
+            {/if}
           {:else}
-            <p class="text-xs text-slate-700">Sin paneles, la batería depende de la carga previa desde la red y del consumo durante el apagón.</p>
+            <p class="text-xs text-slate-700">Perfecto: primero calcularemos el respaldo con batería. Al final podrás revisar cuántos paneles serían orientativos si decides añadirlos.</p>
           {/if}
         </div>
-        <div class="rounded-2xl border border-slate-200 p-4 mt-5 space-y-3">
-          <label class="flex gap-3 items-center font-bold text-slate-800">
-            <input type="checkbox" bind:checked={existingInverter}/> Ya tengo inversor o regulador solar
+        {#if existingInverter && level==='tecnico'}
+        <details class="rounded-2xl border border-slate-200 p-4 mt-5 space-y-3">
+          <summary class="cursor-pointer text-sm font-bold text-teal-800">Opcional: datos técnicos de mi inversor y horario conocido de corte</summary>
+          <p class="text-xs text-slate-600 mt-3">Solo para técnicos que conocen las especificaciones. Si no sabes la hora del apagón, no hace falta indicarla.</p>
+          <label class="solar-label mt-3">Hora de inicio del escenario de corte (0–23, solo ejemplo)
+            <input type="number" min="0" max="23" step="1" bind:value={outageStartHour} class="solar-input"/>
           </label>
-          {#if existingInverter}
-            <label class="solar-label">Marca y modelo (si lo conoces)
-              <input class="solar-input" maxlength="200" bind:value={existingModel} placeholder="Ej. Marca y modelo exactos del inversor"/>
-            </label>
-            <label class="flex gap-2 items-center text-sm text-teal-800 font-bold">
-              <input type="checkbox" bind:checked={showSpecs}/> Tengo sus límites MPPT y la ficha de mis paneles
-            </label>
-            {#if showSpecs}
+          <label class="flex gap-2 items-center text-sm text-teal-800 font-bold mt-3">
+            <input type="checkbox" bind:checked={showSpecs}/> Tengo límites MPPT y la ficha de mis paneles
+          </label>
+          {#if showSpecs}
               <p class="text-xs text-amber-800 bg-amber-50 rounded-xl p-3">Introduce solo valores reales de las fichas técnicas. Sin todos ellos no se propondrán cadenas de paneles. Los resultados siguen sujetos a revisión por un instalador.</p>
               <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <label class="solar-label">Máximo voltaje DC inversor (V)<input type="number" min="1" bind:value={pv.maxDcVoltage} class="solar-input"/></label>
@@ -423,8 +484,8 @@
                 <label class="solar-label">Temperatura máxima de célula (°C)<input type="number" step="1" bind:value={pv.maxCellC} class="solar-input"/></label>
               </div>
             {/if}
-          {/if}
-        </div>
+        </details>
+        {/if}
       {:else if step===4}
         <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">Resumen antes de calcular</h2>
         <p class="text-sm text-slate-600 mt-2">Estos valores son preliminares. La potencia simultánea supone que todas las cargas indicadas podrían estar encendidas a la vez.</p>
