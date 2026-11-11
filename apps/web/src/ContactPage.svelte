@@ -3,6 +3,30 @@
   import { api } from './lib/api';
   let settings: Record<string, string> = $state({});
   let type = $state('consultation');
+  let requestCategories: {id:string;name:string;requires_image:number|boolean}[] = $state([]);
+  type Attachment = { file: File; preview: string };
+  let attachments: Attachment[] = $state([]);
+  function pickImages(files: FileList | null) {
+    if (!files) return;
+    error = '';
+    for (const file of Array.from(files)) {
+      if (attachments.length >= 5) { error = 'Puedes adjuntar hasta cinco fotografías.'; break; }
+      if (!['image/jpeg','image/png','image/webp'].includes(file.type) || file.size > 8*1024*1024 || !file.size) {
+        error = 'Las fotos deben ser JPG, PNG o WebP, de hasta 8 MB cada una.';
+        continue;
+      }
+      attachments = [...attachments, { file, preview: URL.createObjectURL(file) }];
+    }
+  }
+  function discardImage(index: number) {
+    URL.revokeObjectURL(attachments[index].preview);
+    attachments = attachments.filter((_,i) => i !== index);
+  }
+  function clearImages() {
+    attachments.forEach(a => URL.revokeObjectURL(a.preview));
+    attachments = [];
+  }
+  let needsImage = $derived(Boolean(requestCategories.find(c=>c.id===type)?.requires_image));
   let title = $state('');
   let description = $state('');
   let preferredDate = $state('');
@@ -10,7 +34,10 @@
   let error = $state('');
   let busy = $state(false);
   onMount(async () => {
-    try { settings = (await api.getSettings()).settings ?? {}; } catch { /* Los datos de contacto son opcionales. */ }
+    const [config, kinds] = await Promise.allSettled([api.getSettings(), api.getRequestCategories()]);
+    if (config.status === 'fulfilled') settings = config.value.settings ?? {};
+    if (kinds.status === 'fulfilled') requestCategories = kinds.value.categories || [];
+    if (requestCategories.length && !requestCategories.some(c => c.id === type)) type = requestCategories[0].id;
     const params = new URLSearchParams(window.location.search);
     if (params.has('product')) {
       type = 'consultation'; title = `Consulta sobre ${params.get('product')}`;
@@ -25,13 +52,28 @@
       type = 'installation'; title = 'Evaluación de sistema solar';
       description = `Asesor solar: potencia ${params.get('power')} W, energía ${params.get('dailyEnergy')} kWh, batería ${params.get('batteryCapacity')} kWh, inversor ${params.get('inverterMin')} W, sistema ${params.get('pvPower')} kWp, ${params.get('panelCount')} paneles. Equipo existente: ${params.get('existingEquipment') || 'No especificado'}.`;
     }
+    return () => clearImages();
   });
   async function submit(event: SubmitEvent) {
     event.preventDefault(); busy = true; error = ''; message = '';
     try {
-      const result = await api.createRequest({ type, title, description, preferred_date: preferredDate || undefined });
-      message = `Tu solicitud se registró correctamente. Número de referencia: ${result.id}`;
-      title = ''; description = ''; preferredDate = '';
+      if (needsImage && attachments.length === 0) {
+        error = 'Para esta solicitud, adjunta al menos una fotografía del equipo o trabajo que necesitas revisar.';
+        return;
+      }
+      const result = await api.createRequest({
+        category_id: type, type, title, description, preferred_date: preferredDate || undefined
+      });
+      let uploaded = 0;
+      for (const entry of attachments) {
+        try { await api.uploadRequestImage(result.id, entry.file); uploaded += 1; }
+        catch { /* La solicitud ya existe: informar de cualquier foto no subida, sin crear otra solicitud. */ }
+      }
+      const total = attachments.length;
+      message = `Solicitud registrada. Referencia: ${result.id}.` +
+        (total ? ` Fotografías guardadas: ${uploaded} de ${total}.` : '') +
+        (uploaded < total ? ' Algunas fotos no se cargaron; puedes añadirlas desde Mis solicitudes.' : '');
+      clearImages(); title = ''; description = ''; preferredDate = '';
     } catch (e) { error = e instanceof Error ? e.message : 'No se pudo enviar la solicitud'; }
     finally { busy = false; }
   }
@@ -49,12 +91,18 @@
         <div class="flex items-center gap-3 mb-2"><span class="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-extrabold">01</span><div><h2 class="text-xl font-bold text-slate-900">Cuéntanos tu solicitud</h2><p class="text-xs text-slate-500">Los campos obligatorios están señalados.</p></div></div>
         <label class="contact-label">Tipo de solicitud *
           <select bind:value={type} class="contact-control">
-            <option value="consultation">Consulta sobre equipos</option>
-            <option value="installation">Instalación solar</option>
-            <option value="repair">Reparación</option>
-            <option value="maintenance">Mantenimiento</option>
-            <option value="complaint">Reclamación</option>
-            <option value="suggestion">Sugerencia</option>
+            {#if requestCategories.length}
+              {#each requestCategories as kind (kind.id)}
+                <option value={kind.id}>{kind.name}</option>
+              {/each}
+            {:else}
+              <option value="consultation">Consulta sobre equipos</option>
+              <option value="installation">Instalación solar</option>
+              <option value="repair">Reparación</option>
+              <option value="maintenance">Mantenimiento</option>
+              <option value="complaint">Reclamación</option>
+              <option value="suggestion">Sugerencia</option>
+            {/if}
           </select>
         </label>
         <label class="contact-label">Asunto *
@@ -66,6 +114,30 @@
         <label class="contact-label">Fecha preferida (opcional)
           <input type="date" bind:value={preferredDate} class="contact-control" />
         </label>
+        <fieldset class="rounded-2xl border border-teal-100 bg-teal-50/40 p-4 space-y-3">
+          <legend class="text-sm font-extrabold text-slate-800 px-2">Fotografías de tu solicitud {needsImage ? '*' : '(opcional)'}</legend>
+          <p class="text-xs sm:text-sm text-slate-600">
+            {needsImage
+              ? 'Por favor, adjunta una foto del equipo, avería o instalación que quieres reparar, mantener o reclamar.'
+              : 'Puedes adjuntar imágenes para explicar mejor lo que necesitas.'}
+          </p>
+          <input type="file" multiple accept="image/jpeg,image/png,image/webp"
+            class="block w-full text-xs sm:text-sm text-slate-700 file:rounded-lg file:border-0 file:bg-teal-700 file:text-white file:font-bold file:px-4 file:py-2.5 file:mr-3"
+            aria-label="Seleccionar fotografías de la solicitud"
+            onchange={e => { pickImages(e.currentTarget.files); e.currentTarget.value = ''; }} />
+          <p class="text-xs text-slate-500">Hasta 5 imágenes JPG, PNG o WebP de 8 MB cada una. Solo tú y el personal autorizado pueden verlas.</p>
+          {#if attachments.length}
+            <div class="grid grid-cols-3 sm:grid-cols-5 gap-2">
+              {#each attachments as entry, i (entry.preview)}
+                <div class="relative min-w-0 rounded-xl overflow-hidden border border-slate-200 bg-white">
+                  <img src={entry.preview} alt={'Foto seleccionada '+(i+1)} class="w-full h-24 object-cover" />
+                  <button type="button" onclick={() => discardImage(i)} aria-label={'Quitar fotografía '+(i+1)}
+                    class="absolute top-1 right-1 bg-white/95 shadow rounded-lg w-7 h-7 text-red-700 font-bold">✕</button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </fieldset>
         {#if error}<p role="alert" class="text-red-700 bg-red-50 border border-red-200 rounded-xl p-3 text-sm">{error}</p>{/if}
         {#if message}<p role="status" class="text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm font-semibold break-words">{message}</p>{/if}
         <button disabled={busy} type="submit" class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white px-5 py-3.5 font-extrabold rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600">
