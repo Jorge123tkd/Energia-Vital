@@ -3,6 +3,7 @@
   import { api } from '../lib/api';
   let { token, products }: {token:string;products:any[]}=$props();
   let productId=$state('');
+  let reviews:any[]=$state([]);
   let productSearch=$state('');
   let reviewSearch=$state('');
   let filteredProducts=$derived(products.filter(p=>
@@ -13,7 +14,7 @@
       String(value||'').toLocaleLowerCase('es').includes(reviewSearch.trim().toLocaleLowerCase('es')))));
   let customerId=$state('');
   let reference=$state('');
-  let reviews:any[]=$state([]);
+
   let loading=$state(true),busy=$state(false),error=$state(''),notice=$state('');
   async function load(){
     loading=true;
