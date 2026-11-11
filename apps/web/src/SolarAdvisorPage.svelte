@@ -50,7 +50,9 @@
     ...solarInputs,hasPanels:true,outageStartHour:9,
   }));
   type StockItem = {id:string;name:string;category_name?:string;stock_status?:string;
-    stock_quantity?:number|null;price?:number|null;currency?:string};
+    stock_quantity?:number|null;price?:number|null;currency?:string;
+    primary_image_url?:string|null;short_description?:string|null;description?:string|null;
+    brand?:string|null;model?:string|null};
   let inventory:StockItem[]=$state([]);
   let inventoryLoading=$state(true),inventoryError=$state('');
   onMount(() => {
@@ -83,6 +85,11 @@
       paneles:choose('panel',panelWatts)
     };
   });
+  let recommendedProducts=$derived([
+    ...recommendations.baterias.map(item=>({item,family:'Batería',reason:'Alternativa de almacenamiento; revisa capacidad y compatibilidad.'})),
+    ...recommendations.paneles.map(item=>({item,family:'Panel solar',reason:'Opción para producir energía durante las horas de sol.'})),
+    ...recommendations.inversores.map(item=>({item,family:'Inversor',reason:existingInverter?'Opción de ampliación; comprueba primero si el tuyo sirve.':'Alternativa para las cargas esenciales estimadas.'})),
+  ].slice(0,6));
   function addLoad(item?:Omit<Load,'id'>){
     devices=[...devices,item?{...item,id:nextId++}:{
       id:nextId++,name:'',watts:100,units:1,hours:4,critical:false,backupDuty:1,estimate:true,
@@ -497,9 +504,9 @@
             {label:'Consumo diario',value:estimated.daily.toFixed(2)+' kWh'},
             {label:'Potencia media esencial en apagón',value:estimated.backupWatts.toFixed(0)+' W'},
             {label:'Respaldo solicitado',value:autonomyHours+' horas'},
-            {label:'Inicio aproximado del corte',value:String(outageStartHour).padStart(2,'0')+':00'},
-            {label:'Paneles a evaluar',value:hasPanels?maxPanels+' paneles de '+panelWatts+' W':'Sin paneles'},
-            {label:'Escenario de sol',value:hasPanels?solarWeather:'No aplica'},
+            {label:'Situación inicial',value:existingInverter?'Ya tengo inversor':'Voy a empezar desde cero'},
+            {label:'Banco de batería actual',value:existingInverter && existingBatteryKWh>0?existingBatteryKWh+' kWh declarados':'No especificado'},
+            {label:'Opciones solares',value:hasPanels?'Deseo ver una alternativa con paneles':'Por ahora, batería y respaldo'},
           ] as info}
             <div class="rounded-xl bg-slate-50 p-4"><dt class="text-xs text-slate-500">{info.label}</dt><dd class="font-extrabold text-slate-900 mt-1">{info.value}</dd></div>
           {/each}
@@ -507,7 +514,7 @@
         {#if level==='basico'}<p class="mt-4 text-xs bg-amber-50 text-amber-900 p-3 rounded-xl">Los consumos de neveras, ventiladores y demás equipos son aproximaciones. Antes de comprar, confirma sus potencias y picos de arranque.</p>{/if}
       {:else if step===5 && result}
         <h2 class="text-2xl font-extrabold text-slate-900">Tu estudio solar preliminar</h2>
-        <p class="text-sm text-slate-600 mt-2">Comparamos {autonomyHours} horas sin red desde las {outageStartHour}:00, con y sin producción solar. El consumo depende de cuánto tiempo uses cada equipo esencial.</p>
+        <p class="text-sm text-slate-600 mt-2">Calculamos las horas de respaldo solicitadas con los equipos que elegiste. No necesitas saber a qué hora ocurrirá un apagón. La generación solar se analiza aparte como un escenario posible, nunca garantizado.</p>
         {#if level==='basico'}
           <p class="mt-3 rounded-xl bg-teal-50 p-4 text-sm text-slate-700"><strong>Lectura sencilla:</strong> los vatios (W) indican cuánto consume un aparato mientras funciona; los kilovatios-hora (kWh) indican cuánto gasta o puede almacenar una batería con el paso del tiempo. Estos resultados son aproximaciones, no una lista de compras obligatoria.</p>
         {/if}
@@ -518,7 +525,7 @@
             {label:'Potencia media esencial',value:result.backupWatts.toFixed(0)+' W'},
             {label:sector==='residencial'?'Banco doméstico de referencia':'Banco comercial de referencia',value:result.guideBattery.toFixed(2)+' kWh'},
             {label:'Inversor para cargas esenciales',value:result.inverter.toFixed(0)+' W'},
-            {label:'Paneles previstos',value:result.plannedPanels+' de '+result.panelWatts+' W'},
+            {label:'Paneles orientativos',value:daylightExample.panelCount+' de '+result.panelWatts+' W'},
           ] as box}
             <div class="rounded-2xl border border-teal-100 bg-teal-50 p-3 sm:p-4">
               <dt class="text-xs text-teal-800 font-semibold">{box.label}</dt>
@@ -527,23 +534,25 @@
           {/each}
         </div>
         <section class="rounded-2xl p-4 sm:p-5 border border-slate-200 bg-white mt-5 space-y-3">
-          <h3 class="text-lg font-extrabold text-slate-900">Batería con paneles y sin paneles</h3>
-          <div class="grid sm:grid-cols-2 gap-3">
+          <h3 class="text-lg font-extrabold text-slate-900">Cuánta batería necesitarías</h3>
+          <div class="grid {hasPanels?'sm:grid-cols-2':''} gap-3">
             <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
-              <p class="text-xs font-semibold text-slate-600">Sin aporte solar durante el corte</p>
+              <p class="text-xs font-semibold text-slate-600">Respaldo sin contar con el sol</p>
               <p class="text-2xl font-extrabold text-slate-900 mt-1">{result.battery.toFixed(2)} kWh</p>
-              <p class="text-xs text-slate-600 mt-2">Demanda nominal teórica para las cargas y horas declaradas; no es una recomendación automática de compra.</p>
+              <p class="text-xs text-slate-600 mt-2">Estimación nominal para las cargas que marcaste como esenciales durante {autonomyHours} horas. No significa que debas comprar automáticamente este tamaño de batería.</p>
             </div>
-            <div class="rounded-xl bg-teal-50 border border-teal-100 p-4">
-              <p class="text-xs font-semibold text-teal-800">Con {result.plannedPanels} paneles en este escenario</p>
-              <p class="text-2xl font-extrabold text-teal-950 mt-1">{result.batteryWithSolar.toFixed(2)} kWh</p>
-              <p class="text-xs text-slate-600 mt-2">Solo hay beneficio cuando el corte coincide con producción solar y la batería puede aceptar recarga. Se supone batería cargada al inicio.</p>
-            </div>
+            {#if hasPanels}
+              <div class="rounded-xl bg-teal-50 border border-teal-100 p-4">
+                <p class="text-xs font-semibold text-teal-800">{level==='basico'?'Ejemplo de corte diurno con paneles':'Escenario técnico con paneles'}</p>
+                <p class="text-2xl font-extrabold text-teal-950 mt-1">{(level==='basico'?daylightExample.batteryWithSolar:result.batteryWithSolar).toFixed(2)} kWh</p>
+                <p class="text-xs text-slate-600 mt-2">{level==='basico'?'Solo ilustra un corte que empieza con sol a las 9:00 a. m.; no conocemos el horario real de los apagones.':'Calculado con el horario de ejemplo que indicaste; no equivale a una garantía de producción solar.'}</p>
+              </div>
+            {/if}
           </div>
-          <p class="text-sm text-slate-700">De las {autonomyHours} horas de corte, <strong>{result.outageSunHours.toFixed(1)} h</strong> coinciden con la ventana de producción y <strong>{result.outageNoSunHours.toFixed(1)} h</strong> quedan fuera. Los paneles aportarían aproximadamente {result.pvOutageKWh.toFixed(1)} kWh durante el corte: {result.pvDirectKWh.toFixed(1)} kWh cubrirían cargas directamente y hasta {result.pvSurplusKWh.toFixed(1)} kWh serían excedente potencial de recarga, antes de pérdidas.</p>
-          {#if result.outageSunHours===0}
-            <p class="rounded-xl bg-amber-50 border border-amber-200 text-amber-900 p-3 text-sm">Si el corte transcurre completamente de noche, los paneles no reducen la batería necesaria esa noche. Sí pueden alimentar la casa y recargar la batería al día siguiente.</p>
+          {#if hasPanels}
+            <p class="text-sm text-slate-700">En el escenario comparativo los paneles podrían suministrar alrededor de {(level==='basico'?daylightExample.pvDirectKWh:result.pvDirectKWh).toFixed(1)} kWh directamente a los equipos y generar hasta {(level==='basico'?daylightExample.pvSurplusKWh:result.pvSurplusKWh).toFixed(1)} kWh de excedente potencial de recarga, antes de pérdidas. Eso solo ocurre durante horas con producción y depende de la instalación.</p>
           {/if}
+          <p class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">Para prepararte ante un apagón que puede ocurrir de noche, toma como referencia conservadora la batería <strong>sin aporte solar</strong>. Los paneles ayudan a consumir y recargar de día, pero no sustituyen el almacenamiento nocturno.</p>
           <p class="text-sm text-slate-600">Para {sectorOptions.find(x=>x.id===sector)?.label.toLowerCase()}, usamos {sector==='residencial'?'5, 10, 12 y 15 kWh':'varias capacidades comerciales'} como referencias, <strong>no como límites técnicos ni legales</strong>.</p>
           <div class="rounded-xl p-4 {result.guideFits?'bg-emerald-50 border border-emerald-100':'bg-amber-50 border border-amber-200'}">
             <p class="font-bold text-slate-900">Referencia: {result.guideBattery} kWh nominales</p>
@@ -555,8 +564,28 @@
               <p class="text-xs text-slate-700 mt-2">Otra opción es estudiar un banco mayor o un sistema por etapas. No recomendamos automáticamente comprar {result.battery.toFixed(1)} kWh solo por el número calculado.</p>
             {/if}
           </div>
-          {#if result.existingHours!==null}
-            <p class="text-sm text-teal-900 bg-teal-50 rounded-xl p-3">Con tu batería actual declarada ({existingBatteryKWh} kWh nominales), la autonomía de esas cargas sería aproximadamente <strong>{result.existingHours.toFixed(1)} horas</strong> bajo los supuestos del cálculo.</p>
+          {#if existingInverter}
+            <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-2">
+              <h4 class="font-extrabold text-teal-950">Tu sistema actual y posibles ampliaciones</h4>
+              {#if existingBatteryKWh>0 && result.existingHours!==null}
+                <p class="text-sm text-slate-700">Con los <strong>{existingBatteryKWh} kWh</strong> nominales de batería que declaraste, la autonomía ilustrativa sería de <strong>{result.existingHours.toFixed(1)} horas</strong> para las cargas esenciales estimadas, sin aporte solar.</p>
+                {#if result.battery>existingBatteryKWh}
+                  <p class="text-sm text-slate-800">Para las {autonomyHours} horas que deseas, la diferencia teórica respecto al banco actual sería de <strong>{Math.max(0,result.battery-existingBatteryKWh).toFixed(2)} kWh nominales</strong>. No significa que sea seguro conectar otra batería directamente: primero hay que verificar química, voltaje, BMS y condiciones del banco existente.</p>
+                {:else}
+                  <p class="text-sm text-teal-900">La energía nominal declarada parece suficiente para este escenario de consumo; hay que verificar las condiciones reales de la batería.</p>
+                {/if}
+              {:else}
+                <p class="text-sm text-slate-700">No indicaste la capacidad de tu batería. Puedes volver al primer paso para añadirla y ver una comparación de ampliación.</p>
+              {/if}
+              {#if existingInverterKw>0}
+                <p class="text-sm text-slate-700">Tu inversor declarado: <strong>{existingInverterKw} kW</strong>. Potencia orientativa para cargas esenciales: <strong>{(result.inverter/1000).toFixed(2)} kW</strong>. {existingInverterKw*1000>=result.inverter?'La potencia nominal parece alcanzar esta referencia, sin verificar picos de arranque ni batería.':'La potencia declarada podría resultar insuficiente con esas cargas; se requiere revisar el inversor o reducir simultaneidad.'}</p>
+              {:else}
+                <p class="text-sm text-slate-700">Sin potencia nominal del inversor no podemos decidir todavía si soporta todos los equipos o una ampliación.</p>
+              {/if}
+              {#if existingPanelCount>0}
+                <p class="text-xs text-slate-600">Paneles existentes declarados: {existingPanelCount}. Para saber si puedes aprovecharlos o ampliarlos hacen falta datos de los módulos y del MPPT; no se presupone compatibilidad con paneles adicionales.</p>
+              {/if}
+            </div>
           {/if}
           <p class="text-xs text-slate-500">Supuestos ilustrativos: batería inicialmente cargada, 80 % de descarga utilizable, 90 % de eficiencia y paneles al 75 % de rendimiento global. Producción promediada en intervalos de 15 minutos dentro de 9:00–16:00; no sustituye irradiancia horaria, curva de carga, límites BMS ni estudios por ubicación. Ninguna cifra garantiza autonomía real.</p>
         </section>
