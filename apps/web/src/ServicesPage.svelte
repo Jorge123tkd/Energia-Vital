@@ -58,7 +58,7 @@
     <div aria-label={featured ? 'Servicios destacados, desplazamiento horizontal' : 'Listado de servicios'}
       class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
       {#each visibleServices as service (service.id)}
-        <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc((100%-3rem)/5)] snap-start' : ''}">
+        <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
           <button type="button" onclick={()=>details(service)} class="w-full relative overflow-hidden bg-teal-50" aria-label={'Ver fotos de '+service.name}>
             <CardImage src={service.image_url} alt={service.name} />
           </button>

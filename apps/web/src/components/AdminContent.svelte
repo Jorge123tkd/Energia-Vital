@@ -199,6 +199,27 @@
       await onRefresh(); notice = s.is_active ? 'Servicio ocultado.' : 'Servicio publicado.';
     });
   }
+  async function setFeaturedProduct(item: any) {
+    await execute(async () => {
+      await api.updateAdminProduct(token, item.id, {is_featured: !item.is_featured});
+      await onRefresh();
+      notice = item.is_featured ? 'Producto retirado de Inicio.' : 'Producto destacado en Inicio.';
+    });
+  }
+  async function setFeaturedService(item: any) {
+    await execute(async () => {
+      await api.updateAdminService(token, item.id, {is_featured: !item.is_featured});
+      await onRefresh();
+      notice = item.is_featured ? 'Servicio retirado de Inicio.' : 'Servicio destacado en Inicio.';
+    });
+  }
+  async function setFeaturedGallery(item: any) {
+    await execute(async () => {
+      await api.updateAdminGallery(token, item.id, {is_featured: !item.is_featured});
+      gallery = (await api.getAdminGallery(token)).gallery ?? [];
+      notice = item.is_featured ? 'Proyecto retirado de Inicio.' : 'Proyecto destacado en Inicio.';
+    });
+  }
 
   let gallery: any[] = $state([]);
   let galleryFeaturedCount = $derived(gallery.filter(g => Boolean(g.is_featured) && Boolean(g.is_active)).length);
@@ -471,7 +492,7 @@
             {#each categories as cat (cat.id)}<option value={cat.id}>{cat.name}</option>{/each}
           </select>
         </label>
-        <span class="text-sm text-slate-500 whitespace-nowrap py-2">{visibleProducts.length} resultados</span>
+        <span class="text-sm text-slate-500 whitespace-nowrap py-2">{visibleProducts.length} resultados · Destacados {productFeaturedCount}/5</span>
       </div>
       <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {#each pagedProducts as p (p.id)}
@@ -483,6 +504,8 @@
                 <p class="font-bold">{p.price == null ? 'Consultar precio' : Number(p.price).toLocaleString('es-CU') + ' ' + (p.currency || 'USD')}</p>
                 <div class="flex flex-wrap items-center gap-2">
                   <button type="button" class="admin-secondary flex-1" onclick={() => editProduct(p)}>✎ Editar</button>
+                  <button type="button" class="admin-secondary text-xs" disabled={busy || (!p.is_featured && productFeaturedCount>=5 && p.is_active)}
+                    onclick={() => setFeaturedProduct(p)}>{p.is_featured ? '★ Quitar' : '☆ Destacar'}</button>
                   <button type="button" disabled={busy} class="admin-link" onclick={() => toggleProduct(p)}>{p.is_active ? 'Ocultar' : 'Publicar'}</button>
                   <button type="button" disabled={busy} class="rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-bold px-3 py-2" onclick={() => removeProduct(p)} aria-label={'Eliminar producto '+p.name} title="Eliminar producto">✕ Borrar</button>
                 </div>
@@ -512,6 +535,7 @@
     <section class="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
       <div class="flex flex-wrap gap-3 justify-between items-center">
         <div><h2 class="text-2xl font-bold text-slate-900">Servicios ({services.length})</h2>
+          <p class="text-xs text-teal-800 font-semibold mt-1">Destacados en Inicio: {serviceFeaturedCount}/5 · Selecciona o retira con ★</p>
           <p class="text-sm text-slate-500 mt-1">Publica servicios completos con fotografías, descripción y precio.</p>
         </div>
         <button type="button" class="admin-primary" onclick={() => { resetService(); modal = 'service'; error = ''; }}>+ Nuevo servicio</button>
@@ -527,6 +551,8 @@
                 <p class="text-sm font-semibold">{s.price_type === 'fixed' && s.price != null ? Number(s.price).toLocaleString('es-CU') + ' USD' : s.price_type === 'free' ? 'Gratuito' : 'Bajo presupuesto'}</p>
                 <div class="flex flex-wrap items-center gap-2">
                   <button type="button" class="admin-secondary flex-1" onclick={() => editService(s)}>✎ Editar</button>
+                  <button type="button" class="admin-secondary text-xs" disabled={busy || (!s.is_featured && serviceFeaturedCount>=5 && s.is_active)}
+                    onclick={() => setFeaturedService(s)}>{s.is_featured ? '★ Quitar' : '☆ Destacar'}</button>
                   <button type="button" disabled={busy} class="admin-link" onclick={() => toggleService(s)}>{s.is_active ? 'Ocultar' : 'Publicar'}</button>
                   <button type="button" disabled={busy} class="rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-bold px-3 py-2" onclick={() => removeService(s)} aria-label={'Eliminar servicio '+s.name} title="Eliminar servicio">✕ Borrar</button>
                 </div>
@@ -544,6 +570,7 @@
       <header class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="text-2xl font-bold text-slate-900">Galería de proyectos ({gallery.length})</h2>
+          <p class="text-xs text-teal-800 font-semibold mt-1">Destacados en Inicio: {galleryFeaturedCount}/5 · Selecciona o retira con ★</p>
           <p class="text-sm text-slate-500 mt-1">Trabajos, instalaciones y resultados en tarjetas compactas.</p>
         </div>
         <button type="button" class="admin-primary" onclick={() => { galleryEdit = null; galleryFeatured = false; galleryTitle = ''; galleryDescription = ''; galleryCategory = ''; galleryFile = null; galleryPhotos = []; galleryUrl = ''; error = ''; modal = 'gallery'; }}>
@@ -566,6 +593,8 @@
         <p class="text-xs text-slate-500 line-clamp-2 min-h-[2rem]">{g.description || 'Sin descripción'}</p>
         <div class="flex gap-1 pt-1">
           <button class="admin-secondary text-xs flex-1" onclick={() => { galleryEdit = { ...g, is_featured: Boolean(g.is_featured) }; modal = 'gallery-edit'; error = ''; }}>Editar</button>
+          <button type="button" class="admin-secondary text-xs" disabled={busy || (!g.is_featured && galleryFeaturedCount>=5 && g.is_active)}
+            onclick={() => setFeaturedGallery(g)}>{g.is_featured ? '★ Quitar' : '☆ Destacar'}</button>
           <button disabled={busy} class="admin-link text-xs text-red-700" onclick={() => removeGallery(g)}>Eliminar</button>
         </div>
       </div>

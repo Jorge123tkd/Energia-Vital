@@ -77,7 +77,7 @@
       <div aria-label={featured ? 'Proyectos destacados, desplazamiento horizontal' : 'Listado de proyectos'}
         class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
         {#each visibleProjects as work (work.id)}
-          <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc((100%-3rem)/5)] snap-start' : ''}">
+          <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
             <button type="button" class="block relative w-full bg-slate-100 overflow-hidden" onclick={()=>show(work)} aria-label={'Ver fotografías de '+work.title}>
               <CardImage src={work.url} alt={work.title} />
               {#if work.image_count}<span class="absolute right-2 bottom-2 bg-slate-950/80 text-white rounded-full px-2.5 py-1 text-[11px] font-bold">▧ {work.image_count} fotos</span>{/if}

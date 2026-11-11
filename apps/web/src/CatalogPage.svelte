@@ -210,7 +210,7 @@
     <div aria-label={featured ? 'Productos destacados, desliza horizontalmente' : 'Listado de productos'}
       class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
       {#each pageItems as product (product.id)}
-        <article class="min-w-0 flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-teal-200 transition {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc((100%-3rem)/5)] snap-start' : ''}">
+        <article class="min-w-0 flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-teal-200 transition {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
           <button type="button" class="relative block w-full text-left bg-gradient-to-br from-teal-50 to-slate-100 overflow-hidden" onclick={() => details(product)} aria-label={'Ver detalles de ' + product.name}>
             <CardImage src={imageOf(product)} alt={product.name} />
             {#if product.is_featured}

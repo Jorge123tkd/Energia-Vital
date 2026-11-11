@@ -31,7 +31,7 @@
   let appointmentTotal = $state(0);
   let pagingBusy = $state(false);
   let copiedReference = $state('');
-  const pageSize = 20;
+  const pageSize = 10;
   const requestStatusLabels: Record<string, string> = {
     pending: 'Pendiente', quoted: 'Presupuestada', approved: 'Aprobada',
     scheduled: 'Programada', completed: 'Completada', cancelled: 'Cancelada'
