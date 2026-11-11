@@ -137,6 +137,27 @@ authRoutes.post('/register', async c => {
       c.env.DB.prepare('INSERT INTO auth_sessions (id, user_id, user_type, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
         .bind(sessionId, id, 'customer', now, expires),
     ]);
+    // Solo avisos internos: no enviamos SMS ni WhatsApp sin autorización expresa.
+    try {
+      const {results}=await c.env.DB.prepare(`SELECT key,value FROM system_settings
+        WHERE key IN ('welcome_notification_enabled','welcome_notification_title','welcome_notification_message')`)
+        .all<{key:string;value:string}>();
+      const configured=Object.fromEntries((results||[]).map(x=>[x.key,x.value]));
+      if(configured.welcome_notification_enabled!=='false') {
+        await c.env.DB.prepare(`INSERT INTO notifications
+          (id,user_id,user_type,type,title,message,is_read,created_at)
+          VALUES (?,?,'customer','system',?,?,0,?)`).bind(
+          crypto.randomUUID(),id,
+          configured.welcome_notification_title||'¡Bienvenido a Bonaire!',
+          configured.welcome_notification_message||
+            'Gracias por registrarte. Desde tu cuenta puedes solicitar servicios, consultar tus citas y recibir notificaciones.',
+          now,
+        ).run();
+      }
+    } catch(e) {
+      console.error('[register] El aviso de bienvenida no se pudo guardar',e);
+      // La cuenta ya está creada: un fallo de notificaciones no bloquea el alta.
+    }
     const tokens = await generateTokenPair(c.env, id, 'customer', 'customer', sessionId);
     return c.json({ user: { id, name, email, phone, address, city, province, role: 'customer', phone_verified: false }, ...tokens }, 201);
   } catch (error) {
