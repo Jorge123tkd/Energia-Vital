@@ -79,6 +79,20 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const category = await request('Admin creates a category', '/api/admin/categories', 'POST', {
     name: 'Paneles de prueba', slug: 'paneles-test-' + uid
   }, adminToken);
+  await request('Admin edits category name and description', '/api/admin/categories/' + category.id, 'PATCH',
+    { name: 'Equipos solares de prueba', description: 'Categoría editable', sort_order: 4, is_active: true }, adminToken);
+  const categoriesEdited = await request('Admin lists updated categories', '/api/admin/categories', 'GET', null, adminToken);
+  assert.ok(categoriesEdited.categories.some(row =>
+    row.id === category.id && row.name === 'Equipos solares de prueba' && row.sort_order === 4));
+  await request('Admin clears the category description', '/api/admin/categories/' + category.id, 'PATCH',
+    { description: '' }, adminToken);
+  const categoriesCleared = await request('Admin sees cleared category description', '/api/admin/categories', 'GET', null, adminToken);
+  assert.ok(categoriesCleared.categories.some(row => row.id === category.id && row.description == null));
+  await request('Reject an invalid category update', '/api/admin/categories/' + category.id, 'PATCH',
+    { name: '' }, adminToken, 400);
+  await request('Moderator cannot edit categories', '/api/admin/categories/' + category.id, 'PATCH',
+    { name: 'Malicioso' }, staffToken, 403);
+
   const product = await request('Admin creates a richly described product', '/api/admin/products', 'POST', {
     category_id: category.id, name: 'Panel de 550 W', slug: 'panel-550-' + uid,
     price: 0, description: 'Panel monocristalino de prueba', currency: 'USD'
