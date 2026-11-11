@@ -8,7 +8,7 @@
     "dev": "wrangler dev src/index.ts",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/integration.cjs",
+    "test": "node tests/solar-estimator.cjs && node tests/integration.cjs",
     "db:seed": "wrangler d1 execute energia-vital-db --local --file tests/seed.sql",
     "db:clean": "wrangler d1 execute energia-vital-db --local --file tests/clean.sql",
     "db:integrity": "wrangler d1 execute energia-vital-db --local --file tests/integrity.sql",
