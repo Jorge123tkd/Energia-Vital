@@ -249,25 +249,41 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const followUp = await request('Assistant preserves topic in follow-up', '/api/assistant/message', 'POST',
     { session_id: chat.session_id, message: '¿Y a 48 voltios?' }, at);
   assert.equal(followUp.intent, 'solar_advice');
-  const guidedStart = await request('Solar guide starts from chat', '/api/assistant/message', 'POST',
+  const guidedStart = await request('Solar guide asks for sector', '/api/assistant/message', 'POST',
     { session_id: chat.session_id, message: 'Quiero un asesoramiento solar' }, at);
-  assert.match(guidedStart.response, /tipo de instalaci[oó]n/i);
+  assert.match(guidedStart.response, /sector/i);
   for (const [answer, expectedText] of [
-    ['1', 'datos de consumo'],
-    ['1', 'vatios'],
-    ['800 W', 'horas al día'],
-    ['6', 'autonomía'],
-    ['5', 'horas solares pico'],
+    ['1', 'experiencia'], ['2', 'tipo de instalación'], ['1', 'datos de consumo'],
+    ['1', 'vatios'], ['800 W', 'horas al día'], ['6', 'cargas esenciales'],
+    ['35', 'inversor'], ['no', 'autonomía'], ['5', 'horas solares pico'],
   ]) {
     const guidedNext = await request('Solar guide accepts step ' + answer, '/api/assistant/message', 'POST',
       { session_id: chat.session_id, message: answer }, at);
     assert.ok(guidedNext.response.toLowerCase().includes(expectedText.toLowerCase()), 'Solar guide progression: ' + expectedText);
   }
-  const guidedResult = await request('Solar guide calculates recommendation', '/api/assistant/message', 'POST',
+  const guidedResult = await request('Solar guide calculates technical recommendation', '/api/assistant/message', 'POST',
     { session_id: chat.session_id, message: '4,5' }, at);
   assert.match(guidedResult.response, /consumo diario/i);
   assert.match(guidedResult.response, /batería nominal/i);
   assert.match(guidedResult.response, /paneles/i);
+  assert.match(guidedResult.response, /serie o paralelo/i);
+
+  const noviceStart = await request('New novice solar conversation', '/api/assistant/message', 'POST',
+    {message:'Necesito asesoramiento solar'},at);
+  assert.match(noviceStart.response,/sector/i);
+  for (const [answer, expected] of [
+    ['1','experiencia'],['1','electrodomésticos'],['1 nevera, 1 televisor, 2 ventiladores, 6 luces LED','esenciales'],
+    ['1','inversor'],['no','autonomía'],['5','horas solares pico'],
+  ]) {
+    const reply = await request('Novice guidance '+answer,'/api/assistant/message','POST',
+      {session_id:noviceStart.session_id,message:answer},at);
+    assert.ok(reply.response.toLowerCase().includes(expected.toLowerCase()),'Novice flow: '+expected);
+  }
+  const noviceResult=await request('Beginner household sees realistic battery reference',
+    '/api/assistant/message','POST',{session_id:noviceStart.session_id,message:'4,5'},at);
+  assert.match(noviceResult.response,/refrigerador/i);
+  assert.match(noviceResult.response,/batería nominal/i);
+  assert.match(noviceResult.response,/serie o paralelo/i);
   const commercial = await request('Assistant understands catalog availability', '/api/assistant/message', 'POST',
     { message: '¿Tienen disponibilidad de baterías?' }, at);
   assert.equal(commercial.intent, 'product_inquiry');
