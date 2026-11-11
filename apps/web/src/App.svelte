@@ -65,6 +65,11 @@
     navigate('/entrar?next=%2F');
   }
 
+  function openAssistantPage() {
+    isAssistantOpen.set(false);
+    navigate('/asistente');
+  }
+
   function onAuthenticated(customer: any, token: string) {
     if ((customer.account_type === 'admin' || customer.role === 'admin' || customer.role === 'operator')) {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
@@ -113,11 +118,16 @@
   {#if currentRoute === '/entrar' || currentRoute === '/registro' || (!user && !publicRoutes.has(currentRoute))}
     <CustomerAccess onSuccess={onAuthenticated} initialMode={currentRoute === '/registro' ? 'register' : 'login'} />
   {:else}
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 min-h-screen">
+    <main class={currentRoute==='/asistente'
+      ? 'w-full max-w-none min-h-[calc(100dvh-4.5rem)] px-0 py-0'
+      : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 min-h-screen'}>
       {#if currentRoute === '/'}<HomePage onAssistant={openAssistant} />
       {:else if currentRoute === '/catalogo'}<CatalogPage />
       {:else if currentRoute === '/servicios'}<ServicesPage />
       {:else if currentRoute === '/asesor-solar'}<SolarAdvisorPage />
+      {:else if currentRoute === '/asistente' && user && user.account_type !== 'admin' && user.role !== 'admin' && user.role !== 'operator'}
+        <Assistant fullPage userId={user.id} onContact={() => navigate('/contacto')}
+          onAdvisor={() => navigate('/asesor-solar')} onBack={() => navigate('/')} />
       {:else if currentRoute === '/notificaciones'}<NotificationsPage staff={user?.account_type === 'admin' || user?.role === 'admin' || user?.role === 'operator'} token={sessionStorage.getItem(ADMIN_TOKEN_KEY) || ''} />
       {:else if currentRoute === '/galeria'}<GalleryPage />
       {:else if currentRoute === '/contacto'}<ContactPage />
@@ -143,8 +153,10 @@
       {:else}<HomePage onAssistant={openAssistant} />{/if}
     </main>
     {#if user && user.account_type !== 'admin' && user.role !== 'admin' && user.role !== 'operator' && $isAssistantOpen}
-      <div class="fixed bottom-5 right-3 sm:right-6 z-[100]"><Assistant userId={user.id} onContact={() => navigate('/contacto')} onAdvisor={() => { isAssistantOpen.set(false); navigate('/asesor-solar'); }} /></div>
+      <div class="fixed bottom-5 right-3 sm:right-6 z-[100]"><Assistant userId={user.id}
+        onContact={() => navigate('/contacto')} onExpand={openAssistantPage}
+        onAdvisor={() => { isAssistantOpen.set(false); navigate('/asesor-solar'); }} /></div>
     {/if}
   {/if}
-  <Footer />
+  {#if currentRoute !== '/asistente'}<Footer />{/if}
 {/if}
