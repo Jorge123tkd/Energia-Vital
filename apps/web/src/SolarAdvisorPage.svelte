@@ -205,6 +205,11 @@
         <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">¿Qué necesitas alimentar?</h2>
         {#if level==='basico'}
           <p class="text-sm text-slate-600 mt-2">Selecciona los equipos que tienes. Los consumos son ejemplos aproximados: un refrigerador puede variar mucho según su tamaño, edad y ciclo de compresor.</p>
+          <div class="rounded-xl bg-teal-50 border border-teal-100 p-3 mt-3 text-xs sm:text-sm text-slate-700 space-y-1">
+            <p><strong>W (vatios):</strong> cuánta potencia usa un aparato mientras trabaja.</p>
+            <p><strong>Horas al día:</strong> cuánto tiempo funciona, o las horas equivalentes si enciende y apaga solo.</p>
+            <p><strong>Esencial:</strong> marca los que deben mantenerse encendidos durante un apagón.</p>
+          </div>
           <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2 mt-5">
             {#each DEFAULT_LOADS as preset (preset.name)}
               <button type="button" aria-pressed={devices.some(d=>d.name===preset.name)}
@@ -269,17 +274,41 @@
       {:else if step===3}
         <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">Autonomía y equipos existentes</h2>
         <p class="text-sm text-slate-600 mt-2">Calcularemos el respaldo para las cargas imprescindibles, no necesariamente para toda la vivienda o negocio.</p>
+        {#if level==='basico'}
+          <div class="rounded-xl border border-teal-100 bg-teal-50 p-4 mt-4 text-sm text-slate-700 space-y-2">
+            <p><strong>¿Qué significa autonomía?</strong> Es el tiempo que quieres que funcionen tus aparatos esenciales cuando se va la corriente.</p>
+            <p><strong>¿Qué es kWh?</strong> Es la energía que puede almacenar una batería, distinta de la potencia (kW) que puede suministrar un inversor.</p>
+            <p>No necesitas conocer la potencia exacta de los paneles. Usaremos valores de referencia y te explicaremos las suposiciones al terminar.</p>
+          </div>
+        {/if}
         <div class="grid sm:grid-cols-2 gap-4 mt-5">
           <label class="solar-label">Horas que deseas funcionar sin red
             <input type="number" min="0.5" max="72" step="0.5" bind:value={autonomyHours} class="solar-input"/>
           </label>
-          <label class="solar-label">Horas solares pico/día
-            <input type="number" min="1" max="8" step="0.5" bind:value={peakSunHours} class="solar-input"/>
-            <span class="block text-xs font-normal text-slate-500 mt-1">4,5 es solo un ejemplo; hay que verificar tu zona, sombras y época del año.</span>
-          </label>
-          <label class="solar-label">Potencia del panel que consideras (W)
-            <input type="number" min="100" max="900" step="10" bind:value={panelWatts} class="solar-input"/>
-          </label>
+          {#if level==='tecnico'}
+            <label class="solar-label">Horas solares pico/día
+              <input type="number" min="1" max="8" step="0.5" bind:value={peakSunHours} class="solar-input"/>
+              <span class="block text-xs font-normal text-slate-500 mt-1">4,5 es solo un ejemplo; verifica ubicación, sombras y época del año.</span>
+            </label>
+            <label class="solar-label">Potencia del panel que consideras (W)
+              <input type="number" min="100" max="900" step="10" bind:value={panelWatts} class="solar-input"/>
+            </label>
+          {:else}
+            <div class="sm:col-span-2">
+              <details class="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                <summary class="cursor-pointer text-sm font-bold text-teal-800">Opcional: ajustar supuestos técnicos de paneles</summary>
+                <p class="text-xs text-slate-600 mt-2">Por defecto: 4,5 horas solares pico y paneles de 450 W, orientativos, no datos de tu equipo.</p>
+                <div class="grid sm:grid-cols-2 gap-3 mt-3">
+                  <label class="solar-label">Horas solares pico/día
+                    <input type="number" min="1" max="8" step="0.5" bind:value={peakSunHours} class="solar-input"/>
+                  </label>
+                  <label class="solar-label">Potencia del panel (W)
+                    <input type="number" min="100" max="900" step="10" bind:value={panelWatts} class="solar-input"/>
+                  </label>
+                </div>
+              </details>
+            </div>
+          {/if}
           <label class="solar-label">Batería que ya tienes (kWh nominales; 0 si no tienes)
             <input type="number" min="0" max="5000" step="0.5" bind:value={existingBatteryKWh} class="solar-input"/>
           </label>
@@ -334,6 +363,9 @@
       {:else if step===5 && result}
         <h2 class="text-2xl font-extrabold text-slate-900">Tu estudio solar preliminar</h2>
         <p class="text-sm text-slate-600 mt-2">La batería se calcula para las cargas que marcaste como esenciales durante {autonomyHours} horas. La potencia fotovoltaica cubre el consumo diario total indicado.</p>
+        {#if level==='basico'}
+          <p class="mt-3 rounded-xl bg-teal-50 p-4 text-sm text-slate-700"><strong>Lectura sencilla:</strong> los vatios (W) indican cuánto consume un aparato mientras funciona; los kilovatios-hora (kWh) indican cuánto gasta o puede almacenar una batería con el paso del tiempo. Estos resultados son aproximaciones, no una lista de compras obligatoria.</p>
+        {/if}
         <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 mt-6">
           {#each [
             {label:'Potencia simultánea total',value:result.power.toFixed(0)+' W'},
