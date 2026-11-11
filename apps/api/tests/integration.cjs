@@ -210,6 +210,11 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   publicReviews = await request('Approved review is public','/api/public/extras/products/'+product.id+'/reviews');
   assert.equal(publicReviews.count,1);
   assert.equal(publicReviews.average,5);
+  await request('Cannot delete purchased product with verified reviews',
+    '/api/admin/products/'+product.id,'DELETE',null,adminToken,409);
+  await request('Cannot delete category still containing a product',
+    '/api/admin/categories/'+category.id,'DELETE',null,adminToken,409);
+
   await request('Duplicate email refused', '/api/auth/register', 'POST', a, null, 409);
   await request('Admin changes customer address', '/api/admin-customers/customers/' + br.user.id,
     'PATCH', { name: b.name, email: b.email, phone: b.phone, address: 'Nueva avenida 123', city: b.city, province: b.province }, adminToken);
@@ -285,6 +290,39 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   assert.ok(!other.requests.some(r => r.id === created.id));
   const chat = await request('Assistant message A', '/api/assistant/message', 'POST', { message: 'Hola, necesito paneles solares' }, at);
   assert.ok(chat.session_id);
+
+  const blankChat=await request('Create a new private assistant conversation',
+    '/api/assistant/sessions','POST',{},at,201);
+  assert.ok(blankChat.session.id);
+  const initialChats=await request('List customer assistant history',
+    '/api/assistant/sessions','GET',null,at);
+  assert.ok(initialChats.sessions.some(x=>x.id===chat.session_id));
+  assert.ok(initialChats.sessions.some(x=>x.id===blankChat.session.id));
+  const otherChats=await request('Other customer cannot list customer A conversations',
+    '/api/assistant/sessions','GET',null,bt);
+  assert.ok(!otherChats.sessions.some(x=>x.id===blankChat.session.id));
+  await request('Other customer cannot read private chat messages',
+    '/api/assistant/session/'+blankChat.session.id+'/messages','GET',null,bt,404);
+  await request('Other customer cannot rename conversation',
+    '/api/assistant/session/'+blankChat.session.id,'PATCH',{title:'Robado'},bt,404);
+  await request('Other customer cannot delete private conversation',
+    '/api/assistant/session/'+blankChat.session.id,'DELETE',null,bt,404);
+  await request('Rename own conversation','/api/assistant/session/'+blankChat.session.id,
+    'PATCH',{title:'Estudio solar personal'},at);
+  const namedChats=await request('History includes new title',
+    '/api/assistant/sessions','GET',null,at);
+  assert.ok(namedChats.sessions.some(x=>x.id===blankChat.session.id&&x.title==='Estudio solar personal'));
+  await request('Send message to explicitly created conversation','/api/assistant/message',
+    'POST',{session_id:blankChat.session.id,message:'Hola'},at);
+  await request('Delete own conversation','/api/assistant/session/'+blankChat.session.id,
+    'DELETE',null,at);
+  await request('Deleted chat cannot be restored','/api/assistant/session/'+blankChat.session.id+
+    '/messages','GET',null,at,404);
+  const retainedChats=await request('Older conversation remains after deleting another',
+    '/api/assistant/sessions','GET',null,at);
+  assert.ok(retainedChats.sessions.some(x=>x.id===chat.session_id));
+  assert.ok(!retainedChats.sessions.some(x=>x.id===blankChat.session.id));
+
   const followUp = await request('Assistant preserves topic in follow-up', '/api/assistant/message', 'POST',
     { session_id: chat.session_id, message: '¿Y a 48 voltios?' }, at);
   assert.equal(followUp.intent, 'solar_advice');
@@ -339,6 +377,8 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   assert.equal(appSearch.appointments[0].id,booked.id);
   await request('Staff confirms appointment','/api/admin-customers/appointments/'+booked.id,
     'PATCH',{status:'confirmed'},staffToken);
+  await request('Cannot delete service linked to an appointment',
+    '/api/admin/services/'+service.id,'DELETE',null,adminToken,409);
   const appointmentAlert=await request('Customer sees appointment status alert',
     '/api/notifications','GET',null,at);
   assert.ok(appointmentAlert.notifications.some(n=>n.title==='Estado de tu cita' &&
