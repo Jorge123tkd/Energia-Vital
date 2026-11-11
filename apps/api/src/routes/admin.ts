@@ -202,6 +202,18 @@ adminRoutes.get('/notifications', async (c) => {
 });
 
 
+// Cinco destacados publicados como máximo por sección. No elimina elementos existentes
+// y solo bloquea activar un sexto hasta que se desmarque u oculte otro.
+async function canFeature(c: any, table: 'products' | 'services' | 'work_gallery', id?: string) {
+  const sql = 'SELECT COUNT(*) AS n FROM ' + table +
+    ' WHERE is_active = 1 AND is_featured = 1' + (id ? ' AND id != ?' : '');
+  const row = await c.env.DB.prepare(sql).bind(...(id ? [id] : [])).first<{n:number}>();
+  return (row?.n ?? 0) < 5;
+}
+const featuredLimitResponse = (c: any) => c.json({
+  error: 'Ya tienes cinco destacados publicados en esta sección. Retira uno antes de destacar otro.'
+}, 409);
+
 // --- PRODUCTOS ---
 adminRoutes.get('/products', async (c) => {
   const { DB } = c.env;
@@ -214,6 +226,8 @@ adminRoutes.post('/products', async (c) => {
   const b = await c.req.json<any>();
   const price = nullableNumber(b.price);
   if (!cleanText(b.name, 120) || !cleanText(b.category_id, 100) || !validPrice(price)) return c.json({ error: 'Nombre, categoría y precio válido son necesarios.' }, 400);
+  if (b.is_featured && b.is_active !== false && !(await canFeature(c, 'products')))
+    return featuredLimitResponse(c);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await DB.prepare(
@@ -241,6 +255,8 @@ adminRoutes.patch('/products/:id', async c => {
   if (!name || !category || !validPrice(price) || (quantity !== null && (!Number.isInteger(quantity) || quantity < 0)))
     return c.json({ error: 'Revisa nombre, categoría, precio y existencias.' }, 400);
   if (!['in_stock', 'out_of_stock', 'on_order'].includes(row.stock_status)) return c.json({ error: 'Estado de inventario inválido.' }, 400);
+  if (row.is_featured && row.is_active && !(await canFeature(c, 'products', id)))
+    return featuredLimitResponse(c);
   await c.env.DB.prepare(`UPDATE products SET category_id=?, name=?, brand=?, model=?, description=?, short_description=?, price=?, currency=?, stock_quantity=?, stock_status=?, specifications=?, warranty_months=?, compatibility=?, purchase_url=?, is_featured=?, is_active=?, updated_at=? WHERE id=?`)
     .bind(category, name, cleanText(row.brand, 120) || null, cleanText(row.model, 120) || null,
       cleanText(row.description, 5000) || null, cleanText(row.short_description, 400) || null,
@@ -405,6 +421,8 @@ adminRoutes.post('/services', async (c) => {
   if (b.is_featured !== undefined && typeof b.is_featured !== 'boolean') return c.json({ error: 'Estado destacado inválido.' }, 400);
   const price = nullableNumber(b.price);
   if (!cleanText(b.name, 120) || !validPrice(price) || !['fixed', 'quote', 'free'].includes(b.price_type || 'quote')) return c.json({ error: 'Revisa el nombre, precio y tipo de servicio.' }, 400);
+  if (b.is_featured === true && b.is_active !== false && !(await canFeature(c, 'services')))
+    return featuredLimitResponse(c);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await DB.prepare(
@@ -418,6 +436,12 @@ adminRoutes.patch('/services/:id', async (c) => {
   const id = c.req.param('id');
   const b = await c.req.json<any>();
   if (b.is_featured !== undefined && typeof b.is_featured !== 'boolean') return c.json({ error: 'Estado destacado inválido.' }, 400);
+  const current = await DB.prepare('SELECT is_featured,is_active FROM services WHERE id=?').bind(id).first<any>();
+  if (!current) return c.notFound();
+  const isFeatured = b.is_featured === undefined ? Boolean(current.is_featured) : b.is_featured;
+  const isActive = b.is_active === undefined ? Boolean(current.is_active) : b.is_active;
+  if (isFeatured && isActive && !(await canFeature(c, 'services', id)))
+    return featuredLimitResponse(c);
   const now = new Date().toISOString();
   await DB.prepare(
     'UPDATE services SET name = COALESCE(?, name), slug = COALESCE(?, slug), description = COALESCE(?, description), scope = COALESCE(?, scope), price = COALESCE(?, price), price_type = COALESCE(?, price_type), duration_minutes = COALESCE(?, duration_minutes), is_featured = COALESCE(?, is_featured), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order), updated_at = ? WHERE id = ?'
@@ -581,6 +605,10 @@ adminRoutes.post('/gallery', async (c) => {
   }
 
   if (!title || !cleanText(title,160)) return c.json({ error: 'El proyecto necesita un título.' },400);
+  if (is_featured && is_active && !(await canFeature(c, 'work_gallery'))) {
+    if (r2_key) await BUCKET.delete(r2_key).catch(() => {});
+    return featuredLimitResponse(c);
+  }
   if (url && !r2_key) {
     try {
       const parsed = new URL(url);
@@ -610,6 +638,10 @@ adminRoutes.patch('/gallery/:id', async c => {
   if (!current) return c.notFound();
   const b = await c.req.json<any>();
   if (b.is_featured !== undefined && typeof b.is_featured !== 'boolean') return c.json({ error: 'Estado destacado inválido.' }, 400);
+  const isFeatured = b.is_featured === undefined ? Boolean(current.is_featured) : b.is_featured;
+  const isActive = b.is_active === undefined ? Boolean(current.is_active) : b.is_active;
+  if (isFeatured && isActive && !(await canFeature(c, 'work_gallery', id)))
+    return featuredLimitResponse(c);
   await c.env.DB.prepare('UPDATE work_gallery SET title=?, description=?, category=?, video_url=?, is_active=?, is_featured=?, sort_order=? WHERE id=?')
     .bind(cleanText(b.title ?? current.title, 160), cleanText(b.description ?? current.description, 2000) || null,
       cleanText(b.category ?? current.category, 120) || null, cleanText(b.video_url ?? current.video_url, 500) || null,

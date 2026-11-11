@@ -22,11 +22,13 @@ publicRoutes.get('/products', async c => {
   if (search) { sql += ' AND (p.name LIKE ? OR p.brand LIKE ? OR p.model LIKE ?)';
     const match = `%${search.slice(0, 100)}%`; params.push(match, match, match); }
   const paging = listPaging(c);
+  const onlyFeatured = featured === 'true';
   sql += ' ORDER BY p.sort_order, p.created_at DESC LIMIT ? OFFSET ?';
-  const { results } = await c.env.DB.prepare(sql).bind(...params, paging.limit, paging.offset).all();
+  const { results } = await c.env.DB.prepare(sql).bind(...params,
+    onlyFeatured ? 5 : paging.limit, onlyFeatured ? 0 : paging.offset).all();
   const rows = results ?? [];
-  return c.json({ products: paging.requested ? rows.slice(0, paging.size) : rows,
-    ...(paging.requested ? { page: paging.page, has_more: rows.length > paging.size } : {}) });
+  return c.json({ products: onlyFeatured ? rows : paging.requested ? rows.slice(0, paging.size) : rows,
+    ...(paging.requested ? { page: paging.page, has_more: !onlyFeatured && rows.length > paging.size } : {}) });
 });
 // R2 se sirve por identificador de imagen; no se expone el nombre del objeto.
 publicRoutes.get('/products/image/:id', async c => {
@@ -56,11 +58,12 @@ publicRoutes.get('/categories', async c => {
 });
 publicRoutes.get('/services', async c => {
   const paging = listPaging(c);
-  const { results } = await c.env.DB.prepare(`SELECT * FROM services WHERE is_active = 1 ${c.req.query('featured') === 'true' ? 'AND is_featured = 1' : ''} ORDER BY sort_order, id LIMIT ? OFFSET ?`)
-    .bind(paging.limit, paging.offset).all();
+  const onlyFeatured = c.req.query('featured') === 'true';
+  const { results } = await c.env.DB.prepare(`SELECT * FROM services WHERE is_active = 1 ${onlyFeatured ? 'AND is_featured = 1' : ''} ORDER BY sort_order, id LIMIT ? OFFSET ?`)
+    .bind(onlyFeatured ? 5 : paging.limit, onlyFeatured ? 0 : paging.offset).all();
   const rows = results ?? [];
-  return c.json({ services: paging.requested ? rows.slice(0, paging.size) : rows,
-    ...(paging.requested ? { page: paging.page, has_more: rows.length > paging.size } : {}) });
+  return c.json({ services: onlyFeatured ? rows : paging.requested ? rows.slice(0, paging.size) : rows,
+    ...(paging.requested ? { page: paging.page, has_more: !onlyFeatured && rows.length > paging.size } : {}) });
 });
 publicRoutes.get('/services/image/:id', async c => {
   const service = await c.env.DB.prepare('SELECT image_r2_key FROM services WHERE id = ? AND is_active = 1')
@@ -128,11 +131,12 @@ publicRoutes.get('/gallery/media/:id', async c => {
 });
 publicRoutes.get('/gallery', async c => {
   const paging = listPaging(c);
-  const { results } = await c.env.DB.prepare(`SELECT w.*, (SELECT COUNT(*) FROM work_gallery_images im WHERE im.project_id=w.id) AS image_count FROM work_gallery w WHERE w.is_active = 1 ${c.req.query('featured') === 'true' ? 'AND w.is_featured = 1' : ''} ORDER BY w.sort_order, w.id LIMIT ? OFFSET ?`)
-    .bind(paging.limit, paging.offset).all();
+  const onlyFeatured = c.req.query('featured') === 'true';
+  const { results } = await c.env.DB.prepare(`SELECT w.*, (SELECT COUNT(*) FROM work_gallery_images im WHERE im.project_id=w.id) AS image_count FROM work_gallery w WHERE w.is_active = 1 ${onlyFeatured ? 'AND w.is_featured = 1' : ''} ORDER BY w.sort_order, w.id LIMIT ? OFFSET ?`)
+    .bind(onlyFeatured ? 5 : paging.limit, onlyFeatured ? 0 : paging.offset).all();
   const rows = results ?? [];
-  return c.json({ gallery: paging.requested ? rows.slice(0, paging.size) : rows,
-    ...(paging.requested ? { page: paging.page, has_more: rows.length > paging.size } : {}) });
+  return c.json({ gallery: onlyFeatured ? rows : paging.requested ? rows.slice(0, paging.size) : rows,
+    ...(paging.requested ? { page: paging.page, has_more: !onlyFeatured && rows.length > paging.size } : {}) });
 });
 // Solo configuración comercial publicada; nunca claves internas ni datos privados.
 const publicSettingKeys = ['youtube_channel_url', 'facebook_url', 'instagram_url', 'business_phone',

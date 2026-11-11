@@ -19,6 +19,8 @@
   let productSearch = $state('');
   let productCategory = $state('');
   let productPage = $state(1);
+  let productFeaturedCount = $derived(products.filter(p => Boolean(p.is_featured) && Boolean(p.is_active)).length);
+  let serviceFeaturedCount = $derived(services.filter(s => Boolean(s.is_featured) && Boolean(s.is_active)).length);
   let servicePage = $state(1);
   let galleryPage = $state(1);
   const itemPageSize = 10;
@@ -199,6 +201,7 @@
   }
 
   let gallery: any[] = $state([]);
+  let galleryFeaturedCount = $derived(gallery.filter(g => Boolean(g.is_featured) && Boolean(g.is_active)).length);
   let galleryPageCount = $derived(Math.max(1, Math.ceil(gallery.length / itemPageSize)));
   let visibleGallery = $derived(gallery.slice((Math.min(galleryPage,galleryPageCount)-1)*itemPageSize,
     Math.min(galleryPage,galleryPageCount)*itemPageSize));
@@ -827,7 +830,9 @@
             </label>
             <p class="text-xs text-slate-500">Si eliges un archivo y escribes una URL, tendrá prioridad el archivo guardado en Cloudflare R2. Las URLs son imágenes externas.</p>
             <div class="flex flex-wrap gap-4 py-2">
-              <label class="flex gap-2 items-center text-sm"><input type="checkbox" bind:checked={product.is_featured} /> Destacar en inicio</label>
+              <label class="flex gap-2 items-center text-sm"><input type="checkbox" bind:checked={product.is_featured}
+  disabled={!product.is_featured && productFeaturedCount >= 5 && product.is_active} />
+  Destacar en inicio · {productFeaturedCount}/5 publicados</label>
               <label class="flex gap-2 items-center text-sm"><input type="checkbox" bind:checked={product.is_active} /> Publicado</label>
             </div>
             <button disabled={busy} class="admin-primary">{busy ? 'Guardando…' : editingProduct ? 'Guardar cambios del producto' : 'Publicar producto'}</button>
@@ -850,7 +855,9 @@
               {/each}
             </select>
           </label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryFeatured} /> Destacar en inicio</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryFeatured}
+  disabled={!galleryFeatured && galleryFeaturedCount >= 5} />
+  Destacar en inicio · {galleryFeaturedCount}/5 publicados</label>
           <ImagePicker max={15} label="Fotografías del proyecto" onFiles={(files)=>galleryPhotos=files}/>
           <p class="text-xs text-slate-500">Si no subes un archivo, puedes utilizar una imagen HTTPS externa.</p>
           <label class="admin-label">URL de imagen (opcional)<input type="url" class="admin-input" placeholder="https://..." bind:value={galleryUrl} /></label>
@@ -867,7 +874,9 @@
             </select>
           </label>
           <label class="admin-label md:col-span-2">Descripción<textarea rows="3" class="admin-input" bind:value={galleryEdit.description}></textarea></label>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryEdit.is_featured} /> Destacar en inicio</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryEdit.is_featured}
+  disabled={!galleryEdit.is_featured && galleryFeaturedCount >= 5 && galleryEdit.is_active} />
+  Destacar en inicio · {galleryFeaturedCount}/5 publicados</label>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryEdit.is_active} /> Proyecto publicado</label>
           <div class="flex gap-2"><button disabled={busy} class="admin-primary">Guardar proyecto</button><button type="button" class="admin-secondary" onclick={() => { galleryEdit = null; modal = null; }}>Cancelar</button></div>
         </form>
@@ -890,7 +899,9 @@
             <input type="url" maxlength="600" class="admin-input" placeholder="https://…" bind:value={serviceImageUrl} />
           </label>
           <p class="text-xs text-slate-500">Si seleccionas un archivo, lo guardaremos en Cloudflare R2 y tendrá prioridad sobre el enlace externo.</p>
-          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={service.is_featured} /> Destacar en inicio</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={service.is_featured}
+  disabled={!service.is_featured && serviceFeaturedCount >= 5 && service.is_active} />
+  Destacar en inicio · {serviceFeaturedCount}/5 publicados</label>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={service.is_active} /> Publicado en la página de servicios</label>
           <button disabled={busy} class="admin-primary w-full">{busy ? 'Guardando…' : editingService ? 'Guardar cambios' : 'Crear servicio'}</button>
         </form>
