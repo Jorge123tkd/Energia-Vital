@@ -199,7 +199,7 @@
         <article class="min-w-0 flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-teal-200 transition">
           <button type="button" class="relative block w-full text-left bg-gradient-to-br from-teal-50 to-slate-100 overflow-hidden" onclick={() => details(product)} aria-label={'Ver detalles de ' + product.name}>
             {#if imageOf(product)}
-              <img src={imageOf(product)} alt={product.name} loading="lazy" class="w-full h-40 sm:h-44 object-contain p-2 hover:scale-105 transition-transform duration-300" />
+              <img src={imageOf(product)} alt={product.name} loading="lazy" class="w-full h-40 sm:h-44 object-cover object-center hover:scale-105 transition-transform duration-300" />
             {:else}
               <div class="h-40 sm:h-44 flex flex-col items-center justify-center gap-2 text-teal-700">
                 <span class="text-4xl" aria-hidden="true">☀</span>
