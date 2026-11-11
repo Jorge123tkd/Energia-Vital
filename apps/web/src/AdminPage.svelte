@@ -289,7 +289,7 @@
               <article class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm min-w-0">
                 <div class="flex flex-wrap justify-between gap-2 items-start">
                   <div class="min-w-0">
-                    <p class="text-xs font-extrabold text-teal-700 uppercase">{r.category_name || r.type}</p>
+                    <p class="text-xs font-extrabold text-teal-700 uppercase">{r.category_name || (String(r.title || '').startsWith('Servicio:') ? 'Servicio solicitado' : r.type)}</p>
                     <h3 class="text-base font-extrabold text-slate-900 mt-1 break-words">{r.title}</h3>
                     <p class="text-xs text-slate-500 mt-1">Ref. {r.id.slice(0,8).toUpperCase()} · {new Date(r.created_at).toLocaleString('es-CU')}</p>
                     <button type="button" onclick={() => copyReference(r.id)} title={r.id} class="text-[11px] text-teal-800 underline break-all text-left">

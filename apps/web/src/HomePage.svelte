@@ -60,6 +60,18 @@
         {slide.link_label || 'Conocer más'} →
       </a>
       <button onclick={onAssistant} class="px-5 py-3.5 rounded-xl border border-white/40 bg-white/10 font-semibold hover:bg-white/20">Hablar con el asistente</button>
+      {#if settings.bot_whatsapp_url}
+        <a href={settings.bot_whatsapp_url} target="_blank" rel="noopener noreferrer"
+          class="px-4 py-3.5 rounded-xl border border-teal-300/50 bg-teal-950/30 text-sm font-semibold hover:bg-teal-900/50">
+          ◉ Bot de WhatsApp
+        </a>
+      {/if}
+      {#if settings.bot_telegram_url}
+        <a href={settings.bot_telegram_url} target="_blank" rel="noopener noreferrer"
+          class="px-4 py-3.5 rounded-xl border border-teal-300/50 bg-teal-950/30 text-sm font-semibold hover:bg-teal-900/50">
+          ➤ Bot de Telegram
+        </a>
+      {/if}
     </div>
   </div>
   <div class="relative px-6 pb-6 sm:px-14 flex items-center justify-between gap-4">
