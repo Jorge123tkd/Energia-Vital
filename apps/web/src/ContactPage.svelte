@@ -33,7 +33,8 @@
   let message = $state('');
   let error = $state('');
   let busy = $state(false);
-  onMount(async () => {
+  onMount(() => {
+    void (async () => {
     const [config, kinds] = await Promise.allSettled([api.getSettings(), api.getRequestCategories()]);
     if (config.status === 'fulfilled') settings = config.value.settings ?? {};
     if (kinds.status === 'fulfilled') requestCategories = kinds.value.categories || [];
@@ -52,6 +53,7 @@
       type = 'installation'; title = 'Evaluación de sistema solar';
       description = `Asesor solar: potencia ${params.get('power')} W, energía ${params.get('dailyEnergy')} kWh, batería ${params.get('batteryCapacity')} kWh, inversor ${params.get('inverterMin')} W, sistema ${params.get('pvPower')} kWp, ${params.get('panelCount')} paneles. Equipo existente: ${params.get('existingEquipment') || 'No especificado'}.`;
     }
+    })();
     return () => clearImages();
   });
   async function submit(event: SubmitEvent) {
