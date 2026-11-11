@@ -329,7 +329,7 @@
                 class="block w-full rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold px-5 py-3.5 mt-4 text-center">Comprar por WhatsApp →</a>
             {:else}
               <button type="button" class="w-full rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-extrabold px-5 py-3.5 mt-4"
-                onclick={() => openPurchaseOptions(selected)}>Comprar por WhatsApp →</button>
+                onclick={() => { if (selected) openPurchaseOptions(selected); }}>Comprar por WhatsApp →</button>
             {/if}
             <p class="mt-3 text-xs text-slate-500">La disponibilidad y compatibilidad se confirman con el equipo de Bonaire.</p>
           </div>
