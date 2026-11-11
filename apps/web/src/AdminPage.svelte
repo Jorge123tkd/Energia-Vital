@@ -6,6 +6,8 @@
   import AdminStaff from './components/AdminStaff.svelte';
   import AdminNotifications from './components/AdminNotifications.svelte';
   import NotificationBell from './components/NotificationBell.svelte';
+  import AdminRequestCategories from './components/AdminRequestCategories.svelte';
+  import RequestPhotoGallery from './components/RequestPhotoGallery.svelte';
   let token = $state('');
   let staffRole = $state<'admin' | 'operator'>('admin');
   let ownId = $state('');
@@ -19,6 +21,7 @@
   let mobileMenu = $state(false);
   let accountMenu = $state(false);
   let syncBusy = $state(false);
+  let requestPhotosOpen = $state('');
   let menuItems = $derived([
     { id: 'requests', title: 'Solicitudes' },
     { id: 'appointments', title: 'Citas' },
@@ -220,12 +223,54 @@
     {#if tab === 'customers'}
       <AdminCustomers {token} {customers} canManage={staffRole === 'admin'} onRefresh={async () => { await reload(); }} />
     {:else if tab === 'requests'}
-      <h2 class="font-semibold text-xl mb-4">Solicitudes ({requests.length})</h2>
-      <div class="space-y-3">{#each requests as r (r.id)}
-        <article class="bg-white border rounded-lg p-4 space-y-2"><div class="flex flex-wrap justify-between gap-3"><strong>{r.title}</strong><select aria-label="Estado de la solicitud" value={r.status} onchange={e => void changeRequest(r.id, e.currentTarget.value)} class="border rounded p-2">
-          {#each ['pending', 'quoted', 'approved', 'scheduled', 'completed', 'cancelled'] as status}<option value={status}>{status}</option>{/each}
-        </select></div><p class="text-sm">{r.customer_name} · {r.phone} · {r.email}</p><p class="text-sm text-gray-600">{r.location}</p><p>{r.description}</p></article>
-      {/each}</div>
+      <div class="space-y-5">
+        {#if staffRole === 'admin'}<AdminRequestCategories {token}/>{/if}
+        <section class="space-y-3">
+          <h2 class="text-xl font-extrabold text-slate-900">Solicitudes recibidas ({requests.length})</h2>
+          {#if requests.length===0}<p class="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">Todavía no hay solicitudes.</p>{/if}
+          <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
+            {#each requests as r (r.id)}
+              <article class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm min-w-0">
+                <div class="flex flex-wrap justify-between gap-2 items-start">
+                  <div class="min-w-0">
+                    <p class="text-xs font-extrabold text-teal-700 uppercase">{r.category_name || r.type}</p>
+                    <h3 class="text-base font-extrabold text-slate-900 mt-1 break-words">{r.title}</h3>
+                    <p class="text-xs text-slate-500 mt-1">Ref. {r.id.slice(0,8).toUpperCase()} · {new Date(r.created_at).toLocaleString('es-CU')}</p>
+                  </div>
+                  <select aria-label={'Estado de '+r.title} value={r.status}
+                    onchange={e=>void changeRequest(r.id,e.currentTarget.value)}
+                    class="border border-slate-300 bg-slate-50 rounded-xl text-xs px-2 py-2">
+                    {#each ['pending','quoted','approved','scheduled','completed','cancelled'] as status}
+                      <option value={status}>{status}</option>
+                    {/each}
+                  </select>
+                </div>
+                <div class="text-sm text-slate-600 space-y-1">
+                  <p class="font-bold text-slate-800">{r.customer_name||'Cliente'}</p>
+                  <p class="text-xs break-all">{r.phone||'Sin teléfono'} · {r.email||'Sin correo'}</p>
+                  {#if r.location}<p class="text-xs">{r.location}</p>{/if}
+                  <p class="text-sm whitespace-pre-line line-clamp-4">{r.description}</p>
+                </div>
+                <div class="flex gap-2 flex-wrap border-t border-slate-100 pt-3">
+                  {#if r.phone && r.phone.replace(/\D/g,'').length>=8}
+                    <a target="_blank" rel="noopener noreferrer"
+                      href={'https://wa.me/'+r.phone.replace(/\D/g,'')+'?text='+encodeURIComponent('Hola '+(r.customer_name||'')+', te escribimos desde Bonaire sobre tu solicitud «'+r.title+'» (Ref. '+r.id.slice(0,8).toUpperCase()+'). ¿Podemos conversar?')}
+                      class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2.5"
+                      aria-label={'Abrir WhatsApp del cliente '+(r.customer_name||'')}>☎ WhatsApp cliente</a>
+                  {/if}
+                  <button type="button" onclick={()=>requestPhotosOpen=requestPhotosOpen===r.id?'':r.id}
+                    class="rounded-xl border border-teal-200 text-teal-800 font-bold text-xs px-3 py-2.5 hover:bg-teal-50">
+                    ▧ {requestPhotosOpen===r.id?'Ocultar fotos':'Ver fotos ('+(r.image_count||0)+')'}
+                  </button>
+                </div>
+                {#if requestPhotosOpen===r.id}
+                  <RequestPhotoGallery {token} staff requestId={r.id}/>
+                {/if}
+              </article>
+            {/each}
+          </div>
+        </section>
+      </div>
     {:else if tab === 'appointments'}
       <h2 class="font-semibold text-xl mb-4">Citas ({appointments.length})</h2>
       <div class="space-y-3">{#each appointments as a (a.id)}
