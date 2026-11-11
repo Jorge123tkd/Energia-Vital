@@ -648,7 +648,7 @@ adminRoutes.delete('/settings/:id', async (c) => {
 });
 
 // Configuración pública editable sin exponer secretos ni aceptar HTML arbitrario.
-const allowedSiteFields = ['home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links',
+const allowedSiteFields = ['home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links', 'footer_cta_title', 'footer_cta_description',
   'business_phone', 'business_phones', 'business_email', 'business_address', 'business_hours',
   'youtube_channel_url', 'facebook_url', 'instagram_url', 'telegram_public_url'] as const;
 adminRoutes.put('/site-settings', async c => {
