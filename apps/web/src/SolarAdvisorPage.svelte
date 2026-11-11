@@ -157,7 +157,8 @@
     const query=new URLSearchParams({
       power:result.power.toFixed(0),dailyEnergy:result.daily.toFixed(2),
       batteryCapacity:result.batteryWithSolar.toFixed(2),inverterMin:result.inverter.toFixed(0),
-      pvPower:result.plannedPvKW.toFixed(2),panelCount:String(result.plannedPanels),
+      pvPower:(hasPanels?(level==='basico'?daylightExample.plannedPvKW:result.plannedPvKW):0).toFixed(2),
+      panelCount:String(hasPanels?(level==='basico'?daylightExample.plannedPanels:result.plannedPanels):0),
       sector,experience:level,criticalWatts:result.backupWatts.toFixed(0),
       existingEquipment:existingInverter
         ?('Inversor existente '+(existingModel||'sin modelo')+' · '+(existingInverterKw||'potencia sin confirmar')+' kW · batería '+existingBatteryKWh+' kWh').slice(0,160)
@@ -219,7 +220,7 @@
           </div>
           <div class="grid sm:grid-cols-2 gap-3">
             <button type="button" aria-pressed={!existingInverter}
-              onclick={()=>existingInverter=false}
+              onclick={()=>{existingInverter=false;existingModel='';existingInverterKw=0;existingBatteryKWh=0;existingPanelCount=0;showSpecs=false;}}
               class="text-left rounded-xl border-2 p-4 {existingInverter?'border-slate-200 bg-white':'border-teal-700 bg-white'}">
               <strong class="block text-slate-900">No, necesito un sistema nuevo</strong>
               <span class="block text-xs text-slate-600 mt-1">Ayúdame a elegir batería, inversor y paneles.</span>
@@ -610,16 +611,20 @@
         </section>
         <section class="rounded-2xl p-4 sm:p-5 bg-slate-950 text-white mt-5 space-y-3">
           <h3 class="text-lg font-extrabold">Paneles y compatibilidad con el inversor</h3>
-          <p class="text-sm text-slate-200">Escenario propuesto: <strong>{result.plannedPanels} paneles de {result.panelWatts} W</strong> ({result.plannedPvKW.toFixed(2)} kWp), con unos {result.pvDailyKWh.toFixed(1)} kWh/día bajo el clima indicado. La necesidad orientativa sin reducción por nubes sería {result.panelCount} paneles. El cálculo no determina conexiones seguras en serie o paralelo.</p>
-          {#if hasPanels && result.pvCoveragePercent<100}
-            <p class="rounded-xl bg-slate-800 border border-slate-600 p-3 text-sm text-slate-100">La producción estimada en estas condiciones cubriría aproximadamente {result.pvCoveragePercent.toFixed(0)} % de tu consumo diario. La diferencia dependería de energía almacenada, red u otras fuentes y del patrón real de uso.</p>
+          <p class="text-sm text-slate-200">Si deseas incorporar paneles, el consumo declarado sugiere orientativamente <strong>{result.panelCount} paneles de {result.panelWatts} W</strong> para cubrir la energía diaria en condiciones base. En el ejemplo limitado por espacio se evaluarían <strong>{daylightExample.plannedPanels} paneles</strong>, con unos {daylightExample.pvDailyKWh.toFixed(1)} kWh/día bajo nubosidad variable. No es una cantidad que tengas que conocer antes de la evaluación.</p>
+          {#if existingInverter && existingPanelCount>0}
+            <p class="text-sm text-teal-100">Actualmente declaraste {existingPanelCount} paneles. Si todos fueran compatibles y de potencia semejante, la diferencia respecto a la referencia diaria sería de aproximadamente <strong>{Math.max(0,result.panelCount-existingPanelCount)} paneles</strong>; esta resta no sustituye el dimensionamiento de los MPPT ni garantiza que puedas mezclarlos.</p>
           {/if}
-          {#if hasPanels && result.panelCount>result.plannedPanels}
+          {#if hasPanels && (level==='basico'?daylightExample.pvCoveragePercent:result.pvCoveragePercent)<100}
+            <p class="rounded-xl bg-slate-800 border border-slate-600 p-3 text-sm text-slate-100">La producción estimada en estas condiciones cubriría aproximadamente {(level==='basico'?daylightExample.pvCoveragePercent:result.pvCoveragePercent).toFixed(0)} % de tu consumo diario. La diferencia dependería de energía almacenada, red u otras fuentes y del patrón real de uso.</p>
+          {/if}
+          {#if hasPanels && result.panelCount>(level==='basico'?daylightExample.plannedPanels:result.plannedPanels)}
             <p class="rounded-xl bg-amber-900/50 border border-amber-300/40 text-amber-100 p-3 text-sm">La cantidad de paneles prevista no cubre toda la demanda diaria calculada en el caso base. Hay que revisar el consumo, espacio, módulos disponibles, apoyo de la red o un diseño distinto: no se debe ocultar este déficit.</p>
           {/if}
           {#if !hasPanels}
-            <p class="text-sm text-amber-100">No se han previsto paneles: la autonomía depende de la batería cargada previamente y de la disponibilidad de la red para recargarla.</p>
+            <p class="text-sm text-teal-100">Por ahora no seleccionaste la comparación con paneles. Puedes volver al paso de autonomía para explorarla si te interesa; el respaldo nocturno sigue dependiendo de la batería y de su carga previa.</p>
           {/if}
+          {#if level==='tecnico'}
           {#if result.candidateStrings.length}
             <p class="text-xs font-bold text-teal-200">Ejemplos preliminares con los límites que introdujiste (una cadena por MPPT independiente):</p>
             <div class="grid sm:grid-cols-2 gap-2">
@@ -635,6 +640,9 @@
           {:else}
             <p class="text-xs text-amber-200">No se puede decidir el número de paneles en serie/paralelo sin conocer la ficha del inversor (rango MPPT, tensión máxima, Isc por MPPT, potencia admisible) y del panel (Voc, Vmp, Isc y coeficientes de temperatura). Requiere verificación técnica.</p>
           {/if}
+          {:else}
+            <p class="text-xs text-teal-100">Un instalador comprobará cómo conectar los paneles de forma segura al inversor. No necesitas resolver tensiones, cadenas ni MPPT para pedir esta orientación.</p>
+          {/if}
         </section>
         <section class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
           <div class="flex flex-wrap justify-between items-end gap-3">
@@ -648,7 +656,7 @@
           {#if inventoryError}<p class="text-sm text-amber-800">{inventoryError}</p>{/if}
           {#if !inventoryLoading && recommendedProducts.length}
             <p class="text-xs text-slate-500 sm:hidden">Desliza hacia los lados para explorar →</p>
-            <div aria-label="Productos recomendados; desplaza horizontalmente"
+            <div role="region" tabindex="0" aria-label="Productos recomendados; desplaza horizontalmente"
               class="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]">
               {#each recommendedProducts as recommendation (recommendation.item.id)}
                 <article class="min-w-0 shrink-0 flex flex-col w-[78vw] sm:w-[44vw] md:w-[30vw] lg:w-[calc(20%_-_0.6rem)] snap-start rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition">
