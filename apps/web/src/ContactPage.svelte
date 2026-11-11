@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
+  import { messagingBotUrl } from './lib/messaging-links';
   let settings: Record<string, string> = $state({});
+  let botWhatsApp = $derived(messagingBotUrl(settings.bot_whatsapp_url, 'whatsapp'));
+  let botTelegram = $derived(messagingBotUrl(settings.bot_telegram_url, 'telegram'));
   let serviceId = $state('');
   let services: {id:string;name:string;description?:string}[] = $state([]);
   let serviceLoading = $state(true);
@@ -168,11 +171,11 @@
         {/if}
         {#if settings.business_address}<div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Dirección</p><p class="text-sm text-slate-100">{settings.business_address}</p></div>{/if}
         {#if settings.business_hours}<div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Horario</p><p class="text-sm text-slate-100">{settings.business_hours}</p></div>{/if}
-        {#if settings.bot_whatsapp_url || settings.bot_telegram_url}
+        {#if botWhatsApp || botTelegram}
           <section class="border-t border-white/15 pt-4 space-y-2">
             <p class="text-xs text-teal-300 font-bold">Asistente automático (canal independiente)</p>
-            {#if settings.bot_whatsapp_url}<a class="block rounded-xl border border-teal-400/50 px-3 py-2.5 text-sm text-white font-semibold" href={settings.bot_whatsapp_url} target="_blank" rel="noopener noreferrer">Abrir bot de WhatsApp</a>{/if}
-            {#if settings.bot_telegram_url}<a class="block rounded-xl border border-teal-400/50 px-3 py-2.5 text-sm text-white font-semibold" href={settings.bot_telegram_url} target="_blank" rel="noopener noreferrer">Abrir bot de Telegram</a>{/if}
+            {#if botWhatsApp}<a class="block rounded-xl border border-teal-400/50 px-3 py-2.5 text-sm text-white font-semibold" href={botWhatsApp} target="_blank" rel="noopener noreferrer">Abrir bot de WhatsApp</a>{/if}
+            {#if botTelegram}<a class="block rounded-xl border border-teal-400/50 px-3 py-2.5 text-sm text-white font-semibold" href={botTelegram} target="_blank" rel="noopener noreferrer">Abrir bot de Telegram</a>{/if}
           </section>
         {/if}
         {#if settings.youtube_channel_url}<a target="_blank" rel="noopener noreferrer" class="inline-block text-teal-300 font-semibold underline text-sm" href={settings.youtube_channel_url}>Nuestro canal de YouTube</a>{/if}

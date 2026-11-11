@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import { messagingBotUrl } from '../lib/messaging-links';
   let { settings = {} }: { settings?: Record<string, string> } = $props();
   let published: Record<string, string> = $state({});
   onMount(() => { api.getSettings().then(r => { published = r.settings ?? {}; }).catch(() => {}); });
@@ -28,9 +29,9 @@
     { label: 'Canal de Telegram', url: site.telegram_public_url }
   ].filter(link => link.url && /^https:\/\/[^\s]+$/i.test(link.url)));
   let bots = $derived([
-    { label: 'WhatsApp · Asistente', url: site.bot_whatsapp_url, icon: '◉' },
-    { label: 'Telegram · Asistente', url: site.bot_telegram_url, icon: '➤' }
-  ].filter(item => item.url && /^https:\/\/[^\s]+$/i.test(item.url)));
+    { label: 'WhatsApp · Asistente', url: messagingBotUrl(site.bot_whatsapp_url, 'whatsapp'), icon: '◉' },
+    { label: 'Telegram · Asistente', url: messagingBotUrl(site.bot_telegram_url, 'telegram'), icon: '➤' }
+  ].filter(item => Boolean(item.url)));
   let phones = $derived.by(() => {
     let additional: { label: string; number: string }[] = [];
     try {

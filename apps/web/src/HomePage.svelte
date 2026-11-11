@@ -1,11 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
+  import { messagingBotUrl } from './lib/messaging-links';
   let { onAssistant }: { onAssistant: () => void } = $props();
   import CatalogPage from './CatalogPage.svelte';
   import ServicesPage from './ServicesPage.svelte';
   import GalleryPage from './GalleryPage.svelte';
   let settings: Record<string, string> = $state({});
+  let botWhatsApp = $derived(messagingBotUrl(settings.bot_whatsapp_url, 'whatsapp'));
+  let botTelegram = $derived(messagingBotUrl(settings.bot_telegram_url, 'telegram'));
   const intro = 'Paneles solares, inversores, baterías y servicios de instalación y mantenimiento. Explora nuestro catálogo y recibe asesoramiento profesional para tu hogar o negocio.';
   onMount(() => {
     void (async () => {
@@ -60,14 +63,14 @@
         {slide.link_label || 'Conocer más'} →
       </a>
       <button onclick={onAssistant} class="px-5 py-3.5 rounded-xl border border-white/40 bg-white/10 font-semibold hover:bg-white/20">Hablar con el asistente</button>
-      {#if settings.bot_whatsapp_url}
-        <a href={settings.bot_whatsapp_url} target="_blank" rel="noopener noreferrer"
+      {#if botWhatsApp}
+        <a href={botWhatsApp} target="_blank" rel="noopener noreferrer"
           class="px-4 py-3.5 rounded-xl border border-teal-300/50 bg-teal-950/30 text-sm font-semibold hover:bg-teal-900/50">
           ◉ Bot de WhatsApp
         </a>
       {/if}
-      {#if settings.bot_telegram_url}
-        <a href={settings.bot_telegram_url} target="_blank" rel="noopener noreferrer"
+      {#if botTelegram}
+        <a href={botTelegram} target="_blank" rel="noopener noreferrer"
           class="px-4 py-3.5 rounded-xl border border-teal-300/50 bg-teal-950/30 text-sm font-semibold hover:bg-teal-900/50">
           ➤ Bot de Telegram
         </a>
