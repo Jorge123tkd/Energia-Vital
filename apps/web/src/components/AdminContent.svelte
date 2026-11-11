@@ -4,6 +4,7 @@
   import ImagePicker from './ImagePicker.svelte';
   import AdminMediaGallery from './AdminMediaGallery.svelte';
   import AdminGalleryCategories from './AdminGalleryCategories.svelte';
+  import AdminProductReviews from './AdminProductReviews.svelte';
 
   type Section = 'products' | 'services' | 'gallery' | 'site';
   let { token, tab, products, services, categories, onRefresh }: {
@@ -369,6 +370,7 @@
         </div>
         
       {#if products.length === 0}<p class="text-slate-500 text-sm py-8">Aún no hay equipos. Crea una categoría y añade el primer producto.</p>{/if}
+      <AdminProductReviews {token} {products} />
     </section>
   {:else if tab === 'services'}
     <section class="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
