@@ -119,17 +119,22 @@
   async function reload(t = token) {
     if (!t) return;
     if (staffRole === 'operator') {
-      const [c, r, a] = await Promise.all([api.adminCustomers(t), api.adminRequests(t), api.adminAppointments(t)]);
+      const [c, r, a] = await Promise.all([
+        api.adminCustomers(t), api.adminRequests(t, requestQuery, requestPage, pageSize),
+        api.adminAppointments(t, appointmentQuery, appointmentPage, pageSize),
+      ]);
       customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
-      requestTotal = requests.length; appointmentTotal = appointments.length;
+      requestTotal = r.total ?? requests.length; appointmentTotal = a.total ?? appointments.length;
       products = []; services = []; categories = [];
       return;
     }
     const [c, r, a, p, s, cat] = await Promise.all([
-      api.adminCustomers(t), api.adminRequests(t), api.adminAppointments(t), api.getAdminProducts(t), api.getAdminServices(t), api.getAdminCategories(t),
+      api.adminCustomers(t), api.adminRequests(t, requestQuery, requestPage, pageSize),
+      api.adminAppointments(t, appointmentQuery, appointmentPage, pageSize),
+      api.getAdminProducts(t), api.getAdminServices(t), api.getAdminCategories(t),
     ]);
     customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
-    requestTotal = requests.length; appointmentTotal = appointments.length;
+    requestTotal = r.total ?? requests.length; appointmentTotal = a.total ?? appointments.length;
     products = p.products ?? []; services = s.services ?? []; categories = cat.categories ?? [];
   }
   async function changeRequest(id: string, status: string) {
