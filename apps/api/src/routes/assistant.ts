@@ -137,7 +137,7 @@ assistantRoutes.post('/message', async c => {
 assistantRoutes.get('/session/:id/messages', async c => {
   const user = getUser(c)!;
   const session = c.req.param('id');
-  const existing = await c.env.DB.prepare('SELECT id FROM assistant_sessions WHERE id = ? AND customer_id = ? AND channel = 'web'')
+  const existing = await c.env.DB.prepare("SELECT id FROM assistant_sessions WHERE id = ? AND customer_id = ? AND channel = 'web'")
     .bind(session, user.user_id).first();
   if (!existing) return c.json({ error: 'Conversación no encontrada' }, 404);
   const { results } = await c.env.DB.prepare('SELECT id, role, content, intent, created_at FROM assistant_messages WHERE session_id = ? ORDER BY created_at')
