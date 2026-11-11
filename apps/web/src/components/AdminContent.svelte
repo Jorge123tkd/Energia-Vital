@@ -181,6 +181,7 @@
 
   function siteDefaults(): Record<string, string> {
     return { home_title: 'Bonaire', home_subtitle: '', footer_description: '',
+      footer_cta_title: '', footer_cta_description: '',
       business_phone: '', business_email: '', business_address: '', business_hours: '',
       youtube_channel_url: '', facebook_url: '', instagram_url: '', telegram_public_url: '' };
   }
