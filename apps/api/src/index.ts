@@ -14,6 +14,7 @@ import { telegramRoutes } from './routes/telegram';
 import { giveawaysRoutes } from './routes/giveaways';
 import { rewardsRoutes } from './routes/rewards';
 import { notificationsRoutes } from './routes/notifications';
+import { publicExtrasRoutes, privateExtrasRoutes, adminExtrasRoutes, staffExtrasRoutes } from './routes/content-extras';
 
 // Vista previa controlada del panel: misma API, sin habilitar cualquier subdominio.
 const knownOrigins = [
@@ -48,6 +49,10 @@ export default {
       await next();
     });
     app.route('/api/public', publicRoutes);
+    app.route('/api/public/extras', publicExtrasRoutes);
+    app.route('/api/private/extras', privateExtrasRoutes);
+    app.route('/api/admin/extras', adminExtrasRoutes);
+    app.route('/api/admin-customers/extras', staffExtrasRoutes);
     app.route('/api/private', privateRoutes);
     app.route('/api/assistant', assistantRoutes);
     app.route('/api/auth', authRoutes);
