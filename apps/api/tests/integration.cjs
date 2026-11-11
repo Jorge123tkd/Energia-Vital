@@ -272,7 +272,7 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
     {message:'Necesito asesoramiento solar'},at);
   assert.match(noviceStart.response,/sector/i);
   for (const [answer, expected] of [
-    ['1','experiencia'],['1','electrodomésticos'],['1 nevera, 1 televisor, 2 ventiladores, 6 luces LED','esenciales'],
+    ['1','experiencia'],['1','equipos'],['1 nevera, 1 televisor, 2 ventiladores, 6 luces LED','esenciales'],
     ['1','inversor'],['no','autonomía'],['5','horas solares pico'],
   ]) {
     const reply = await request('Novice guidance '+answer,'/api/assistant/message','POST',
