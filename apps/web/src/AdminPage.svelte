@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api, apiRequest, ADMIN_TOKEN_KEY } from './lib/api';
   import AdminContent from './components/AdminContent.svelte';
+  import Pagination from './components/Pagination.svelte';
   import AdminCustomers from './components/AdminCustomers.svelte';
   import AdminStaff from './components/AdminStaff.svelte';
   import AdminNotifications from './components/AdminNotifications.svelte';
@@ -250,7 +251,7 @@
       </button>
     </div>
     <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6" aria-label="Resumen de operaciones">
-      {#each [{label:'Solicitudes',count:requests.length,id:'requests'}, {label:'Citas',count:appointments.length,id:'appointments'},
+      {#each [{label:'Solicitudes',count:requestTotal,id:'requests'}, {label:'Citas',count:appointmentTotal,id:'appointments'},
         {label:'Clientes',count:customers.length,id:'customers'}, {label:'Productos',count:products.length,id:'products'}] as item}
         <button class="rounded-2xl text-left bg-white border border-slate-200 shadow-sm p-4 hover:border-teal-500" onclick={() => tab = item.id as typeof tab}>
           <span class="block text-slate-500 text-xs uppercase tracking-wide">{item.label}</span>
@@ -319,15 +320,8 @@
               </article>
             {/each}
           </div>
-          {#if requestTotal > pageSize}
-            <nav class="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-3" aria-label="Páginas de solicitudes">
-              <p class="text-xs text-slate-600">Página {requestPage} de {Math.ceil(requestTotal/pageSize)} · {requestTotal} registros</p>
-              <div class="flex gap-2">
-                <button type="button" class="rounded-lg border px-3 py-2 text-xs font-bold" disabled={pagingBusy||requestPage===1} onclick={() => loadRequestPage(requestPage-1)}>Anterior</button>
-                <button type="button" class="rounded-lg border px-3 py-2 text-xs font-bold" disabled={pagingBusy||requestPage>=Math.ceil(requestTotal/pageSize)} onclick={() => loadRequestPage(requestPage+1)}>Siguiente</button>
-              </div>
-            </nav>
-          {/if}
+          <Pagination page={requestPage} total={requestTotal} perPage={pageSize}
+          disabled={pagingBusy} label="solicitudes" onPage={loadRequestPage} />
         </section>
       </div>
     {:else if tab === 'appointments'}
@@ -374,15 +368,8 @@
             </article>
           {/each}
         </div>
-        {#if appointmentTotal > pageSize}
-          <nav class="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-2xl p-3" aria-label="Páginas de citas">
-            <p class="text-xs text-slate-600">Página {appointmentPage} de {Math.ceil(appointmentTotal/pageSize)} · {appointmentTotal} citas</p>
-            <div class="flex gap-2">
-              <button type="button" class="rounded-lg border px-3 py-2 text-xs font-bold" disabled={pagingBusy||appointmentPage===1} onclick={() => loadAppointmentPage(appointmentPage-1)}>Anterior</button>
-              <button type="button" class="rounded-lg border px-3 py-2 text-xs font-bold" disabled={pagingBusy||appointmentPage>=Math.ceil(appointmentTotal/pageSize)} onclick={() => loadAppointmentPage(appointmentPage+1)}>Siguiente</button>
-            </div>
-          </nav>
-        {/if}
+        <Pagination page={appointmentPage} total={appointmentTotal} perPage={pageSize}
+          disabled={pagingBusy} label="citas" onPage={loadAppointmentPage} />
       </section>
     {:else if staffRole === 'admin' && (tab === 'products' || tab === 'services' || tab === 'gallery' || tab === 'site')}
       <AdminContent {token} {tab} {products} {services} {categories} onRefresh={async () => { await reload(); }} />
