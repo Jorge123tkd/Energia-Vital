@@ -15,6 +15,7 @@
 
   let busy = $state(false);
   let showPurchaseModal = $state(false);
+  let siteSection = $state<'slides' | 'contact' | 'channels' | 'links'>('slides');
   let productSearch = $state('');
   let productCategory = $state('');
   let productPage = $state(1);
@@ -584,8 +585,24 @@
           {/each}
         </div>
       </div>
+      <nav aria-label="Secciones de personalización del sitio" class="grid grid-cols-2 lg:grid-cols-4 gap-2 rounded-2xl bg-slate-50 border border-slate-200 p-2">
+        {#each [
+          {id:'slides',label:'Portada',desc:'Diapositivas'},
+          {id:'contact',label:'Contacto',desc:'Empresa y teléfonos'},
+          {id:'channels',label:'Redes y bots',desc:'Canales públicos'},
+          {id:'links',label:'Pie de página',desc:'Enlaces rápidos'}
+        ] as item (item.id)}
+          <button type="button" aria-current={siteSection === item.id ? 'page' : undefined}
+            onclick={() => siteSection = item.id as typeof siteSection}
+            class="text-left rounded-xl px-3 py-3 border transition {siteSection === item.id ? 'bg-teal-700 text-white border-teal-700 shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:border-teal-300'}">
+            <span class="block text-sm font-extrabold">{item.label}</span>
+            <span class="block text-[11px] mt-0.5 {siteSection === item.id ? 'text-teal-50' : 'text-slate-500'}">{item.desc}</span>
+          </button>
+        {/each}
+      </nav>
       <form onsubmit={saveSite} class="grid grid-cols-1 xl:grid-cols-12 gap-5 xl:gap-6 items-start min-w-0">
-        <fieldset class="space-y-4 min-w-0 xl:col-span-8">
+        {#if siteSection === 'slides'}
+        <fieldset class="space-y-4 min-w-0 xl:col-span-12">
           <legend class="text-lg font-semibold mb-3">Carrusel de portada · {slides.length} diapositivas</legend>
           <div class="flex flex-wrap items-center justify-between gap-3">
             <p class="text-sm text-slate-500">Conserva tus tres diapositivas actuales y añade hasta tres más. Edita o elimina con botones.</p>
@@ -654,7 +671,9 @@
             </div>
           {/if}
         </fieldset>
-        <fieldset class="space-y-3 min-w-0 xl:col-span-4"><legend class="text-lg font-semibold mb-3">Pie de página y contacto</legend>
+        {/if}
+        {#if siteSection === 'contact'}
+        <fieldset class="space-y-3 min-w-0 xl:col-span-12"><legend class="text-lg font-semibold mb-3">Contacto de la empresa</legend>
           <label class="admin-label">Texto sobre la empresa<textarea rows="3" class="admin-input" bind:value={site.footer_description}></textarea></label>
           <div class="rounded-2xl border border-teal-100 bg-teal-50/40 p-4 space-y-3">
             <h3 class="font-extrabold text-slate-900 text-sm">Recuadro de asesoría del pie de página</h3>
@@ -689,6 +708,8 @@
             {#if phoneRows.length === 0}<p class="text-xs text-slate-500">Puedes añadir varios números para ventas, atención y soporte.</p>{/if}
           </div>
         </fieldset>
+        {/if}
+        {#if siteSection === 'channels'}
         <fieldset class="space-y-3 min-w-0 xl:col-span-6"><legend class="text-lg font-semibold mb-3">Redes sociales</legend>
           <div class="grid sm:grid-cols-2 gap-3">
             <label class="admin-label">YouTube<input type="url" class="admin-input" placeholder="https://youtube.com/..." bind:value={site.youtube_channel_url} /></label>
@@ -707,11 +728,16 @@
             <input type="url" class="admin-input" placeholder="https://t.me/NombreDelBot" bind:value={site.bot_telegram_url} />
           </label>
         </fieldset>
-        <fieldset class="space-y-3 min-w-0 xl:col-span-6"><legend class="text-lg font-semibold mb-2">Enlaces del footer</legend>
+        {/if}
+        {#if siteSection === 'links'}
+        <fieldset class="space-y-3 min-w-0 xl:col-span-12"><legend class="text-lg font-semibold mb-2">Enlaces del pie de página</legend>
           <p class="text-sm text-slate-500">Un enlace por línea con el formato «Texto | dirección». Puedes usar rutas internas o direcciones HTTPS.</p>
           <label class="admin-label">Páginas que quieres mostrar<textarea rows="6" class="admin-input font-mono" placeholder="Catálogo | /catalogo&#10;Servicios | /servicios&#10;Galería | /galeria&#10;Nuestro canal | https://youtube.com/..." bind:value={linksText}></textarea></label>
         </fieldset>
-        <div class="xl:col-span-12 flex justify-end pt-2 border-t border-slate-100"><button disabled={busy} class="admin-primary">{busy ? 'Publicando…' : 'Guardar y publicar cambios del sitio'}</button></div>
+        {/if}
+        <div class="xl:col-span-12 flex justify-end pt-2 border-t border-slate-100">
+          <button disabled={busy || uploadingSlide} class="admin-primary">{busy ? 'Publicando…' : 'Guardar y publicar cambios del sitio'}</button>
+        </div>
       </form>
     </section>
   {/if}
