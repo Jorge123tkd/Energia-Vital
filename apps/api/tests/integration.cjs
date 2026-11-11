@@ -117,6 +117,19 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   }, adminToken);
   const serviceList = await request('Public services include the description', '/api/public/services');
   assert.ok(serviceList.services.some(s => s.id === service.id && s.description === 'Instalación completa'));
+
+  const disposableCategory=await request('Create disposable unused category',
+    '/api/admin/categories','POST',{name:'Temporal '+uid,slug:'temporal-'+uid},adminToken);
+  const disposableProduct=await request('Create disposable product','/api/admin/products','POST',
+    {category_id:disposableCategory.id,name:'Equipo temporal '+uid,slug:'equipo-temporal-'+uid},adminToken);
+  await request('Delete unpurchased product','/api/admin/products/'+disposableProduct.id,
+    'DELETE',null,adminToken);
+  await request('Delete now-empty product category','/api/admin/categories/'+disposableCategory.id,
+    'DELETE',null,adminToken);
+  const disposableService=await request('Create disposable service','/api/admin/services','POST',
+    {name:'Servicio temporal '+uid,slug:'servicio-temporal-'+uid,price_type:'quote'},adminToken);
+  await request('Delete unreferenced service','/api/admin/services/'+disposableService.id,
+    'DELETE',null,adminToken);
   // Exercise real R2 uploads and public image delivery for the content editors.
   const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO85ggAAAABJRU5ErkJggg==', 'base64');
   async function uploadPhoto(route, fields = {}) {
