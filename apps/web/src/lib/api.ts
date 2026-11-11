@@ -56,6 +56,12 @@ export const api = {
 
   getSettings: () => apiRequest('/api/public/settings'),
   getAssistantConfig: () => apiRequest('/api/assistant/config'),
+  getAssistantSessions: (page = 1) => apiRequest('/api/assistant/sessions?page=' + page),
+  createAssistantSession: () => post('/api/assistant/sessions', {}),
+  renameAssistantSession: (id: string, title: string) =>
+    patch('/api/assistant/session/' + encodeURIComponent(id), {title}),
+  deleteAssistantSession: (id: string) =>
+    apiRequest('/api/assistant/session/' + encodeURIComponent(id), {method:'DELETE'}),
   getAssistantMessages: (id: string) => apiRequest(`/api/assistant/session/${encodeURIComponent(id)}/messages`),
   postAssistantMessage: (body: { session_id?: string; message: string; channel?: string }) => post('/api/assistant/message', body),
 
