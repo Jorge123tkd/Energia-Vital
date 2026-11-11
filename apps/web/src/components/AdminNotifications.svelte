@@ -64,7 +64,7 @@
     {#if canSend}
       <div class="flex flex-wrap gap-2">
         <button type="button" onclick={() => {welcomeError='';modal='welcome';}}
-          class="rounded-xl border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 px-4 py-3 text-sm font-bold">⚙ Automatizaciones</button>
+          class="rounded-xl border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 px-4 py-3 text-sm font-bold">⚙ Crear / editar automatización</button>
         <button type="button" onclick={() => {error='';modal='send';}}
           class="rounded-xl bg-teal-700 hover:bg-teal-800 px-4 py-3 text-white text-sm font-bold">＋ Crear notificación</button>
       </div>
