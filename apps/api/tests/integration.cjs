@@ -152,6 +152,25 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
     {name:'Proyecto residencial '+uid},adminToken,201);
   const project = await uploadPhoto('/api/admin/gallery',{title:'Instalación '+uid,
     category:'Proyecto residencial '+uid,description:'Vivienda con inversor y baterías'});
+  // Home highlights must be explicit, persist through edits, and never reveal hidden content.
+  for (const [kind, collection, id] of [['services', 'services', service.id], ['gallery', 'gallery', project.id]]) {
+    const path = '/api/admin/' + kind + '/' + id;
+    const highlights = () => request(kind + ' home highlights', '/api/public/' + kind + '?featured=true');
+    assert.ok(!(await highlights())[collection].some(x => x.id === id));
+    await request(kind + ' rejects string booleans', path, 'PATCH', {is_featured: 'false'}, adminToken, 400);
+    await request(kind + ' marks highlight', path, 'PATCH', {is_featured: true}, adminToken);
+    assert.ok((await highlights())[collection].some(x => x.id === id));
+    await request(kind + ' preserves highlight on unrelated edit', path, 'PATCH', {description: 'Descripción actualizada'}, adminToken);
+    assert.ok((await highlights())[collection].some(x => x.id === id));
+    await request(kind + ' hides highlight', path, 'PATCH', {is_active: false}, adminToken);
+    assert.ok(!(await highlights())[collection].some(x => x.id === id));
+    await request(kind + ' republishes highlight', path, 'PATCH', {is_active: true}, adminToken);
+    assert.ok((await highlights())[collection].some(x => x.id === id));
+    await request(kind + ' removes highlight', path, 'PATCH', {is_featured: false}, adminToken);
+    assert.ok(!(await highlights())[collection].some(x => x.id === id));
+    const all = await request(kind + ' remains in full listing', '/api/public/' + kind);
+    assert.ok(all[collection].some(x => x.id === id));
+  }
   await uploadPhoto('/api/admin/extras/gallery/'+project.id+'/images');
   const projectPhotos = await request('Public gallery lists project photos',
     '/api/public/extras/gallery/'+project.id+'/images');

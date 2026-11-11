@@ -72,7 +72,7 @@
   }
   function blankService() {
     return { name: '', description: '', scope: '', price: undefined as number | undefined,
-      price_type: 'quote', duration_minutes: undefined as number | undefined, is_active: true };
+      price_type: 'quote', duration_minutes: undefined as number | undefined, is_featured: false, is_active: true };
   }
   let product = $state(blankProduct());
   let service = $state(blankService());
@@ -87,7 +87,7 @@
     notice = ''; error = ''; modal = 'product';
   }
   function editService(s: any) {
-    editingService = s.id; service = { ...blankService(), ...s, price: s.price ?? undefined, duration_minutes: s.duration_minutes ?? undefined };
+    editingService = s.id; service = { ...blankService(), ...s, is_featured: Boolean(s.is_featured), price: s.price ?? undefined, duration_minutes: s.duration_minutes ?? undefined };
     servicePhoto = null; servicePhotos = []; serviceImageUrl = ''; notice = ''; error = ''; modal = 'service';
   }
 
@@ -191,6 +191,7 @@
   }
 
   let gallery: any[] = $state([]);
+  let galleryFeatured = $state(false);
   let galleryTitle = $state('');
   let galleryDescription = $state('');
   let galleryCategory = $state('');
@@ -295,6 +296,7 @@
       data.append('description', galleryDescription.trim());
       data.append('category', galleryCategory.trim());
       data.append('is_active', 'true');
+      data.append('is_featured', String(galleryFeatured));
       if (galleryPhotos.length) data.append('file', galleryPhotos[0]);
       else data.append('url', galleryUrl.trim());
       const created = await api.createAdminGallery(token, data);
@@ -318,7 +320,7 @@
     if (!galleryEdit) return;
     await execute(async () => {
       await api.updateAdminGallery(token, galleryEdit.id, { title: galleryEdit.title,
-        description: galleryEdit.description, category: galleryEdit.category, is_active: Boolean(galleryEdit.is_active) });
+        description: galleryEdit.description, category: galleryEdit.category, is_active: Boolean(galleryEdit.is_active), is_featured: Boolean(galleryEdit.is_featured) });
       galleryEdit = null; modal = null; gallery = (await api.getAdminGallery(token)).gallery ?? [];
       notice = 'Proyecto actualizado.';
     });
@@ -461,6 +463,7 @@
               {#if s.image_url}<div class="overflow-hidden"><img class="w-full h-32 sm:h-36 object-cover object-center group-hover:scale-110 transition-transform duration-300" src={s.image_url} alt={s.name} /></div>{:else}<div class="h-28 sm:h-32 bg-slate-100 flex items-center justify-center text-slate-400">Sin fotografía</div>{/if}
               <div class="p-3 space-y-2">
                 <h3 class="font-semibold">{s.name}</h3>
+                {#if s.is_featured}<span class="text-xs font-semibold text-teal-800">Destacado en inicio</span>{/if}
                 <p class="text-xs text-slate-500 line-clamp-2">{s.description || 'Sin descripción'}</p>
                 <p class="text-sm font-semibold">{s.price_type === 'fixed' && s.price != null ? Number(s.price).toLocaleString('es-CU') + ' USD' : s.price_type === 'free' ? 'Gratuito' : 'Bajo presupuesto'}</p>
                 <div class="flex flex-wrap items-center gap-2">
@@ -482,7 +485,7 @@
           <h2 class="text-2xl font-bold text-slate-900">Galería de proyectos ({gallery.length})</h2>
           <p class="text-sm text-slate-500 mt-1">Trabajos, instalaciones y resultados en tarjetas compactas.</p>
         </div>
-        <button type="button" class="admin-primary" onclick={() => { galleryEdit = null; galleryTitle = ''; galleryDescription = ''; galleryCategory = ''; galleryFile = null; galleryPhotos = []; galleryUrl = ''; error = ''; modal = 'gallery'; }}>
+        <button type="button" class="admin-primary" onclick={() => { galleryEdit = null; galleryFeatured = false; galleryTitle = ''; galleryDescription = ''; galleryCategory = ''; galleryFile = null; galleryPhotos = []; galleryUrl = ''; error = ''; modal = 'gallery'; }}>
           + Añadir proyecto
         </button>
       </header>
@@ -496,11 +499,12 @@
       <div class="p-3 space-y-2">
         <div class="flex items-start justify-between gap-1">
           <h3 class="font-semibold text-sm text-slate-900 line-clamp-2">{g.title}</h3>
+                {#if g.is_featured}<span class="text-xs font-semibold text-teal-800">Destacado en inicio</span>{/if}
           <span class="text-[11px] shrink-0 {g.is_active ? 'text-emerald-700' : 'text-orange-700'}">{g.is_active ? 'Visible' : 'Oculto'}</span>
         </div>
         <p class="text-xs text-slate-500 line-clamp-2 min-h-[2rem]">{g.description || 'Sin descripción'}</p>
         <div class="flex gap-1 pt-1">
-          <button class="admin-secondary text-xs flex-1" onclick={() => { galleryEdit = { ...g }; modal = 'gallery-edit'; error = ''; }}>Editar</button>
+          <button class="admin-secondary text-xs flex-1" onclick={() => { galleryEdit = { ...g, is_featured: Boolean(g.is_featured) }; modal = 'gallery-edit'; error = ''; }}>Editar</button>
           <button disabled={busy} class="admin-link text-xs text-red-700" onclick={() => removeGallery(g)}>Eliminar</button>
         </div>
       </div>
@@ -729,6 +733,7 @@
               {/each}
             </select>
           </label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryFeatured} /> Destacar en inicio</label>
           <ImagePicker max={15} label="Fotografías del proyecto" onFiles={(files)=>galleryPhotos=files}/>
           <p class="text-xs text-slate-500">Si no subes un archivo, puedes utilizar una imagen HTTPS externa.</p>
           <label class="admin-label">URL de imagen (opcional)<input type="url" class="admin-input" placeholder="https://..." bind:value={galleryUrl} /></label>
@@ -745,6 +750,7 @@
             </select>
           </label>
           <label class="admin-label md:col-span-2">Descripción<textarea rows="3" class="admin-input" bind:value={galleryEdit.description}></textarea></label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryEdit.is_featured} /> Destacar en inicio</label>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={galleryEdit.is_active} /> Proyecto publicado</label>
           <div class="flex gap-2"><button disabled={busy} class="admin-primary">Guardar proyecto</button><button type="button" class="admin-secondary" onclick={() => { galleryEdit = null; modal = null; }}>Cancelar</button></div>
         </form>
@@ -767,6 +773,7 @@
             <input type="url" maxlength="600" class="admin-input" placeholder="https://…" bind:value={serviceImageUrl} />
           </label>
           <p class="text-xs text-slate-500">Si seleccionas un archivo, lo guardaremos en Cloudflare R2 y tendrá prioridad sobre el enlace externo.</p>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={service.is_featured} /> Destacar en inicio</label>
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={service.is_active} /> Publicado en la página de servicios</label>
           <button disabled={busy} class="admin-primary w-full">{busy ? 'Guardando…' : editingService ? 'Guardar cambios' : 'Crear servicio'}</button>
         </form>

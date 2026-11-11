@@ -2,18 +2,15 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
   let { onAssistant }: { onAssistant: () => void } = $props();
-  let products: any[] = $state([]);
+  import CatalogPage from './CatalogPage.svelte';
+  import ServicesPage from './ServicesPage.svelte';
+  import GalleryPage from './GalleryPage.svelte';
   let settings: Record<string, string> = $state({});
-  let loading = $state(true);
-  let error = $state('');
   const intro = 'Paneles solares, inversores, baterías y servicios de instalación y mantenimiento. Explora nuestro catálogo y recibe asesoramiento profesional para tu hogar o negocio.';
   onMount(() => {
     void (async () => {
-      const [items, config] = await Promise.allSettled([api.getProducts({ featured: 'true' }), api.getSettings()]);
-      if (items.status === 'fulfilled') products = items.value.products ?? [];
-      else error = 'No se pudieron cargar los equipos destacados.';
-      if (config.status === 'fulfilled') settings = config.value.settings ?? {};
-      loading = false;
+      try { settings = (await api.getSettings()).settings ?? {}; }
+      catch { /* The home banner keeps its defaults if settings are unavailable. */ }
     })();
     const interval = window.setInterval(() => {
       if (!document.hidden) activeSlide = (activeSlide + 1) % 3;
@@ -42,7 +39,6 @@
   });
   let slide = $derived(slides[activeSlide] || slides[0]);
   function selectSlide(index: number) { activeSlide = (index + 3) % 3; }
-  function consult(p: any) { window.location.href = '/contacto?product=' + encodeURIComponent(p.name); }
 </script>
 
 <section aria-label="Presentación de Bonaire" class="relative rounded-3xl overflow-hidden min-h-[440px] sm:min-h-[500px] bg-slate-950 text-white flex flex-col justify-between shadow-xl">
@@ -84,30 +80,27 @@
   </div>
 </section>
 
-<section class="max-w-7xl mx-auto py-12">
+
+<section class="max-w-7xl mx-auto py-8" aria-label="Productos destacados">
   <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
-    <div><p class="text-teal-700 uppercase font-semibold text-xs tracking-wider mb-2">Equipos solares</p><h2 class="text-3xl font-bold text-slate-900">Productos destacados</h2><p class="text-slate-600 mt-2">Soluciones seleccionadas para diferentes necesidades energéticas.</p></div>
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Productos destacados</h2>
     <a href="/catalogo" class="text-teal-800 font-semibold hover:underline">Ver catálogo completo →</a>
   </div>
-  {#if loading}
-    <p class="text-slate-500">Cargando equipos destacados…</p>
-  {:else if error}
-    <p role="alert" class="text-red-700">{error}</p>
-  {:else if products.length === 0}
-    <div class="bg-white border border-slate-200 rounded-2xl p-8 text-slate-600">Pronto encontrarás aquí nuestros equipos destacados. Mientras tanto, puedes consultar los servicios disponibles.</div>
-  {:else}
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {#each products as p (p.id)}
-        <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition">
-          {#if p.primary_image_url}<img class="w-full h-52 object-cover object-center" src={p.primary_image_url} alt={p.name} />{:else}<div class="h-52 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400">Fotografía próximamente</div>{/if}
-          <div class="p-5 space-y-3">
-            <p class="text-xs font-semibold text-teal-700">{p.category_name || 'Energía solar'}</p>
-            <h3 class="font-semibold text-xl">{p.name}</h3>
-            <p class="text-slate-600 text-sm line-clamp-3">{p.short_description || p.description || [p.brand, p.model].filter(Boolean).join(' ') || 'Consulta características y disponibilidad.'}</p>
-            <div class="flex items-center justify-between gap-3 pt-2"><strong class="text-teal-800">{p.price == null ? 'Precio a consultar' : Number(p.price).toLocaleString('es-CU') + ' ' + (p.currency || 'USD')}</strong><button onclick={() => consult(p)} class="bg-teal-700 text-white rounded-xl px-4 py-2 font-medium hover:bg-teal-800">Consultar</button></div>
-          </div>
-        </article>
-      {/each}
-    </div>
-  {/if}
+  <CatalogPage featured />
+</section>
+
+<section class="max-w-7xl mx-auto py-8" aria-label="Servicios destacados">
+  <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Servicios destacados</h2>
+    <a href="/servicios" class="text-teal-800 font-semibold hover:underline">Ver todos los servicios →</a>
+  </div>
+  <ServicesPage featured />
+</section>
+
+<section class="max-w-7xl mx-auto py-8" aria-label="Galerías destacadas">
+  <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Galerías destacadas</h2>
+    <a href="/galeria" class="text-teal-800 font-semibold hover:underline">Ver todos los proyectos →</a>
+  </div>
+  <GalleryPage featured />
 </section>

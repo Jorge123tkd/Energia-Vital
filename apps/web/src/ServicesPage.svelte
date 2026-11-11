@@ -1,12 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
+  import CardImage from './components/CardImage.svelte';
+  let { featured = false }: { featured?: boolean } = $props();
   let services:any[]=$state([]);
   let loading=$state(true),error=$state('');
   let selected:any=$state(null),images:{id:string;url:string}[]=$state([]);
   let photoIndex=$state(0),loadingPhotos=$state(false);
   onMount(()=>{
-    api.getServices().then(r=>{services=r.services??[];})
+    api.getServices(featured).then(r=>{services=r.services??[];})
       .catch(e=>error=e instanceof Error?e.message:'No se pudieron cargar los servicios.')
       .finally(()=>loading=false);
   });
@@ -35,22 +37,23 @@
   if(e.key==='ArrowRight')photoIndex=(photoIndex+1)%Math.max(1,images.length);
   if(e.key==='ArrowLeft')photoIndex=(photoIndex+Math.max(1,images.length)-1)%Math.max(1,images.length);
 }}/>
-<section class="w-full max-w-[1600px] mx-auto px-2 sm:px-4 py-8">
+<section class={featured ? "w-full" : "w-full max-w-[1600px] mx-auto px-2 sm:px-4 py-8"}>
+  {#if !featured}
   <header class="mb-8">
     <span class="text-xs font-extrabold tracking-widest uppercase text-teal-700">Bonaire · Asistencia especializada</span>
     <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-2">Servicios para tu tranquilidad</h1>
     <p class="text-slate-600 mt-3 max-w-2xl">Desde la planificación hasta el mantenimiento. Te acompañamos para aprovechar al máximo tu inversión solar.</p>
   </header>
+  {/if}
   {#if loading}<p class="text-slate-500">Cargando servicios…</p>
   {:else if error}<p role="alert" class="text-red-700">{error}</p>
-  {:else if !services.length}<div class="rounded-2xl bg-white p-8 border border-slate-200 text-slate-600">Pronto publicaremos nuestros servicios.</div>
+  {:else if !services.length}<div class="rounded-2xl bg-white p-8 border border-slate-200 text-slate-600">{featured ? "Pronto publicaremos servicios destacados." : "Pronto publicaremos nuestros servicios."}</div>
   {:else}
     <div class="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
       {#each services as service (service.id)}
         <article class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-lg transition">
           <button type="button" onclick={()=>details(service)} class="w-full relative overflow-hidden bg-teal-50" aria-label={'Ver fotos de '+service.name}>
-            {#if service.image_url}<img src={service.image_url} alt={service.name} loading="lazy" class="w-full h-44 object-cover object-center hover:scale-105 transition-transform duration-300"/>
-            {:else}<div class="h-44 flex items-center justify-center text-teal-700">Servicio de Bonaire</div>{/if}
+            <CardImage src={service.image_url} alt={service.name} />
           </button>
           <div class="p-4 flex flex-col flex-1 space-y-2">
             <h2 class="font-extrabold text-sm sm:text-base text-slate-900 line-clamp-2">{service.name}</h2>

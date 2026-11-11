@@ -45,7 +45,7 @@ publicRoutes.get('/categories', async c => {
   return c.json({ categories: results ?? [] });
 });
 publicRoutes.get('/services', async c => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM services WHERE is_active = 1 ORDER BY sort_order LIMIT 200').all();
+  const { results } = await c.env.DB.prepare(`SELECT * FROM services WHERE is_active = 1 ${c.req.query('featured') === 'true' ? 'AND is_featured = 1' : ''} ORDER BY sort_order, id LIMIT 200`).all();
   return c.json({ services: results ?? [] });
 });
 publicRoutes.get('/services/image/:id', async c => {
@@ -113,7 +113,7 @@ publicRoutes.get('/gallery/media/:id', async c => {
   return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
 publicRoutes.get('/gallery', async c => {
-  const { results } = await c.env.DB.prepare('SELECT w.*, (SELECT COUNT(*) FROM work_gallery_images im WHERE im.project_id=w.id) AS image_count FROM work_gallery w WHERE w.is_active = 1 ORDER BY w.sort_order LIMIT 200').all();
+  const { results } = await c.env.DB.prepare(`SELECT w.*, (SELECT COUNT(*) FROM work_gallery_images im WHERE im.project_id=w.id) AS image_count FROM work_gallery w WHERE w.is_active = 1 ${c.req.query('featured') === 'true' ? 'AND w.is_featured = 1' : ''} ORDER BY w.sort_order, w.id LIMIT 200`).all();
   return c.json({ gallery: results ?? [] });
 });
 // Solo configuración comercial publicada; nunca claves internas ni datos privados.

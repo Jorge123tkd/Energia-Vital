@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
+  import CardImage from './components/CardImage.svelte';
+  let { featured = false }: { featured?: boolean } = $props();
   type Project = {id:string;title:string;description?:string;category?:string;url?:string;image_count?:number};
   type Photo = {id:string;url:string};
   let gallery:Project[]=$state([]);
@@ -16,7 +18,7 @@
   ));
   onMount(async()=>{
     try{
-      const [g,c]=await Promise.all([api.getGallery(),api.getGalleryCategories()]);
+      const [g,c]=await Promise.all([api.getGallery(featured),featured ? Promise.resolve({categories:[]}) : api.getGalleryCategories()]);
       gallery=g.gallery||[];categories=c.categories||[];
     }catch(e){error=e instanceof Error?e.message:'No se pudo cargar la galería';}
     finally{loading=false;}
@@ -40,8 +42,9 @@
   if(event.key==='ArrowLeft')photoIndex=(photoIndex+images.length-1)%Math.max(1,images.length);
   if(event.key==='ArrowRight')photoIndex=(photoIndex+1)%Math.max(1,images.length);
 }}/>
-<div class="min-h-[calc(100vh-6rem)] bg-gradient-to-b from-teal-50 via-slate-50 to-slate-100 px-3 sm:px-6 py-7 sm:py-10">
+<div class={featured ? "w-full" : "min-h-[calc(100vh-6rem)] bg-gradient-to-b from-teal-50 via-slate-50 to-slate-100 px-3 sm:px-6 py-7 sm:py-10"}>
   <div class="w-full max-w-[1600px] mx-auto space-y-6">
+    {#if !featured}
     <header class="rounded-3xl bg-gradient-to-br from-slate-950 via-teal-950 to-teal-800 p-6 sm:p-10 text-white shadow-xl">
       <span class="uppercase tracking-widest text-teal-200 font-extrabold text-xs">Bonaire · Trabajos realizados</span>
       <h1 class="mt-3 text-3xl sm:text-5xl font-extrabold">Nuestros proyectos</h1>
@@ -60,16 +63,16 @@
     </section>
 
     <div class="flex items-end justify-between gap-3"><h2 class="font-extrabold text-2xl text-slate-900">Trabajos de Bonaire</h2><span class="text-sm text-slate-500">{filtered.length} proyectos</span></div>
+    {/if}
     {#if loading}<p class="rounded-xl bg-white p-6 text-slate-500">Cargando proyectos…</p>
     {:else if error}<p role="alert" class="rounded-xl bg-red-50 text-red-700 p-4">{error}</p>
-    {:else if !filtered.length}<div class="rounded-2xl bg-white border border-slate-200 p-8 text-center text-slate-600">No encontramos proyectos con esos filtros.</div>
+    {:else if !filtered.length}<div class="rounded-2xl bg-white border border-slate-200 p-8 text-center text-slate-600">{featured ? "Pronto publicaremos proyectos destacados." : "No encontramos proyectos con esos filtros."}</div>
     {:else}
       <div class="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
         {#each filtered as work (work.id)}
           <article class="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg transition">
             <button type="button" class="block relative w-full bg-slate-100 overflow-hidden" onclick={()=>show(work)} aria-label={'Ver fotografías de '+work.title}>
-              {#if work.url}<img src={work.url} alt={work.title} loading="lazy" class="w-full h-44 sm:h-48 object-cover object-center hover:scale-105 transition-transform duration-300"/>
-              {:else}<div class="h-44 sm:h-48 bg-teal-50 flex items-center justify-center text-slate-400">Sin foto</div>{/if}
+              <CardImage src={work.url} alt={work.title} />
               {#if work.image_count}<span class="absolute right-2 bottom-2 bg-slate-950/80 text-white rounded-full px-2.5 py-1 text-[11px] font-bold">▧ {work.image_count} fotos</span>{/if}
             </button>
             <div class="flex flex-col flex-1 p-4 gap-2">

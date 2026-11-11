@@ -402,13 +402,14 @@ adminRoutes.get('/services', async (c) => {
 adminRoutes.post('/services', async (c) => {
   const { DB } = c.env;
   const b = await c.req.json<any>();
+  if (b.is_featured !== undefined && typeof b.is_featured !== 'boolean') return c.json({ error: 'Estado destacado inválido.' }, 400);
   const price = nullableNumber(b.price);
   if (!cleanText(b.name, 120) || !validPrice(price) || !['fixed', 'quote', 'free'].includes(b.price_type || 'quote')) return c.json({ error: 'Revisa el nombre, precio y tipo de servicio.' }, 400);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await DB.prepare(
-    'INSERT INTO services (id, name, slug, description, scope, price, price_type, duration_minutes, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(id, b.name, b.slug, b.description || null, b.scope || null, price, b.price_type || 'quote', b.duration_minutes || null, 1, b.sort_order || 0, now, now).run();
+    'INSERT INTO services (id, name, slug, description, scope, price, price_type, duration_minutes, is_active, is_featured, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(id, b.name, b.slug, b.description || null, b.scope || null, price, b.price_type || 'quote', b.duration_minutes || null, b.is_active === false ? 0 : 1, b.is_featured === true ? 1 : 0, b.sort_order || 0, now, now).run();
   return c.json({ id, message: 'Servicio creado' });
 });
 
@@ -416,12 +417,14 @@ adminRoutes.patch('/services/:id', async (c) => {
   const { DB } = c.env;
   const id = c.req.param('id');
   const b = await c.req.json<any>();
+  if (b.is_featured !== undefined && typeof b.is_featured !== 'boolean') return c.json({ error: 'Estado destacado inválido.' }, 400);
   const now = new Date().toISOString();
   await DB.prepare(
-    'UPDATE services SET name = COALESCE(?, name), slug = COALESCE(?, slug), description = COALESCE(?, description), scope = COALESCE(?, scope), price = COALESCE(?, price), price_type = COALESCE(?, price_type), duration_minutes = COALESCE(?, duration_minutes), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order), updated_at = ? WHERE id = ?'
+    'UPDATE services SET name = COALESCE(?, name), slug = COALESCE(?, slug), description = COALESCE(?, description), scope = COALESCE(?, scope), price = COALESCE(?, price), price_type = COALESCE(?, price_type), duration_minutes = COALESCE(?, duration_minutes), is_featured = COALESCE(?, is_featured), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order), updated_at = ? WHERE id = ?'
   ).bind(
     b.name || null, b.slug || null, b.description || null, b.scope || null,
     b.price !== undefined ? b.price : null, b.price_type || null, b.duration_minutes !== undefined ? b.duration_minutes : null,
+    b.is_featured !== undefined ? (b.is_featured === true ? 1 : 0) : null,
     b.is_active !== undefined ? (b.is_active ? 1 : 0) : null, b.sort_order !== undefined ? b.sort_order : null,
     now, id
   ).run();
@@ -500,7 +503,8 @@ adminRoutes.patch('/faq/:id', async (c) => {
   const now = new Date().toISOString();
   await DB.prepare(
     'UPDATE frequently_asked_questions SET category_id = COALESCE(?, category_id), question = COALESCE(?, question), answer = COALESCE(?, answer), is_active = COALESCE(?, is_active), sort_order = COALESCE(?, sort_order), updated_at = ? WHERE id = ?'
-  ).bind(b.category_id || null, b.question || null, b.answer || null, b.is_active !== undefined ? (b.is_active ? 1 : 0) : null, b.sort_order !== undefined ? b.sort_order : null, now, id).run();
+  ).bind(b.category_id || null, b.question || null, b.answer || null, b.is_featured !== undefined ? (b.is_featured === true ? 1 : 0) : null,
+    b.is_active !== undefined ? (b.is_active ? 1 : 0) : null, b.sort_order !== undefined ? b.sort_order : null, now, id).run();
   return c.json({ message: 'FAQ actualizada' });
 });
 
@@ -529,6 +533,7 @@ adminRoutes.post('/gallery', async (c) => {
   let video_url: string | null = null;
   let category: string | null = null;
   let is_active = true;
+  let is_featured = false;
   let sort_order = 0;
 
   // Soporta multipart/form-data (subida de archivo) o JSON (URL externa)
@@ -539,6 +544,10 @@ adminRoutes.post('/gallery', async (c) => {
     description = (formData.get('description') as string) || null;
     video_url = (formData.get('video_url') as string) || null;
     category = (formData.get('category') as string) || null;
+    const featuredRaw = formData.get('is_featured');
+    if (featuredRaw !== null && !['true', 'false', '1', '0'].includes(String(featuredRaw)))
+      return c.json({ error: 'Estado destacado inválido.' }, 400);
+    is_featured = featuredRaw === 'true' || featuredRaw === '1';
     const isActiveRaw = formData.get('is_active');
     if (isActiveRaw !== null) is_active = isActiveRaw === 'true' || isActiveRaw === '1';
     const sortRaw = formData.get('sort_order');
@@ -565,6 +574,8 @@ adminRoutes.post('/gallery', async (c) => {
     r2_key = null;
     video_url = b.video_url ?? null;
     category = b.category ?? null;
+    if (b.is_featured !== undefined && typeof b.is_featured !== 'boolean') return c.json({ error: 'Estado destacado inválido.' }, 400);
+    is_featured = b.is_featured === true;
     is_active = b.is_active !== false;
     sort_order = b.sort_order || 0;
   }
@@ -578,10 +589,10 @@ adminRoutes.post('/gallery', async (c) => {
     } catch { return c.json({error:'URL de imagen inválida.'},400); }
   }
   await DB.prepare(
-    'INSERT INTO work_gallery (id, title, description, url, r2_key, video_url, category, is_active, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO work_gallery (id, title, description, url, r2_key, video_url, category, is_active, is_featured, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     id, title, description, url, r2_key, video_url,
-    category, is_active ? 1 : 0, sort_order, now
+    category, is_active ? 1 : 0, is_featured ? 1 : 0, sort_order, now
   ).run();
 
   if (url) {
@@ -598,10 +609,11 @@ adminRoutes.patch('/gallery/:id', async c => {
   const current = await c.env.DB.prepare('SELECT * FROM work_gallery WHERE id = ?').bind(id).first<any>();
   if (!current) return c.notFound();
   const b = await c.req.json<any>();
-  await c.env.DB.prepare('UPDATE work_gallery SET title=?, description=?, category=?, video_url=?, is_active=?, sort_order=? WHERE id=?')
+  if (b.is_featured !== undefined && typeof b.is_featured !== 'boolean') return c.json({ error: 'Estado destacado inválido.' }, 400);
+  await c.env.DB.prepare('UPDATE work_gallery SET title=?, description=?, category=?, video_url=?, is_active=?, is_featured=?, sort_order=? WHERE id=?')
     .bind(cleanText(b.title ?? current.title, 160), cleanText(b.description ?? current.description, 2000) || null,
       cleanText(b.category ?? current.category, 120) || null, cleanText(b.video_url ?? current.video_url, 500) || null,
-      (b.is_active ?? current.is_active) ? 1 : 0, Number(b.sort_order ?? current.sort_order) || 0, id).run();
+      (b.is_active ?? current.is_active) ? 1 : 0, (b.is_featured ?? current.is_featured) ? 1 : 0, Number(b.sort_order ?? current.sort_order) || 0, id).run();
   return c.json({ message: 'Galería actualizada' });
 });
 

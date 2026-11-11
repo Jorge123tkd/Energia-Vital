@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
+  import CardImage from './components/CardImage.svelte';
+  let { featured = false }: { featured?: boolean } = $props();
   import ProductReviews from './components/ProductReviews.svelte';
 
   type Product = {
@@ -50,7 +52,7 @@
     loading = true;
     error = '';
     try {
-      const [p, c] = await Promise.all([api.getProducts(), api.getCategories()]);
+      const [p, c] = await Promise.all([api.getProducts(featured ? { featured: 'true' } : undefined), featured ? Promise.resolve({ categories: [] }) : api.getCategories()]);
       products = p.products ?? [];
       categories = c.categories ?? [];
     } catch (e) {
@@ -112,6 +114,7 @@
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape' && selected) closeDetails(); }} />
 
 <div class="w-full min-w-0 pb-12">
+  {#if !featured}
   <header class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-teal-950 to-teal-800 px-5 py-9 sm:px-10 sm:py-12 xl:px-12 xl:py-14 text-white shadow-xl">
     <div class="relative z-10 max-w-3xl">
       <span class="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/20 px-3.5 py-1.5 text-xs sm:text-sm font-bold tracking-wide text-teal-100">☀ Bonaire · Equipos solares</span>
@@ -168,6 +171,8 @@
     {/if}
   </div>
 
+  {/if}
+
   {#if loading}
     <div class="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4" aria-label="Cargando equipos">
       {#each [1, 2, 3, 4, 5] as n}
@@ -186,7 +191,7 @@
   {:else if !filtered.length}
     <div class="rounded-2xl border border-slate-200 bg-white p-8 sm:p-12 text-center">
       <div class="w-14 h-14 mx-auto rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center text-2xl">⌕</div>
-      <h3 class="text-xl font-extrabold text-slate-900 mt-4">{products.length ? 'No encontramos equipos con esos filtros' : 'Próximamente: nuestros equipos solares'}</h3>
+      <h3 class="text-xl font-extrabold text-slate-900 mt-4">{featured ? 'Pronto publicaremos equipos destacados' : products.length ? 'No encontramos equipos con esos filtros' : 'Próximamente: nuestros equipos solares'}</h3>
       <p class="text-slate-500 mt-2 text-sm">{products.length ? 'Prueba con otra palabra o selecciona todas las categorías.' : 'Estamos preparando el catálogo. Puedes solicitar orientación sobre un sistema solar.'}</p>
       {#if products.length}
         <button type="button" onclick={resetFilters} class="rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-5 py-3 mt-5">Mostrar todos</button>
@@ -199,14 +204,7 @@
       {#each filtered as product (product.id)}
         <article class="min-w-0 flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-teal-200 transition">
           <button type="button" class="relative block w-full text-left bg-gradient-to-br from-teal-50 to-slate-100 overflow-hidden" onclick={() => details(product)} aria-label={'Ver detalles de ' + product.name}>
-            {#if imageOf(product)}
-              <img src={imageOf(product)} alt={product.name} loading="lazy" class="w-full h-40 sm:h-44 object-cover object-center hover:scale-105 transition-transform duration-300" />
-            {:else}
-              <div class="h-40 sm:h-44 flex flex-col items-center justify-center gap-2 text-teal-700">
-                <span class="text-4xl" aria-hidden="true">☀</span>
-                <span class="text-xs font-semibold text-slate-500">Imagen próximamente</span>
-              </div>
-            {/if}
+            <CardImage src={imageOf(product)} alt={product.name} />
             {#if product.is_featured}
               <span class="absolute top-2 left-2 rounded-full bg-amber-100 text-amber-900 px-2.5 py-1 text-[10px] font-extrabold shadow-sm">Destacado</span>
             {/if}
