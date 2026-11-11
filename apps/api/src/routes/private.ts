@@ -20,8 +20,18 @@ privateRoutes.post('/requests', async c => {
   const user = getUser(c)!;
   const b = await c.req.json<any>().catch(() => null);
   if (!b || typeof b !== 'object') return c.json({ error: 'Solicitud inválida.' },400);
-  const title = typeof b.title === 'string' ? b.title.trim().slice(0, 180) : '';
-  const description = typeof b.description === 'string' ? b.description.trim().slice(0, 3000) : '';
+  const selectedId = typeof b.service_id === 'string' ? b.service_id.trim() : '';
+  const selectedService = selectedId
+    ? await c.env.DB.prepare('SELECT id, name FROM services WHERE id = ? AND is_active = 1')
+      .bind(selectedId).first<{id: string; name: string}>() : null;
+  if (selectedId && !selectedService) return c.json({ error: 'El servicio ya no está disponible. Actualiza la lista.' }, 400);
+  const requestedTitle = typeof b.title === 'string' ? b.title.trim().slice(0, 180) : '';
+  const requestedDescription = typeof b.description === 'string' ? b.description.trim().slice(0, 3000) : '';
+  // Conservar el servicio elegido sin una migración adicional ni depender de un título del navegador.
+  const title = selectedService ? ('Servicio: ' + selectedService.name + ' · ' + requestedTitle).slice(0, 180) : requestedTitle;
+  const description = selectedService
+    ? ('Servicio elegido: ' + selectedService.name + ' (ID: ' + selectedService.id + ').\n' + requestedDescription).slice(0, 3000)
+    : requestedDescription;
   const requestedCategory = typeof b.category_id === 'string' ? b.category_id.slice(0,80) : '';
   const chosen = requestedCategory
     ? await c.env.DB.prepare('SELECT id,legacy_type FROM request_categories WHERE id=? AND is_active=1')

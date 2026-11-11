@@ -77,7 +77,7 @@ export const api = {
   logout: () => post('/api/auth/logout', {}),
   refreshToken: (body: { refresh_token: string }) => post('/api/auth/refresh', body),
   getMyRequests: () => apiRequest('/api/private/requests'),
-  createRequest: (body: { type?: string; category_id?: string; title: string; description: string; preferred_date?: string }) => post('/api/private/requests', body),
+  createRequest: (body: { service_id?: string; type?: string; category_id?: string; title: string; description: string; preferred_date?: string }) => post('/api/private/requests', body),
   uploadRequestImage: (id: string, file: File) => {
     const body = new FormData(); body.append('file', file);
     return apiRequest('/api/private/extras/requests/' + encodeURIComponent(id) + '/images', { method: 'POST', body });

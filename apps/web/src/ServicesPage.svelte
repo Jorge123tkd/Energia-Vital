@@ -17,7 +17,7 @@
       .catch(e=>error=e instanceof Error?e.message:'No se pudieron cargar los servicios.')
       .finally(()=>loading=false);
   });
-  function request(service:any){window.location.href='/contacto?service='+encodeURIComponent(service.name);}
+  function request(service:any){window.location.href='/contacto?service_id='+encodeURIComponent(service.id);}
   function price(service:any){
     return service.price_type==='fixed'&&service.price!=null
       ? Number(service.price).toLocaleString('es-CU')+' USD'

@@ -2,8 +2,16 @@
   import { onMount } from 'svelte';
   import { api } from './lib/api';
   let settings: Record<string, string> = $state({});
-  let type = $state('consultation');
-  let requestCategories: {id:string;name:string;requires_image:number|boolean}[] = $state([]);
+  let serviceId = $state('');
+  let services: {id:string;name:string;description?:string}[] = $state([]);
+  let serviceLoading = $state(true);
+  let serviceError = $state('');
+  let selectedService = $derived(services.find(service => service.id === serviceId));
+  function selectService(id: string) {
+    serviceId = id;
+    if (selectedService && (!title.trim() || title.startsWith('Solicitud de ')))
+      title = 'Solicitud de ' + selectedService.name;
+  }
   type Attachment = { file: File; preview: string };
   let attachments: Attachment[] = $state([]);
   function pickImages(files: FileList | null) {
@@ -26,7 +34,7 @@
     attachments.forEach(a => URL.revokeObjectURL(a.preview));
     attachments = [];
   }
-  let needsImage = $derived(Boolean(requestCategories.find(c=>c.id===type)?.requires_image));
+
   let title = $state('');
   let description = $state('');
   let preferredDate = $state('');
@@ -35,36 +43,42 @@
   let busy = $state(false);
   onMount(() => {
     void (async () => {
-    const [config, kinds] = await Promise.allSettled([api.getSettings(), api.getRequestCategories()]);
-    if (config.status === 'fulfilled') settings = config.value.settings ?? {};
-    if (kinds.status === 'fulfilled') requestCategories = kinds.value.categories || [];
-    if (requestCategories.length && !requestCategories.some(c => c.id === type)) type = requestCategories[0].id;
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('product')) {
-      type = 'consultation'; title = `Consulta sobre ${params.get('product')}`;
-      description = `Solicito información sobre el equipo ${params.get('product')}: disponibilidad, precio y compatibilidad.`;
-    } else if (params.has('service')) {
-      type = 'installation'; title = `Servicio: ${params.get('service')}`;
-      description = `Quiero información y presupuesto para el servicio ${params.get('service')}.`;
-    } else if (params.has('reference')) {
-      type = 'installation'; title = `Proyecto similar a ${params.get('reference')}`;
-      description = `Solicito evaluación para un proyecto semejante a ${params.get('reference')}.`;
-    } else if (params.has('power')) {
-      type = 'installation'; title = 'Evaluación de sistema solar';
-      description = `Asesor solar: potencia ${params.get('power')} W, energía ${params.get('dailyEnergy')} kWh, batería ${params.get('batteryCapacity')} kWh, inversor ${params.get('inverterMin')} W, sistema ${params.get('pvPower')} kWp, ${params.get('panelCount')} paneles. Equipo existente: ${params.get('existingEquipment') || 'No especificado'}.`;
-    }
+      const [config, available] = await Promise.allSettled([api.getSettings(), api.getServices()]);
+      if (config.status === 'fulfilled') settings = config.value.settings ?? {};
+      if (available.status === 'fulfilled') {
+        services = available.value.services ?? [];
+        if (!services.length) serviceError = 'Por el momento no hay servicios publicados. Prueba desde el catálogo o contáctanos directamente.';
+      } else serviceError = 'No pudimos cargar los servicios. Recarga la página antes de enviar la solicitud.';
+      serviceLoading = false;
+
+      const params = new URLSearchParams(window.location.search);
+      const indicatedId = params.get('service_id');
+      const indicatedName = params.get('service');
+      const matched = services.find(s => s.id === indicatedId || (indicatedName && s.name === indicatedName));
+      serviceId = matched?.id ?? services[0]?.id ?? '';
+      if (params.has('product')) {
+        title = 'Consulta sobre ' + params.get('product');
+        description = 'Solicito información sobre el equipo ' + params.get('product') + ': disponibilidad, precio y compatibilidad.';
+      } else if (matched) {
+        title = 'Solicitud de ' + matched.name;
+        description = 'Necesito información y presupuesto para el servicio ' + matched.name + '.';
+      } else if (params.has('reference')) {
+        title = 'Proyecto similar a ' + params.get('reference');
+        description = 'Solicito evaluación para un proyecto semejante a ' + params.get('reference') + '.';
+      } else if (params.has('power')) {
+        title = 'Evaluación de sistema solar';
+        description = `Asesor solar: potencia ${params.get('power')} W, energía ${params.get('dailyEnergy')} kWh, batería ${params.get('batteryCapacity')} kWh, inversor ${params.get('inverterMin')} W, sistema ${params.get('pvPower')} kWp, ${params.get('panelCount')} paneles. Equipo existente: ${params.get('existingEquipment') || 'No especificado'}.`;
+      } else if (services.length) title = 'Solicitud de ' + services[0].name;
     })();
     return () => clearImages();
   });
+
   async function submit(event: SubmitEvent) {
     event.preventDefault(); busy = true; error = ''; message = '';
     try {
-      if (needsImage && attachments.length === 0) {
-        error = 'Para esta solicitud, adjunta al menos una fotografía del equipo o trabajo que necesitas revisar.';
-        return;
-      }
+      if (!serviceId || !selectedService) throw new Error('Selecciona uno de los servicios disponibles.');
       const result = await api.createRequest({
-        category_id: type, type, title, description, preferred_date: preferredDate || undefined
+        service_id: serviceId, title, description, preferred_date: preferredDate || undefined
       });
       let uploaded = 0;
       for (const entry of attachments) {
@@ -86,27 +100,25 @@
     <header class="max-w-3xl">
       <span class="text-xs uppercase tracking-[.2em] font-extrabold text-teal-700">Bonaire · Atención personalizada</span>
       <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-2">¿En qué podemos ayudarte?</h1>
-      <p class="text-slate-600 mt-3 leading-relaxed">Solicita una instalación, consulta sobre equipos o pide una visita técnica. Tu solicitud quedará vinculada a los datos de tu perfil.</p>
+      <p class="text-slate-600 mt-3 leading-relaxed">Elige uno de los servicios publicados por Bonaire y descríbenos lo que necesitas. La solicitud quedará vinculada a tu cuenta.</p>
     </header>
     <div class="grid lg:grid-cols-[minmax(0,1.45fr)_minmax(0,0.85fr)] gap-5 lg:gap-7 items-start">
       <form onsubmit={submit} class="bg-white rounded-3xl border border-slate-200 shadow-lg shadow-slate-200/50 p-5 sm:p-8 space-y-5 min-w-0">
         <div class="flex items-center gap-3 mb-2"><span class="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-extrabold">01</span><div><h2 class="text-xl font-bold text-slate-900">Cuéntanos tu solicitud</h2><p class="text-xs text-slate-500">Los campos obligatorios están señalados.</p></div></div>
-        <label class="contact-label">Tipo de solicitud *
-          <select bind:value={type} class="contact-control">
-            {#if requestCategories.length}
-              {#each requestCategories as kind (kind.id)}
-                <option value={kind.id}>{kind.name}</option>
-              {/each}
-            {:else}
-              <option value="consultation">Consulta sobre equipos</option>
-              <option value="installation">Instalación solar</option>
-              <option value="repair">Reparación</option>
-              <option value="maintenance">Mantenimiento</option>
-              <option value="complaint">Reclamación</option>
-              <option value="suggestion">Sugerencia</option>
-            {/if}
+        <label class="contact-label">Servicio que necesitas *
+          <select required value={serviceId} disabled={serviceLoading || !services.length}
+            onchange={e => selectService(e.currentTarget.value)} class="contact-control">
+            {#if !serviceId}<option value="" disabled>Selecciona un servicio</option>{/if}
+            {#each services as item (item.id)}
+              <option value={item.id}>{item.name}</option>
+            {/each}
           </select>
         </label>
+        {#if serviceLoading}<p class="text-xs text-slate-500">Cargando servicios publicados…</p>{/if}
+        {#if serviceError}<p role="alert" class="text-sm text-red-700">{serviceError}</p>{/if}
+        {#if selectedService?.description}
+          <p class="rounded-xl border border-teal-100 bg-teal-50 p-3 text-xs text-teal-900">{selectedService.description}</p>
+        {/if}
         <label class="contact-label">Asunto *
           <input required minlength="3" maxlength="180" bind:value={title} class="contact-control" placeholder="Ej. Instalación solar para mi vivienda" />
         </label>
@@ -117,11 +129,9 @@
           <input type="date" bind:value={preferredDate} class="contact-control" />
         </label>
         <fieldset class="rounded-2xl border border-teal-100 bg-teal-50/40 p-4 space-y-3">
-          <legend class="text-sm font-extrabold text-slate-800 px-2">Fotografías de tu solicitud {needsImage ? '*' : '(opcional)'}</legend>
+          <legend class="text-sm font-extrabold text-slate-800 px-2">Fotografías de tu solicitud (opcional)</legend>
           <p class="text-xs sm:text-sm text-slate-600">
-            {needsImage
-              ? 'Por favor, adjunta una foto del equipo, avería o instalación que quieres reparar, mantener o reclamar.'
-              : 'Puedes adjuntar imágenes para explicar mejor lo que necesitas.'}
+            Puedes adjuntar imágenes para explicar mejor el servicio que necesitas.
           </p>
           <input type="file" multiple accept="image/jpeg,image/png,image/webp"
             class="block w-full text-xs sm:text-sm text-slate-700 file:rounded-lg file:border-0 file:bg-teal-700 file:text-white file:font-bold file:px-4 file:py-2.5 file:mr-3"
@@ -142,7 +152,7 @@
         </fieldset>
         {#if error}<p role="alert" class="text-red-700 bg-red-50 border border-red-200 rounded-xl p-3 text-sm">{error}</p>{/if}
         {#if message}<p role="status" class="text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm font-semibold break-words">{message}</p>{/if}
-        <button disabled={busy} type="submit" class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white px-5 py-3.5 font-extrabold rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600">
+        <button disabled={busy || serviceLoading || !serviceId} type="submit" class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white px-5 py-3.5 font-extrabold rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600">
           {busy ? 'Enviando solicitud…' : 'Enviar mi solicitud →'}
         </button>
         <p class="text-xs text-slate-500">No se confirma una cita automáticamente. Nuestro equipo revisará tu solicitud.</p>
