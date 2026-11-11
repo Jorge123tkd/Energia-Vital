@@ -40,6 +40,16 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
     { email: adminEmail, password: adminPassword });
   assert.ok(adminSession.access_token, 'admin returns a signed access token');
   const adminToken = adminSession.access_token;
+  const initialWelcome = await request('Admin reads default welcome automation',
+    '/api/notifications/admin/automation','GET',null,adminToken);
+  assert.equal(initialWelcome.enabled,true);
+  await request('Admin configures automated welcome','/api/notifications/admin/automation','PUT',
+    {enabled:true,title:'Bienvenido a Bonaire de prueba',message:'Te damos la bienvenida al portal de atención solar.'},
+    adminToken);
+  const savedWelcome = await request('Saved welcome automation','/api/notifications/admin/automation',
+    'GET',null,adminToken);
+  assert.equal(savedWelcome.title,'Bienvenido a Bonaire de prueba');
+
   const staffEmail = 'operator-' + uid + '@example.invalid';
   const createdStaff = await request('Admin creates moderator account', '/api/admin/users', 'POST',
     { email: staffEmail, password: 'Operador!Seguro2026', role: 'operator' }, adminToken, 201);
@@ -171,6 +181,12 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
 
   const br = await request('Register customer B', '/api/auth/register', 'POST', b, null, 201);
   const at = ar.access_token, bt = br.access_token;
+  const welcomeCustomer = await request('Customer receives configured welcome notification',
+    '/api/notifications','GET',null,at);
+  assert.ok(welcomeCustomer.notifications.some(n=>n.title==='Bienvenido a Bonaire de prueba'));
+  await request('Operator cannot configure automatic welcomes','/api/notifications/admin/automation',
+    'PUT',{enabled:false,title:'Bloqueado',message:'Esto no debe cambiarse por un operador.'},staffToken,403);
+
   assert.ok(at && bt, 'registration returns tokens');
   const sharedCustomer = await request('Site login recognizes customer', '/api/auth/sign-in', 'POST', a);
   assert.equal(sharedCustomer.user.role, 'customer');
@@ -208,6 +224,26 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const created = await request('Customer A creates request', '/api/private/requests', 'POST', {
     type: 'installation', title: 'Instalación solar residencial', description: 'Deseo instalar paneles y baterías en mi vivienda.'
   }, at, 201);
+  const searchedRequest=await request('Staff searches request by exact ID, first page',
+    '/api/admin-customers/requests?q='+encodeURIComponent(created.id)+'&page=1&page_size=20',
+    'GET',null,staffToken);
+  assert.equal(searchedRequest.total,1);
+  assert.equal(searchedRequest.requests[0].id,created.id);
+  assert.equal(searchedRequest.page,1);
+  const noSecondPage=await request('Staff receives empty second page',
+    '/api/admin-customers/requests?q='+encodeURIComponent(created.id)+'&page=2&page_size=20',
+    'GET',null,staffToken);
+  assert.equal(noSecondPage.requests.length,0);
+  const receipt=await request('Customer sees request creation receipt',
+    '/api/notifications','GET',null,at);
+  assert.ok(receipt.notifications.some(n=>n.title==='Recibimos tu solicitud' && n.message.includes(created.id)));
+  await request('Staff updates request status and triggers alert','/api/admin-customers/requests/'+created.id,
+    'PATCH',{status:'quoted'},staffToken);
+  const changed=await request('Customer sees automatic request status alert',
+    '/api/notifications','GET',null,at);
+  assert.ok(changed.notifications.some(n=>n.title==='Actualización de tu solicitud' &&
+    n.message.includes(created.id)));
+
 
   const extraRequest = await request('Client files a custom type of request','/api/private/requests','POST',
     {category_id:requestCategory.id,title:'Problema de garantía',description:'Quiero que revisen mi inversor instalado.'},at,201);
@@ -293,6 +329,10 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   starts.setUTCHours(14, 0, 0, 0);
   const appointment = { title: 'Visita solar de diagnóstico', starts_at: starts.toISOString(), ends_at: new Date(starts.getTime() + 3600000).toISOString() };
   await request('Customer A reserves time slot', '/api/private/appointments', 'POST', appointment, at, 201);
+  const appSearch=await request('Staff finds appointment by ID and page',
+    '/api/admin-customers/appointments?q='+encodeURIComponent(created.id)+'&page=1&page_size=20',
+    'GET',null,staffToken);
+  assert.equal(appSearch.total,0);
   await request('Duplicate time slot blocked', '/api/private/appointments', 'POST', appointment, bt, 409);
   const bAppointments = await request('B sees only own appointments', '/api/private/appointments', 'GET', null, bt);
   assert.equal(bAppointments.appointments.length, 0);
