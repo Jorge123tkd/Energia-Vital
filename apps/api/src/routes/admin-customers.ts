@@ -90,7 +90,7 @@ adminCustomersRoutes.delete('/customers/:id', requireAdminAuth, async c => {
   const exists = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ?').bind(id).first();
   if (!exists) return c.json({ error: 'Cliente no encontrado' }, 404);
   const linked = ['requests', 'appointments', 'assistant_sessions', 'giveaway_participants',
-    'giveaway_winners', 'reward_redemptions'];
+    'giveaway_winners', 'reward_redemptions', 'verified_product_purchases', 'product_reviews'];
   for (const table of linked) {
     const found = await c.env.DB.prepare(`SELECT 1 AS found FROM ${table} WHERE customer_id = ? LIMIT 1`).bind(id).first();
     if (found) return c.json({
