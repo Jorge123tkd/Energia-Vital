@@ -6,7 +6,7 @@
   let { featured = false }: { featured?: boolean } = $props();
   let services:any[]=$state([]);
   let page=$state(1);
-  const perPage = featured ? 8 : 12;
+  let perPage = $derived(featured ? 8 : 12);
   let pages=$derived(Math.max(1,Math.ceil(services.length/perPage)));
   let visibleServices=$derived(services.slice((Math.min(page,pages)-1)*perPage,Math.min(page,pages)*perPage));
   let loading=$state(true),error=$state('');

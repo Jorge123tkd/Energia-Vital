@@ -21,7 +21,7 @@
   let search = $state('');
   let order = $state<'recommended' | 'name' | 'price_asc' | 'price_desc'>('recommended');
   let page = $state(1);
-  const perPage = featured ? 8 : 12;
+  let perPage = $derived(featured ? 8 : 12);
   let loading = $state(true);
   let error = $state('');
   let selected: Product | null = $state(null);

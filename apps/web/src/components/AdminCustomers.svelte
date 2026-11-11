@@ -29,8 +29,9 @@
     error = ''; searching = true;
     try {
       const result = await api.adminCustomers(token, query.trim(), nextPage, perPage);
-      remoteRows = result.customers ?? [];
-      remoteTotal = result.total ?? remoteRows.length;
+      const rows: any[] = result.customers ?? [];
+      remoteRows = rows;
+      remoteTotal = result.total ?? rows.length;
       page = nextPage;
     } catch (e) { error = e instanceof Error ? e.message : 'No se pudo buscar el cliente'; }
     finally { searching = false; }

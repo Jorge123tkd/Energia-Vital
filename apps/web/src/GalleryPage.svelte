@@ -11,7 +11,7 @@
   let category=$state('');
   let search=$state('');
   let page=$state(1);
-  const perPage = featured ? 8 : 12;
+  let perPage = $derived(featured ? 8 : 12);
   let loading=$state(true),error=$state('');
   let selected:Project|null=$state(null);
   let images:Photo[]=$state([]),photoIndex=$state(0),loadingPhotos=$state(false);

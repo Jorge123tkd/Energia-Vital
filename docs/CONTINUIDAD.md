@@ -11,6 +11,8 @@ Actualizado: 11 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
+2026-11-11: el usuario confirmó en PowerShell `git pull --ff-only` (fast-forward 4d8ca8f..a7dd980), `npm run typecheck --workspace=apps/api` sin errores y `npm run build:web` correcto (Vite 5.4.21, 152 módulos, 9.94 s). `npm run typecheck --workspace=apps/web` detectó **1 error** TS18047 en `AdminCustomers.svelte` (`remoteRows` posiblemente null) y **3 advertencias** `state_referenced_locally` en Catálogo, Servicios y Galería. El error y las tres advertencias se corrigen en el siguiente commit: variable local `rows` para el resultado de clientes y `$derived(featured ? 8 : 12)` para el tamaño de página dependiente de props. Estas correcciones **no han sido comprobadas todavía mediante una nueva ejecución del typecheck en Windows**; no afirmar 0 errores ni 0 advertencias hasta recibir el resultado. Compilación anterior completada pero no implica typecheck limpio. Despliegue de esta tanda pendiente. D1 sin migraciones nuevas.
+
 2026-11-11: versión de trabajo más reciente `78fca73` (frontend/API, NO producción). Se completaron en GitHub paginación de secciones públicas y administrativas, datos D1 paginados de clientes y notificaciones, selección y validación del servicio publicado en solicitudes, y panel web dividido en cuatro secciones. Los enlaces de bots se separan del contacto humano y se validan por host HTTPS autorizado; WhatsApp/Telegram todavía no están conectados a sesiones externas del asistente. Se realizó una inspección estática de 19 archivos de la rama: balance de bloques if/each de componentes Svelte y presencia de paginación, sin anomalías detectadas en esta revisión limitada. **No se ejecutaron aquí typecheck ni build de esta tanda** y tampoco se desplegó. No hay migraciones nuevas ni cambios D1 remotos.
 
 2026-11-11: se reorganizó el formulario «Mi sitio web» del panel con cuatro secciones conmutables mediante botones (Portada, Contacto, Redes y bots, Pie de página), conservando el guardado común. Se añadieron accesos opcionales a canales de bot configurados en el carrusel de Inicio y aclaración de «Servicio solicitado» en la ficha administrativa. La persistencia de enlaces y la presentación visual siguen pendientes de prueba. Los enlaces de bots no constituyen integración efectiva: no hay historial ni mensajes multicanal conectados todavía. No se han desplegado los cambios. 
@@ -77,6 +79,8 @@ No volver a pedir `npm test`, `npm ci`, `npm run typecheck`, `npm run build:web`
 | Auditoría completa y lanzamiento 1.0 | Pendiente |
 
 ## Bitácora
+- 2026-11-11: evidencia PowerShell: API typecheck PASS, build web PASS, Svelte typecheck con 1 error y 3 advertencias; cambios mínimos preparados para corregir estos cuatro diagnósticos, pendiente verificar web typecheck y build en la rama actualizada.
+
 - 2026-11-11: inspección estática de 19 archivos tras 78fca73; marcadores Svelte if/each equilibrados. Typechecks, build, prueba funcional incremental y despliegue pendientes; sin cambios remotos D1 ni Pages/Worker.
 
 - 2026-11-11: reorganizado «Mi sitio web» en cuatro paneles navegables, botones opcionales de bot en portada y etiquetas de solicitudes de servicio; pendientes typechecks/build de la nueva tanda y validación incremental.
