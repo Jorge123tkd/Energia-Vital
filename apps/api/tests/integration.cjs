@@ -328,11 +328,18 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const starts = new Date(Date.now() + 48 * 3600 * 1000);
   starts.setUTCHours(14, 0, 0, 0);
   const appointment = { title: 'Visita solar de diagnóstico', starts_at: starts.toISOString(), ends_at: new Date(starts.getTime() + 3600000).toISOString() };
-  await request('Customer A reserves time slot', '/api/private/appointments', 'POST', appointment, at, 201);
+  const booked = await request('Customer A reserves time slot', '/api/private/appointments', 'POST', appointment, at, 201);
   const appSearch=await request('Staff finds appointment by ID and page',
-    '/api/admin-customers/appointments?q='+encodeURIComponent(created.id)+'&page=1&page_size=20',
+    '/api/admin-customers/appointments?q='+encodeURIComponent(booked.id)+'&page=1&page_size=20',
     'GET',null,staffToken);
-  assert.equal(appSearch.total,0);
+  assert.equal(appSearch.total,1);
+  assert.equal(appSearch.appointments[0].id,booked.id);
+  await request('Staff confirms appointment','/api/admin-customers/appointments/'+booked.id,
+    'PATCH',{status:'confirmed'},staffToken);
+  const appointmentAlert=await request('Customer sees appointment status alert',
+    '/api/notifications','GET',null,at);
+  assert.ok(appointmentAlert.notifications.some(n=>n.title==='Estado de tu cita' &&
+    n.message.includes(booked.id)));
   await request('Duplicate time slot blocked', '/api/private/appointments', 'POST', appointment, bt, 409);
   const bAppointments = await request('B sees only own appointments', '/api/private/appointments', 'GET', null, bt);
   assert.equal(bAppointments.appointments.length, 0);
