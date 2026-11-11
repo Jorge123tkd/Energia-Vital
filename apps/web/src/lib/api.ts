@@ -86,6 +86,11 @@ export const api = {
   getCalendarSlots: (date: string, minutes = 60) => apiRequest(`/api/calendar/slots?date=${encodeURIComponent(date)}&duration_minutes=${minutes}`),
   getNotifications: () => apiRequest('/api/notifications'),
   markNotificationRead: (id: string) => patch('/api/notifications/' + encodeURIComponent(id) + '/read', {}),
+  getWelcomeAutomation: (token: string) => apiRequest('/api/notifications/admin/automation', withAdmin(token)),
+  saveWelcomeAutomation: (token: string, enabled: boolean, title: string, message: string) =>
+    apiRequest('/api/notifications/admin/automation', withAdmin(token, {
+      method: 'PUT', body: JSON.stringify({enabled,title,message}),
+    })),
   getStaffInbox: (token: string) => apiRequest('/api/notifications/inbox', withAdmin(token)),
   markStaffNotificationRead: (token: string, id: string) =>
     patch('/api/notifications/inbox/' + encodeURIComponent(id) + '/read', {}, withAdmin(token)),
