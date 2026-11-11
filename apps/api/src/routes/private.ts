@@ -43,6 +43,15 @@ privateRoutes.post('/requests', async c => {
       FROM admin_users WHERE is_active = 1 AND role IN ('admin','operator')`)
       .bind(title, now).run();
   } catch (e) { console.error('No se pudo crear el aviso de solicitud', e); }
+  try {
+    await c.env.DB.prepare(`INSERT INTO notifications
+      (id,user_id,user_type,type,title,message,is_read,created_at)
+      VALUES (?,?,'customer','system',?,?,0,?)`).bind(
+      crypto.randomUUID(),user.user_id,'Recibimos tu solicitud',
+      'Tu solicitud «'+title+'» se registró correctamente. Referencia: '+id+
+        '. Puedes consultar su estado en Mis solicitudes.',now
+    ).run();
+  }catch(e){console.error('No se pudo registrar confirmación de solicitud',e);}
   return c.json({ id, message: 'Solicitud creada', status: 'pending' }, 201);
 });
 
