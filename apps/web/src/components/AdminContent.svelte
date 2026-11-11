@@ -511,7 +511,16 @@
     </section>
   {:else if tab === 'site'}
     <section class="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm w-full min-w-0 max-w-none space-y-5">
-      <div><h2 class="text-2xl font-bold text-slate-900">Personalizar la web</h2><p class="text-slate-500 mt-1">Controla los textos principales, el contacto, las redes sociales y los enlaces del pie de página sin editar código.</p></div>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div><h2 class="text-2xl font-bold text-slate-900">Personalizar la web</h2><p class="text-slate-500 mt-1">Controla los textos principales, el contacto, las redes sociales y los enlaces del pie de página sin editar código.</p></div>
+        <div class="flex flex-wrap gap-2">
+          {#each [{path:'/',label:'Inicio'},{path:'/catalogo',label:'Catálogo'},{path:'/servicios',label:'Servicios'},{path:'/galeria',label:'Galería'}] as link}
+            <a href={link.path} target="_blank" rel="noopener noreferrer"
+              class="rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold px-3 py-2.5"
+              aria-label={'Ver '+link.label+' en una pestaña nueva'}>↗ Ver {link.label}</a>
+          {/each}
+        </div>
+      </div>
       <form onsubmit={saveSite} class="grid grid-cols-1 xl:grid-cols-12 gap-5 xl:gap-6 items-start min-w-0">
         <fieldset class="space-y-4 min-w-0 xl:col-span-8">
           <legend class="text-lg font-semibold mb-3">Carrusel de portada · 3 diapositivas</legend>
