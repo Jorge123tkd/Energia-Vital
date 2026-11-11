@@ -47,6 +47,7 @@
   }
 
   function navigate(path: string) {
+    if (path.split('?')[0] === '/asistente') isAssistantOpen.set(false);
     currentRoute = path.split('?')[0] || '/';
     history.pushState(null, '', path);
     window.scrollTo(0, 0);
@@ -58,7 +59,7 @@
       return;
     }
     if (user) {
-      isAssistantOpen.set(true);
+      if (currentRoute !== '/asistente') isAssistantOpen.set(true);
       return;
     }
     sessionStorage.setItem(LOGIN_ACTION_KEY, 'assistant');
