@@ -178,12 +178,14 @@
       'Potencia media de respaldo (cargas esenciales): '+result.backupWatts.toFixed(0)+' W',
       'Autonomía solicitada: '+autonomyHours+' horas',
       'Batería nominal sin aporte solar: '+result.battery.toFixed(2)+' kWh',
-      'Batería nominal con aporte solar en el corte: '+result.batteryWithSolar.toFixed(2)+' kWh',
+      hasPanels
+        ?'Batería nominal con aporte solar (escenario técnico o ejemplo diurno): '+(level==='basico'?daylightExample.batteryWithSolar:result.batteryWithSolar).toFixed(2)+' kWh'
+        :'No se solicitó una comparación con paneles solares.',
       'Banco de referencia: '+result.guideBattery+' kWh ('+(result.guideFits?'cubre escenario estimado':'no cubre todas las cargas')+')',
       level==='basico'
         ?'Sin hora declarada de apagón: comparación de batería sin aporte FV; ejemplo con sol separado.'
         :'Escenario técnico desde las '+outageStartHour+':00 · Sol dentro del corte '+result.outageSunHours.toFixed(1)+' h',
-      'Paneles sugeridos orientativamente: '+daylightExample.plannedPanels+' paneles; '+daylightExample.pvDailyKWh.toFixed(1)+' kWh/día de ejemplo',
+      'Paneles iniciales de referencia: '+daylightExample.plannedPanels+' paneles; '+daylightExample.pvDailyKWh.toFixed(1)+' kWh/día de ejemplo',
       'Ejemplo diurno: '+daylightExample.batteryWithSolar.toFixed(2)+' kWh de batería, no sustituye el escenario nocturno.',
       'Inversor preliminar para cargas esenciales: '+result.inverter.toFixed(0)+' W (revisar picos de arranque)',
       'Paneles calculados para energía diaria en condiciones base: '+result.panelCount+' de '+result.panelWatts+' W',
@@ -545,7 +547,7 @@
             {label:'Potencia media esencial',value:result.backupWatts.toFixed(0)+' W'},
             {label:sector==='residencial'?'Banco doméstico de referencia':'Banco comercial de referencia',value:result.guideBattery.toFixed(2)+' kWh'},
             {label:'Inversor para cargas esenciales',value:result.inverter.toFixed(0)+' W'},
-            {label:'Paneles orientativos',value:daylightExample.panelCount+' de '+result.panelWatts+' W'},
+            {label:'Paneles de referencia para empezar',value:daylightExample.plannedPanels+' de '+result.panelWatts+' W'},
           ] as box}
             <div class="rounded-2xl border border-teal-100 bg-teal-50 p-3 sm:p-4">
               <dt class="text-xs text-teal-800 font-semibold">{box.label}</dt>
@@ -611,7 +613,7 @@
         </section>
         <section class="rounded-2xl p-4 sm:p-5 bg-slate-950 text-white mt-5 space-y-3">
           <h3 class="text-lg font-extrabold">Paneles y compatibilidad con el inversor</h3>
-          <p class="text-sm text-slate-200">Si deseas incorporar paneles, el consumo declarado sugiere orientativamente <strong>{result.panelCount} paneles de {result.panelWatts} W</strong> para cubrir la energía diaria en condiciones base. En el ejemplo limitado por espacio se evaluarían <strong>{daylightExample.plannedPanels} paneles</strong>, con unos {daylightExample.pvDailyKWh.toFixed(1)} kWh/día bajo nubosidad variable. No es una cantidad que tengas que conocer antes de la evaluación.</p>
+          <p class="text-sm text-slate-200">Como opción práctica inicial, estudiaríamos hasta <strong>{daylightExample.plannedPanels} paneles de {result.panelWatts} W</strong>, con aproximadamente {daylightExample.pvDailyKWh.toFixed(1)} kWh/día bajo el clima supuesto. La demanda diaria teórica podría necesitar {result.panelCount} paneles en condiciones base: si son más de los que caben, te diremos el déficit en lugar de sugerir una instalación demasiado grande para tu vivienda.</p>
           {#if existingInverter && existingPanelCount>0}
             <p class="text-sm text-teal-100">Actualmente declaraste {existingPanelCount} paneles. Si todos fueran compatibles y de potencia semejante, la diferencia respecto a la referencia diaria sería de aproximadamente <strong>{Math.max(0,result.panelCount-existingPanelCount)} paneles</strong>; esta resta no sustituye el dimensionamiento de los MPPT ni garantiza que puedas mezclarlos.</p>
           {/if}
