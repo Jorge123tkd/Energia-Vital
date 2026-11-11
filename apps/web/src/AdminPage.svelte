@@ -352,9 +352,17 @@
                   <p class="text-xs text-slate-500 mt-1">{a.customer_name || 'Cliente'} · {a.phone || 'Sin teléfono'}</p>
                   <p class="text-xs text-slate-500 mt-1">{new Date(a.starts_at).toLocaleString('es-CU')}</p>
                   <p class="text-[11px] break-all text-slate-500 mt-2" title={a.id}>ID: {a.id}</p>
-                  <button type="button" onclick={() => copyReference(a.id)} class="text-xs text-teal-800 font-bold mt-1 underline">
-                    {copiedReference===a.id?'Copiado ✓':'Copiar ID de cita'}
-                  </button>
+                  <div class="flex gap-2 items-center flex-wrap mt-2">
+                    <button type="button" onclick={() => copyReference(a.id)} class="text-xs text-teal-800 font-bold underline">
+                      {copiedReference===a.id?'Copiado ✓':'Copiar ID de cita'}
+                    </button>
+                    {#if a.phone && String(a.phone).replace(/\D/g,'').length>=8}
+                      <a href={'https://wa.me/'+String(a.phone).replace(/\D/g,'')+'?text='+encodeURIComponent(
+                        'Hola '+(a.customer_name||'')+', te contactamos de Bonaire acerca de tu cita «'+a.title+'» (Ref. '+a.id.slice(0,8).toUpperCase()+'). ¿Podemos confirmar los detalles?'
+                      )} target="_blank" rel="noopener noreferrer" aria-label={'Abrir WhatsApp del cliente para cita '+a.id}
+                        class="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2.5">☎ WhatsApp cliente</a>
+                    {/if}
+                  </div>
                 </div>
                 <select aria-label={'Estado de cita '+a.title} value={a.status} onchange={e=>void changeAppointment(a.id,e.currentTarget.value)}
                   class="border border-slate-300 rounded-xl text-xs px-2 py-2 bg-slate-50">
