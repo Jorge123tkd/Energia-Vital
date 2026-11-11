@@ -151,12 +151,12 @@
         <div class="grid sm:grid-cols-2 gap-3 mt-3">
           <button type="button" aria-pressed={level==='basico'} onclick={()=>{level='basico';origin='equipos';}}
             class="rounded-2xl border-2 p-5 text-left {level==='basico'?'border-teal-700 bg-teal-50':'border-slate-200'}">
-            <span class="block text-xl font-extrabold text-slate-900">☀ Quiero una guía sencilla</span>
+            <span class="block text-xl font-extrabold text-slate-900">☀ No tengo experiencia</span>
             <span class="block text-sm mt-2 text-slate-600">Elijo nevera, televisor, luces y otros aparatos. Bonaire propone potencias orientativas que puedo corregir.</span>
           </button>
           <button type="button" aria-pressed={level==='tecnico'} onclick={()=>level='tecnico'}
             class="rounded-2xl border-2 p-5 text-left {level==='tecnico'?'border-teal-700 bg-teal-50':'border-slate-200'}">
-            <span class="block text-xl font-extrabold text-slate-900">⚡ Conozco los datos técnicos</span>
+            <span class="block text-xl font-extrabold text-slate-900">⚡ Sí tengo experiencia</span>
             <span class="block text-sm mt-2 text-slate-600">Introduzco vatios, cantidades, lecturas de corriente y, si los tengo, datos del MPPT del inversor.</span>
           </button>
         </div>
