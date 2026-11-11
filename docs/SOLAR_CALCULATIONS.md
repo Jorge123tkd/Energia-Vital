@@ -6,6 +6,19 @@
 - Las horas equivalentes de uso diario se registran por aparato. En el corte, el cliente puede indicar cuántas horas utilizará cada carga esencial, porque no todas funcionan sin detenerse durante las 15 horas.
 - Una nevera usa un factor orientativo de trabajo del compresor de 0,40; todos los factores son ejemplos editables por diseño técnico, no promesas de consumo real.
 
+## Comparador interactivo de baterías nominales
+
+Tras el cálculo, el usuario puede seleccionar referencias de **5, 10, 12 o 15 kWh**, independientemente de la batería que el estimador sugiera inicialmente. Seleccionar una referencia no cambia los aparatos, horas elegidas ni el cálculo base. Se muestran:
+
+- Energía utilizable de referencia: capacidad nominal (kWh) × 0,8 × 0,9.
+- Horas de autonomía orientativa, sin producción solar: energía utilizable × 1.000 ÷ potencia media de las cargas esenciales (W).
+- Potencia media máxima para las horas solicitadas: energía utilizable × 1.000 ÷ horas deseadas.
+- Mensaje claro si los aparatos seleccionados superan ese presupuesto energético, con la reducción aproximada de vatios medios necesaria.
+- Si no hay aparatos esenciales marcados, se solicita seleccionarlos; no se simulan horas garantizadas.
+- La capacidad, energía y potencia media no certifican los picos de arranque, inversor/BMS ni estado real de carga. No significa que instalar una batería determinada sea seguro para un inversor existente.
+
+Ejemplo ilustrativo para 15 horas sin red: 5 kWh → 240 W medios; 10 kWh → 480 W; 12 kWh → 576 W; 15 kWh → 720 W. Una carga constante de 500 W con 5 kWh nominales daría 7,2 horas bajo esos supuestos (sin generación solar).
+
 ## Experiencia del cliente: asesoramiento sencillo y ampliación
 
 La primera pregunta es **«¿Ya tienes inversor?»** antes de elegir vivienda, negocio o centro estatal y antes del nivel de conocimientos.
