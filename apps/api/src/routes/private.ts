@@ -9,9 +9,9 @@ const allowedTypes = new Set(['installation', 'maintenance', 'repair', 'consulta
 
 privateRoutes.get('/requests', async c => {
   const user = getUser(c)!;
-  const { results } = await c.env.DB.prepare('SELECT id, type, request_category_id, title, description, status, preferred_date, created_at,
+  const { results } = await c.env.DB.prepare(`SELECT id, type, request_category_id, title, description, status, preferred_date, created_at,
     (SELECT COUNT(*) FROM request_images im WHERE im.request_id=requests.id) AS image_count
-    FROM requests WHERE customer_id = ? ORDER BY created_at DESC')
+    FROM requests WHERE customer_id = ? ORDER BY created_at DESC`)
     .bind(user.user_id).all();
   return c.json({ requests: results ?? [] });
 });
