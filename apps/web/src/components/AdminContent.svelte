@@ -326,7 +326,7 @@
       <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {#each products as p (p.id)}
             <article class="rounded-xl border border-slate-200 overflow-hidden bg-white">
-              {#if p.primary_image_url}<img src={p.primary_image_url} alt={p.name} class="h-28 sm:h-32 w-full object-cover" />{:else}<div class="h-28 sm:h-32 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400 text-sm">Sin fotografía</div>{/if}
+              {#if p.primary_image_url}<img src={p.primary_image_url} alt={p.name} class="h-32 sm:h-36 w-full object-cover object-center" />{:else}<div class="h-28 sm:h-32 bg-gradient-to-br from-emerald-50 to-slate-100 flex items-center justify-center text-slate-400 text-sm">Sin fotografía</div>{/if}
               <div class="p-3 space-y-2">
                 <div class="flex justify-between gap-2"><h3 class="font-semibold text-slate-900">{p.name}</h3><span class="text-xs whitespace-nowrap {p.is_active ? 'text-emerald-700' : 'text-orange-600'}">{p.is_active ? 'Publicado' : 'Oculto'}</span></div>
                 <p class="text-xs text-slate-500 line-clamp-2">{p.short_description || p.description || 'Sin descripción'}</p>
