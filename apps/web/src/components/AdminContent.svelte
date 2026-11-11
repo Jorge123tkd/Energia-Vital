@@ -423,8 +423,8 @@
       </div>
       <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {#each services as s (s.id)}
-            <article class="border border-slate-200 rounded-xl overflow-hidden">
-              {#if s.image_url}<img class="w-full h-28 sm:h-32 object-cover" src={s.image_url} alt={s.name} />{:else}<div class="h-28 sm:h-32 bg-slate-100 flex items-center justify-center text-slate-400">Sin fotografía</div>{/if}
+            <article class="group border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg hover:border-teal-200 transition">
+              {#if s.image_url}<div class="overflow-hidden"><img class="w-full h-32 sm:h-36 object-cover object-center group-hover:scale-110 transition-transform duration-300" src={s.image_url} alt={s.name} /></div>{:else}<div class="h-28 sm:h-32 bg-slate-100 flex items-center justify-center text-slate-400">Sin fotografía</div>{/if}
               <div class="p-3 space-y-2">
                 <h3 class="font-semibold">{s.name}</h3>
                 <p class="text-xs text-slate-500 line-clamp-2">{s.description || 'Sin descripción'}</p>
@@ -451,9 +451,9 @@
       <AdminGalleryCategories {token} onUpdate={loadGalleryCategories} />
       <div class="grid grid-cols-1 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
   {#each gallery as g (g.id)}
-    <article class="rounded-xl border border-slate-200 overflow-hidden bg-white min-w-0">
+    <article class="group rounded-xl border border-slate-200 overflow-hidden bg-white min-w-0 hover:shadow-lg hover:border-teal-200 transition">
       {#if g.url}
-        <img src={g.url} alt={g.title} loading="lazy" class="w-full h-32 sm:h-36 object-cover" />
+        <div class="overflow-hidden"><img src={g.url} alt={g.title} loading="lazy" class="w-full h-32 sm:h-36 object-cover object-center group-hover:scale-110 transition-transform duration-300" /></div>
       {:else}<div class="h-32 sm:h-36 bg-slate-100 flex items-center justify-center text-slate-400">Sin foto</div>{/if}
       <div class="p-3 space-y-2">
         <div class="flex items-start justify-between gap-1">
