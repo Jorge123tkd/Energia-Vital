@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
+  import ProductReviews from './components/ProductReviews.svelte';
 
   type Product = {
     id: string; name: string; category_id?: string; category_name?: string;
@@ -295,6 +296,7 @@
           </div>
         </div>
       </div>
+      <div class="px-5 sm:px-7 pb-6"><ProductReviews productId={selected.id} /></div>
     </dialog>
   </div>
 {/if}
