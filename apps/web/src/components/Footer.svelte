@@ -45,7 +45,7 @@
     <section class="flex flex-col lg:flex-row lg:items-center justify-between gap-5 rounded-3xl bg-gradient-to-r from-teal-900 to-teal-700 border border-teal-600/70 p-5 sm:p-7 shadow-xl">
       <div class="max-w-2xl">
         <p class="text-xs font-extrabold uppercase tracking-[.2em] text-teal-200">Bonaire · Atención a tu proyecto</p>
-        <h2 class="text-xl sm:text-2xl font-extrabold text-white mt-2">¿Necesitas una solución solar para tu vivienda o empresa?</h2>
+        <h2 class="text-xl sm:text-2xl font-extrabold text-white mt-2">{site.footer_cta_title || '¿Necesitas una solución solar para tu vivienda o empresa?'}</h2>
         <p class="text-sm text-teal-50 mt-2">Explora los equipos, calcula una orientación inicial o solicita a nuestro equipo una revisión de tus necesidades.</p>
       </div>
       <div class="flex flex-wrap gap-2 shrink-0">
