@@ -194,6 +194,9 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
 
   await request('Unverified customer cannot submit product review','/api/private/extras/products/'+product.id+'/reviews',
     'POST',{rating:5,comment:'Muy buen equipo'},at,403);
+  await request('Cannot verify purchase without an audit reference',
+    '/api/admin/extras/products/'+product.id+'/verify-purchase','POST',
+    {customer_id:ar.user.id},adminToken,400);
   await request('Admin verifies a real purchase','/api/admin/extras/products/'+product.id+'/verify-purchase',
     'POST',{customer_id:ar.user.id,reference:'Factura-test-'+uid},adminToken,201);
   const review = await request('Verified customer can submit review','/api/private/extras/products/'+product.id+'/reviews',
