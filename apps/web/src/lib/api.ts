@@ -26,6 +26,20 @@ function withAdmin(token: string, options: RequestInit = {}): RequestInit {
 const post = (path: string, body: unknown, options: RequestInit = {}) => apiRequest(path, { ...options, method: 'POST', body: JSON.stringify(body) });
 const patch = (path: string, body: unknown, options: RequestInit = {}) => apiRequest(path, { ...options, method: 'PATCH', body: JSON.stringify(body) });
 
+/** Descarga una imagen privada con la sesión adecuada para mostrarla en un objeto URL local. */
+export async function authorizedImageBlob(path: string, token?: string): Promise<Blob> {
+  const auth = token || customerToken();
+  if (!auth) throw new Error('Necesitas iniciar sesión para ver este archivo.');
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${auth}` }
+  });
+  if (!response.ok) throw new Error('No se pudo cargar esta imagen privada.');
+  const blob = await response.blob();
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(blob.type))
+    throw new Error('El archivo no tiene un formato de imagen válido.');
+  return blob;
+}
+
 export const api = {
   getProducts: (params?: Record<string, string>) => apiRequest(`/api/public/products${params ? '?' + new URLSearchParams(params).toString() : ''}`),
   getProduct: (id: string) => apiRequest(`/api/public/products/${encodeURIComponent(id)}`),
@@ -34,6 +48,12 @@ export const api = {
   getService: (id: string) => apiRequest(`/api/public/services/${encodeURIComponent(id)}`),
   getFAQ: (params?: Record<string, string>) => apiRequest(`/api/public/faq${params ? '?' + new URLSearchParams(params).toString() : ''}`),
   getGallery: () => apiRequest('/api/public/gallery'),
+  getGalleryCategories: () => apiRequest('/api/public/extras/gallery/categories'),
+  getGalleryImages: (id: string) => apiRequest('/api/public/extras/gallery/' + encodeURIComponent(id) + '/images'),
+  getServiceImages: (id: string) => apiRequest('/api/public/extras/services/' + encodeURIComponent(id) + '/images'),
+  getRequestCategories: () => apiRequest('/api/public/extras/request-categories'),
+  getProductReviews: (id: string) => apiRequest('/api/public/extras/products/' + encodeURIComponent(id) + '/reviews'),
+
   getSettings: () => apiRequest('/api/public/settings'),
   getAssistantConfig: () => apiRequest('/api/assistant/config'),
   getAssistantMessages: (id: string) => apiRequest(`/api/assistant/session/${encodeURIComponent(id)}/messages`),
@@ -51,7 +71,16 @@ export const api = {
   logout: () => post('/api/auth/logout', {}),
   refreshToken: (body: { refresh_token: string }) => post('/api/auth/refresh', body),
   getMyRequests: () => apiRequest('/api/private/requests'),
-  createRequest: (body: { type: string; title: string; description: string; preferred_date?: string }) => post('/api/private/requests', body),
+  createRequest: (body: { type?: string; category_id?: string; title: string; description: string; preferred_date?: string }) => post('/api/private/requests', body),
+  uploadRequestImage: (id: string, file: File) => {
+    const body = new FormData(); body.append('file', file);
+    return apiRequest('/api/private/extras/requests/' + encodeURIComponent(id) + '/images', { method: 'POST', body });
+  },
+  getMyRequestImages: (id: string) => apiRequest('/api/private/extras/requests/' + encodeURIComponent(id) + '/images'),
+  getReviewEligibility: (id: string) => apiRequest('/api/private/extras/products/' + encodeURIComponent(id) + '/review-eligibility'),
+  sendProductReview: (id: string, rating: number, comment: string) =>
+    post('/api/private/extras/products/' + encodeURIComponent(id) + '/reviews', { rating, comment }),
+
   getMyAppointments: () => apiRequest('/api/private/appointments'),
   createAppointment: (body: { title: string; starts_at: string; ends_at: string }) => post('/api/private/appointments', body),
   getCalendarSlots: (date: string, minutes = 60) => apiRequest(`/api/calendar/slots?date=${encodeURIComponent(date)}&duration_minutes=${minutes}`),
@@ -90,6 +119,15 @@ export const api = {
   deleteAdminCustomer: (token: string, id: string) =>
     apiRequest(`/api/admin-customers/customers/${encodeURIComponent(id)}`, withAdmin(token, { method: 'DELETE' })),
   adminRequests: (token: string) => apiRequest('/api/admin-customers/requests', withAdmin(token)),
+  getStaffRequestImages: (token: string, id: string) =>
+    apiRequest('/api/admin-customers/extras/requests/' + encodeURIComponent(id) + '/images', withAdmin(token)),
+  listAdminRequestCategories: (token: string) => apiRequest('/api/admin/extras/request-categories', withAdmin(token)),
+  createAdminRequestCategory: (token: string, body: unknown) => post('/api/admin/extras/request-categories', body, withAdmin(token)),
+  updateAdminRequestCategory: (token: string, id: string, body: unknown) =>
+    patch('/api/admin/extras/request-categories/' + encodeURIComponent(id), body, withAdmin(token)),
+  deleteAdminRequestCategory: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/request-categories/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
+
   adminAppointments: (token: string) => apiRequest('/api/admin-customers/appointments', withAdmin(token)),
   updateAdminRequest: (token: string, id: string, status: string) => patch(`/api/admin-customers/requests/${id}`, { status }, withAdmin(token)),
   updateAdminAppointment: (token: string, id: string, status: string) => patch(`/api/admin-customers/appointments/${id}`, { status }, withAdmin(token)),
@@ -124,6 +162,39 @@ export const api = {
     return apiRequest('/api/admin/site-media', withAdmin(token, { method: 'POST', body }));
   },
   getAdminGallery: (token: string) => apiRequest('/api/admin/gallery', withAdmin(token)),
+  listAdminGalleryCategories: (token: string) => apiRequest('/api/admin/extras/gallery/categories', withAdmin(token)),
+  createAdminGalleryCategory: (token: string, name: string) =>
+    post('/api/admin/extras/gallery/categories', { name }, withAdmin(token)),
+  updateAdminGalleryCategory: (token: string, id: string, body: unknown) =>
+    patch('/api/admin/extras/gallery/categories/' + encodeURIComponent(id), body, withAdmin(token)),
+  deleteAdminGalleryCategory: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/gallery/categories/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
+  getAdminGalleryImages: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/gallery/' + encodeURIComponent(id) + '/images', withAdmin(token)),
+  uploadAdminGalleryImage: (token: string, id: string, file: File) => {
+    const form = new FormData(); form.append('file', file);
+    return apiRequest('/api/admin/extras/gallery/' + encodeURIComponent(id) + '/images', withAdmin(token, { method: 'POST', body: form }));
+  },
+  deleteAdminGalleryImage: (token: string, id: string, imageId: string) =>
+    apiRequest('/api/admin/extras/gallery/' + encodeURIComponent(id) + '/images/' + encodeURIComponent(imageId), withAdmin(token, { method: 'DELETE' })),
+  getAdminProductImages: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/products/' + encodeURIComponent(id) + '/images', withAdmin(token)),
+  deleteAdminProductImage: (token: string, id: string, imageId: string) =>
+    apiRequest('/api/admin/extras/products/' + encodeURIComponent(id) + '/images/' + encodeURIComponent(imageId), withAdmin(token, { method: 'DELETE' })),
+  getAdminServiceImages: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/services/' + encodeURIComponent(id) + '/images', withAdmin(token)),
+  uploadAdminServiceImage: (token: string, id: string, file: File) => {
+    const form = new FormData(); form.append('file', file);
+    return apiRequest('/api/admin/extras/services/' + encodeURIComponent(id) + '/images', withAdmin(token, { method: 'POST', body: form }));
+  },
+  deleteAdminServiceImage: (token: string, id: string, imageId: string) =>
+    apiRequest('/api/admin/extras/services/' + encodeURIComponent(id) + '/images/' + encodeURIComponent(imageId), withAdmin(token, { method: 'DELETE' })),
+  verifyProductPurchase: (token: string, id: string, customerId: string, reference = '') =>
+    post('/api/admin/extras/products/' + encodeURIComponent(id) + '/verify-purchase', { customer_id: customerId, reference }, withAdmin(token)),
+  listAdminProductReviews: (token: string) => apiRequest('/api/admin/extras/product-reviews', withAdmin(token)),
+  moderateProductReview: (token: string, id: string, status: 'published' | 'rejected' | 'pending') =>
+    patch('/api/admin/extras/product-reviews/' + encodeURIComponent(id), { status }, withAdmin(token)),
+
   createAdminGallery: (token: string, body: FormData) => apiRequest('/api/admin/gallery', withAdmin(token, { method: 'POST', body })),
   updateAdminGallery: (token: string, id: string, body: unknown) => patch(`/api/admin/gallery/${id}`, body, withAdmin(token)),
   deleteAdminGallery: (token: string, id: string) => apiRequest(`/api/admin/gallery/${id}`, withAdmin(token, { method: 'DELETE' })),
