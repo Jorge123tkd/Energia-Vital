@@ -637,32 +637,42 @@
           {/if}
         </section>
         <section class="mt-5 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 space-y-3">
-          <h3 class="font-extrabold text-lg text-slate-900">Equipos disponibles en el catálogo de Bonaire</h3>
-          <p class="text-sm text-slate-600">Opciones tomadas de productos marcados «En existencia». Su aparición aquí no confirma compatibilidad técnica ni reserva de inventario.</p>
-          {#if inventoryLoading}<p class="text-sm text-slate-500">Consultando existencias…</p>{/if}
-          {#if inventoryError}<p class="text-sm text-amber-800">{inventoryError}</p>{/if}
-          <div class="grid sm:grid-cols-3 gap-3">
-            {#each [
-              {title:'Baterías',items:recommendations.baterias},
-              {title:'Inversores',items:recommendations.inversores},
-              {title:'Paneles',items:recommendations.paneles},
-            ] as group}
-              <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-                <h4 class="font-bold text-sm text-slate-900">{group.title}</h4>
-                {#each group.items as item (item.id)}
-                  <div class="rounded-lg border border-slate-200 bg-white p-3 space-y-1">
-                    <p class="text-sm font-semibold text-slate-900">{item.name}</p>
-                    <p class="text-xs text-teal-800">En existencia · {item.price == null ? 'Precio a consultar' : Number(item.price).toLocaleString('es-CU')+' '+(item.currency||'USD')}</p>
-                  </div>
-                {/each}
-                {#if !group.items.length && !inventoryLoading}
-                  <p class="text-xs text-slate-500">No hay un modelo confirmado en existencia para esta categoría.</p>
-                {/if}
-              </div>
-            {/each}
+          <div class="flex flex-wrap justify-between items-end gap-3">
+            <div>
+              <h3 class="font-extrabold text-xl text-slate-900">Productos recomendados para tu estudio</h3>
+              <p class="text-sm text-slate-600 mt-1">Hasta seis alternativas reales del catálogo de Bonaire para comparar. Tú eliges cuáles te interesan.</p>
+            </div>
+            <a href="/catalogo" class="rounded-xl border border-teal-200 bg-teal-50 text-teal-800 px-4 py-2.5 font-bold text-sm hover:bg-teal-100">Ver más productos →</a>
           </div>
-          <a href="/catalogo" class="inline-flex rounded-xl bg-teal-700 text-white font-bold px-4 py-3 text-sm">Ver productos y consultar compatibilidad →</a>
-          <p class="text-xs text-slate-500">Antes de elegir: confirmar tensión y química de batería, BMS, potencia y arranque del inversor, MPPT, voltajes y corrientes del módulo, protecciones y condiciones del lugar.</p>
+          {#if inventoryLoading}<p class="text-sm text-slate-500">Buscando equipos disponibles…</p>{/if}
+          {#if inventoryError}<p class="text-sm text-amber-800">{inventoryError}</p>{/if}
+          {#if !inventoryLoading && recommendedProducts.length}
+            <p class="text-xs text-slate-500 sm:hidden">Desliza hacia los lados para explorar →</p>
+            <div aria-label="Productos recomendados; desplaza horizontalmente"
+              class="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]">
+              {#each recommendedProducts as recommendation (recommendation.item.id)}
+                <article class="min-w-0 shrink-0 flex flex-col w-[78vw] sm:w-[44vw] md:w-[30vw] lg:w-[calc(20%_-_0.6rem)] snap-start rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition">
+                  <a href={'/catalogo?product='+encodeURIComponent(recommendation.item.id)}
+                    class="block bg-gradient-to-br from-teal-50 to-slate-100"
+                    aria-label={'Ver detalles de '+recommendation.item.name}>
+                    <CardImage src={recommendation.item.primary_image_url} alt={recommendation.item.name}/>
+                  </a>
+                  <div class="p-3.5 flex flex-col flex-1 gap-2">
+                    <p class="text-[11px] uppercase tracking-wide font-extrabold text-teal-700">{recommendation.family}</p>
+                    <h4 class="font-extrabold text-slate-900 text-sm line-clamp-2">{recommendation.item.name}</h4>
+                    <p class="text-xs text-slate-600 line-clamp-2 flex-1">{recommendation.reason}</p>
+                    <p class="text-sm font-extrabold text-teal-800">{recommendation.item.price == null ? 'Consultar precio' : Number(recommendation.item.price).toLocaleString('es-CU')+' '+(recommendation.item.currency||'USD')}</p>
+                    <p class="text-[11px] font-medium text-emerald-700">Marcado como disponible en catálogo</p>
+                    <a href={'/catalogo?product='+encodeURIComponent(recommendation.item.id)}
+                      class="rounded-xl bg-teal-700 px-3 py-2.5 text-center text-xs font-bold text-white hover:bg-teal-800">Ver ficha y consultar →</a>
+                  </div>
+                </article>
+              {/each}
+            </div>
+          {:else if !inventoryLoading}
+            <p class="rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-700 p-4">No encontramos modelos de estas familias marcados como disponibles. Consulta el catálogo completo o solicita orientación.</p>
+          {/if}
+          <p class="text-xs text-slate-500">Son sugerencias comerciales preliminares por familia y potencia identificable, no compatibilidad garantizada. Confirma tensión y química de batería, BMS, corrientes y MPPT, picos del inversor, protecciones y existencias actuales antes de comprar.</p>
         </section>
         <p class="mt-5 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-900">
           <strong>Importante:</strong> Orientación comercial preliminar, no diseño eléctrico ni presupuesto final. Los motores pueden tener picos de arranque, y la temperatura y las sombras alteran la producción. Un especialista debe revisar tensión, corriente, protecciones, baterías y condiciones locales antes de comprar o instalar.
