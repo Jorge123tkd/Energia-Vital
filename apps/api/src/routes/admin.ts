@@ -297,7 +297,14 @@ adminRoutes.post('/products/:id/image-url', async c => {
 
 adminRoutes.delete('/products/:id', async (c) => {
   const { DB } = c.env;
+
   const id = c.req.param('id');
+  const linked = await DB.prepare(`SELECT
+    (SELECT COUNT(*) FROM verified_product_purchases WHERE product_id=?) AS purchases,
+    (SELECT COUNT(*) FROM product_reviews WHERE product_id=?) AS reviews`)
+    .bind(id,id).first<{purchases:number;reviews:number}>();
+  if ((linked?.purchases||0)>0 || (linked?.reviews||0)>0)
+    return c.json({error:'El producto tiene compras verificadas o valoraciones. Ocúltalo para conservar esos registros.'},409);
   const { results } = await DB.prepare('SELECT r2_key FROM product_images WHERE product_id = ?').bind(id).all<{r2_key:string}>();
   await DB.prepare('DELETE FROM products WHERE id = ?').bind(id).run();
   for (const image of results || []) if (image.r2_key)
@@ -372,9 +379,17 @@ adminRoutes.patch('/categories/:id', async c => {
 });
 
 adminRoutes.delete('/categories/:id', async (c) => {
-  const { DB } = c.env;
-  await DB.prepare('DELETE FROM categories WHERE id = ?').bind(c.req.param('id')).run();
-  return c.json({ message: 'Categoría eliminada' });
+  const { DB } = c.env,id=c.req.param('id');
+  const row=await DB.prepare('SELECT id FROM categories WHERE id=?').bind(id).first();
+  if(!row)return c.notFound();
+  const linked=await DB.prepare(`SELECT
+    (SELECT COUNT(*) FROM products WHERE category_id=?) AS products,
+    (SELECT COUNT(*) FROM frequently_asked_questions WHERE category_id=?) AS faqs`)
+    .bind(id,id).first<{products:number;faqs:number}>();
+  if ((linked?.products||0)>0 || (linked?.faqs||0)>0)
+    return c.json({error:'La categoría tiene productos o preguntas frecuentes. Reasigna esos registros antes de eliminarla.'},409);
+  await DB.prepare('DELETE FROM categories WHERE id=?').bind(id).run();
+  return c.json({message:'Categoría eliminada'});
 });
 
 // --- SERVICIOS ---
@@ -447,7 +462,11 @@ adminRoutes.post('/services/:id/image-url', async c => {
 
 adminRoutes.delete('/services/:id', async (c) => {
   const { DB } = c.env;
+
   const id = c.req.param('id');
+  const linked = await DB.prepare('SELECT COUNT(*) AS n FROM appointments WHERE service_id=?').bind(id).first<{n:number}>();
+  if((linked?.n||0)>0)
+    return c.json({error:'Este servicio está vinculado a citas. Ocúltalo para conservar el historial.'},409);
   const {results} = await DB.prepare('SELECT r2_key FROM service_images WHERE service_id=?').bind(id).all<{r2_key:string|null}>();
   const row = await DB.prepare('SELECT image_r2_key FROM services WHERE id = ?').bind(id).first<{ image_r2_key: string | null }>();
   await DB.prepare('DELETE FROM services WHERE id = ?').bind(id).run();
