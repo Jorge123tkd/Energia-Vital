@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { api } from './lib/api';
   import PageHero from './components/PageHero.svelte';
   import { DEFAULT_LOADS, estimateSolar, type Load, type SolarOutput, type Sector,
     type Level, type Phase, type Origin, type PvDetails } from './lib/solar-estimator';
@@ -15,7 +17,10 @@
   let voltage=$state(220),amps=$state(0),powerFactor=$state(0.85),hoursDaily=$state(6);
   let devices:Load[]=$state([]);
   let nextId=1;
-  let autonomyHours=$state(5),peakSunHours=$state(4.5),panelWatts=$state(450);
+  let autonomyHours=$state(15),peakSunHours=$state(4.5),panelWatts=$state(450);
+  let outageStartHour=$state(17),hasPanels=$state(true),maxPanels=$state(10);
+  let solarWeather=$state<'soleado'|'variable'|'nublado'>('variable');
+  let cloudFactor=$derived(solarWeather==='soleado'?1:solarWeather==='variable'?0.7:0.35);
   let essentialPercent=$state(35);
   let existingInverter=$state(false),existingModel=$state('');
   let existingBatteryKWh=$state(0);
@@ -29,8 +34,43 @@
     sector,level,origin:level==='basico'?'equipos':origin,phase,
     loads:devices,voltage,amps,powerFactor,hoursDaily,
     autonomyHours,peakSunHours,panelWatts,essentialPercent,existingBatteryKWh,
+    outageStartHour,hasPanels,maxPanels,cloudFactor,
     panelDetails:existingInverter&&showSpecs?pv:undefined,
   }));
+  type StockItem = {id:string;name:string;category_name?:string;stock_status?:string;
+    stock_quantity?:number|null;price?:number|null;currency?:string};
+  let inventory:StockItem[]=$state([]);
+  let inventoryLoading=$state(true),inventoryError=$state('');
+  onMount(() => {
+    void api.getProducts().then((data: any) => { inventory=data.products ?? []; })
+      .catch(() => {inventoryError='No se pudo consultar el catálogo.';})
+      .finally(() => {inventoryLoading=false;});
+  });
+  function normalized(value:string) { return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+  function nominal(item:StockItem,kind:'bateria'|'panel'|'inversor'):number|null {
+    const name=normalized(item.name).replace(',','.');
+    const unit=kind==='bateria'?'kwh':kind==='panel'?'w':'kw';
+    const found=name.match(new RegExp('([0-9]+(?:\\.[0-9]+)?)\\s*'+unit+'\\b'));
+    return found?Number(found[1])*(kind==='inversor'?1000:1):null;
+  }
+  let recommendations=$derived.by(() => {
+    const available=inventory.filter(p => p.stock_status==='in_stock' &&
+      (p.stock_quantity===null || p.stock_quantity===undefined || Number(p.stock_quantity)>0));
+    const choose=(kind:'bateria'|'panel'|'inversor',target:number) => available.filter(p => {
+      const key=normalized((p.category_name||'')+' '+p.name);
+      return kind==='bateria'?/bateria|litio|lifepo4|almacenamiento/.test(key)
+        :kind==='panel'?/panel|fotovoltaic|modulo solar/.test(key)
+        :/inversor|hibrido|convertidor solar/.test(key);
+    }).sort((a,b)=>{
+      const score=(n:number|null)=>n===null?1e6:n>=target?n-target:1e5+target-n;
+      return score(nominal(a,kind))-score(nominal(b,kind));
+    }).slice(0,2);
+    return {
+      baterias:choose('bateria',result?.guideBattery ?? 10),
+      inversores:choose('inversor',result?.inverter ?? 5000),
+      paneles:choose('panel',panelWatts)
+    };
+  });
   function addLoad(item?:Omit<Load,'id'>){
     devices=[...devices,item?{...item,id:nextId++}:{
       id:nextId++,name:'',watts:100,units:1,hours:4,critical:false,backupDuty:1,estimate:true,
@@ -69,7 +109,8 @@
       }
     }
     if(next===4 && (!valid(autonomyHours,.5,72)||!valid(peakSunHours,1,8)||
-      !valid(panelWatts,100,900)||!valid(existingBatteryKWh,0,5000))){
+      !valid(panelWatts,100,900)||!valid(existingBatteryKWh,0,5000)||
+      !valid(outageStartHour,0,23)||!valid(maxPanels,1,200))){
       error='Comprueba horas de respaldo, horas solares, potencia de panel y batería existente.';return false;
     }
     return true;
@@ -92,8 +133,8 @@
     if(!result)return;
     const query=new URLSearchParams({
       power:result.power.toFixed(0),dailyEnergy:result.daily.toFixed(2),
-      batteryCapacity:result.battery.toFixed(2),inverterMin:result.inverter.toFixed(0),
-      pvPower:result.pv.toFixed(2),panelCount:String(result.panelCount),
+      batteryCapacity:result.batteryWithSolar.toFixed(2),inverterMin:result.inverter.toFixed(0),
+      pvPower:result.plannedPvKW.toFixed(2),panelCount:String(result.plannedPanels),
       sector,experience:level,criticalWatts:result.backupWatts.toFixed(0),
       existingEquipment:existingModel||devices.map(d=>d.name).join(', ').slice(0,160),
     });
@@ -108,10 +149,13 @@
       'Consumo diario total: '+result.daily.toFixed(2)+' kWh',
       'Potencia media de respaldo (cargas esenciales): '+result.backupWatts.toFixed(0)+' W',
       'Autonomía solicitada: '+autonomyHours+' horas',
-      'Batería nominal teórica: '+result.battery.toFixed(2)+' kWh',
-      'Batería de referencia: '+result.guideBattery+' kWh ('+(result.guideFits?'alcanza la demanda estimada':'no cubre toda la autonomía')+')',
+      'Batería nominal sin aporte solar: '+result.battery.toFixed(2)+' kWh',
+      'Batería nominal con aporte solar en el corte: '+result.batteryWithSolar.toFixed(2)+' kWh',
+      'Banco de referencia: '+result.guideBattery+' kWh ('+(result.guideFits?'cubre escenario estimado':'no cubre todas las cargas')+')',
+      'Corte desde las '+outageStartHour+':00 · Ventana solar dentro del corte: '+result.outageSunHours.toFixed(1)+' h',
+      'Potencial FV con '+result.plannedPanels+' paneles: '+result.pvDailyKWh.toFixed(1)+' kWh/día',
       'Inversor preliminar para cargas esenciales: '+result.inverter.toFixed(0)+' W (revisar picos de arranque)',
-      'Paneles aproximados: '+result.panelCount+' de '+result.panelWatts+' W',
+      'Paneles calculados para energía diaria en condiciones base: '+result.panelCount+' de '+result.panelWatts+' W',
       'Conexión serie/paralelo: requiere ficha técnica y validación profesional.',
     ].join('\n');
     try{await navigator.clipboard.writeText(summary);copied=true;}
@@ -141,7 +185,7 @@
         <p class="text-sm text-slate-600 mt-2">El sector nos ayuda a priorizar las cargas esenciales; no cambia las leyes físicas ni establece límites obligatorios de batería.</p>
         <div class="grid sm:grid-cols-3 gap-3 mt-5">
           {#each sectorOptions as option (option.id)}
-            <button type="button" aria-pressed={sector===option.id} onclick={()=>sector=option.id}
+            <button type="button" aria-pressed={sector===option.id} onclick={()=>{sector=option.id;maxPanels=option.id==='residencial'?10:option.id==='privado'?24:40;}}
               class="text-left p-4 border-2 rounded-2xl {sector===option.id?'bg-teal-50 border-teal-700':'border-slate-200 hover:border-teal-300'}">
               <strong class="block text-slate-900">{option.label}</strong><span class="block text-xs text-slate-500 mt-2">{option.info}</span>
             </button>
@@ -176,7 +220,7 @@
           <div class="grid sm:grid-cols-3 gap-3 mt-5">
             {#each [{number:'1',title:'Enumera tus aparatos',text:'Refrigerador, televisor, ventiladores, luces…'},
               {number:'2',title:'Elige lo imprescindible',text:'Qué debe seguir funcionando durante un apagón.'},
-              {number:'3',title:'Compara la autonomía',text:'Verás si 5, 10, 12 o 15 kWh nominales cubren la necesidad estimada.'}] as item}
+              {number:'3',title:'Compara escenarios',text:'Batería estimada con paneles y sin paneles, y opciones comunes de 5 a 15 kWh.'}] as item}
               <div class="rounded-2xl border border-teal-100 bg-teal-50/50 p-4">
                 <span class="text-teal-700 font-extrabold">{item.number}</span>
                 <h3 class="font-bold text-slate-900 mt-2">{item.title}</h3>
@@ -263,6 +307,15 @@
                   <input type="checkbox" bind:checked={d.critical}/>
                   Debe funcionar durante los apagones
                 </label>
+                {#if d.critical}
+                  <label class="solar-label">Horas de uso durante el apagón (opcional)
+                    <input type="number" min="0.5" max={autonomyHours} step="0.5"
+                      value={d.backupHours ?? autonomyHours}
+                      onchange={e => d.backupHours=Number(e.currentTarget.value)}
+                      class="solar-input" />
+                    <span class="block mt-1 text-xs text-slate-500 font-normal">El aparato no tiene que estar encendido durante todo el corte si lo usarás menos horas.</span>
+                  </label>
+                {/if}
                 {#if d.name==='Refrigerador'}
                   <p class="text-xs text-slate-500">Para el respaldo suponemos que el compresor funciona aproximadamente el 40% del tiempo. Compruébalo con tus mediciones reales.</p>
                 {/if}
@@ -309,9 +362,36 @@
               </details>
             </div>
           {/if}
+          <label class="solar-label">Hora aproximada de inicio del apagón (0–23)
+            <input type="number" min="0" max="23" step="1" bind:value={outageStartHour} class="solar-input"/>
+            <span class="block text-xs font-normal text-slate-500 mt-1">Ejemplo: 17 = 5 p. m.; 15 horas desde esa hora llegan a las 8 a. m. sin sol útil durante el corte.</span>
+          </label>
           <label class="solar-label">Batería que ya tienes (kWh nominales; 0 si no tienes)
             <input type="number" min="0" max="5000" step="0.5" bind:value={existingBatteryKWh} class="solar-input"/>
           </label>
+        </div>
+        <div class="rounded-2xl border border-teal-100 bg-teal-50/40 p-4 mt-5 space-y-3">
+          <label class="flex gap-3 items-center text-sm font-bold text-slate-800">
+            <input type="checkbox" bind:checked={hasPanels}/> Evaluar sistema con paneles solares
+          </label>
+          {#if hasPanels}
+            <div class="grid sm:grid-cols-2 gap-3">
+              <label class="solar-label">Paneles previstos o disponibles
+                <input type="number" min="1" max="200" step="1" bind:value={maxPanels} class="solar-input"/>
+                <span class="block mt-1 text-xs font-normal text-slate-500">En vivienda partimos de diez como ejemplo de espacio, no como tope obligatorio.</span>
+              </label>
+              <label class="solar-label">Condiciones del cielo
+                <select bind:value={solarWeather} class="solar-input">
+                  <option value="soleado">Soleado · ejemplo 100 %</option>
+                  <option value="variable">Nubes variables · 70 %</option>
+                  <option value="nublado">Muy nublado · 35 %</option>
+                </select>
+              </label>
+            </div>
+            <p class="text-xs text-slate-600">Ventana simplificada: 9:00–16:00. Horas solares pico (4,5 por defecto) expresan energía equivalente, no siete horas a potencia máxima.</p>
+          {:else}
+            <p class="text-xs text-slate-700">Sin paneles, la batería depende de la carga previa desde la red y del consumo durante el apagón.</p>
+          {/if}
         </div>
         <div class="rounded-2xl border border-slate-200 p-4 mt-5 space-y-3">
           <label class="flex gap-3 items-center font-bold text-slate-800">
