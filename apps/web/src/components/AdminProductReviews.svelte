@@ -60,8 +60,8 @@
     <label class="text-xs font-semibold text-slate-700">ID del cliente
       <input required bind:value={customerId} placeholder="Pega el ID de cliente" class="block w-full mt-2 border border-slate-300 rounded-xl px-3 py-2.5 bg-white text-sm"/>
     </label>
-    <label class="text-xs font-semibold text-slate-700">Referencia de compra (opcional)
-      <input bind:value={reference} maxlength="200" placeholder="Factura o comprobante" class="block w-full mt-2 border border-slate-300 rounded-xl px-3 py-2.5 bg-white text-sm"/>
+    <label class="text-xs font-semibold text-slate-700">Factura o comprobante (obligatorio)
+      <input required minlength="3" bind:value={reference} maxlength="200" placeholder="Número de factura o comprobante" class="block w-full mt-2 border border-slate-300 rounded-xl px-3 py-2.5 bg-white text-sm"/>
     </label>
     <button disabled={busy} class="rounded-xl bg-teal-700 text-white font-bold px-4 py-3 text-sm">Verificar compra</button>
   </form>
