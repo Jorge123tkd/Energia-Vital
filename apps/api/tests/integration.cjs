@@ -124,6 +124,28 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   await uploadPhoto('/api/admin/products/' + product.id + '/image');
   await uploadPhoto('/api/admin/services/' + service.id + '/image');
   await uploadPhoto('/api/admin/gallery', { title: 'Instalación residencial de prueba', description: 'Obra terminada' });
+
+  const galleryCategory = await request('Create project category', '/api/admin/extras/gallery/categories','POST',
+    {name:'Proyecto residencial '+uid},adminToken,201);
+  const project = await uploadPhoto('/api/admin/gallery',{title:'Instalación '+uid,
+    category:'Proyecto residencial '+uid,description:'Vivienda con inversor y baterías'});
+  await uploadPhoto('/api/admin/extras/gallery/'+project.id+'/images');
+  const projectPhotos = await request('Public gallery lists project photos',
+    '/api/public/extras/gallery/'+project.id+'/images');
+  assert.equal(projectPhotos.images.length,2);
+  await request('Rename project category', '/api/admin/extras/gallery/categories/'+galleryCategory.id,'PATCH',
+    {name:'Instalación privada '+uid,is_active:true,sort_order:1},adminToken);
+  const publicProjects = await request('Project appears under renamed category','/api/public/gallery');
+  assert.ok(publicProjects.gallery.some(p=>p.id===project.id && p.category==='Instalación privada '+uid));
+  await uploadPhoto('/api/admin/extras/services/'+service.id+'/images');
+  const servicePhotos = await request('Public service photos list','/api/public/extras/services/'+service.id+'/images');
+  assert.ok(servicePhotos.images.length>=1);
+  const requestCategory = await request('Create custom request type','/api/admin/extras/request-categories','POST',
+    {name:'Garantía técnica '+uid,legacy_type:'complaint',requires_image:true},adminToken,201);
+  await request('Edit custom request type','/api/admin/extras/request-categories/'+requestCategory.id,
+    'PATCH',{name:'Garantía e incidencias '+uid,requires_image:true,is_active:true},adminToken);
+  const requestCategories = await request('Customers can see custom types','/api/public/extras/request-categories');
+  assert.ok(requestCategories.categories.some(c=>c.id===requestCategory.id));
   const slideMedia = await uploadPhoto('/api/admin/site-media');
   assert.match(slideMedia.image_url, /\/api\/public\/site\/media\//);
   await request('Admin saves telephone list', '/api/admin/site-settings', 'PUT', {
@@ -153,6 +175,22 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const sharedCustomer = await request('Site login recognizes customer', '/api/auth/sign-in', 'POST', a);
   assert.equal(sharedCustomer.user.role, 'customer');
 
+
+  await request('Unverified customer cannot submit product review','/api/private/extras/products/'+product.id+'/reviews',
+    'POST',{rating:5,comment:'Muy buen equipo'},at,403);
+  await request('Admin verifies a real purchase','/api/admin/extras/products/'+product.id+'/verify-purchase',
+    'POST',{customer_id:ar.user.id,reference:'Factura-test-'+uid},adminToken,201);
+  const review = await request('Verified customer can submit review','/api/private/extras/products/'+product.id+'/reviews',
+    'POST',{rating:5,comment:'El equipo funciona según lo esperado.'},at,201);
+  let publicReviews = await request('Pending reviews are private','/api/public/extras/products/'+product.id+'/reviews');
+  assert.equal(publicReviews.count,0);
+  await request('Moderator cannot approve reviews','/api/admin/extras/product-reviews/'+review.id,
+    'PATCH',{status:'published'},staffToken,403);
+  await request('Admin approves verified purchase review','/api/admin/extras/product-reviews/'+review.id,
+    'PATCH',{status:'published'},adminToken);
+  publicReviews = await request('Approved review is public','/api/public/extras/products/'+product.id+'/reviews');
+  assert.equal(publicReviews.count,1);
+  assert.equal(publicReviews.average,5);
   await request('Duplicate email refused', '/api/auth/register', 'POST', a, null, 409);
   await request('Admin changes customer address', '/api/admin-customers/customers/' + br.user.id,
     'PATCH', { name: b.name, email: b.email, phone: b.phone, address: 'Nueva avenida 123', city: b.city, province: b.province }, adminToken);
@@ -170,6 +208,35 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const created = await request('Customer A creates request', '/api/private/requests', 'POST', {
     type: 'installation', title: 'Instalación solar residencial', description: 'Deseo instalar paneles y baterías en mi vivienda.'
   }, at, 201);
+
+  const extraRequest = await request('Client files a custom type of request','/api/private/requests','POST',
+    {category_id:requestCategory.id,title:'Problema de garantía',description:'Quiero que revisen mi inversor instalado.'},at,201);
+  async function uploadPrivatePhoto(route,token){
+    const form=new FormData();
+    form.append('file',new Blob([pixel],{type:'image/png'}),'evidencia.png');
+    const response=await fetch(BASE+route,{method:'POST',headers:{Authorization:'Bearer '+token},body:form});
+    const body=await response.json().catch(()=>({}));
+    assert.equal(response.status,201,'Private photo upload: '+JSON.stringify(body));
+    return body;
+  }
+  const evidence = await uploadPrivatePhoto('/api/private/extras/requests/'+extraRequest.id+'/images',at);
+  await request('Other customer cannot list request photos',
+    '/api/private/extras/requests/'+extraRequest.id+'/images','GET',null,bt,404);
+  await request('Other customer cannot download request photo',
+    '/api/private/extras/requests/images/'+evidence.id,'GET',null,bt,404);
+  const imageResponse=await fetch(BASE+'/api/private/extras/requests/images/'+evidence.id,
+    {headers:{Authorization:'Bearer '+at}});
+  assert.equal(imageResponse.status,200,'Owner can view own private request image');
+  const staffPhotos=await request('Staff can list request attachments',
+    '/api/admin-customers/extras/requests/'+extraRequest.id+'/images','GET',null,staffToken);
+  assert.equal(staffPhotos.images.length,1);
+  const staffImage=await fetch(BASE+'/api/admin-customers/extras/requests/images/'+evidence.id,
+    {headers:{Authorization:'Bearer '+staffToken}});
+  assert.equal(staffImage.status,200,'Staff can view private evidence');
+  const adminRequests=await request('Staff sees custom request category and photo count',
+    '/api/admin-customers/requests','GET',null,staffToken);
+  assert.ok(adminRequests.requests.some(x=>x.id===extraRequest.id &&
+    x.image_count===1 && x.category_name==='Garantía e incidencias '+uid));
   const own = await request('Customer A lists own requests', '/api/private/requests', 'GET', null, at);
   const other = await request('Customer B lists own requests', '/api/private/requests', 'GET', null, bt);
   assert.ok(own.requests.some(r => r.id === created.id));
