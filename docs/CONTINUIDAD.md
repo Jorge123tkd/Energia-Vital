@@ -11,16 +11,15 @@ Actualizado: 11 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
-2026-11-11: usuario confirmó por salida de PowerShell la actualización de la rama de trabajo a `4d8ca8f` mediante `git pull --ff-only`; `npm ci` instaló 164 paquetes; `npm run typecheck --workspace=apps/api` terminó sin errores, `npm run typecheck --workspace=apps/web` indicó explícitamente **0 errores y 0 advertencias**, y `npm run build:web` con Vite 5.4.21 terminó correctamente (150 módulos transformados). La salida mostró 9 alertas de dependencias (1 baja, 6 moderadas, 2 altas); pendientes de auditoría/remediación. Advertencias de allowScripts para esbuild/workerd, sin fallo de build. Estas pruebas se ejecutaron en el equipo del usuario, no en el entorno del agente; no hay confirmación de prueba visual, prueba end-to-end ni despliegue de esta actualización.
-
-Código funcional en la rama: corrección de `/asistente` a altura completa sin navegación pública (`fa2b1db`) y gestor de diapositivas por botones, carrusel de 1 a 6 y validación API (`4d8ca8f`). Se conserva el último despliegue de producción confirmado: Worker versión 07e2b3b8-0832-42d2-851c-fb401f142909, Pages Production/main ad66cfa7-024c-4935-aad9-f7f313404533, fuente 98011f0; migraciones D1 remotas 009/010 aplicadas. El build recién ejecutado **no confirma** que VITE_API_URL estuviese definida; revisarlo antes de desplegar Pages. No guardar ni subir respaldos o credenciales.
+2026-11-11: usuario ejecutó `npm test`. La prueba unitaria del calculador solar concluyó **PASS**, pero la integración quedó **bloqueada por entorno local**, no por una aserción fallida de negocio: `fetch failed / ECONNREFUSED 127.0.0.1:8787` al intentar conectar con el Worker de pruebas. El archivo `apps/api/tests/integration.cjs` consume por defecto `http://127.0.0.1:8787`, asume D1 local con migraciones y crea usuarios/pruebas en su base; también necesita el setup local de administrador. **Nunca lanzar el test contra producción ni cambiar BASE_URL hacia la API pública.**
+El usuario confirmó `npm audit --omit=dev` con 0 vulnerabilidades, `$env:VITE_API_URL` exactamente `https://energia-vital-api.astrustrus.workers.dev`, y nueva compilación `npm run build:web` correcta (Vite 5.4.21, 150 módulos, 16.80 s). Los nueve hallazgos de `npm ci` en el audit completo siguen pendientes de clasificar; no significa que se hayan corregido. No hay confirmación de prueba visual ni despliegue de los commits `fa2b1db` y `4d8ca8f`.
 
 ## Siguiente paso exacto
-1. En PowerShell verificar `$env:VITE_API_URL` antes de la compilación para producción; usar la URL HTTPS real del Worker (`https://energia-vital-api.astrustrus.workers.dev`, si sigue siendo la correcta), reconstruir si no se estableció antes del build.
-2. Ejecutar pruebas del API (`npm test`) y comprobar la interfaz local del frontend (asistente pantalla completa sin nav pública, Atrás, historial, nuevo chat; en /admin > sitio, crear/editar/eliminar diapositivas y validar publicación/persistencia).
-3. Revisar `npm audit` para clasificar las 9 vulnerabilidades; no aplicar arreglos automáticos de versiones importantes sin evaluación.
-4. Solo después de las pruebas: confirmar respaldo D1 remoto, migraciones pendientes y la rama de producción Pages (históricamente main); desplegar API y frontend con los comandos de docs/DESPLIEGUE-ACTUAL.md, conservando el mismo destino y VITE_API_URL. Registrar evidencia de cada despliegue y de las pruebas visuales en producción.
-5. Mantener pendientes selección administrativa de servicios/proyectos destacados, auditoría general 1.0 y recuperación selectiva del stash.
+1. Repetir pruebas integradas **solo local** levantando el Worker en 127.0.0.1:8787: en terminal 1, desde apps/api, usar un directorio local único para D1 con `npx wrangler d1 migrations apply energia-vital-db --local --persist-to "<directorio-pruebas>"`, luego `npx wrangler dev --port 8787 --persist-to "<mismo-directorio>"`, con JWT_SECRET y ADMIN_SETUP_KEY de prueba local coherente con el valor de `TEST_ADMIN_SETUP_KEY` del test. No usar `--remote` ni credenciales de producción. Con el Worker vivo, terminal 2 ejecutar `npm test` desde raíz. Inspeccionar mensajes reales y registrar resultado.
+2. Probar visualmente en escritorio y móvil el asistente a pantalla completa y controles de diapositivas; confirmar persistencia y publicación en entorno de pruebas.
+3. Revisar `npm audit` completo (9 avisos de desarrollo/framework); evaluar arreglos sin forzar cambios de versiones.
+4. Solo con pruebas satisfactorias: confirmar respaldo D1 remoto y rama Production/main de Pages y publicar Worker y Pages con VITE_API_URL correcto, siguiendo docs/DESPLIEGUE-ACTUAL.md. Registrar versiones y comprobaciones posteriores.
+5. Mantener pendientes destacados comerciales, recuperación selectiva del stash y checklist general de lanzamiento 1.0.
 
 ## Trabajo completado y evidencia
 ### Cambios previos presentes en el repositorio
@@ -53,7 +52,7 @@ Código funcional en la rama: corrección de `/asistente` a altura completa sin 
 | Autenticación Cloudflare del usuario | Confirmada por whoami; permisos D1, Workers y Pages |
 | Proyecto Pages | energia-vital-web.pages.dev; sin proveedor Git |
 | Rama de producción Pages | main, confirmada por listado Production; Git sigue en la rama de trabajo |
-| Dependencias en Windows | audit --omit=dev: 0; audit completo: 9, remediación pendiente |
+| Dependencias en Windows | audit --omit=dev: 0 confirmado de nuevo; audit completo: 9 avisos pendientes de revisar |
 | Versión Pages anterior | 89031ae4-57c9-4fc8-907f-52d1eaba93d3, fuente a9a8a9c |
 | Respaldo D1 remoto para esta actualización | Exportado: energia-vital-20261111-011838.sql, 158917 bytes; no se ensayó restauración |
 | Migraciones D1 remotas, incluida 010 | Completadas 009/010; ninguna pendiente |
@@ -65,6 +64,7 @@ Código funcional en la rama: corrección de `/asistente` a altura completa sin 
 | Auditoría completa y lanzamiento 1.0 | Pendiente |
 
 ## Bitácora
+- 2026-11-11: calculador solar PASS; integración bloqueada por API local inexistente (ECONNREFUSED 127.0.0.1:8787); audit de producción 0 vulnerabilidades; VITE_API_URL de Worker correcta; build web repetido con éxito. Próximo: iniciar Worker y D1 locales aislados, repetir integración y prueba visual. Producción sin cambios.
 - 2026-11-11: evidencia del usuario: PowerShell aplicó fast-forward 98011f0..4d8ca8f, `npm ci` completó con 9 avisos de seguridad, typecheck API sin errores, Svelte 0 errores/0 warnings y Vite build exitoso (150 módulos, 22.80 s). Pendiente confirmar VITE_API_URL, ejecutar pruebas funcionales y publicación. No se ejecutaron órdenes Cloudflare de esta actualización.
 
 - 2026-11-11: preparado gestor de diapositivas por botones y soporte frontend/API para 1–6 diapositivas. Pendiente compilación, pruebas de interfaz y despliegue.
