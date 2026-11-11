@@ -43,7 +43,8 @@
     ? batteryUsableKWh * 1000 / result.backupWatts : 0);
   let selectedBatteryMaxWatts = $derived(autonomyHours > 0
     ? batteryUsableKWh * 1000 / autonomyHours : 0);
-  let selectedBatteryFits = $derived(Boolean(result && result.backupEnergy <= batteryUsableKWh + 1e-9));
+  let selectedBatteryFits = $derived(Boolean(result && result.backupWatts > 0 &&
+    result.backupEnergy <= batteryUsableKWh + 1e-9));
   let solarInputs=$derived({
     sector,level,origin:level==='basico'?'equipos' as Origin:origin,phase,
     loads:devices,voltage,amps,powerFactor,hoursDaily,
@@ -608,8 +609,14 @@
             </div>
             <div aria-live="polite" class="rounded-xl bg-white border {selectedBatteryFits?'border-emerald-200':'border-amber-200'} p-4 space-y-2">
               <p class="font-extrabold text-slate-900">Batería nominal de {selectedBatteryKWh} kWh</p>
-              <p class="text-sm text-slate-700">Con las cargas esenciales que seleccionaste (media estimada de <strong>{result.backupWatts.toFixed(0)} W</strong>), la autonomía teórica sería de unas <strong>{selectedBatteryHours.toFixed(1)} horas</strong> sin producción solar.</p>
-              {#if selectedBatteryFits}
+              {#if result.backupWatts <= 0}
+                <p class="text-sm text-amber-900">Todavía no has señalado equipos esenciales que funcionarán durante el apagón. Vuelve a «Tus equipos» y marca los que necesitas respaldar para calcular su autonomía.</p>
+              {:else}
+                <p class="text-sm text-slate-700">Con las cargas esenciales que seleccionaste (media estimada de <strong>{result.backupWatts.toFixed(0)} W</strong>), la autonomía teórica sería de unas <strong>{selectedBatteryHours.toFixed(1)} horas</strong> sin producción solar.</p>
+              {/if}
+              {#if result.backupWatts <= 0}
+                <p class="text-xs text-slate-600">Una capacidad en kWh por sí sola no permite estimar horas de uso sin conocer las cargas.</p>
+              {:else if selectedBatteryFits}
                 <p class="text-sm text-emerald-900 font-semibold">La energía almacenada podría alcanzar las {autonomyHours} horas que buscas, según el consumo indicado.</p>
               {:else}
                 <p class="text-sm text-amber-900 font-semibold">No alcanzaría las {autonomyHours} horas con todas esas cargas esenciales. Podrías reducir el consumo medio durante el corte o estudiar otro banco.</p>
