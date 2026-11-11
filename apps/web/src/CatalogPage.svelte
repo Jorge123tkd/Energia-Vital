@@ -247,12 +247,12 @@
                 {#if salesManagers.length===1}
                   <a href={salesWhatsAppLink(salesManagers[0],product)} target="_blank" rel="noopener noreferrer"
                     class="relative z-20 block rounded-xl bg-teal-700 text-white px-3 py-2.5 text-center font-extrabold text-xs hover:bg-teal-800">
-                    <span aria-hidden="true">◉</span> Comprar por WhatsApp
+                    <span aria-hidden="true">🛒</span> Comprar por WhatsApp
                   </a>
                 {:else}
                   <button type="button" class="relative z-20 w-full rounded-xl bg-teal-700 text-white px-3 py-2.5 font-extrabold text-xs hover:bg-teal-800"
                     onclick={() => openPurchaseOptions(product)}>
-                    <span aria-hidden="true">◉</span> Comprar por WhatsApp
+                    <span aria-hidden="true">🛒</span> Comprar por WhatsApp
                   </button>
                 {/if}
               </div>

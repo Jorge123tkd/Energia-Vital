@@ -705,12 +705,10 @@
             <div role="region" aria-label="Productos recomendados; desplaza horizontalmente"
               class="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]">
               {#each recommendedProducts as recommendation (recommendation.item.id)}
-                <article class="min-w-0 shrink-0 flex flex-col w-[78vw] sm:w-[44vw] md:w-[30vw] lg:w-[calc(20%_-_0.6rem)] snap-start rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition">
-                  <a href={'/catalogo?product='+encodeURIComponent(recommendation.item.id)}
-                    class="block bg-gradient-to-br from-teal-50 to-slate-100"
-                    aria-label={'Ver detalles de '+recommendation.item.name}>
+                <article class="group relative min-w-0 shrink-0 flex flex-col w-[78vw sm:w-[44vw] md:w-[30vw] lg:w-[calc(20%_-_0.6rem)] snap-start rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition">
+                  <div class="block bg-gradient-to-br from-teal-50 to-slate-100">
                     <CardImage src={recommendation.item.primary_image_url} alt={recommendation.item.name}/>
-                  </a>
+                  </div>
                   <div class="p-3.5 flex flex-col flex-1 gap-2">
                     <p class="text-[11px] uppercase tracking-wide font-extrabold text-teal-700">{recommendation.family}</p>
                     <h4 class="font-extrabold text-slate-900 text-sm line-clamp-2">{recommendation.item.name}</h4>
@@ -718,8 +716,11 @@
                     <p class="text-sm font-extrabold text-teal-800">{recommendation.item.price == null ? 'Consultar precio' : Number(recommendation.item.price).toLocaleString('es-CU')+' '+(recommendation.item.currency||'USD')}</p>
                     <p class="text-[11px] font-medium text-emerald-700">Marcado como disponible en catálogo</p>
                     <a href={'/catalogo?product='+encodeURIComponent(recommendation.item.id)}
-                      class="rounded-xl bg-teal-700 px-3 py-2.5 text-center text-xs font-bold text-white hover:bg-teal-800">Ver ficha y consultar →</a>
+                      class="relative z-20 rounded-xl bg-teal-700 px-3 py-2.5 text-center text-xs font-bold text-white hover:bg-teal-800">Ver ficha y consultar →</a>
                   </div>
+                  <a href={'/catalogo?product='+encodeURIComponent(recommendation.item.id)}
+                    class="absolute inset-0 z-10 rounded-2xl focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-[-4px] focus-visible:outline-teal-700"
+                    aria-label={'Abrir ficha de '+recommendation.item.name}></a>
                 </article>
               {/each}
             </div>
