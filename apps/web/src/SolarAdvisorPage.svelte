@@ -436,6 +436,9 @@
             {label:'Consumo diario',value:estimated.daily.toFixed(2)+' kWh'},
             {label:'Potencia media esencial en apagón',value:estimated.backupWatts.toFixed(0)+' W'},
             {label:'Respaldo solicitado',value:autonomyHours+' horas'},
+            {label:'Inicio aproximado del corte',value:String(outageStartHour).padStart(2,'0')+':00'},
+            {label:'Paneles a evaluar',value:hasPanels?maxPanels+' paneles de '+panelWatts+' W':'Sin paneles'},
+            {label:'Escenario de sol',value:hasPanels?solarWeather:'No aplica'},
           ] as info}
             <div class="rounded-xl bg-slate-50 p-4"><dt class="text-xs text-slate-500">{info.label}</dt><dd class="font-extrabold text-slate-900 mt-1">{info.value}</dd></div>
           {/each}
@@ -499,6 +502,9 @@
         <section class="rounded-2xl p-4 sm:p-5 bg-slate-950 text-white mt-5 space-y-3">
           <h3 class="text-lg font-extrabold">Paneles y compatibilidad con el inversor</h3>
           <p class="text-sm text-slate-200">Escenario propuesto: <strong>{result.plannedPanels} paneles de {result.panelWatts} W</strong> ({result.plannedPvKW.toFixed(2)} kWp), con unos {result.pvDailyKWh.toFixed(1)} kWh/día bajo el clima indicado. La necesidad orientativa sin reducción por nubes sería {result.panelCount} paneles. El cálculo no determina conexiones seguras en serie o paralelo.</p>
+          {#if hasPanels && result.pvCoveragePercent<100}
+            <p class="rounded-xl bg-slate-800 border border-slate-600 p-3 text-sm text-slate-100">La producción estimada en estas condiciones cubriría aproximadamente {result.pvCoveragePercent.toFixed(0)} % de tu consumo diario. La diferencia dependería de energía almacenada, red u otras fuentes y del patrón real de uso.</p>
+          {/if}
           {#if hasPanels && result.panelCount>result.plannedPanels}
             <p class="rounded-xl bg-amber-900/50 border border-amber-300/40 text-amber-100 p-3 text-sm">La cantidad de paneles prevista no cubre toda la demanda diaria calculada en el caso base. Hay que revisar el consumo, espacio, módulos disponibles, apoyo de la red o un diseño distinto: no se debe ocultar este déficit.</p>
           {/if}

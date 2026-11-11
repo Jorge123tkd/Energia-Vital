@@ -31,10 +31,12 @@
 </script>
 
 <section class="w-full max-w-5xl mx-auto px-2 sm:px-4 py-6 sm:py-10">
-  <div class="mb-5">
-    <PageHero eyebrow="Bonaire · Tu cuenta" title="Notificaciones"
-      description="Revisa avisos de tus solicitudes, citas y comunicaciones recientes." />
-  </div>
+  {#if !staff}
+    <div class="mb-5">
+      <PageHero eyebrow="Bonaire · Tu cuenta" title="Notificaciones"
+        description="Revisa avisos de tus solicitudes, citas y comunicaciones recientes." />
+    </div>
+  {/if}
   <div class="mb-5 flex justify-end">
     <button type="button" onclick={() => load()} disabled={busy}
       class="px-4 py-2.5 rounded-xl border border-teal-200 text-teal-800 font-bold bg-white disabled:opacity-50">Actualizar</button>
