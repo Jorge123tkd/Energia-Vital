@@ -8,7 +8,7 @@ export type Phase = 'monofasica' | 'bifasica' | 'trifasica';
 export type Origin = 'equipos' | 'medicion' | 'acometida';
 export type Load = {
   id: number; name: string; watts: number; units: number; hours: number;
-  critical: boolean; backupDuty: number; estimate: boolean;
+  critical: boolean; backupDuty: number; backupHours?: number; estimate: boolean;
 };
 export const DEFAULT_LOADS: Omit<Load, 'id'>[] = [
   {name:'Refrigerador',watts:150,units:1,hours:8,critical:true,backupDuty:0.40,estimate:true},
@@ -43,6 +43,8 @@ export type SolarInput = {
   loads:Load[]; voltage:number; amps:number; powerFactor:number; hoursDaily:number;
   autonomyHours:number; peakSunHours:number; panelWatts:number; essentialPercent:number;
   existingBatteryKWh:number; panelDetails?:PvDetails;
+  // Horario local de inicio del corte y escenario de irradiación; los valores son orientativos.
+  outageStartHour?:number; maxPanels?:number; cloudFactor?:number; hasPanels?:boolean;
 };
 export type SolarOutput = {
   power:number; daily:number; backupWatts:number; criticalPeakWatts:number; backupEnergy:number; battery:number;
@@ -50,6 +52,9 @@ export type SolarOutput = {
   guideBattery:number; guideFits:boolean; guideHours:number; maxCriticalWatts:number;
   existingHours:number|null; candidateStrings:StringCandidate[];
   requiresElectricalReview:boolean;
+  batteryWithSolar:number; plannedPanels:number; plannedPvKW:number;
+  pvDailyKWh:number; pvOutageKWh:number; pvDirectKWh:number; pvSurplusKWh:number;
+  outageSunHours:number; outageNoSunHours:number; pvCoveragePercent:number;
 };
 function rounded(num:number,digits=2){return Number(num.toFixed(digits));}
 function safe(v:number){return Number.isFinite(v)?Math.max(0,v):0;}
@@ -89,30 +94,73 @@ export function estimateSolar(input:SolarInput):SolarOutput {
   const daily=isLoads
     ?loads.reduce((sum,l)=>sum+l.watts*l.units*l.hours,0)/1000
     :power*input.hoursDaily/1000;
-  const backupWatts=isLoads
-    ?loads.filter(l=>l.critical).reduce((sum,l)=>sum+l.watts*l.units*l.backupDuty,0)
-    :power*input.essentialPercent/100;
+  // El usuario puede indicar cuántas horas utiliza cada carga esencial durante el corte;
+  // si no se especifican, se considera toda la autonomía pedida.
+  const backupEnergy=isLoads
+    ?loads.filter(l=>l.critical).reduce((sum,l)=>sum+l.watts*l.units*l.backupDuty*
+      Math.min(input.autonomyHours,Math.max(0,l.backupHours??input.autonomyHours)),0)/1000
+    :power*input.essentialPercent/100*input.autonomyHours/1000;
+  const backupWatts=input.autonomyHours>0?backupEnergy*1000/input.autonomyHours:0;
   const criticalPeakWatts=isLoads
     ?loads.filter(l=>l.critical).reduce((sum,l)=>sum+l.watts*l.units,0)
     :power*input.essentialPercent/100;
-  const backupEnergy=backupWatts*input.autonomyHours/1000;
-  // Ejemplo de litio: 80% DoD y 90% eficiencia; los datos reales dependen de la batería.
-  const battery=backupEnergy/(0.8*0.9);
+  // Reserva nominal antes de considerar producción FV durante el apagón.
+  // Ejemplo de litio: 80% DoD y 90% eficiencia; confirmar ficha de batería/BMS.
+  const usableFraction=0.8*0.9;
+  const battery=backupEnergy/usableFraction;
   const inverter=criticalPeakWatts*1.25; // No contempla corrientes de arranque ni requisitos de conmutación.
   const pv=daily/(input.peakSunHours*0.75);
   const panelCount=Math.ceil(pv*1000/input.panelWatts);
+  // Ventana solar simplificada de 09:00 a 16:00 (7 h de reloj).
+  // Horas pico solares no son horas de luz: su energía equivalente se reparte aquí
+  // para una comparación orientativa. No equivale a un modelo irradiancia por hora.
+  const sunStart=9,sunEnd=16,sunWindow=sunEnd-sunStart;
+  const maxBySector=input.sector==='residencial'?10:input.sector==='privado'?24:40;
+  const panelLimit=Math.max(1,Math.min(200,Math.floor(input.maxPanels??maxBySector)));
+  const hasPanels=input.hasPanels!==false;
+  const plannedPanels=hasPanels?Math.min(panelCount,panelLimit):0;
+  const plannedPvKW=plannedPanels*input.panelWatts/1000;
+  const cloudFactor=Math.max(0.1,Math.min(1,input.cloudFactor??0.75));
+  const pvDailyKWh=plannedPvKW*input.peakSunHours*0.75*cloudFactor;
+  const solarKw= pvDailyKWh/sunWindow; // promedio idealizado dentro de la ventana
+  const startingHour=((input.outageStartHour??17)%24+24)%24;
+  const loadKw=backupWatts/1000;
+  let dischargeKWh=0, maxDrawKWh=0, pvOutageKWh=0,pvDirectKWh=0,pvSurplusKWh=0,outageSunHours=0;
+  // Intervalos de 15 min, permitiendo que el excedente fotovoltaico recargue el banco.
+  // No modela picos de irradiancia, temperatura, profundidad de descarga por fabricante,
+  // limitaciones de carga, inversor ni recargas con red.
+  for(let elapsed=0;elapsed<input.autonomyHours;elapsed+=0.25) {
+    const h=Math.min(0.25,input.autonomyHours-elapsed);
+    const clock=(startingHour+elapsed)%24;
+    const sun=clock>=sunStart&&clock<sunEnd;
+    const available=sun?solarKw:0;
+    if(sun)outageSunHours+=h;
+    pvOutageKWh+=available*h;
+    pvDirectKWh+=Math.min(available,loadKw)*h;
+    pvSurplusKWh+=Math.max(0,available-loadKw)*h;
+    dischargeKWh=Math.max(0,dischargeKWh+(loadKw-available)*h);
+    maxDrawKWh=Math.max(maxDrawKWh,dischargeKWh);
+  }
+  const batteryWithSolar=maxDrawKWh/usableFraction;
+  const outageNoSunHours=Math.max(0,input.autonomyHours-outageSunHours);
+  const pvCoveragePercent=daily>0?pvDailyKWh/daily*100:0;
   const tiers=SECTOR_CAPACITY_GUIDE[input.sector];
-  const guideBattery=tiers.find(v=>v>=battery)||tiers[tiers.length-1];
-  const guideFits=battery<=guideBattery;
+  const guideBattery=tiers.find(v=>v>=batteryWithSolar)||tiers[tiers.length-1];
+  const guideFits=batteryWithSolar<=guideBattery;
   const guideHours=backupWatts>0?guideBattery*1000*.8*.9/backupWatts:0;
   const maxCriticalWatts=guideBattery*1000*.8*.9/input.autonomyHours;
   const existingHours=input.existingBatteryKWh>0&&backupWatts>0?
     input.existingBatteryKWh*1000*.8*.9/backupWatts:null;
-  const candidateStrings=candidatePvStrings(panelCount,input.panelWatts,input.panelDetails);
+  const candidateStrings=candidatePvStrings(plannedPanels,input.panelWatts,input.panelDetails);
   return {
     power:safe(power),daily:safe(daily),backupWatts:safe(backupWatts),criticalPeakWatts:safe(criticalPeakWatts),backupEnergy:safe(backupEnergy),
     battery:safe(battery),inverter:safe(inverter),pv:safe(pv),panelCount,panelWatts:input.panelWatts,
     guideBattery,guideFits,guideHours, maxCriticalWatts,
     existingHours,candidateStrings,requiresElectricalReview:true,
+    batteryWithSolar:safe(batteryWithSolar),plannedPanels,plannedPvKW:safe(plannedPvKW),
+    pvDailyKWh:safe(pvDailyKWh),pvOutageKWh:safe(pvOutageKWh),
+    pvDirectKWh:safe(pvDirectKWh),pvSurplusKWh:safe(pvSurplusKWh),
+    outageSunHours:safe(outageSunHours),outageNoSunHours:safe(outageNoSunHours),
+    pvCoveragePercent:safe(pvCoveragePercent),
   };
 }
