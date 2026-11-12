@@ -55,7 +55,7 @@ notificationsRoutes.get('/admin', requireAdminAuth, async c => {
 notificationsRoutes.get('/admin/sent', requireAdminAuth, async c => {
   const page=Math.max(1,Math.min(100000,Number.parseInt(c.req.query('page')||'1',10)||1));
   const size=Math.max(1,Math.min(50,Number.parseInt(c.req.query('page_size')||'10',10)||10));
-  const groupKey=`COALESCE(NULLIF(n.data,''), n.created_at || '|' || n.title || '|' || n.message)`;
+  const groupKey=`n.type || '|' || COALESCE(NULLIF(n.data,''), n.created_at || '|' || n.title || '|' || n.message)`;
   const {results}=await c.env.DB.prepare(`SELECT MIN(n.id) AS id,
     MAX(n.title) AS title,MAX(n.message) AS message,MAX(n.created_at) AS created_at,
     MIN(n.data) AS campaign_data,MIN(n.type) AS notification_type,COUNT(*) AS recipient_count

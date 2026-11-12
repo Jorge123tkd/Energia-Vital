@@ -78,6 +78,8 @@
     }finally{if(seq===searchSeq)searchBusy=false;}
   }
   function queueSearch(){
+    // Evitar mostrar resultados del término anterior mientras se busca el nuevo.
+    searchResults=[];
     if(searchTimer)clearTimeout(searchTimer);
     searchTimer=setTimeout(()=>{void searchRecipients(searchTerm);},280);
   }
