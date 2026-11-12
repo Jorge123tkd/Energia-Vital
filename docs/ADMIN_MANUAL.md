@@ -96,6 +96,17 @@ El asistente conversacional se configura completamente desde el panel:
    - Información de contacto
 3. Estos valores se muestran en el pie de página y el asistente
 
+## Solicitudes: nuevas solicitudes y contador de pendientes
+
+El usuario pidió evitar una bandeja duplicada de «Avisos internos». **Ya no existe esa sección ni su campanita en el panel de personal**; los mensajes de los clientes se administran directamente desde **Solicitudes** y las citas desde **Citas**. La pestaña Solicitudes tiene un contador rojo con el número **total de solicitudes cuyo estado es Pendiente**, independiente de los filtros y la página actual. El contador se sincroniza cuando se carga el panel o una solicitud cambia y se consulta nuevamente cada 60 segundos mientras el panel siga abierto. **Notificaciones a clientes** permanece separada para campañas y bienvenidas.
+
+En **Solicitudes → + Crear solicitud**, administradores y moderadores pueden registrar un pedido conversado por WhatsApp, por teléfono o presencial. Hay dos modos:
+
+- **Contacto por WhatsApp sin cuenta:** escribe nombre completo, teléfono y detalles del trabajo. El sistema crea un ticket con identificador nuevo y estado inicial editable (Pendiente por defecto), sin inventar una cuenta ni contraseña. El contacto queda documentado dentro de la descripción, pero se muestra como nombre/teléfono en la ficha; puedes llamar por WhatsApp desde la tarjeta.
+- **Cliente registrado:** busca por nombre, correo, teléfono o ID, elige una ficha existente y crea el ticket asociado, visible en Mis solicitudes de ese cliente.
+
+Para ambos modos, elige título, descripción, tipo, ubicación opcional, fecha preferida y estado. El ticket queda auditable con el origen manual; la información de clientes sin cuenta no se puede consultar desde el portal hasta diseñar una vinculación segura. Nunca afirmar que se creó una cuenta cuando solo se registró un contacto. La pestaña Notificaciones a clientes no debe incluir avisos de tickets.
+
 ## Solicitudes: editar o eliminar
 
 En `/admin` → **Solicitudes** cada ficha muestra el estado y la posibilidad de contactar al cliente por WhatsApp. Los administradores pueden:
