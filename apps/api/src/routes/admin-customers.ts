@@ -150,10 +150,62 @@ adminCustomersRoutes.get('/requests', async c => {
     (SELECT COUNT(*) FROM request_images im WHERE im.request_id = r.id) AS image_count`
     + joins + where + ' ORDER BY r.created_at DESC LIMIT ? OFFSET ?';
   const {results} = await c.env.DB.prepare(query).bind(...args,advanced?pageSize:200,advanced?(page-1)*pageSize:0).all();
-  if (!advanced) return c.json({requests:results||[]});
+  const pendingRow=await c.env.DB.prepare("SELECT COUNT(*) AS n FROM requests WHERE status='pending'").first<{n:number}>();
+  const pending_count=pendingRow?.n||0;
+  if (!advanced) return c.json({requests:results||[],pending_count});
   const total = await c.env.DB.prepare('SELECT COUNT(*) AS n'+joins+where).bind(...args).first<{n:number}>();
-  return c.json({requests:results||[],page,page_size:pageSize,total:total?.n||0});
+  return c.json({requests:results||[],page,page_size:pageSize,total:total?.n||0,pending_count});
 });
+// El personal puede registrar una solicitud recibida por teléfono o WhatsApp
+// incluso si el contacto aún NO tiene cuenta de cliente. No crea usuarios falsos.
+adminCustomersRoutes.post('/requests', async c => {
+  const b=await c.req.json<Record<string,unknown>>().catch(()=>null);
+  if(!b||Object.keys(b).some(k=>!['customer_id','contact_name','contact_phone','type','title','description','location','preferred_date','status'].includes(k)))
+    return c.json({error:'La solicitud tiene campos no permitidos.'},400);
+  const title=typeof b.title==='string'?b.title.trim():'';
+  const description=typeof b.description==='string'?b.description.trim():'';
+  const status=typeof b.status==='string'?b.status:'pending';
+  const type=typeof b.type==='string'?b.type:'consultation';
+  const location=typeof b.location==='string'?b.location.trim():'';
+  const preferred=typeof b.preferred_date==='string'?b.preferred_date.trim():'';
+  const cid=typeof b.customer_id==='string'?b.customer_id.trim():'';
+  const contactName=typeof b.contact_name==='string'?b.contact_name.trim():'';
+  const contactPhone=typeof b.contact_phone==='string'?b.contact_phone.trim():'';
+  const types=['installation','maintenance','repair','consultation','complaint','suggestion'];
+  const statuses=['pending','quoted','approved','scheduled','completed','cancelled'];
+  if(title.length<3||title.length>180||description.length<6||description.length>3000||
+    !types.includes(type)||!statuses.includes(status)||location.length>500||
+    (preferred&&(!/^\d{4}-\d{2}-\d{2}$/.test(preferred)||!Number.isFinite(Date.parse(preferred+'T00:00:00Z')))))
+    return c.json({error:'Completa un asunto (3-180), una descripción (6-3000) y un tipo y estado válidos.'},400);
+  let customer:{id:string;name:string;phone:string|null}|null=null;
+  if(cid){
+    customer=await c.env.DB.prepare('SELECT id,name,phone FROM customers WHERE id=? AND is_active=1')
+      .bind(cid).first<{id:string;name:string;phone:string|null}>();
+    if(!customer)return c.json({error:'La cuenta del cliente no existe o está desactivada.'},400);
+  }else if(contactName.length<3||contactName.length>120||!/^[+]?[0-9 ()-]{8,22}$/.test(contactPhone)){
+    return c.json({error:'Para contactos sin cuenta, registra nombre y teléfono de WhatsApp (mínimo 8 dígitos).'},400);
+  }
+  // Se preserva la ficha existente; no se crean cuentas sin credenciales.
+  // Los contactos sin cuenta quedan registrados explícitamente dentro de la solicitud.
+  const details=customer?description:
+    '[Contacto por WhatsApp - sin cuenta]\nNombre: '+contactName+
+    '\nTeléfono: '+contactPhone+'\n\n'+description;
+  if(details.length>3300)return c.json({error:'Descripción demasiado extensa.'},400);
+  const id=crypto.randomUUID(),now=new Date().toISOString();
+  await c.env.DB.batch([
+    c.env.DB.prepare(`INSERT INTO requests
+      (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at)
+      VALUES (?,?,?,NULL,?,?,?,'medium',?,?,?,?)`)
+      .bind(id,customer?.id||null,type,title,details,status,location,preferred||null,now,now),
+    c.env.DB.prepare(`INSERT INTO audit_logs
+      (id,admin_user_id,action,entity_type,entity_id,details,created_at)
+      VALUES (?,?,?,'request',?,?,?)`)
+      .bind(crypto.randomUUID(),c.get('user')?.user_id||null,'request_created_manual',id,
+        JSON.stringify({origin:'whatsapp',linked_customer:!!customer,status}),now),
+  ]);
+  return c.json({id,status,message:'Solicitud creada desde administración.'},201);
+});
+
 adminCustomersRoutes.patch('/requests/:id', async c => {
   const b = await c.req.json<any>().catch(()=>null);
   if (!b || !['pending', 'quoted', 'approved', 'scheduled', 'completed', 'cancelled'].includes(b.status))
