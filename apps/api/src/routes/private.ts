@@ -47,13 +47,8 @@ privateRoutes.post('/requests', async c => {
   await c.env.DB.prepare(`INSERT INTO requests (id, customer_id, type, request_category_id, title, description, status, priority, location, preferred_date, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 'pending', 'medium', ?, ?, ?, ?)`)
     .bind(id, user.user_id, type, categoryId, title, description, location, typeof b.preferred_date === 'string' ? b.preferred_date.slice(0, 32) : null, now, now).run();
-  // Notificar al personal; la solicitud no falla si el aviso no puede entregarse.
-  try {
-    await c.env.DB.prepare(`INSERT INTO notifications (id, user_id, user_type, type, title, message, is_read, created_at)
-      SELECT lower(hex(randomblob(16))), id, 'admin', 'new_request', 'Nueva solicitud de cliente', ?, 0, ?
-      FROM admin_users WHERE is_active = 1 AND role IN ('admin','operator')`)
-      .bind(title, now).run();
-  } catch (e) { console.error('No se pudo crear el aviso de solicitud', e); }
+  // El contador de solicitudes pendientes del panel es la referencia del equipo.
+  // No duplicar el ticket con avisos internos.
   try {
     await c.env.DB.prepare(`INSERT INTO notifications
       (id,user_id,user_type,type,title,message,is_read,created_at)
@@ -87,12 +82,7 @@ privateRoutes.post('/appointments', async c => {
     WHERE NOT EXISTS (SELECT 1 FROM appointments WHERE status != 'cancelled' AND starts_at < ? AND ends_at > ?)`)
     .bind(id, user.user_id, title, starts.toISOString(), ends.toISOString(), now, now, ends.toISOString(), starts.toISOString()).run();
   if (!result.meta?.changes) return c.json({ error: 'Horario no disponible' }, 409);
-  try {
-    await c.env.DB.prepare(`INSERT INTO notifications (id, user_id, user_type, type, title, message, is_read, created_at)
-      SELECT lower(hex(randomblob(16))), id, 'admin', 'new_appointment', 'Nueva cita solicitada', ?, 0, ?
-      FROM admin_users WHERE is_active = 1 AND role IN ('admin','operator')`)
-      .bind(title, now).run();
-  } catch (e) { console.error('No se pudo crear el aviso de cita', e); }
+  // El equipo gestiona la nueva cita desde el calendario del panel, sin aviso duplicado.
   return c.json({ id, message: 'Cita solicitada', status: 'pending' }, 201);
 });
 // Cambios de estado, notas y asignaciones solo desde endpoints del administrador.
