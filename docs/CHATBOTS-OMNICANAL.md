@@ -6,6 +6,13 @@ Actualizado: 11 de noviembre de 2026.
 - En los bots, al elegir «Nueva conversación» se inicia una sesión independiente; el usuario quiere conservar memoria e historial para recuperar chats anteriores siempre que el canal lo permita.
 - La experiencia web ya ofrece conversaciones privadas, nuevo chat, búsqueda, renombrar, eliminar, compartir texto y pantalla completa. No se deben exponer esos mensajes a personas no autenticadas ni mezclar cuentas por número de teléfono.
 
+## Orden de trabajo acordado el 12 de noviembre de 2026
+1. **Primero** corregir el asistente web antes de copiarlo a canales nuevos. Regresión: conversaciones sobre crisis mundial, precio del dólar/euro y dos aires acondicionados sin pérdida de datos. Una API autorizada de elTOQUE, con token en un secreto de Cloudflare, puede responder tasas del mercado informal; sin token, no inventar cifras.
+2. **Después** habilitar un motor de respuesta general más capaz (la configuración actual tiene `WORKERS_AI_ENABLED=false` y no hay IA general garantizada) y/o datos periodísticos autorizados para preguntas de actualidad, evitando que el bot finja navegar.
+3. **Luego** preparar un bot de Telegram con BotFather, su token secreto y webhook verificado; y WhatsApp Business Platform Cloud API con un número del **bot** que no sea el de los gestores de ventas, webhook seguro y aprobación de la plataforma.
+4. Ambos canales deben reutilizar la **misma lógica** del asistente de Bonaire y respetar identidad, historial, límites, verificación del cliente y privacidad. Los enlaces `wa.me` o `t.me` por sí solos **no** implementan un chatbot.
+5. Este cambio de noviembre **no configura ni despliega** ninguno de los dos bots. Primero validar backend y consultar los permisos/credenciales que administrará el propietario. No subir secretos a GitHub.
+
 ## Estado real
 - **Código preparado en rama:** nuevos ajustes `bot_whatsapp_url` y `bot_telegram_url` en Mi sitio web. Se muestran enlaces independientes en el pie de página y en Solicitar servicio si el administrador configura URL HTTPS oficiales (wa.me / api.whatsapp.com y t.me / telegram.me). No hacen público un enlace hasta guardarlo.
 - **Telegram existente:** hay un webhook con secreto que devuelve mensajes de orientación sobre el acceso web, pero NO se ha conectado al historial privado del asistente ni soporta /nuevo o /historial todavía. El mensaje fue actualizado para nombrar Bonaire y no prometer funciones que no están activas.
