@@ -13,6 +13,18 @@ Actualizado: 12 de noviembre de 2026.
 4. Ambos canales deben reutilizar la **misma lógica** del asistente de Bonaire y respetar identidad, historial, límites, verificación del cliente y privacidad. Los enlaces `wa.me` o `t.me` por sí solos **no** implementan un chatbot.
 5. Este cambio de noviembre **no configura ni despliega** ninguno de los dos bots. Primero validar backend y consultar los permisos/credenciales que administrará el propietario. No subir secretos a GitHub.
 
+## Alerta regional: clientes cubanos (+53) y WhatsApp Cloud API
+
+Meta/WhatsApp Business Platform excluye números de Cuba **+53** de las comunicaciones de la API comercial. Es distinto de los enlaces `wa.me` y de conversar manualmente en WhatsApp Business App. Cambiar de desarrollador, intermediario o país de acceso no subsana la exclusión de los teléfonos destinatarios. Los proveedores oficiales Twilio y 360dialog también documentan la restricción:
+- https://help.twilio.com/articles/360051177134-What-countries-can-I-reach-with-the-Twilio-API-for-WhatsApp
+- https://docs.360dialog.com/docs/support/client-faq
+
+**Decisión recomendada mientras exista la restricción:** no aplicar D1 011, no configurar secretos Meta ni anunciar el bot de WhatsApp como disponible a clientes +53. No contratar terceros que prometan evadir las normas ni automatizar WhatsApp Web. Mantener WhatsApp/WhatsApp Business normal como canal **humano** de ventas, enlazado a «Crear solicitud» en /admin.
+
+**Alternativa técnica:** priorizar **Telegram Bot API** y reutilizar Cloudflare Workers + D1 y el asesor de Bonaire para clientes, más vinculación verificada y comandos HOY/MAÑANA/PENDIENTES para staff. Hay un webhook Telegram elemental en `apps/api/src/routes/telegram.ts`, pero no tiene todavía la agenda ni el motor comercial conectados, y tampoco recordatorios programados. Probar Telegram con usuarios reales y evaluar disponibilidad y normativa antes de activarlo. Documentación: https://core.telegram.org/bots/api
+
+Si Meta modifica las restricciones o existe actividad legítima con destinatarios de un país admitido, reevaluar con la cuenta real de la empresa, nunca mediante datos ficticios.
+
 ## Nueva etapa acordada — WhatsApp para clientes y personal
 
 El usuario decidió el 12 de noviembre iniciar **primero WhatsApp**, integrarlo a `energia-vital-api`, mantener respuestas **comerciales exclusivamente** para clientes y ofrecer una vista privada de agenda para personal vinculado. Los avisos internos de solicitudes se eliminan del menú `/admin`, sustituidos por un contador de solicitudes pendientes; administradores/moderadores pueden registrar manualmente solicitudes recibidas por WhatsApp, incluso si el contacto aún no tiene cuenta.
