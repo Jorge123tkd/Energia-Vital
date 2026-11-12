@@ -1,5 +1,5 @@
 # Chatbots de Bonaire — WhatsApp y Telegram
-Actualizado: 11 de noviembre de 2026.
+Actualizado: 12 de noviembre de 2026.
 
 ## Acuerdos recuperados del usuario
 - WhatsApp y Telegram de **chatbot** son canales atendidos por el **asistente de Bonaire**, no números de administradores. Los teléfonos de atención humana y los enlaces de redes sociales son distintos.
@@ -8,16 +8,26 @@ Actualizado: 11 de noviembre de 2026.
 
 ## Orden de trabajo acordado el 12 de noviembre de 2026
 1. **Primero** corregir el asistente web antes de copiarlo a canales nuevos. Regresión: conversaciones sobre crisis mundial, precio del dólar/euro y dos aires acondicionados sin pérdida de datos. Una API autorizada de elTOQUE, con token en un secreto de Cloudflare, puede responder tasas del mercado informal; sin token, no inventar cifras.
-2. **Después** habilitar un motor de respuesta general más capaz (la configuración actual tiene `WORKERS_AI_ENABLED=false` y no hay IA general garantizada) y/o datos periodísticos autorizados para preguntas de actualidad, evitando que el bot finja navegar.
+2. **Alcance corregido por decisión expresa del propietario:** el bot NO responderá preguntas de cultura general o crisis mundial: redirigirá a Bonaire. El asistente determinista actual (con `WORKERS_AI_ENABLED=false`) ya comparte catálogo, servicios, asesoría solar y tasas vía elTOQUE autorizadas. NO activar un chatbot general de noticias.
 3. **Luego** preparar un bot de Telegram con BotFather, su token secreto y webhook verificado; y WhatsApp Business Platform Cloud API con un número del **bot** que no sea el de los gestores de ventas, webhook seguro y aprobación de la plataforma.
 4. Ambos canales deben reutilizar la **misma lógica** del asistente de Bonaire y respetar identidad, historial, límites, verificación del cliente y privacidad. Los enlaces `wa.me` o `t.me` por sí solos **no** implementan un chatbot.
 5. Este cambio de noviembre **no configura ni despliega** ninguno de los dos bots. Primero validar backend y consultar los permisos/credenciales que administrará el propietario. No subir secretos a GitHub.
 
+## Nueva etapa acordada — WhatsApp para clientes y personal
+
+El usuario decidió el 12 de noviembre iniciar **primero WhatsApp**, integrarlo a `energia-vital-api`, mantener respuestas **comerciales exclusivamente** para clientes y ofrecer una vista privada de agenda para personal vinculado. Los avisos internos de solicitudes se eliminan del menú `/admin`, sustituidos por un contador de solicitudes pendientes; administradores/moderadores pueden registrar manualmente solicitudes recibidas por WhatsApp, incluso si el contacto aún no tiene cuenta.
+
+La primera base real ya quedó en GitHub: `apps/api/src/routes/whatsapp.ts`, migración nueva `011_whatsapp_bot_foundation.sql`, vinculación de personal desde `/admin → Mi cuenta`, verificación de firma HMAC Meta, contexto solar por remitente y comandos `HOY`, `MAÑANA`, `PENDIENTES`, `DESVINCULAR`. **No está desplegada ni configurada con Meta**; requiere typecheck, test nuevo, D1 011, credenciales privadas y QA. Las consultas privadas requieren OTP temporal desde web autenticada, no coincidencia del número de teléfono.
+
+Los recordatorios proactivos por la mañana, asignación de técnicos, plantillas Utility aprobadas, vinculación de clientes y sincronización de sus historiales siguen **pendientes de segunda fase**. Se debe verificar que los mensajes reales de WhatsApp cumplan consentimiento, la ventana de atención y la política de Meta. El bot no inicia una solicitud de cliente ni agenda automáticamente.
+
+**Guía completa de implementación:** [WhatsApp Cloud API desde cero](./WHATSAPP-BOT-DESDE-CERO.md).
+
 ## Estado real
 - **Código preparado en rama:** nuevos ajustes `bot_whatsapp_url` y `bot_telegram_url` en Mi sitio web. Se muestran enlaces independientes en el pie de página y en Solicitar servicio si el administrador configura URL HTTPS oficiales (wa.me / api.whatsapp.com y t.me / telegram.me). No hacen público un enlace hasta guardarlo.
 - **Telegram existente:** hay un webhook con secreto que devuelve mensajes de orientación sobre el acceso web, pero NO se ha conectado al historial privado del asistente ni soporta /nuevo o /historial todavía. El mensaje fue actualizado para nombrar Bonaire y no prometer funciones que no están activas.
-- **WhatsApp:** los enlaces wa.me de teléfonos comerciales son contacto tradicional, NO constituyen por sí mismos una integración de bot. Enlazar un número de bot tampoco activa automáticamente Cloud API.
-- **No se han configurado ni probado credenciales, bots, webhooks de Meta o Telegram nuevos en producción**. No se ha publicado esta actualización. No guardar tokens ni credenciales de bots en GitHub.
+- **WhatsApp:** ya hay implementación inicial del webhook de Cloud API y vinculación staff en la rama, pero está **inactiva sin los secretos de Meta y migración 011**. Los enlaces wa.me de teléfonos comerciales siguen siendo contacto tradicional. Enlazar un número del bot en el sitio NO lo activa automáticamente.
+- **No se han configurado ni probado credenciales, webhooks Meta reales o Telegram nuevo en producción**. Solo código en GitHub; no guardar tokens o claves en GitHub. `/api/whatsapp/webhook` debe quedar deshabilitado hasta configurar los secretos.
 
 ## Diseño objetivo antes de activar bots
 1. **Canales separados:** número WhatsApp del bot distinto del contacto humano; usuario Telegram del bot distinto de una cuenta personal. El panel «Mi sitio web» permite modificar solamente los enlaces visibles, no secretos.
@@ -33,10 +43,10 @@ Actualizado: 11 de noviembre de 2026.
 «¡Hola! Soy el asistente virtual de Bonaire ☀️. Puedo orientarte sobre equipos, precios publicados, instalaciones, mantenimiento y solicitudes. ¿En qué te ayudo hoy?»
 
 **Bot — Inicio de chat nuevo:**
-«He iniciado una conversación nueva. Tus conversaciones anteriores siguen disponibles en tu historial, cuando tu cuenta y canal estén vinculados.»
+«Nueva conversación de Bonaire. ¿Necesitas asesoría solar, precios de equipos o solicitar un servicio?»
 
 **Sin vincular:**
-«Puedo ayudarte con información general. Para consultar solicitudes o recuperar tu historial, vincula primero tu cuenta Bonaire de forma segura desde la web.»
+«Puedo asesorarte sobre paneles solares, inversores, baterías y servicios de Bonaire. Las solicitudes y agendas privadas requieren un acceso verificado; por ahora consulta tu cuenta de la página.»
 
 **Confirmación de solicitud:**
 «Recibimos tu solicitud del servicio [nombre]. Referencia: [ID]. Está pendiente de revisión; puedes consultar el estado desde Mis solicitudes.»
