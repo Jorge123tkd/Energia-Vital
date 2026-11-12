@@ -447,8 +447,9 @@ export function generateResponse(
     case 'telegram':
       return {
         text:
-          'Puedes continuar la conversación por Telegram con nuestro bot oficial. ' +
-          '¿Quieres que te indique cómo contactarnos?',
+          'Bonaire está preparando la conexión de este mismo asistente con Telegram y WhatsApp. ' +
+          'Los enlaces de contacto todavía no garantizan un bot conectado ni que tu historial viaje entre canales. ' +
+          'Puedes seguir utilizando el asistente web mientras completamos la integración segura.',
         intent,
         source: 'template',
       };
