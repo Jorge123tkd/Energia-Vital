@@ -23,6 +23,11 @@
   let accountMenu = $state(false);
   let syncBusy = $state(false);
   let requestPhotosOpen = $state('');
+  let requestEditor: {
+    id:string; title:string; description:string; location:string; preferred_date:string;
+    expected_updated_at:string; customer_name:string;
+  } | null = $state(null);
+  let requestActionBusy = $state(false);
   let requestQuery = $state('');
   let appointmentQuery = $state('');
   let requestPage = $state(1);
@@ -150,6 +155,42 @@
     error = ''; message = '';
     try { await api.updateAdminRequest(token, id, status); await loadRequestPage(requestPage); message = 'Solicitud actualizada.'; }
     catch (e) { error = e instanceof Error ? e.message : 'No se pudo actualizar'; }
+  }
+  function openRequestEditor(r:any) {
+    error=''; message='';
+    requestEditor={
+      id:r.id, title:String(r.title||''), description:String(r.description||''),
+      location:String(r.location||''),preferred_date:String(r.preferred_date||'').slice(0,10),
+      expected_updated_at:String(r.updated_at||''),customer_name:String(r.customer_name||'Cliente')
+    };
+  }
+  async function saveRequestEditor(e:SubmitEvent) {
+    e.preventDefault();
+    if(!requestEditor||requestActionBusy)return;
+    requestActionBusy=true;error='';message='';
+    try {
+      await api.updateAdminRequestDetails(token,requestEditor.id,{
+        title:requestEditor.title,description:requestEditor.description,location:requestEditor.location,
+        preferred_date:requestEditor.preferred_date||null,expected_updated_at:requestEditor.expected_updated_at
+      });
+      requestEditor=null;
+      await loadRequestPage(requestPage);
+      message='Los datos de la solicitud se actualizaron correctamente.';
+    } catch(e){error=e instanceof Error?e.message:'No se pudo editar la solicitud.';}
+    finally{requestActionBusy=false;}
+  }
+  async function removeRequest(r:any){
+    if(requestActionBusy||staffRole!=='admin')return;
+    if(!window.confirm('¿Eliminar DEFINITIVAMENTE la solicitud «'+r.title+'» (Ref. '+r.id+')? Se perderán sus fotos y la solicitud dejará de estar disponible para el cliente. Esta operación no se puede deshacer.'))return;
+    requestActionBusy=true;error='';message='';
+    try{
+      await api.deleteAdminRequest(token,r.id);
+      if(requestPhotosOpen===r.id)requestPhotosOpen='';
+      const newPage=requests.length===1&&requestPage>1?requestPage-1:requestPage;
+      await loadRequestPage(newPage);
+      message='Solicitud eliminada definitivamente. La operación quedó registrada.';
+    } catch(e){error=e instanceof Error?e.message:'No se pudo eliminar la solicitud.';}
+    finally{requestActionBusy=false;}
   }
   async function changeAppointment(id: string, status: string) {
     error = ''; message = '';
@@ -311,6 +352,12 @@
                   <p class="text-sm whitespace-pre-line line-clamp-4">{r.description}</p>
                 </div>
                 <div class="flex gap-2 flex-wrap border-t border-slate-100 pt-3">
+                  {#if staffRole==='admin'}
+                    <button type="button" disabled={requestActionBusy} onclick={()=>openRequestEditor(r)}
+                      class="rounded-xl border border-teal-200 text-teal-800 font-bold text-xs px-3 py-2.5 hover:bg-teal-50 disabled:opacity-50">✎ Editar</button>
+                    <button type="button" disabled={requestActionBusy} onclick={()=>void removeRequest(r)}
+                      class="rounded-xl border border-red-200 text-red-700 font-bold text-xs px-3 py-2.5 hover:bg-red-50 disabled:opacity-50">Eliminar</button>
+                  {/if}
                   {#if r.phone && r.phone.replace(/\D/g,'').length>=8}
                     <a target="_blank" rel="noopener noreferrer"
                       href={'https://wa.me/'+r.phone.replace(/\D/g,'')+'?text='+encodeURIComponent('Hola '+(r.customer_name||'')+', te escribimos desde Bonaire sobre tu solicitud «'+r.title+'» (Ref. '+r.id.slice(0,8).toUpperCase()+'). ¿Podemos conversar?')}
@@ -388,3 +435,49 @@
     {/if}
   {/if}
 </div>
+
+{#if requestEditor}
+  <div class="fixed inset-0 z-[210] flex justify-center items-center p-3 sm:p-6">
+    <button type="button" class="absolute inset-0 bg-slate-950/70"
+      aria-label="Cerrar edición de solicitud" onclick={()=>{if(!requestActionBusy)requestEditor=null;}}></button>
+    <dialog open aria-label="Editar solicitud de cliente"
+      class="relative m-0 w-full max-w-2xl max-h-[92dvh] overflow-y-auto rounded-3xl bg-white shadow-2xl p-5 sm:p-6">
+      <div class="flex items-start justify-between gap-3 mb-5">
+        <div>
+          <h2 class="text-xl font-extrabold text-slate-900">Editar solicitud</h2>
+          <p class="text-sm text-slate-500 mt-1">{requestEditor.customer_name} · Ref. {requestEditor.id.slice(0,8).toUpperCase()}</p>
+        </div>
+        <button type="button" disabled={requestActionBusy} aria-label="Cerrar"
+          onclick={()=>requestEditor=null} class="rounded-xl bg-slate-100 px-3 py-2 font-bold">✕</button>
+      </div>
+      {#if error}<p role="alert" class="text-sm text-red-700 bg-red-50 p-3 rounded-xl mb-4">{error}</p>{/if}
+      <form onsubmit={saveRequestEditor} class="space-y-4">
+        <label class="block text-sm font-semibold text-slate-700">Asunto
+          <input required minlength="3" maxlength="180" bind:value={requestEditor.title}
+            class="block w-full mt-1 rounded-xl border border-slate-300 p-3"/>
+        </label>
+        <label class="block text-sm font-semibold text-slate-700">Descripción
+          <textarea required minlength="6" maxlength="3000" rows="6" bind:value={requestEditor.description}
+            class="block w-full mt-1 rounded-xl border border-slate-300 p-3"></textarea>
+        </label>
+        <label class="block text-sm font-semibold text-slate-700">Ubicación
+          <input maxlength="500" bind:value={requestEditor.location}
+            class="block w-full mt-1 rounded-xl border border-slate-300 p-3"/>
+        </label>
+        <label class="block text-sm font-semibold text-slate-700">Fecha preferida (opcional)
+          <input type="date" bind:value={requestEditor.preferred_date}
+            class="block w-full mt-1 rounded-xl border border-slate-300 p-3"/>
+        </label>
+        <p class="text-xs text-slate-500">El ID, el cliente, el estado y las fotos se conservan. El cambio queda registrado en la auditoría.</p>
+        <div class="flex flex-col sm:flex-row gap-2 justify-end">
+          <button type="button" disabled={requestActionBusy} onclick={()=>requestEditor=null}
+            class="rounded-xl border border-slate-300 px-5 py-3 font-bold text-slate-700">Cancelar</button>
+          <button type="submit" disabled={requestActionBusy}
+            class="rounded-xl bg-teal-700 px-5 py-3 font-bold text-white disabled:opacity-50">
+            {requestActionBusy?'Guardando…':'Guardar cambios'}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+{/if}
