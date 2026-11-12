@@ -33,10 +33,15 @@ assert.match(exchange.text,/elTOQUE/i);
 const crisis=generateResponse('Saber de la crisis mundial',ctx);
 assert.match(crisis.text,/inflaci[oó]n|econom[ií]a/i);
 assert.doesNotMatch(crisis.text,/Trabajamos con/);
+const crisisAfterCurrency=generateResponse('Saber de la crisis mundial',ctx,
+  [{role:'user',content:'Precio del dólar'},{role:'assistant',content:'No tengo tasas recientes'}]);
+assert.equal(crisisAfterCurrency.intent,'general','Nuevo tema general no hereda precio del dólar');
+assert.match(crisisAfterCurrency.text,/crisis mundial|inflaci[oó]n/i);
 
 const loads=parseLoads('1 televisor, 1 refrigerador, 2 aires acondicionados, 5 luces led, 1 computadora');
 assert.equal(loads.length,5);
 assert.equal(loads.find(l=>l.name==='Aire acondicionado').units,2);
+assert.equal(parseLoads('2 airas acondicionados')[0].units,2);
 assert.equal(loads.reduce((sum,l)=>sum+l.watts*l.units,0),2840);
 
 function turn(text,state){
@@ -68,6 +73,9 @@ const unknown=turn('1 refrigerador, 2 equipos misteriosos',r.state);
 assert.equal(unknown.state.stage,'simple-loads');
 assert.match(unknown.reply,/No reconoc[ií]/);
 assert.match(unknown.reply,/equipos misteriosos/);
+const joined=turn('2 aires acondicionados y 1 refrigerador',r.state);
+assert.equal(joined.state.stage,'simple-loads');
+assert.match(joined.reply,/No reconoc[ií]/);
 
 assert.equal(parseElToquePayload(null),null);
 assert.equal(parseElToquePayload({tasas:{USD:400,ECU:450,MLC:310},date:'2026-11-12',hour:8,minutes:15}).eur,450);
