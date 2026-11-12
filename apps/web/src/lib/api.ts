@@ -145,6 +145,11 @@ export const api = {
     patch(`/api/admin-customers/customers/${encodeURIComponent(id)}/status`, { is_active }, withAdmin(token)),
   deleteAdminCustomer: (token: string, id: string) =>
     apiRequest(`/api/admin-customers/customers/${encodeURIComponent(id)}`, withAdmin(token, { method: 'DELETE' })),
+  createAdminRequest: (token: string, body: {
+    customer_id?: string;contact_name?: string;contact_phone?: string;
+    type: string; title: string; description: string; status: string;
+    location: string; preferred_date: string | null;
+  }) => post('/api/admin-customers/requests', body, withAdmin(token)),
   adminRequests: (token: string, q = '', page?: number, pageSize = 20) =>
     apiRequest('/api/admin-customers/requests' +
       (page !== undefined || q ? '?' + new URLSearchParams({
