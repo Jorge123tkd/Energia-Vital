@@ -44,36 +44,36 @@
   let manualType=$state('consultation'),manualStatus=$state('pending'),manualDate=$state('');
   let manualSearchSequence=0;
   let manualSearchTimer:ReturnType<typeof setTimeout>|undefined;
-  let whatsappLinkOpen=$state(false),whatsappLinkBusy=$state(false),whatsappLinkError=$state('');
-  let whatsappStatus:{configured:boolean;linked:boolean;phone_masked:string|null}|null=$state(null);
-  let whatsappLinkCode=$state(''),whatsappLinkExpiry=$state('');
-  async function openWhatsappLink(){
-    whatsappLinkOpen=true;whatsappLinkError='';whatsappLinkCode='';
-    await refreshWhatsappLink();
+  let telegramLinkOpen=$state(false),telegramLinkBusy=$state(false),telegramLinkError=$state('');
+  let telegramStatus:{configured:boolean;linked:boolean;reminders_enabled:boolean}|null=$state(null);
+  let telegramLinkCode=$state(''),telegramLinkExpiry=$state('');
+  async function openTelegramLink(){
+    telegramLinkOpen=true;telegramLinkError='';telegramLinkCode='';
+    await refreshTelegramLink();
   }
-  async function refreshWhatsappLink(){
-    whatsappLinkBusy=true;whatsappLinkError='';
+  async function refreshTelegramLink(){
+    telegramLinkBusy=true;telegramLinkError='';
     try{
-      const status=await api.getWhatsAppStaffLink(token);
-      whatsappStatus={configured:Boolean(status.configured),linked:Boolean(status.linked),
-        phone_masked:status.phone_masked||null};
-    }catch(e){whatsappLinkError=e instanceof Error?e.message:'No se pudo consultar la vinculación.';}
-    finally{whatsappLinkBusy=false;}
+      const status=await api.getTelegramStaffLink(token);
+      telegramStatus={configured:Boolean(status.configured),linked:Boolean(status.linked),
+        reminders_enabled:Boolean(status.reminders_enabled)};
+    }catch(e){telegramLinkError=e instanceof Error?e.message:'No se pudo consultar la vinculación de Telegram.';}
+    finally{telegramLinkBusy=false;}
   }
-  async function generateWhatsappCode(){
-    whatsappLinkBusy=true;whatsappLinkError='';whatsappLinkCode='';
+  async function generateTelegramCode(){
+    telegramLinkBusy=true;telegramLinkError='';telegramLinkCode='';
     try{
-      const info=await api.createWhatsAppStaffLinkCode(token);
-      whatsappLinkCode=info.code;whatsappLinkExpiry=info.expires_at;
-    }catch(e){whatsappLinkError=e instanceof Error?e.message:'No se pudo generar el código.';}
-    finally{whatsappLinkBusy=false;}
+      const info=await api.createTelegramStaffLinkCode(token);
+      telegramLinkCode=info.code;telegramLinkExpiry=info.expires_at;
+    }catch(e){telegramLinkError=e instanceof Error?e.message:'No se pudo generar el código.';}
+    finally{telegramLinkBusy=false;}
   }
-  async function unlinkWhatsapp(){
-    if(!window.confirm('¿Desvincular tu WhatsApp de la cuenta de personal Bonaire?'))return;
-    whatsappLinkBusy=true;whatsappLinkError='';
-    try{await api.deleteWhatsAppStaffLink(token);whatsappStatus={configured:true,linked:false,phone_masked:null};whatsappLinkCode='';}
-    catch(e){whatsappLinkError=e instanceof Error?e.message:'No se pudo desvincular.';}
-    finally{whatsappLinkBusy=false;}
+  async function unlinkTelegram(){
+    if(!window.confirm('¿Desvincular tu Telegram de la cuenta de personal Bonaire?'))return;
+    telegramLinkBusy=true;telegramLinkError='';
+    try{await api.deleteTelegramStaffLink(token);telegramStatus={configured:true,linked:false,reminders_enabled:false};telegramLinkCode='';}
+    catch(e){telegramLinkError=e instanceof Error?e.message:'No se pudo desvincular Telegram.';}
+    finally{telegramLinkBusy=false;}
   }
   async function lookupManualCustomers(query:string) {
     const sequence=++manualSearchSequence;
@@ -348,8 +348,8 @@
                 <p class="text-xs px-3 py-2 font-bold text-slate-400">{staffRole === 'admin' ? 'Administrador' : 'Moderador'}</p>
                 <a href="/perfil" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Mi perfil</a>
                 <a href="/" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Ver sitio público</a>
-                <button type="button" onclick={()=>{accountMenu=false;void openWhatsappLink();}}
-                  class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">Vincular WhatsApp de equipo</button>
+                <button type="button" onclick={()=>{accountMenu=false;void openTelegramLink();}}
+                  class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">Vincular Telegram de equipo</button>
                 <button type="button" disabled={syncBusy} onclick={syncNow} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">{syncBusy ? 'Sincronizando…' : '↻ Sincronizar datos'}</button>
                 <div class="border-t border-slate-100 my-1"></div>
                 <button type="button" onclick={logout} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-red-700 hover:bg-red-50">Cerrar sesión</button>
@@ -379,8 +379,8 @@
         <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2">
           <a href="/perfil" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Mi perfil</a>
           <a href="/" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Ver sitio público</a>
-          <button type="button" onclick={()=>{mobileMenu=false;void openWhatsappLink();}}
-            class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-semibold text-teal-800">Vincular WhatsApp</button>
+          <button type="button" onclick={()=>{mobileMenu=false;void openTelegramLink();}}
+            class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-semibold text-teal-800">Vincular Telegram</button>
           <button type="button" disabled={syncBusy} onclick={syncNow} class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700">{syncBusy ? 'Actualizando…' : '↻ Sincronizar'}</button>
           <button type="button" onclick={logout} class="rounded-xl bg-red-50 border border-red-100 px-3 py-3 text-sm font-semibold text-red-700">Cerrar sesión</button>
         </div>
@@ -558,43 +558,43 @@
   {/if}
 </div>
 
-{#if whatsappLinkOpen}
+{#if telegramLinkOpen}
   <div class="fixed inset-0 z-[230] flex justify-center items-center p-3">
     <button type="button" class="absolute inset-0 bg-slate-950/70"
-      aria-label="Cerrar vinculación de WhatsApp" onclick={()=>{if(!whatsappLinkBusy)whatsappLinkOpen=false;}}></button>
-    <dialog open aria-label="Vincular WhatsApp del equipo"
+      aria-label="Cerrar vinculación de WhatsApp" onclick={()=>{if(!telegramLinkBusy)telegramLinkOpen=false;}}></button>
+    <dialog open aria-label="Vincular Telegram del equipo"
       class="relative m-0 w-full max-w-lg rounded-3xl bg-white p-5 sm:p-6 shadow-2xl space-y-4">
       <div class="flex items-start justify-between gap-2">
-        <h2 class="text-xl font-extrabold text-slate-900">WhatsApp del equipo</h2>
-        <button type="button" disabled={whatsappLinkBusy} onclick={()=>whatsappLinkOpen=false}
+        <h2 class="text-xl font-extrabold text-slate-900">Telegram del equipo</h2>
+        <button type="button" disabled={telegramLinkBusy} onclick={()=>telegramLinkOpen=false}
           class="rounded-xl bg-slate-100 px-3 py-2" aria-label="Cerrar">✕</button>
       </div>
-      <p class="text-sm text-slate-600">Solo vincula tu WhatsApp después de iniciar sesión en Bonaire. El bot oficial debe configurarse primero en Meta y Cloudflare; nunca compartas el código con otros.</p>
-      {#if whatsappLinkError}<p role="alert" class="rounded-xl bg-red-50 p-3 text-sm text-red-700">{whatsappLinkError}</p>{/if}
-      {#if whatsappStatus && !whatsappStatus.configured}
+      <p class="text-sm text-slate-600">Vincula tu Telegram solo desde una sesión de personal en Bonaire. Primero crea el bot en @BotFather y configura sus secretos en Cloudflare; nunca compartas el código con otros.</p>
+      {#if telegramLinkError}<p role="alert" class="rounded-xl bg-red-50 p-3 text-sm text-red-700">{telegramLinkError}</p>{/if}
+      {#if telegramStatus && !telegramStatus.configured}
         <p class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
-          El bot de Meta todavía no está configurado. La vinculación se habilitará cuando termine la instalación oficial; las solicitudes y el resto del panel siguen funcionando.
+          Telegram todavía no está configurado. Primero hay que crear el bot en @BotFather, aplicar la migración de Telegram y configurar sus secretos en Cloudflare. El resto del panel sigue funcionando.
         </p>
-      {:else if whatsappStatus?.linked}
+      {:else if telegramStatus?.linked}
         <p class="rounded-xl bg-teal-50 border border-teal-200 p-3 text-sm font-bold text-teal-800">
-          Vinculado al número terminado en {whatsappStatus.phone_masked}
+          Telegram vinculado a tu cuenta de personal. Avisos diarios: {telegramStatus.reminders_enabled?'activados':'desactivados'}.
         </p>
-        <button type="button" disabled={whatsappLinkBusy} onclick={()=>void unlinkWhatsapp()}
-          class="rounded-xl border border-red-200 px-4 py-3 text-sm font-bold text-red-700">Desvincular número</button>
+        <button type="button" disabled={telegramLinkBusy} onclick={()=>void unlinkTelegram()}
+          class="rounded-xl border border-red-200 px-4 py-3 text-sm font-bold text-red-700">Desvincular Telegram</button>
       {:else}
-        <p class="text-sm text-slate-600">No hay un número vinculado actualmente.</p>
-        <button type="button" disabled={whatsappLinkBusy||!whatsappStatus?.configured} onclick={()=>void generateWhatsappCode()}
+        <p class="text-sm text-slate-600">No hay una conversación privada de Telegram vinculada todavía.</p>
+        <button type="button" disabled={telegramLinkBusy||!telegramStatus?.configured} onclick={()=>void generateTelegramCode()}
           class="rounded-xl bg-teal-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">Generar código de vinculación</button>
-        {#if whatsappLinkCode}
+        {#if telegramLinkCode}
           <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-2">
             <p class="text-xs font-bold text-teal-900">Código de 8 dígitos (válido 10 minutos)</p>
-            <p class="font-mono font-extrabold tracking-widest text-2xl select-all">{whatsappLinkCode}</p>
-            <p class="text-sm text-slate-700">Desde TU número, envía al WhatsApp oficial del bot: <strong>VINCULAR {whatsappLinkCode}</strong></p>
-            <p class="text-xs text-slate-500">Expira: {new Date(whatsappLinkExpiry).toLocaleString('es-CU')}</p>
+            <p class="font-mono font-extrabold tracking-widest text-2xl select-all">{telegramLinkCode}</p>
+            <p class="text-sm text-slate-700">Abre TU chat privado con el bot oficial de Telegram, pulsa Iniciar y envía: <strong>/vincular {telegramLinkCode}</strong></p>
+            <p class="text-xs text-slate-500">Expira: {new Date(telegramLinkExpiry).toLocaleString('es-CU')}</p>
           </div>
         {/if}
       {/if}
-      <button type="button" disabled={whatsappLinkBusy} onclick={()=>void refreshWhatsappLink()}
+      <button type="button" disabled={telegramLinkBusy} onclick={()=>void refreshTelegramLink()}
         class="rounded-xl border border-teal-200 px-4 py-3 text-sm text-teal-800 font-bold">Actualizar estado</button>
     </dialog>
   </div>

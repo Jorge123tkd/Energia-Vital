@@ -126,6 +126,10 @@ export const api = {
   participateGiveaway: (id: string, body: unknown) => post(`/api/giveaways/public/${id}/participate`, body),
 
   adminLogin: (body: { email: string; password: string }) => post('/api/auth/login', body),
+  getTelegramStaffLink: (token:string) => apiRequest('/api/telegram/admin/link', withAdmin(token)),
+  createTelegramStaffLinkCode: (token:string) => post('/api/telegram/admin/link-code', {}, withAdmin(token)),
+  deleteTelegramStaffLink: (token:string) => apiRequest('/api/telegram/admin/link',
+    withAdmin(token,{method:'DELETE'})),
   getWhatsAppStaffLink: (token:string) => apiRequest('/api/whatsapp/admin/link', withAdmin(token)),
   createWhatsAppStaffLinkCode: (token:string) => post('/api/whatsapp/admin/link-code', {}, withAdmin(token)),
   deleteWhatsAppStaffLink: (token:string) => apiRequest('/api/whatsapp/admin/link',
