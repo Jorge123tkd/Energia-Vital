@@ -24,6 +24,9 @@ assert.equal(detectIntent('¿A cuánto está el euro hoy?'),'currency_exchange')
 assert.equal(detectIntent('Cuánto cuestan los paneles en USD'),'price_inquiry');
 assert.equal(isCurrencyQuestion('Precio de inversor en dólares'),false);
 assert.equal(detectIntent('¿y el euro?'),'currency_exchange');
+assert.equal(detectIntent('¿y el dólar?'),'currency_exchange');
+assert.equal(detectIntent('¡y el euro!'),'currency_exchange');
+assert.equal(isCurrencyQuestion('y el euro'),true);
 assert.equal(detectIntent('Dólar a euro'),'currency_exchange');
 const exchange=generateResponse('Precio del dolar',ctx);
 assert.equal(exchange.intent,'currency_exchange');
