@@ -248,13 +248,19 @@ adminCustomersRoutes.patch('/requests/:id/details', requireAdminAuth, async c =>
     location.length>500||(preferredDate && (!/^\d{4}-\d{2}-\d{2}$/.test(preferredDate)||
       !Number.isFinite(Date.parse(preferredDate+'T00:00:00Z')))))
     return c.json({error:'Asunto de 3 a 180 caracteres, descripción de 6 a 3000 y fecha válida (opcional).'},400);
-  const old=await c.env.DB.prepare('SELECT id,customer_id,updated_at FROM requests WHERE id=?').bind(id).first<{id:string;customer_id:string;updated_at:string}>();
+  const old=await c.env.DB.prepare('SELECT id,customer_id,description,updated_at FROM requests WHERE id=?').bind(id)
+    .first<{id:string;customer_id:string|null;description:string;updated_at:string}>();
   if(!old)return c.json({error:'Solicitud no encontrada.'},404);
   if(old.updated_at!==b.expected_updated_at)
     return c.json({error:'La solicitud cambió desde que la abriste. Actualiza el listado antes de editarla.'},409);
+  // La ficha de contacto externo se conserva aun si el administrador edita la descripción.
+  const prefix=!old.customer_id ? (old.description||'').match(/^\[Contacto por WhatsApp - sin cuenta\]\nNombre: [^\n]+\nTeléfono: [^\n]+\n\n/)?.[0] : undefined;
+  const cleanDescription=description.replace(/^\[Contacto por WhatsApp - sin cuenta\]\nNombre: [^\n]+\nTeléfono: [^\n]+\n\n/,'');
+  const fullDescription=prefix ? prefix+cleanDescription : description;
+  if(fullDescription.length>3500)return c.json({error:'La descripción completa excede el límite.'},400);
   const now=new Date().toISOString();
   const changed=await c.env.DB.prepare(`UPDATE requests SET title=?,description=?,location=?,preferred_date=?,updated_at=?
-    WHERE id=? AND updated_at=?`).bind(title,description,location,preferredDate||null,now,id,b.expected_updated_at).run();
+    WHERE id=? AND updated_at=?`).bind(title,fullDescription,location,preferredDate||null,now,id,b.expected_updated_at).run();
   if(!changed.meta?.changes)return c.json({error:'La solicitud se modificó mientras la editabas. Actualiza el listado.'},409);
   await c.env.DB.prepare(`INSERT INTO audit_logs
     (id,admin_user_id,action,entity_type,entity_id,details,created_at) VALUES (?,?,?,'request',?,?,?)`)
