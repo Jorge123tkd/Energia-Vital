@@ -170,6 +170,11 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     return {reply:'Para acceder como personal debes vincular esta conversación desde una sesión de /admin. No basta con indicar tu cargo.',skipHistory:true};
   if(isOutOfScopeMessage(text))return {reply:OUT_OF_SCOPE_REPLY};
   if(isCurrencyQuestion(text))return {reply:formatExchangeReply(await getElToqueRates(env.ELTOQUE_API_TOKEN))};
+  if(detectIntent(text)==='telegram'){
+    return {reply:'Ya estás conversando con el asistente de Bonaire en Telegram.\n'+
+      'Aquí puedo orientarte sobre equipos solares, precios publicados y servicios.\n'+
+      'WhatsApp permanece como canal de atención HUMANA para contactar a nuestros gestores.'};
+  }
   const solar=advanceSolarGuidance(/^\/asesor$/.test(lower)?'asesoramiento solar':text,state);
   if(solar.handled)return {reply:solar.reply,state:solar.state};
   const context=await loadAssistantContext(env.DB);
