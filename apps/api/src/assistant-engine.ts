@@ -295,12 +295,16 @@ export function generateResponse(
   let intent = detectIntent(message);
   // Una respuesta corta ("sí", "48 voltios", "dos horas") continúa el asunto
   // de la conversación, en lugar de reiniciar el diálogo con una plantilla.
-  if (intent === 'general' && message.length < 110) {
+  const tokens = tokenize(message);
+  // Solo una respuesta realmente breve puede heredar la intención anterior.
+  // «Saber de la crisis mundial» no debe convertirse en el último tema de catálogo.
+  const subject = normalize(message);
+  const newTopic = /\b(?:crisis|economia|inflacion|guerra|conflicto|noticias|historia|cultura)\b/.test(subject);
+  if (intent === 'general' && message.length < 45 && tokens.length <= 1 && !newTopic) {
     const previous = [...history].reverse().find(entry =>
       entry.role === 'user' && !['general', 'greeting'].includes(detectIntent(entry.content)));
     if (previous) intent = detectIntent(previous.content);
   }
-  const tokens = tokenize(message);
 
   if (intent === 'currency_exchange') return {
     intent, source:'template',
