@@ -6,6 +6,7 @@
   import AdminCustomers from './components/AdminCustomers.svelte';
   import AdminStaff from './components/AdminStaff.svelte';
   import AdminNotifications from './components/AdminNotifications.svelte';
+  import NotificationsPage from './components/NotificationsPage.svelte';
   import NotificationBell from './components/NotificationBell.svelte';
   import AdminRequestCategories from './components/AdminRequestCategories.svelte';
   import RequestPhotoGallery from './components/RequestPhotoGallery.svelte';
@@ -18,7 +19,7 @@
   let checking = $state(true);
   let error = $state('');
   let message = $state('');
-  let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'notifications'>('requests');
+  let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'alerts' | 'notifications'>('requests');
   let mobileMenu = $state(false);
   let accountMenu = $state(false);
   let syncBusy = $state(false);
@@ -78,7 +79,8 @@
       { id: 'site', title: 'Mi sitio web' },
       { id: 'staff', title: 'Personal y permisos' },
     ] : []),
-    { id: 'notifications', title: 'Notificaciones' }
+    { id: 'alerts', title: 'Avisos internos' },
+    ...(staffRole === 'admin' ? [{ id: 'notifications', title: 'Notificaciones a clientes' }] : [])
   ]);
   function chooseTab(next: typeof tab) {
     tab = next;
@@ -226,7 +228,7 @@
 
       <div class="flex items-center justify-end gap-2 ml-auto shrink-0">
         {#if token}
-          <NotificationBell staff {token} onAll={() => chooseTab('notifications')} />
+          <NotificationBell staff {token} onAll={() => chooseTab('alerts')} />
           <div class="hidden xl:block relative">
             <button type="button" class="flex items-center gap-2 rounded-xl border border-slate-200 text-slate-700 px-3 py-2.5 text-sm font-bold bg-white hover:bg-slate-50"
               aria-label="Abrir menú de mi cuenta" aria-expanded={accountMenu} onclick={() => accountMenu = !accountMenu}>
@@ -430,8 +432,10 @@
       <AdminContent {token} {tab} {products} {services} {categories} onRefresh={async () => { await reload(); }} />
     {:else if staffRole === 'admin' && tab === 'staff'}
       <AdminStaff {token} {ownId} />
-    {:else if tab === 'notifications'}
-      <AdminNotifications {token} {customers} canSend={staffRole === 'admin'} />
+    {:else if tab === 'alerts'}
+      <NotificationsPage staff {token} />
+    {:else if tab === 'notifications' && staffRole === 'admin'}
+      <AdminNotifications {token} canSend={true} />
     {/if}
   {/if}
 </div>
