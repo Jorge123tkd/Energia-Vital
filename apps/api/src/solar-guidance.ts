@@ -1,6 +1,6 @@
 /** Asesoramiento solar por chat: estimación comercial, NO diseño eléctrico. */
 export type SolarStage =
-  | 'sector' | 'level' | 'simple-loads' | 'phase' | 'origin'
+  | 'ownership' | 'sector' | 'level' | 'simple-loads' | 'phase' | 'origin'
   | 'power' | 'measurement' | 'hours' | 'essential' | 'inverter' | 'backup' | 'sun';
 export type SimpleLoad = { name:string; watts:number; hours:number; units:number; critical:boolean; duty:number };
 export type SolarState = {
@@ -17,7 +17,8 @@ type StepResult={handled:boolean;state:SolarState|null;reply:string};
 const normalize=(s:string)=>s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
 const numbers=(s:string)=>(s.match(/\d+(?:[.,]\d+)?/g)||[]).map(x=>Number(x.replace(',','.')));
 const valid=(x:number,min:number,max:number)=>Number.isFinite(x)&&x>=min&&x<=max;
-const sectorQuestion='Empecemos tu asesoría solar Bonaire. Primero, ¿qué sector necesitas alimentar?\n\n1. Vivienda o residencial\n2. Negocio privado\n3. Centro estatal\n\nResponde 1, 2 o 3.';
+const ownershipQuestion='¡Empecemos tu estudio solar Bonaire! Antes de calcular: ¿ya tienes un inversor?\n\n1. No, necesito un sistema nuevo.\n2. Sí, tengo un inversor y quiero aprovecharlo o ampliarlo.\n\nResponde 1 o 2. Si lo tienes y sabes la marca, puedes escribir «sí, marca y modelo».';
+const sectorQuestion='¿Para qué necesitas energía?\n\n1. Vivienda o residencial\n2. Negocio privado\n3. Centro estatal\n\nResponde 1, 2 o 3.';
 const levelQuestion='¿Cuánta experiencia tienes con los datos eléctricos?\n\n1. Guía sencilla: dime tus electrodomésticos y estimaremos valores habituales.\n2. Modo técnico: conozco potencias, lecturas o datos del equipo.\n\nResponde 1 o 2.';
 const loadsQuestion='Escribe los equipos que tienes y la cantidad, separados por comas. Por ejemplo: «1 refrigerador, 1 televisor, 2 ventiladores, 6 luces LED, 1 router».\n\nUsaremos potencias y horas orientativas que podrás ajustar después desde «Asesor solar» en Bonaire.';
 const phaseQuestion='Para el cálculo técnico, ¿qué tipo de instalación tienes?\n\n1. Monofásica\n2. Dos líneas / 220 V\n3. Trifásica\n\nResponde 1, 2 o 3.';
@@ -29,13 +30,13 @@ const catalogue=[
   {name:'Ventilador',words:/ventilador|abanico/,watts:65,hours:8,duty:1,critical:true},
   {name:'Bombilla LED',words:/bombilla|bombillo|luces|foco|lampara|led/,watts:10,hours:5,duty:1,critical:true},
   {name:'Router',words:/router|modem|internet|wifi/,watts:15,hours:10,duty:1,critical:true},
-  {name:'Aire acondicionado',words:/aire acond|split/,watts:1200,hours:5,duty:1,critical:false},
+  {name:'Aire acondicionado',words:/\b(?:aires?|airas?)\s+acondicionad[oa]s?\b|\b(?:mini\s*)?splits?\b/,watts:1200,hours:5,duty:1,critical:false},
   {name:'Bomba de agua',words:/bomba/,watts:750,hours:1,duty:1,critical:false},
   {name:'Computadora',words:/computadora|ordenador|pc\b|laptop/,watts:150,hours:6,duty:1,critical:false},
   {name:'Lavadora',words:/lavadora/,watts:600,hours:1,duty:1,critical:false},
   {name:'Microondas',words:/microondas/,watts:1200,hours:0.4,duty:1,critical:false},
 ];
-function parseLoads(input:string):SimpleLoad[]{
+export function parseLoads(input:string):SimpleLoad[]{
   const items:SimpleLoad[]=[];
   for(const chunk of input.split(/[,;\n]+/).slice(0,30)){
     const part=normalize(chunk);
@@ -92,7 +93,9 @@ function finalEstimate(s:SolarState,hsp:number):string{
       'Inversor existente: '+s.existingInverter+'. Verificar ficha del fabricante antes de comprar paneles.':
       'Si ya tienes un inversor, será necesario conocer su ficha técnica.')+
     '\nNunca conectes '+panels+' paneles en serie o paralelo basándote solo en el conteo: hacen falta Voc, Vmp, Isc, coeficientes de temperatura y límites de cada MPPT.'+
-    '\n\nSupuestos: 80% de descarga, 90% de eficiencia de batería y 75% de rendimiento fotovoltaico. El diseño final requiere revisar sombras, temperaturas, arranques, protecciones y equipo real.'+
+    (loads.some(x=>x.name==='Aire acondicionado')
+      ?'\nATENCIÓN: cada aire acondicionado se estimó provisionalmente en 1.200 W. Confirma los datos de placa, el tipo inverter, horas reales y arranque; con dos aires la batería y el inversor pueden necesitar capacidades considerablemente mayores.':'')+
+    '\n\nSupuestos: 80% de descarga, 90% de eficiencia de batería y 75% de rendimiento fotovoltaico. Los paneles son una opción para generación diurna, no se presupone que ya existan. El diseño final requiere revisar sombras, temperaturas, arranques, protecciones y equipo real.'+
     '\n\nPuedes detallar cada aparato en la página «Asesor solar» o solicitar una evaluación técnica.';
 }
 export function advanceSolarGuidance(input:string,previous?:SolarState|null):StepResult{
@@ -101,11 +104,18 @@ export function advanceSolarGuidance(input:string,previous?:SolarState|null):Ste
   const cancel=/^(cancelar|salir de asesoria|terminar asesoria|detener calculo)$/.test(message);
   if(cancel&&previous)return {handled:true,state:null,reply:'Asesoramiento cancelado. Escribe «asesoramiento solar» cuando quieras retomarlo.'};
   if((reset&&previous)||flowStart.test(message))
-    return {handled:true,state:{stage:'sector'},reply:sectorQuestion};
+    return {handled:true,state:{stage:'ownership'},reply:ownershipQuestion};
   if(!previous)return {handled:false,state:null,reply:''};
   const invalid=(help:string):StepResult=>({handled:true,state:previous,
     reply:help+'\n\nPuedes escribir «cancelar» o «reiniciar» cuando quieras.'});
   switch(previous.stage){
+    case 'ownership':{
+      const owns = message==='2'||/^(si|tengo|ya tengo|poseo)\b/.test(message);
+      const none = message==='1'||/^(no|ninguno|sin inversor)\b/.test(message);
+      if (!owns && !none) return invalid(ownershipQuestion);
+      return {handled:true,state:{...previous,existingInverter:owns?(message==='2'?'sí':message):'no',stage:'sector'},
+        reply:sectorQuestion};
+    }
     case 'sector':{
       const sector=message==='1'||message.includes('residen')||message.includes('vivienda')?'residencial':
         message==='2'||message.includes('privad')||message.includes('negocio')?'privado':
@@ -121,8 +131,15 @@ export function advanceSolarGuidance(input:string,previous?:SolarState|null):Ste
         reply:level==='basico'?loadsQuestion:phaseQuestion};
     }
     case 'simple-loads':{
+      const chunks=message.split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean).slice(0,30);
+      const unknown=chunks.filter(chunk=>!catalogue.some(item=>item.words.test(chunk)));
       const loads=parseLoads(message);
-      if(!loads.length)return invalid(loadsQuestion+'\nNo reconocí equipos. Usa nombres como nevera, TV, ventilador, luces LED o aire acondicionado.');
+      if(unknown.length){
+        const recognized=loads.length ? '\nSí reconocí: '+loads.map(x=>x.units+' × '+x.name).join(', ')+'.' : '';
+        return invalid('No reconocí estos equipos: '+unknown.join(', ')+'.'+recognized+
+          '\nPrefiero preguntarte antes que omitirlos y calcular una batería insuficiente. Prueba «2 aires acondicionados» o descríbelos en la página Asesor solar.');
+      }
+      if(!loads.length)return invalid(loadsQuestion+'\nNo reconocí equipos. Usa nombres como nevera, TV, ventiladores, luces LED o aires acondicionados.');
       const summary=loads.map(x=>x.units+' × '+x.name+' ('+x.watts+' W aprox.)').join(', ');
       return {handled:true,state:{...previous,simpleLoads:loads,stage:'essential'},
         reply:'Anoté: '+summary+'.\n\nPara las baterías, ¿qué quieres mantener durante un apagón?\n\n1. Solo esenciales (nevera, luces, ventiladores y router).\n2. Todos los equipos listados.\n\nSi tienes aparatos especiales, el formulario «Asesor solar» te permite detallarlos.'};
@@ -169,11 +186,13 @@ export function advanceSolarGuidance(input:string,previous?:SolarState|null):Ste
         if(message!=='1'&&message!=='2')return invalid('Responde 1 para solo cargas esenciales o 2 para todos los equipos.');
         if(message==='1' && !(previous.simpleLoads||[]).some(x=>x.critical))
           return invalid('De los aparatos que nombraste, ninguno está clasificado como esencial en esta guía. Responde 2 para respaldar los que anotaste, o usa el formulario para marcar los equipos indispensables.');
-        return {handled:true,state:{...previous,onlyCritical:message==='1',stage:'inverter'},reply:inverterQuestion};
+        return {handled:true,state:{...previous,onlyCritical:message==='1',stage:'backup'},
+          reply:'¿Cuántas horas de energía necesitas durante un apagón? Por ejemplo, «10». Si no conoces los vatios de cada aparato usaremos referencias y te diremos cuáles debes confirmar.'};
       }
       const v=numbers(message);
       if(v.length!==1||!valid(v[0],5,100))return invalid('Indica un porcentaje de potencia crítica entre 5 y 100, por ejemplo «35».');
-      return {handled:true,state:{...previous,essentialPercent:v[0],stage:'inverter'},reply:inverterQuestion};
+      return {handled:true,state:{...previous,essentialPercent:v[0],stage:'backup'},
+        reply:'¿Cuántas horas necesitas que funcione tu sistema durante un apagón? Por ejemplo, «10».'};
     }
     case 'inverter':{
       if(!message||message.length>200)return invalid(inverterQuestion);
@@ -185,8 +204,9 @@ export function advanceSolarGuidance(input:string,previous?:SolarState|null):Ste
     case 'backup':{
       const vals=numbers(message);
       if(vals.length!==1||!valid(vals[0],.5,72))return invalid('Responde entre 0,5 y 72 horas, por ejemplo «5».');
+      if(previous.level==='basico')return {handled:true,state:null,reply:finalEstimate({...previous,backup:vals[0]},4.5)};
       return {handled:true,state:{...previous,backup:vals[0],stage:'sun'},
-        reply:'Última pregunta: ¿cuántas horas solares pico podemos estimar por día? Puedes usar «4,5» como supuesto provisional y revisarlo luego con la ubicación y las sombras.'};
+        reply:'En modo técnico, ¿qué horas solares pico deseas usar como hipótesis? Por ejemplo, «4,5». Si no las conoces, usa ese valor provisional.'};
     }
     case 'sun':{
       const vals=numbers(message);
