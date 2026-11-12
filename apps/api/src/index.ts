@@ -11,6 +11,7 @@ import { adminRoutes } from './routes/admin';
 import { adminCustomersRoutes } from './routes/admin-customers';
 import { calendarRoutes } from './routes/calendar';
 import { telegramRoutes } from './routes/telegram';
+import { whatsappRoutes } from './routes/whatsapp';
 import { giveawaysRoutes } from './routes/giveaways';
 import { rewardsRoutes } from './routes/rewards';
 import { notificationsRoutes } from './routes/notifications';
@@ -60,6 +61,7 @@ export default {
     app.route('/api/admin-customers', adminCustomersRoutes);
     app.route('/api/calendar', calendarRoutes);
     app.route('/api/telegram', telegramRoutes);
+    app.route('/api/whatsapp', whatsappRoutes);
     app.route('/api/giveaways', giveawaysRoutes);
     app.route('/api/rewards', rewardsRoutes);
     app.route('/api/notifications', notificationsRoutes);

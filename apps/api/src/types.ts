@@ -207,6 +207,12 @@ export interface Env {
   ENVIRONMENT: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
+  /** WhatsApp Cloud API de Meta; configurar únicamente como secretos de Worker. */
+  WA_APP_SECRET?: string;
+  WA_VERIFY_TOKEN?: string;
+  WA_ACCESS_TOKEN?: string;
+  WA_PHONE_NUMBER_ID?: string;
+  WA_GRAPH_API_VERSION?: string;
   ADMIN_PASSWORD_HASH?: string;
   JWT_SECRET?: string;
   ADMIN_TOKEN?: string;

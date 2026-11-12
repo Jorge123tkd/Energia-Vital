@@ -126,6 +126,10 @@ export const api = {
   participateGiveaway: (id: string, body: unknown) => post(`/api/giveaways/public/${id}/participate`, body),
 
   adminLogin: (body: { email: string; password: string }) => post('/api/auth/login', body),
+  getWhatsAppStaffLink: (token:string) => apiRequest('/api/whatsapp/admin/link', withAdmin(token)),
+  createWhatsAppStaffLinkCode: (token:string) => post('/api/whatsapp/admin/link-code', {}, withAdmin(token)),
+  deleteWhatsAppStaffLink: (token:string) => apiRequest('/api/whatsapp/admin/link',
+    withAdmin(token,{method:'DELETE'})),
   adminMe: (token: string) => apiRequest('/api/auth/admin/me', withAdmin(token)),
   listStaff: (token: string) => apiRequest('/api/admin/users', withAdmin(token)),
   createStaff: (token: string, body: { email: string; password: string; role: 'admin' | 'operator' }) =>
