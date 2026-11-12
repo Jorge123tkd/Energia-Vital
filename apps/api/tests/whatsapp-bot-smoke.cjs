@@ -8,7 +8,7 @@ const ts=require('typescript');
 const {Hono}=require('hono');
 const source=fs.readFileSync(path.resolve(__dirname,'../src/routes/whatsapp.ts'),'utf8');
 const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
-const module={exports:{}};
+const transpiledModule={exports:{}};
 const fakeRequire=(name)=>{
  if(name==='hono')return {Hono};
  if(name==='../middleware')return {requireStaffAuth:async(c,next)=>c.json({error:'unverified'},401),getUser:()=>null};
@@ -17,8 +17,8 @@ const fakeRequire=(name)=>{
  if(name==='../exchange-rates')return {getElToqueRates:()=>null,formatExchangeReply:()=>''};
  return {};
 };
-new Function('require','module','exports',js)(fakeRequire,module,module.exports);
-const {whatsappRoutes,extractIncoming,maskWhatsAppId,verifyMetaSignature}=module.exports;
+new Function('require','module','exports',js)(fakeRequire,transpiledModule,transpiledModule.exports);
+const {whatsappRoutes,extractIncoming,maskWhatsAppId,verifyMetaSignature}=transpiledModule.exports;
 const key='local-test-meta-app-secret';
 const body=new TextEncoder().encode('{"object":"whatsapp_business_account"}');
 async function run(){
@@ -26,7 +26,7 @@ async function run(){
  const signed=await crypto.subtle.sign('HMAC',cryptoKey,body);
  const hex=Buffer.from(new Uint8Array(signed)).toString('hex');
  assert.equal(await verifyMetaSignature(key,body,'sha256='+hex),true);
- assert.equal(await verifyMetaSignature(key,body,'sha256='+hex.slice(0,62)+'ff'),false);
+ assert.equal(await verifyMetaSignature(key,body,'sha256='+hex.slice(0,62)+(hex.slice(-2)==='ff'?'00':'ff')),false);
  assert.equal(await verifyMetaSignature(key,body,'sha1='+hex),false);
  assert.equal(await verifyMetaSignature(key,new TextEncoder().encode('not the same body'),'sha256='+hex),false);
  const payload={object:'whatsapp_business_account',entry:[{changes:[{field:'messages',value:{
