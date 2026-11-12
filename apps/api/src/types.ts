@@ -373,6 +373,7 @@ export interface CustomerPoints {
 // === Notifications ===
 
 export type NotificationType =
+  | 'welcome'
   | 'telegram_login'
   | 'phone_verified'
   | 'giveaway_win'
