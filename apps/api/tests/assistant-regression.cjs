@@ -13,7 +13,7 @@ function load(rel){
   new Function('require','module','exports',js)(()=>({}),module,module.exports);
   return module.exports;
 }
-const {detectIntent,generateResponse,isCurrencyQuestion}=load('assistant-engine.ts');
+const {detectIntent,generateResponse,isCurrencyQuestion,isOutOfScopeMessage,OUT_OF_SCOPE_REPLY,buildSystemPrompt}=load('assistant-engine.ts');
 const {advanceSolarGuidance,parseLoads}=load('solar-guidance.ts');
 const {parseElToquePayload,formatExchangeReply}=load('exchange-rates.ts');
 
@@ -31,12 +31,18 @@ assert.doesNotMatch(exchange.text,/Panel 550|cotizar equipos/);
 assert.match(exchange.text,/elTOQUE/i);
 
 const crisis=generateResponse('Saber de la crisis mundial',ctx);
-assert.match(crisis.text,/inflaci[oó]n|econom[ií]a/i);
-assert.doesNotMatch(crisis.text,/Trabajamos con/);
+assert.equal(crisis.text,OUT_OF_SCOPE_REPLY);
+assert.match(crisis.text,/Bonaire/);
+assert.match(crisis.text,/paneles solares/);
+assert.doesNotMatch(crisis.text,/inflaci[oó]n|conflictos internacionales/i);
+assert.equal(isOutOfScopeMessage('Saber de la crisis mundial'),true);
+assert.equal(isOutOfScopeMessage('¿Qué paneles solares aguantan los apagones?'),false);
+assert.equal(isOutOfScopeMessage('¿Cómo afecta la crisis de electricidad a mis baterías solares?'),false);
 const crisisAfterCurrency=generateResponse('Saber de la crisis mundial',ctx,
   [{role:'user',content:'Precio del dólar'},{role:'assistant',content:'No tengo tasas recientes'}]);
 assert.equal(crisisAfterCurrency.intent,'general','Nuevo tema general no hereda precio del dólar');
-assert.match(crisisAfterCurrency.text,/crisis mundial|inflaci[oó]n/i);
+assert.equal(crisisAfterCurrency.text,OUT_OF_SCOPE_REPLY);
+assert.match(buildSystemPrompt(ctx),/responde SOLO consultas relacionadas/);
 
 const loads=parseLoads('1 televisor, 1 refrigerador, 2 aires acondicionados, 5 luces led, 1 computadora');
 assert.equal(loads.length,5);
@@ -85,4 +91,4 @@ assert.match(reply,/1 EUR =/);
 assert.match(reply,/1 MLC =/);
 assert.match(reply,/no una cotización directa/i);
 assert.doesNotMatch(formatExchangeReply(null),/1 USD = [0-9]/);
-console.log('PASS assistant regression: currency routing, general questions, 2 ACs, truthful rates, unknown loads');
+console.log('PASS assistant regression: business-only scope, currency exception, 2 ACs, truthful rates, unknown loads');

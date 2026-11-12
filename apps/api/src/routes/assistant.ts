@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { detectIntent, generateResponse, loadAssistantContext } from '../assistant-engine';
+import { detectIntent, generateResponse, loadAssistantContext, isOutOfScopeMessage, OUT_OF_SCOPE_REPLY } from '../assistant-engine';
 import { callAI } from '../assistant-ai';
 import { getUser, requireCustomerAuth } from '../middleware';
 import { rateLimited } from '../rate-limit';
@@ -89,6 +89,16 @@ assistantRoutes.post('/message', async c => {
         .bind(messageId, message, intent, now, sessionId, user.user_id),
     ]);
     if (!batch[1].meta?.changes) return c.json({ error: 'Esta conversación pertenece a otra cuenta' }, 403);
+
+    // Respetar el alcance de Bonaire antes de IA y antes de una asesoría solar activa.
+    // Nunca perder ni reiniciar el estado de una asesoría por una pregunta externa.
+    if (isOutOfScopeMessage(message)) {
+      const replyId=crypto.randomUUID();
+      await DB.prepare(`INSERT INTO assistant_messages (id,session_id,role,content,intent,metadata,created_at)
+        VALUES (?,?,'assistant',?,'general',?,?)`)
+        .bind(replyId,sessionId,OUT_OF_SCOPE_REPLY,JSON.stringify({source:'scope'}),new Date().toISOString()).run();
+      return c.json({session_id:sessionId,response:OUT_OF_SCOPE_REPLY,source:'scope',intent:'general',message_id:replyId});
+    }
 
     // Responder consultas de moneda con elTOQUE en vivo (si existe token autorizado).
     // Nunca permitir que la IA invente tasas ni que el catálogo reemplace la pregunta.

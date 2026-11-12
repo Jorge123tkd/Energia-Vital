@@ -31,6 +31,19 @@ export type AssistantIntent =
 const DEFAULT_WELCOME =
   '¡Hola! Soy el asistente de Bonaire. ¿En qué puedo ayudarte hoy?';
 
+/** Un mensaje fuera del ámbito comercial debe recibir una redirección breve, no una explicación inventada. */
+export const OUT_OF_SCOPE_REPLY =
+  'Sobre ese tema no tengo información para ofrecerte. Soy el asistente de Bonaire y puedo asesorarte sobre paneles solares, inversores, baterías, autonomía eléctrica, productos y servicios de instalación o mantenimiento. ¿En qué puedo ayudarte?';
+
+/** Preguntas ajenas a Bonaire: interceptarlas incluso cuando el modelo de IA esté activado. */
+export function isOutOfScopeMessage(message:string): boolean {
+  const m = normalize(message);
+  const external = /\b(?:crisis mundial|crisis global|economia mundial|inflacion|guerras?|conflictos? internacionales|politica|politicos?|elecciones?|presidentes?|futbol|deportes?|mundial de futbol|peliculas?|musica|cantantes?|horoscopos?|historia universal|noticias mundiales|noticias internacionales)\b/.test(m);
+  // Permitir cuestiones sobre crisis del suministro o coste energético vinculadas a Bonaire.
+  const business = /\b(?:bonaire|panel(?:es)?|solar(?:es)?|inversor(?:es)?|baterias?|electricidad|apagones?|corriente|energia|fotovoltaic[oa]s?|reparacion(?:es)?|mantenimiento|servicio(?:s)?|instalacion(?:es)?|catalogo)\b/.test(m);
+  return external && !business;
+}
+
 export function detectIntent(message: string): AssistantIntent {
   const m = normalizeWithTypos(message);
 
@@ -299,13 +312,14 @@ export function generateResponse(
   // Solo una respuesta realmente breve puede heredar la intención anterior.
   // «Saber de la crisis mundial» no debe convertirse en el último tema de catálogo.
   const subject = normalize(message);
-  const newTopic = /\b(?:crisis|economia|inflacion|guerra|conflicto|noticias|historia|cultura)\b/.test(subject);
+  const newTopic = isOutOfScopeMessage(message);
   if (intent === 'general' && message.length < 45 && tokens.length <= 1 && !newTopic) {
     const previous = [...history].reverse().find(entry =>
       entry.role === 'user' && !['general', 'greeting'].includes(detectIntent(entry.content)));
     if (previous) intent = detectIntent(previous.content);
   }
 
+  if (isOutOfScopeMessage(message)) return {text:OUT_OF_SCOPE_REPLY,intent:'general',source:'template'};
   if (intent === 'currency_exchange') return {
     intent, source:'template',
     text:'Para informarte del dólar, euro y MLC en Cuba, necesito una tasa reciente verificada. La fuente de referencia para el mercado informal es elTOQUE: https://eltoque.com/tasas-de-cambio-cuba/mercado-informal/. No inventaré valores ni confundiré esa referencia con la tasa oficial del banco.'
@@ -480,14 +494,12 @@ export function generateResponse(
     }
 
     default: {
-      if (/\b(?:crisis|economia|inflacion|guerra|conflictos?|situacion mundial|noticias)\b/.test(normalize(message))) {
-        return {
-          text:'Claro, podemos hablar de la crisis mundial. Tiene varias dimensiones: inflación y pérdida de poder adquisitivo, conflictos internacionales, combustibles y energía, suministro de alimentos y cambio climático. Para Cuba, estos temas también repercuten en la importación de alimentos, combustible y tecnología. No dispongo aquí de noticias verificadas en tiempo real, así que no atribuiré cifras ni titulares actuales sin fuente. ¿Quieres profundizar en economía, conflictos, precios o su impacto en Cuba?',
-          intent, source:'template'
-        };
-      }
+      const m = normalize(message);
+      const business = /\b(?:bonaire|panel(?:es)?|solar(?:es)?|inversor(?:es)?|baterias?|electricidad|apagones?|energia|fotovoltaic[oa]s?|reparacion(?:es)?|mantenimiento|servicio(?:s)?|instalacion(?:es)?|catalogo)\b/.test(m);
       return {
-        text:'También puedo ayudarte con temas generales, no solo con productos de Bonaire. Cuéntame qué aspecto deseas conocer. Si preguntas por noticias o cifras que cambian hoy, necesitaré una fuente actualizada para confirmarlas.',
+        text: business
+          ? 'Con gusto te ayudo con Bonaire. Puedo orientarte sobre equipos solares, baterías, inversores, precios del catálogo y servicios de instalación, mantenimiento o reparación. ¿Qué necesitas saber?'
+          : OUT_OF_SCOPE_REPLY,
         intent, source:'template'
       };
     }
@@ -509,7 +521,8 @@ export function buildSystemPrompt(ctx: AssistantContext): string {
   return [
     `Eres el asistente de ${business}, una empresa de energía solar y equipos eléctricos.`,
     'Responde en español claro y cercano al contexto de Cuba. Guía paso a paso con una pregunta útil por turno.',
-    'Puedes conversar sobre cultura general, economía y temas mundiales. No respondas siempre con el menú comercial a preguntas generales.',
+    'Alcance obligatorio: responde SOLO consultas relacionadas con Bonaire, sistemas solares, baterías, inversores, energía de respaldo, catálogo, servicios de instalación, mantenimiento y reparación; además, las consultas de tasas de Cuba mediante el servicio de tasas autorizado.',
+    'Si te preguntan sobre crisis mundial, política, guerras, deportes u otros temas ajenos a Bonaire, no expliques esos temas ni compartas noticias: responde que no ofreces información sobre ellos y redirige de forma amable a productos y servicios de Bonaire.',
     'No inventes noticias actuales ni tasas cambiarias. Distingue el mercado informal elTOQUE de tasas oficiales y exige fuente reciente para cifras.',
     'La información del catálogo es orientativa: no inventes precios, existencias, garantía, compatibilidad, fechas ni trámites.',
     'Nunca afirmes que reservaste una cita, registraste una solicitud o realizaste un pedido: el chat no ejecuta esas acciones.',
