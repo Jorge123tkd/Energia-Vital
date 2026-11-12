@@ -1,6 +1,18 @@
 # Chatbots de Bonaire — WhatsApp y Telegram
 Actualizado: 12 de noviembre de 2026.
 
+## Estado ACTUAL — Telegram primero (12 de noviembre de 2026)
+
+La decisión más reciente del propietario reemplaza las fases antiguas de WhatsApp: se trabajará con **Telegram Bot API**, mientras WhatsApp/WhatsApp Business normal seguirá como atención humana de clientes cubanos. El código de WhatsApp Cloud API permanece inactivo por restricciones para números +53; **su archivo de migración fue movido fuera de las migraciones activas** a `docs/archived-migrations/011_whatsapp_bot_foundation.sql`. La ÚNICA migración nueva activa es `apps/api/migrations/011_telegram_bot.sql` y todavía NO ha sido aplicada.
+
+El bot de Telegram está preparado **solo en GitHub** (aún sin tokens, typechecks ni despliegue): `apps/api/src/routes/telegram.ts` integra catálogo, FAQ, asesoría solar, elTOQUE con token autorizado y rechazo de temas ajenos a Bonaire. Guarda mensajes y contexto en D1 separado del portal de clientes, permite `/nuevo`, `/historial` y `/borrarhistorial`. El acceso a agenda y tickets solo lo obtiene personal `admin/operator` activo que vincule su chat privado mediante un código de un solo uso emitido desde su sesión `/admin`. Comandos `/hoy`, `/manana`, `/pendientes`, `/desvincular`.
+
+También hay un resumen opt-in **a las 7:00 a. m. de Cuba** preparado con cron y `/avisos si`/`/avisos no`, sin activar por defecto ni afirmar asignaciones individuales de técnicos. Webhook firmado con secreto de Telegram, anti-duplicados y límites. Ningún usuario de Telegram puede obtener su historial web privado solo por el nombre o teléfono. Los trabajadores deben primero iniciar el chat con el bot.
+
+**Instrucciones vigentes y requisitos de activación:** [Telegram Bonaire desde cero](./TELEGRAM-BOT-DESDE-CERO.md).
+
+**Los apartados más abajo son notas históricas** y no autorizan ejecutar el archivo de WhatsApp archivado ni activar Meta.
+
 ## Acuerdos recuperados del usuario
 - WhatsApp y Telegram de **chatbot** son canales atendidos por el **asistente de Bonaire**, no números de administradores. Los teléfonos de atención humana y los enlaces de redes sociales son distintos.
 - En los bots, al elegir «Nueva conversación» se inicia una sesión independiente; el usuario quiere conservar memoria e historial para recuperar chats anteriores siempre que el canal lo permita.
@@ -19,7 +31,7 @@ Meta/WhatsApp Business Platform excluye números de Cuba **+53** de las comunica
 - https://help.twilio.com/articles/360051177134-What-countries-can-I-reach-with-the-Twilio-API-for-WhatsApp
 - https://docs.360dialog.com/docs/support/client-faq
 
-**Decisión recomendada mientras exista la restricción:** no aplicar D1 011, no configurar secretos Meta ni anunciar el bot de WhatsApp como disponible a clientes +53. No contratar terceros que prometan evadir las normas ni automatizar WhatsApp Web. Mantener WhatsApp/WhatsApp Business normal como canal **humano** de ventas, enlazado a «Crear solicitud» en /admin.
+**Decisión recomendada mientras exista la restricción:** no aplicar la migración WhatsApp archivada, no configurar secretos Meta ni anunciar el bot de WhatsApp como disponible a clientes +53. No contratar terceros que prometan evadir las normas ni automatizar WhatsApp Web. Mantener WhatsApp/WhatsApp Business normal como canal **humano** de ventas, enlazado a «Crear solicitud» en /admin.
 
 **Alternativa técnica:** priorizar **Telegram Bot API** y reutilizar Cloudflare Workers + D1 y el asesor de Bonaire para clientes, más vinculación verificada y comandos HOY/MAÑANA/PENDIENTES para staff. Hay un webhook Telegram elemental en `apps/api/src/routes/telegram.ts`, pero no tiene todavía la agenda ni el motor comercial conectados, y tampoco recordatorios programados. Probar Telegram con usuarios reales y evaluar disponibilidad y normativa antes de activarlo. Documentación: https://core.telegram.org/bots/api
 

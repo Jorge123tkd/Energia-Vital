@@ -1,13 +1,17 @@
 # Bonaire — Bot oficial de WhatsApp desde cero
 Actualizado: 12 de noviembre de 2026.
 
+## Documento histórico — NO aplicar esta guía a la operación actual
+
+La empresa decidió continuar el bot con Telegram. La antigua migración WhatsApp `011_whatsapp_bot_foundation.sql` fue **archivada** en `docs/archived-migrations/` y no debe ejecutarse. `apps/api/migrations/011_telegram_bot.sql` es exclusivamente de Telegram. Su guía vigente es [Telegram desde cero](./TELEGRAM-BOT-DESDE-CERO.md). El código Meta permanece desactivado.
+
 ## Alerta regional: clientes cubanos (+53) y WhatsApp Cloud API
 
 Meta/WhatsApp Business Platform excluye números de Cuba **+53** de las comunicaciones de la API comercial. Es distinto de los enlaces `wa.me` y de conversar manualmente en WhatsApp Business App. Cambiar de desarrollador, intermediario o país de acceso no subsana la exclusión de los teléfonos destinatarios. Los proveedores oficiales Twilio y 360dialog también documentan la restricción:
 - https://help.twilio.com/articles/360051177134-What-countries-can-I-reach-with-the-Twilio-API-for-WhatsApp
 - https://docs.360dialog.com/docs/support/client-faq
 
-**Decisión recomendada mientras exista la restricción:** no aplicar D1 011, no configurar secretos Meta ni anunciar el bot de WhatsApp como disponible a clientes +53. No contratar terceros que prometan evadir las normas ni automatizar WhatsApp Web. Mantener WhatsApp/WhatsApp Business normal como canal **humano** de ventas, enlazado a «Crear solicitud» en /admin.
+**Decisión recomendada mientras exista la restricción:** no aplicar la migración WhatsApp archivada, no configurar secretos Meta ni anunciar el bot de WhatsApp como disponible a clientes +53. No contratar terceros que prometan evadir las normas ni automatizar WhatsApp Web. Mantener WhatsApp/WhatsApp Business normal como canal **humano** de ventas, enlazado a «Crear solicitud» en /admin.
 
 **Alternativa técnica:** priorizar **Telegram Bot API** y reutilizar Cloudflare Workers + D1 y el asesor de Bonaire para clientes, más vinculación verificada y comandos HOY/MAÑANA/PENDIENTES para staff. Hay un webhook Telegram elemental en `apps/api/src/routes/telegram.ts`, pero no tiene todavía la agenda ni el motor comercial conectados, y tampoco recordatorios programados. Probar Telegram con usuarios reales y evaluar disponibilidad y normativa antes de activarlo. Documentación: https://core.telegram.org/bots/api
 

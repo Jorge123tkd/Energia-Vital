@@ -132,6 +132,18 @@ La configuración de **bienvenida automática** tiene su propio editor. Los mens
 
 Los enlaces HTTPS dentro de las respuestas del asistente se muestran como **texto de color y subrayado**, sin desplegar una URL larga. Al pulsarlos se abre la dirección correspondiente. Al utilizar **Compartir texto** el contenido de la conversación se copia/compartirá sin modificar y mantiene la URL original completa (`https://...`).
 
+## Bot oficial de Telegram para el equipo Bonaire
+
+El panel mantiene la gestión directa de Solicitudes (contador de pendientes, creación manual, edición y estados) y Citas. Ya no dispone de un apartado duplicado de «Avisos internos».
+
+Para vincular Telegram, entrar como administrador o moderador en **Mi cuenta → Vincular Telegram de equipo**, tras completar BotFather, la migración `011_telegram_bot.sql` y los secretos del Worker. Generar un código personal de **8 dígitos con 10 minutos de vigencia** y enviarlo desde el chat **privado** del bot como `/vincular CODIGO`. Nadie gana privilegios por escribir «soy admin».
+
+Una vez vinculado, los comandos `/hoy` y `/manana` muestran la agenda GENERAL del equipo, y `/pendientes` cuenta las solicitudes sin atender. `/desvincular` corta el acceso. Los recordatorios de la agenda general a las **7:00 a. m. hora de Cuba** solo se enviarán a usuarios del equipo que hayan optado expresamente por `/avisos si`; usar `/avisos no` para desactivarlos. No son asignaciones individuales a técnicos.
+
+El administrador principal dispone de los controles **Activar webhook de Telegram** y **Comprobar conexión** en el diálogo de vinculación, disponibles una vez configurados los secretos. No activar antes de probar la migración y el Worker.
+
+Guía completa: `docs/TELEGRAM-BOT-DESDE-CERO.md`. **No compartir tokens de BotFather en GitHub o en el chat.**
+
 ## Seguridad
 
 - No compartas tus credenciales de administrador
