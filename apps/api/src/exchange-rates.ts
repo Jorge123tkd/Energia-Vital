@@ -44,7 +44,10 @@ export async function getElToqueRates(token?:string):Promise<ElToqueRates|null> 
     if (!res.ok) return null;
     const raw: unknown=await res.json();
     const rates=parseElToquePayload(raw);
-    if (!rates) return null;
+    if (!rates || !rates.reportedAt) return null;
+    const dateMs=Date.parse(rates.reportedAt.slice(0,10)+'T00:00:00Z');
+    // Un dato sin fecha o claramente antiguo no puede presentarse como tasa actual.
+    if (!Number.isFinite(dateMs) || Math.abs(Date.now()-dateMs)>48*60*60*1000) return null;
     cached={rates,expiry:Date.now()+10*60*1000}; // limitar consultas y evitar carga excesiva
     return rates;
   } catch {

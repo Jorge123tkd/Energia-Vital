@@ -132,7 +132,14 @@ export function advanceSolarGuidance(input:string,previous?:SolarState|null):Ste
     }
     case 'simple-loads':{
       const chunks=message.split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean).slice(0,30);
-      const unknown=chunks.filter(chunk=>!catalogue.some(item=>item.words.test(chunk)));
+      // Si hay varios nombres sin coma, o una cantidad inválida, preguntar
+      // antes de calcular y evitar omisiones silenciosas.
+      const unknown=chunks.filter(chunk=>{
+        const matches=catalogue.filter(item=>item.words.test(chunk));
+        const qty=chunk.match(/\d{1,3}/);
+        return matches.length!==1 || (qty!==null && (!Number.isInteger(Number(qty[0])) ||
+          Number(qty[0])<1 || Number(qty[0])>100));
+      });
       const loads=parseLoads(message);
       if(unknown.length){
         const recognized=loads.length ? '\nSí reconocí: '+loads.map(x=>x.units+' × '+x.name).join(', ')+'.' : '';

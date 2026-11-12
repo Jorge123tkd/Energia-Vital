@@ -132,7 +132,9 @@ export function isCurrencyQuestion(text: string): boolean {
   const named = /\b(?:dolares?|euros?|usd|eur|mlc|divisas?|moneda nacional|peso cubano|cup)\b/.test(m);
   const exchange = /\b(?:cambio|cambiar|tasa|tipo de cambio|cotizacion|equivale|equivalencia|cuanto|precio|valor|vale)\b/.test(m);
   const goods = /\b(?:panel(?:es)?|baterias?|inversores?|servicios?|equipos?|productos?)\b/.test(m);
-  return named && (exchange || /^(?:dolares?|euros?|usd|eur|mlc)$/.test(m)) &&
+  const pair = /\b(?:dolares?|euros?|usd|eur)\s+(?:a|al|en|por)\s+(?:dolares?|euros?|usd|eur|cup|pesos?|moneda nacional)\b/.test(m);
+  const followup = /^\s*(?:y\s+)?(?:el|los)\s+(?:dolares?|euros?)\??\s*$/.test(m);
+  return named && (exchange || pair || followup || /^(?:dolares?|euros?|usd|eur|mlc)$/.test(m)) &&
     !(goods && !/\b(?:tasa|cambio|cotizacion)\b/.test(m));
 }
 
