@@ -47,6 +47,32 @@
   let telegramLinkOpen=$state(false),telegramLinkBusy=$state(false),telegramLinkError=$state('');
   let telegramStatus:{configured:boolean;linked:boolean;reminders_enabled:boolean}|null=$state(null);
   let telegramLinkCode=$state(''),telegramLinkExpiry=$state('');
+  let telegramSetupBusy=$state(false),telegramSetupStatus=$state('');
+  async function activateTelegramWebhook(){
+    if(staffRole!=='admin'||telegramSetupBusy)return;
+    if(!window.confirm('¿Activar el webhook de Telegram? Hazlo únicamente después de aplicar la migración 011 de Telegram y configurar sus dos secretos privados en Cloudflare.'))return;
+    telegramSetupBusy=true;telegramLinkError='';telegramSetupStatus='';
+    try{
+      const r=await api.setupTelegramWebhook(token);
+      if(!r.ok)throw new Error(r.description||'Telegram no confirmó la conexión.');
+      telegramSetupStatus='Webhook registrado con Telegram. Prueba /start en el bot y usa «Comprobar conexión».';
+    }catch(e){telegramLinkError=e instanceof Error?e.message:'No se pudo activar el bot.';}
+    finally{telegramSetupBusy=false;}
+  }
+  async function checkTelegramWebhook(){
+    if(staffRole!=='admin'||telegramSetupBusy)return;
+    telegramSetupBusy=true;telegramLinkError='';telegramSetupStatus='';
+    try{
+      const r=await api.getTelegramWebhookInfo(token);
+      if(!r.ok)throw new Error('Telegram devolvió un error consultando el webhook.');
+      const value=r.result||{};
+      telegramSetupStatus=value.url
+        ?'Webhook actual: '+value.url+'. Pendientes: '+(value.pending_update_count||0)+
+          (value.last_error_message?'. Último error: '+String(value.last_error_message).slice(0,300):'')
+        :'Telegram aún no tiene configurado un webhook.';
+    }catch(e){telegramLinkError=e instanceof Error?e.message:'No se pudo comprobar el bot.';}
+    finally{telegramSetupBusy=false;}
+  }
   async function openTelegramLink(){
     telegramLinkOpen=true;telegramLinkError='';telegramLinkCode='';
     await refreshTelegramLink();
@@ -571,6 +597,19 @@
       </div>
       <p class="text-sm text-slate-600">Vincula tu Telegram solo desde una sesión de personal en Bonaire. Primero crea el bot en @BotFather y configura sus secretos en Cloudflare; nunca compartas el código con otros.</p>
       {#if telegramLinkError}<p role="alert" class="rounded-xl bg-red-50 p-3 text-sm text-red-700">{telegramLinkError}</p>{/if}
+      {#if telegramSetupStatus}<p role="status" class="rounded-xl bg-teal-50 p-3 text-sm text-teal-800 break-words">{telegramSetupStatus}</p>{/if}
+      {#if staffRole==='admin'&&telegramStatus?.configured}
+        <div class="flex flex-wrap gap-2 rounded-xl border border-teal-200 bg-teal-50 p-3">
+          <button type="button" disabled={telegramSetupBusy} onclick={()=>void activateTelegramWebhook()}
+            class="rounded-xl bg-teal-700 px-3 py-2.5 font-semibold text-xs text-white disabled:opacity-50">
+            Activar webhook de Telegram
+          </button>
+          <button type="button" disabled={telegramSetupBusy} onclick={()=>void checkTelegramWebhook()}
+            class="rounded-xl border border-teal-200 bg-white px-3 py-2.5 font-semibold text-xs text-teal-800 disabled:opacity-50">
+            Comprobar conexión
+          </button>
+        </div>
+      {/if}
       {#if telegramStatus && !telegramStatus.configured}
         <p class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
           Telegram todavía no está configurado. Primero hay que crear el bot en @BotFather, aplicar la migración de Telegram y configurar sus secretos en Cloudflare. El resto del panel sigue funcionando.

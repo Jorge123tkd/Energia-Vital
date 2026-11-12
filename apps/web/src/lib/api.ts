@@ -126,6 +126,8 @@ export const api = {
   participateGiveaway: (id: string, body: unknown) => post(`/api/giveaways/public/${id}/participate`, body),
 
   adminLogin: (body: { email: string; password: string }) => post('/api/auth/login', body),
+  setupTelegramWebhook: (token:string) => post('/api/telegram/set-webhook',{},withAdmin(token)),
+  getTelegramWebhookInfo: (token:string) => apiRequest('/api/telegram/webhook-info',withAdmin(token)),
   getTelegramStaffLink: (token:string) => apiRequest('/api/telegram/admin/link', withAdmin(token)),
   createTelegramStaffLinkCode: (token:string) => post('/api/telegram/admin/link-code', {}, withAdmin(token)),
   deleteTelegramStaffLink: (token:string) => apiRequest('/api/telegram/admin/link',
