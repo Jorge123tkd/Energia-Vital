@@ -6,8 +6,6 @@
   import AdminCustomers from './components/AdminCustomers.svelte';
   import AdminStaff from './components/AdminStaff.svelte';
   import AdminNotifications from './components/AdminNotifications.svelte';
-  import NotificationsPage from './components/NotificationsPage.svelte';
-  import NotificationBell from './components/NotificationBell.svelte';
   import AdminRequestCategories from './components/AdminRequestCategories.svelte';
   import RequestPhotoGallery from './components/RequestPhotoGallery.svelte';
   let token = $state('');
@@ -19,7 +17,7 @@
   let checking = $state(true);
   let error = $state('');
   let message = $state('');
-  let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'alerts' | 'notifications'>('requests');
+  let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'notifications'>('requests');
   let mobileMenu = $state(false);
   let accountMenu = $state(false);
   let syncBusy = $state(false);
@@ -34,6 +32,60 @@
   let requestPage = $state(1);
   let appointmentPage = $state(1);
   let requestTotal = $state(0);
+  let pendingRequests = $state(0);
+  let manualRequestOpen = $state(false);
+  let manualRequestBusy = $state(false),manualRequestError = $state('');
+  let manualRecipientMode:'guest'|'customer' = $state('guest');
+  let manualCustomerQuery = $state(''),manualCustomers:any[]=$state([]);
+  let manualSearchBusy=$state(false),manualSearchError=$state('');
+  let manualSelectedCustomer:any=$state(null);
+  let manualContactName=$state(''),manualContactPhone=$state('');
+  let manualTitle=$state(''),manualDescription=$state(''),manualLocation=$state('');
+  let manualType=$state('consultation'),manualStatus=$state('pending'),manualDate=$state('');
+  let manualSearchSequence=0;
+  let manualSearchTimer:ReturnType<typeof setTimeout>|undefined;
+  async function lookupManualCustomers(query:string) {
+    const sequence=++manualSearchSequence;
+    if(query.trim().length<2){manualCustomers=[];manualSearchBusy=false;return;}
+    manualSearchBusy=true;manualSearchError='';
+    try {
+      const result=await api.adminCustomers(token,query.trim(),1,12);
+      if(sequence!==manualSearchSequence)return;
+      manualCustomers=(result.customers||[]).filter((c:any)=>Boolean(c.is_active));
+    }catch(e){if(sequence===manualSearchSequence)manualSearchError=e instanceof Error?e.message:'No se pudo buscar el cliente.';}
+    finally{if(sequence===manualSearchSequence)manualSearchBusy=false;}
+  }
+  function queueManualSearch(){
+    manualCustomers=[];
+    if(manualSearchTimer)clearTimeout(manualSearchTimer);
+    manualSearchTimer=setTimeout(()=>{void lookupManualCustomers(manualCustomerQuery)},280);
+  }
+  function resetManualRequest() {
+    manualRecipientMode='guest';manualSelectedCustomer=null;manualCustomerQuery='';manualCustomers=[];
+    manualContactName='';manualContactPhone='';manualTitle='';manualDescription='';
+    manualLocation='';manualType='consultation';manualStatus='pending';manualDate='';
+    manualRequestError='';
+  }
+  async function createManualRequest(e:SubmitEvent){
+    e.preventDefault();
+    if(manualRequestBusy)return;
+    if(manualRecipientMode==='customer'&&!manualSelectedCustomer){
+      manualRequestError='Busca y selecciona una cuenta de cliente.';return;
+    }
+    manualRequestBusy=true;manualRequestError='';error='';message='';
+    try{
+      await api.createAdminRequest(token,{
+        ...(manualRecipientMode==='customer'?{customer_id:manualSelectedCustomer.id}:
+          {contact_name:manualContactName.trim(),contact_phone:manualContactPhone.trim()}),
+        type:manualType,title:manualTitle.trim(),description:manualDescription.trim(),
+        status:manualStatus,location:manualLocation.trim(),preferred_date:manualDate||null
+      });
+      manualRequestOpen=false;resetManualRequest();
+      requestQuery='';await loadRequestPage(1);
+      message='Solicitud registrada correctamente; aparece en el listado.';
+    }catch(e){manualRequestError=e instanceof Error?e.message:'No se pudo crear la solicitud.';}
+    finally{manualRequestBusy=false;}
+  }
   let appointmentTotal = $state(0);
   let pagingBusy = $state(false);
   let copiedReference = $state('');
@@ -54,7 +106,8 @@
     pagingBusy = true;error = '';
     try {
       const data = await api.adminRequests(token, requestQuery, page, pageSize);
-      requests = data.requests ?? []; requestTotal = data.total ?? requests.length; requestPage = page;
+      requests = data.requests ?? []; requestTotal = data.total ?? requests.length;
+      pendingRequests = data.pending_count ?? 0;requestPage = page;
     } catch (e) { error = e instanceof Error ? e.message : 'No se pudieron buscar las solicitudes.'; }
     finally { pagingBusy = false; }
   }
@@ -79,7 +132,6 @@
       { id: 'site', title: 'Mi sitio web' },
       { id: 'staff', title: 'Personal y permisos' },
     ] : []),
-    { id: 'alerts', title: 'Avisos internos' },
     ...(staffRole === 'admin' ? [{ id: 'notifications', title: 'Notificaciones a clientes' }] : [])
   ]);
   function chooseTab(next: typeof tab) {
@@ -131,6 +183,7 @@
     token = ''; sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     mobileMenu = false; accountMenu = false;
     customers = []; requests = []; appointments = []; products = []; services = []; categories = [];
+    pendingRequests=0;manualRequestOpen=false;
   }
   async function reload(t = token) {
     if (!t) return;
@@ -140,7 +193,8 @@
         api.adminAppointments(t, appointmentQuery, appointmentPage, pageSize),
       ]);
       customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
-      requestTotal = r.total ?? requests.length; appointmentTotal = a.total ?? appointments.length;
+      requestTotal = r.total ?? requests.length; pendingRequests = r.pending_count ?? 0;
+      appointmentTotal = a.total ?? appointments.length;
       products = []; services = []; categories = [];
       return;
     }
@@ -150,7 +204,8 @@
       api.getAdminProducts(t), api.getAdminServices(t), api.getAdminCategories(t),
     ]);
     customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
-    requestTotal = r.total ?? requests.length; appointmentTotal = a.total ?? appointments.length;
+    requestTotal = r.total ?? requests.length; pendingRequests = r.pending_count ?? 0;
+    appointmentTotal = a.total ?? appointments.length;
     products = p.products ?? []; services = s.services ?? []; categories = cat.categories ?? [];
   }
   async function changeRequest(id: string, status: string) {
@@ -219,7 +274,9 @@
           {#each menuItems as item (item.id)}
             <button type="button" onclick={() => chooseTab(item.id as typeof tab)}
               aria-current={tab === item.id ? 'page' : undefined}
-              class="shrink-0 rounded-lg px-2.5 py-2 text-xs 2xl:text-sm font-semibold transition-colors {tab === item.id ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-teal-50 hover:text-teal-900'}">{item.title}</button>
+              class="shrink-0 rounded-lg px-2.5 py-2 text-xs 2xl:text-sm font-semibold transition-colors {tab === item.id ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-teal-50 hover:text-teal-900'}">{item.title}
+              {#if item.id==='requests' && pendingRequests>0}<span aria-label={pendingRequests+' solicitudes pendientes'}
+                class="ml-1.5 inline-flex min-w-5 justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-extrabold text-white">{pendingRequests>99?'99+':pendingRequests}</span>{/if}</button>
           {/each}
         </nav>
       {:else}
@@ -228,7 +285,6 @@
 
       <div class="flex items-center justify-end gap-2 ml-auto shrink-0">
         {#if token}
-          <NotificationBell staff {token} onAll={() => chooseTab('alerts')} />
           <div class="hidden xl:block relative">
             <button type="button" class="flex items-center gap-2 rounded-xl border border-slate-200 text-slate-700 px-3 py-2.5 text-sm font-bold bg-white hover:bg-slate-50"
               aria-label="Abrir menú de mi cuenta" aria-expanded={accountMenu} onclick={() => accountMenu = !accountMenu}>
@@ -262,7 +318,8 @@
           {#each menuItems as item (item.id)}
             <button type="button" onclick={() => chooseTab(item.id as typeof tab)}
               aria-current={tab === item.id ? 'page' : undefined}
-              class="text-left rounded-xl px-3 py-3 text-sm font-semibold {tab === item.id ? 'bg-teal-700 text-white' : 'bg-slate-50 text-slate-700 hover:bg-teal-50'}">{item.title}</button>
+              class="text-left rounded-xl px-3 py-3 text-sm font-semibold {tab === item.id ? 'bg-teal-700 text-white' : 'bg-slate-50 text-slate-700 hover:bg-teal-50'}">{item.title}
+              {#if item.id==='requests' && pendingRequests>0}<span class="ml-1.5 inline-flex min-w-5 justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{pendingRequests>99?'99+':pendingRequests}</span>{/if}</button>
           {/each}
         </div>
         <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -302,7 +359,7 @@
       </button>
     </div>
     <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6" aria-label="Resumen de operaciones">
-      {#each [{label:'Solicitudes',count:requestTotal,id:'requests'}, {label:'Citas',count:appointmentTotal,id:'appointments'},
+      {#each [{label:'Solicitudes pendientes',count:pendingRequests,id:'requests'}, {label:'Citas',count:appointmentTotal,id:'appointments'},
         {label:'Clientes',count:customers.length,id:'customers'}, {label:'Productos',count:products.length,id:'products'}] as item}
         <button class="rounded-2xl text-left bg-white border border-slate-200 shadow-sm p-4 hover:border-teal-500" onclick={() => tab = item.id as typeof tab}>
           <span class="block text-slate-500 text-xs uppercase tracking-wide">{item.label}</span>
@@ -318,7 +375,14 @@
       <div class="space-y-5">
         {#if staffRole === 'admin'}<AdminRequestCategories {token}/>{/if}
         <section class="space-y-3">
-          <h2 class="text-xl font-extrabold text-slate-900">Solicitudes recibidas ({requestTotal})</h2>
+          <div class="flex flex-wrap gap-3 items-center justify-between">
+            <div><h2 class="text-xl font-extrabold text-slate-900">Solicitudes recibidas ({requestTotal})</h2>
+              <p class="text-sm text-slate-600 mt-1"><span class="font-bold text-red-700">{pendingRequests}</span> pendiente(s) por atender</p></div>
+            <button type="button" onclick={()=>{resetManualRequest();manualRequestOpen=true;}}
+              class="rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-sm font-bold px-4 py-3">
+              ＋ Crear solicitud
+            </button>
+          </div>
           <form class="flex flex-col sm:flex-row gap-2 bg-white border border-slate-200 rounded-2xl p-3" onsubmit={searchRequest}>
             <label class="flex-1 text-xs font-bold text-slate-600">Buscar por ID, cliente, asunto, teléfono o correo
               <input type="search" bind:value={requestQuery} class="block w-full rounded-xl border border-slate-300 mt-1.5 px-3 py-3 text-sm font-normal" placeholder="Pega el ID completo o busca un nombre…" />
@@ -432,13 +496,101 @@
       <AdminContent {token} {tab} {products} {services} {categories} onRefresh={async () => { await reload(); }} />
     {:else if staffRole === 'admin' && tab === 'staff'}
       <AdminStaff {token} {ownId} />
-    {:else if tab === 'alerts'}
-      <NotificationsPage staff {token} />
     {:else if tab === 'notifications' && staffRole === 'admin'}
       <AdminNotifications {token} canSend={true} />
     {/if}
   {/if}
 </div>
+
+{#if manualRequestOpen}
+  <div class="fixed inset-0 z-[220] flex justify-center items-center p-3 sm:p-5">
+    <button type="button" class="absolute inset-0 bg-slate-950/70"
+      aria-label="Cerrar creación de solicitud" onclick={()=>{if(!manualRequestBusy)manualRequestOpen=false;}}></button>
+    <dialog open aria-label="Crear solicitud desde administración"
+      class="relative m-0 w-full max-w-2xl max-h-[93dvh] overflow-y-auto rounded-3xl bg-white shadow-2xl p-5 sm:p-6">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div><h2 class="text-xl font-extrabold text-slate-900">Nueva solicitud</h2>
+          <p class="mt-1 text-sm text-slate-600">Registra pedidos recibidos por WhatsApp, teléfono o personalmente.</p></div>
+        <button type="button" disabled={manualRequestBusy} aria-label="Cerrar"
+          onclick={()=>manualRequestOpen=false} class="rounded-xl bg-slate-100 px-3 py-2 font-bold">✕</button>
+      </div>
+      {#if manualRequestError}<p role="alert" class="mb-4 p-3 text-sm rounded-xl bg-red-50 text-red-700">{manualRequestError}</p>{/if}
+      <form onsubmit={createManualRequest} class="space-y-4">
+        <fieldset class="rounded-2xl border border-slate-200 p-3 space-y-3">
+          <legend class="text-sm font-bold text-slate-800 px-1">Origen del cliente</legend>
+          <label class="flex gap-2 items-center text-sm"><input type="radio" name="manual-recipient" value="guest" bind:group={manualRecipientMode}/>
+            Contacto por WhatsApp (sin cuenta en Bonaire)</label>
+          <label class="flex gap-2 items-center text-sm"><input type="radio" name="manual-recipient" value="customer" bind:group={manualRecipientMode}/>
+            Cliente registrado</label>
+          {#if manualRecipientMode==='guest'}
+            <label class="block text-sm font-semibold">Nombre y apellidos
+              <input required minlength="3" maxlength="120" bind:value={manualContactName}
+                class="block w-full mt-1 p-3 rounded-xl border border-slate-300"/></label>
+            <label class="block text-sm font-semibold">Número de WhatsApp del contacto
+              <input type="tel" required minlength="8" maxlength="22" bind:value={manualContactPhone}
+                placeholder="+53…" class="block w-full mt-1 p-3 rounded-xl border border-slate-300"/></label>
+            <p class="text-xs text-slate-500">No se crea una cuenta falsa. Nombre y teléfono se guardan dentro de la solicitud; no aparecerá en «Mis solicitudes» hasta que exista una vinculación posterior.</p>
+          {:else}
+            <label class="block text-sm font-semibold">Buscar cuenta por nombre, correo, teléfono o ID
+              <input type="search" maxlength="120" bind:value={manualCustomerQuery} oninput={queueManualSearch}
+                placeholder="Escribe al menos dos caracteres…" class="block w-full mt-1 p-3 rounded-xl border border-slate-300"/></label>
+            {#if manualSearchBusy}<p role="status" class="text-xs text-slate-500">Buscando…</p>{/if}
+            {#if manualSearchError}<p role="alert" class="text-xs text-red-700">{manualSearchError}</p>{/if}
+            {#if manualSelectedCustomer}
+              <div class="flex gap-2 items-center justify-between rounded-xl bg-teal-50 p-3">
+                <span class="min-w-0 text-sm font-bold text-teal-950 truncate">{manualSelectedCustomer.name} · {manualSelectedCustomer.email}</span>
+                <button type="button" onclick={()=>manualSelectedCustomer=null} class="text-sm text-red-700 font-bold">Cambiar</button>
+              </div>
+            {:else if manualCustomerQuery.trim().length>=2}
+              <div class="max-h-44 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+                {#each manualCustomers as customer (customer.id)}
+                  <button type="button" class="block w-full text-left hover:bg-teal-50 px-3 py-2"
+                    onclick={()=>{manualSelectedCustomer=customer;manualCustomerQuery='';manualCustomers=[];manualSearchSequence++;}}>
+                    <span class="block text-sm font-bold">{customer.name}</span>
+                    <span class="block text-xs text-slate-500 break-all">{customer.email} · {customer.id}</span>
+                  </button>
+                {/each}
+                {#if !manualSearchBusy&&!manualCustomers.length}<p class="p-3 text-xs text-slate-500">Sin clientes coincidentes.</p>{/if}
+              </div>
+            {/if}
+          {/if}
+        </fieldset>
+        <label class="block text-sm font-semibold">Asunto
+          <input required minlength="3" maxlength="180" bind:value={manualTitle}
+            class="block w-full mt-1 p-3 rounded-xl border border-slate-300"/></label>
+        <label class="block text-sm font-semibold">Descripción del trabajo o consulta
+          <textarea required minlength="6" maxlength="3000" rows="4" bind:value={manualDescription}
+            class="block w-full mt-1 p-3 rounded-xl border border-slate-300"></textarea></label>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <label class="block text-sm font-semibold">Tipo
+            <select bind:value={manualType} class="block w-full mt-1 p-3 rounded-xl border border-slate-300">
+              <option value="consultation">Consulta</option><option value="installation">Instalación</option>
+              <option value="repair">Reparación</option><option value="maintenance">Mantenimiento</option>
+              <option value="complaint">Reclamación</option><option value="suggestion">Sugerencia</option>
+            </select></label>
+          <label class="block text-sm font-semibold">Estado inicial
+            <select bind:value={manualStatus} class="block w-full mt-1 p-3 rounded-xl border border-slate-300">
+              <option value="pending">Pendiente</option><option value="quoted">Presupuestada</option>
+              <option value="approved">Aprobada</option><option value="scheduled">Programada</option>
+              <option value="completed">Completada</option><option value="cancelled">Cancelada</option>
+            </select></label>
+        </div>
+        <label class="block text-sm font-semibold">Ubicación (opcional)
+          <input maxlength="500" bind:value={manualLocation} class="block w-full mt-1 p-3 rounded-xl border border-slate-300"/></label>
+        <label class="block text-sm font-semibold">Fecha preferida (opcional)
+          <input type="date" bind:value={manualDate} class="block w-full mt-1 p-3 rounded-xl border border-slate-300"/></label>
+        <div class="flex gap-2 justify-end flex-wrap">
+          <button type="button" disabled={manualRequestBusy} onclick={()=>manualRequestOpen=false}
+            class="rounded-xl px-5 py-3 border border-slate-300 font-semibold">Cancelar</button>
+          <button type="submit" disabled={manualRequestBusy||(manualRecipientMode==='customer'&&!manualSelectedCustomer)}
+            class="rounded-xl px-5 py-3 bg-teal-700 text-white font-bold disabled:opacity-50">
+            {manualRequestBusy?'Registrando…':'Registrar solicitud'}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+{/if}
 
 {#if requestEditor}
   <div class="fixed inset-0 z-[210] flex justify-center items-center p-3 sm:p-6">
