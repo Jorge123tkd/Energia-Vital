@@ -201,16 +201,13 @@ adminCustomersRoutes.patch('/requests/:id/details', requireAdminAuth, async c =>
   if(old.updated_at!==b.expected_updated_at)
     return c.json({error:'La solicitud cambió desde que la abriste. Actualiza el listado antes de editarla.'},409);
   const now=new Date().toISOString();
-  const changed=await c.env.DB.batch([
-    c.env.DB.prepare(`UPDATE requests SET title=?,description=?,location=?,preferred_date=?,updated_at=?
-      WHERE id=? AND updated_at=?`)
-      .bind(title,description,location,preferredDate||null,now,id,b.expected_updated_at),
-    c.env.DB.prepare(`INSERT INTO audit_logs
-      (id,admin_user_id,action,entity_type,entity_id,details,created_at) VALUES (?,?,?,'request',?,?,?)`)
-      .bind(crypto.randomUUID(),c.get('user')?.user_id||null,'request_details_updated',id,
-        JSON.stringify({fields:['title','description','location','preferred_date']}),now),
-  ]);
-  if(!changed[0].meta?.changes)return c.json({error:'La solicitud se modificó mientras la editabas. Actualiza el listado.'},409);
+  const changed=await c.env.DB.prepare(`UPDATE requests SET title=?,description=?,location=?,preferred_date=?,updated_at=?
+    WHERE id=? AND updated_at=?`).bind(title,description,location,preferredDate||null,now,id,b.expected_updated_at).run();
+  if(!changed.meta?.changes)return c.json({error:'La solicitud se modificó mientras la editabas. Actualiza el listado.'},409);
+  await c.env.DB.prepare(`INSERT INTO audit_logs
+    (id,admin_user_id,action,entity_type,entity_id,details,created_at) VALUES (?,?,?,'request',?,?,?)`)
+    .bind(crypto.randomUUID(),c.get('user')?.user_id||null,'request_details_updated',id,
+      JSON.stringify({fields:['title','description','location','preferred_date']}),now).run();
   return c.json({message:'Solicitud editada.'});
 });
 
