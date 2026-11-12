@@ -45,9 +45,29 @@ notificationsRoutes.patch('/inbox/:id/read', requireStaffAuth, async c => {
 });
 notificationsRoutes.get('/admin', requireAdminAuth, async c => {
   const { results } = await c.env.DB.prepare(`SELECT n.*, cu.name AS customer_name FROM notifications n
-    LEFT JOIN customers cu ON cu.id = n.user_id WHERE n.user_type = 'customer' ORDER BY n.created_at DESC LIMIT 100`).all();
+    LEFT JOIN customers cu ON cu.id = n.user_id
+    WHERE n.user_type = 'customer' AND n.type IN ('admin_message','welcome')
+    ORDER BY n.created_at DESC LIMIT 100`).all();
   return c.json({ notifications: results ?? [] });
 });
+// El centro de notificaciones de /admin muestra campañas enviadas a clientes,
+// NO los avisos operativos de nuevas solicitudes/citas del personal.
+notificationsRoutes.get('/admin/sent', requireAdminAuth, async c => {
+  const page=Math.max(1,Math.min(100000,Number.parseInt(c.req.query('page')||'1',10)||1));
+  const size=Math.max(1,Math.min(50,Number.parseInt(c.req.query('page_size')||'10',10)||10));
+  const groupKey=`COALESCE(NULLIF(n.data,''), n.created_at || '|' || n.title || '|' || n.message)`;
+  const {results}=await c.env.DB.prepare(`SELECT MIN(n.id) AS id,
+    MAX(n.title) AS title,MAX(n.message) AS message,MAX(n.created_at) AS created_at,
+    MIN(n.data) AS campaign_data,COUNT(*) AS recipient_count
+    FROM notifications n WHERE n.user_type='customer' AND n.type='admin_message'
+    GROUP BY ${groupKey} ORDER BY MAX(n.created_at) DESC LIMIT ? OFFSET ?`)
+    .bind(size,(page-1)*size).all();
+  const totalRow=await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM (
+    SELECT 1 FROM notifications n WHERE n.user_type='customer' AND n.type='admin_message'
+    GROUP BY ${groupKey})`).first<{n:number}>();
+  return c.json({campaigns:results||[],total:totalRow?.n||0,page,page_size:size});
+});
+
 const welcomeKeys=['welcome_notification_enabled','welcome_notification_title','welcome_notification_message'];
 notificationsRoutes.get('/admin/automation', requireAdminAuth, async c => {
   const {results}=await c.env.DB.prepare(`SELECT key,value FROM system_settings WHERE key IN (?,?,?)`)
@@ -85,18 +105,27 @@ notificationsRoutes.put('/admin/automation', requireAdminAuth, async c => {
 notificationsRoutes.post('/admin/send', requireAdminAuth, async c => {
   const user = getUser(c)!;
   const b = await c.req.json<any>();
-  const customers = Array.isArray(b.customer_ids) ? [...new Set(b.customer_ids)].filter((x): x is string => typeof x === 'string').slice(0, 100) : [];
+  if(!Array.isArray(b.customer_ids)||b.customer_ids.length>100 ||
+     b.customer_ids.some((id:unknown)=>typeof id!=='string'||!id.trim()||id.length>100))
+    return c.json({error:'Selecciona entre 1 y 100 clientes válidos.'},400);
+  const customers=[...new Set(b.customer_ids as string[])];
   const title = typeof b.title === 'string' ? b.title.trim().slice(0, 200) : '';
   const message = typeof b.message === 'string' ? b.message.trim().slice(0, 2000) : '';
   if (!title || !message || !customers.length) return c.json({ error: 'Destinatarios, título y mensaje requeridos' }, 400);
   const now = new Date().toISOString();
-  const statements = customers.map(id => c.env.DB.prepare(`INSERT INTO notifications (id, user_id, user_type, type, title, message, is_read, created_at)
-    SELECT ?, id, 'customer', 'admin_message', ?, ?, 0, ? FROM customers WHERE id = ?`)
-    .bind(crypto.randomUUID(), title, message, now, id));
+  const placeholders=customers.map(()=>'?').join(',');
+  const valid=await c.env.DB.prepare('SELECT COUNT(*) AS n FROM customers WHERE is_active=1 AND id IN ('+placeholders+')')
+    .bind(...customers).first<{n:number}>();
+  if((valid?.n||0)!==customers.length)
+    return c.json({error:'Alguno de los destinatarios no existe o tiene la cuenta desactivada. Vuelve a buscarlos.'},400);
+  const data=JSON.stringify({campaign_id:crypto.randomUUID(),audience:'selected'});
+  const statements = customers.map(id => c.env.DB.prepare(`INSERT INTO notifications (id, user_id, user_type, type, title, message, data, is_read, created_at)
+    SELECT ?, id, 'customer', 'admin_message', ?, ?, ?, 0, ? FROM customers WHERE id = ? AND is_active=1`)
+    .bind(crypto.randomUUID(), title, message, data, now, id));
   await c.env.DB.batch(statements);
   await c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, details, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
     .bind(crypto.randomUUID(), user.user_id, 'notifications.send', 'notifications', JSON.stringify({ count: customers.length }), now).run();
-  return c.json({ message: 'Notificaciones procesadas' });
+  return c.json({ message: 'Notificaciones enviadas', sent:customers.length });
 });
 notificationsRoutes.post('/admin/send-all', requireAdminAuth, async c => {
   const user = getUser(c)!;
@@ -105,9 +134,10 @@ notificationsRoutes.post('/admin/send-all', requireAdminAuth, async c => {
   const message = typeof b.message === 'string' ? b.message.trim().slice(0, 2000) : '';
   if (!title || !message) return c.json({ error: 'Título y mensaje requeridos' }, 400);
   const now = new Date().toISOString();
-  const result = await c.env.DB.prepare(`INSERT INTO notifications (id, user_id, user_type, type, title, message, is_read, created_at)
-    SELECT lower(hex(randomblob(16))), id, 'customer', 'admin_message', ?, ?, 0, ? FROM customers`)
-    .bind(title, message, now).run();
+  const data=JSON.stringify({campaign_id:crypto.randomUUID(),audience:'all'});
+  const result = await c.env.DB.prepare(`INSERT INTO notifications (id, user_id, user_type, type, title, message, data, is_read, created_at)
+    SELECT lower(hex(randomblob(16))), id, 'customer', 'admin_message', ?, ?, ?, 0, ? FROM customers WHERE is_active=1`)
+    .bind(title, message, data, now).run();
   await c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, details, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
     .bind(crypto.randomUUID(), user.user_id, 'notifications.send_all', 'notifications', JSON.stringify({ count: result.meta?.changes }), now).run();
   return c.json({ sent: result.meta?.changes ?? 0 });
