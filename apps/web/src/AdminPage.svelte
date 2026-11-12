@@ -186,7 +186,21 @@
   let categories: any[] = $state([]);
 
 
-  onMount(() => { void restore(); });
+  let pendingCountBusy=false;
+  async function refreshPendingCount(){
+    if(!token||pendingCountBusy)return;
+    pendingCountBusy=true;
+    try{
+      const data=await api.adminRequests(token,'',1,5);
+      if(typeof data.pending_count==='number')pendingRequests=data.pending_count;
+    }catch{/* conservar último valor si no se puede conectar */}
+    finally{pendingCountBusy=false;}
+  }
+  onMount(() => {
+    void restore();
+    const interval=window.setInterval(()=>{void refreshPendingCount();},60000);
+    return ()=>window.clearInterval(interval);
+  });
   async function restore() {
     const saved = sessionStorage.getItem(ADMIN_TOKEN_KEY);
     if (saved) {
