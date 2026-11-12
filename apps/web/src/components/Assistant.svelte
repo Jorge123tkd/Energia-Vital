@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { api } from '../lib/api';
   import { assistantSessionId, assistantMessages, isAssistantOpen } from '../lib/store';
+  import LinkedText from './LinkedText.svelte';
 
   type ChatMessage = {role:'user'|'assistant';content:string;id?:string};
   type Session = {id:string;title:string;updated_at:string;message_count:number};
@@ -308,7 +309,8 @@
             <div class="flex {m.role==='user'?'justify-end':'justify-start'}">
               <div class="max-w-[93%] sm:max-w-[85%] lg:max-w-[75%] rounded-2xl p-3 sm:p-4 text-sm leading-relaxed
                 {m.role==='user'?'bg-teal-700 text-white rounded-tr-sm':'bg-white border border-slate-200 text-slate-900 rounded-tl-sm shadow-sm'}">
-                <p class="whitespace-pre-wrap break-words">{m.content}</p>
+                {#if m.role==='assistant'}<p><LinkedText content={m.content}/></p>
+                {:else}<p class="whitespace-pre-wrap break-words">{m.content}</p>{/if}
               </div>
             </div>
           {/each}
