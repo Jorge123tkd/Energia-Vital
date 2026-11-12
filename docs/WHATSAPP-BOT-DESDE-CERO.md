@@ -51,9 +51,15 @@ npm run build:web
 
 La prueba del bot usa firmas HMAC de laboratorio y no toca Meta, Cloudflare ni D1. El build web es necesario porque cambió `AdminPage.svelte` y se añadieron controles de solicitudes y vinculación. Si falla un control, corregir SOLO ese error antes de publicar. No repetir `npm ci`, test solar ni las migraciones antiguas.
 
+## Publicación por etapas, sin bloquear el trabajo administrativo
+
+**Etapa A — Panel y solicitudes.** Después de aprobar los tres controles técnicos, se puede desplegar el Worker y la web de Bonaire para tener el contador de pendientes, la creación manual de tickets y la eliminación de avisos duplicados **sin activar el bot**. Sin credenciales de Meta, `/api/whatsapp/admin/link` responde `configured:false`, no intenta consultar tablas nuevas, y la pantalla informa que la vinculación está pendiente. El webhook tampoco responde a mensajes externos sin configuración. **No hace falta migrar D1 para usar el panel.**
+
+**Etapa B — Bot de WhatsApp.** Cuando el propietario configure la aplicación Meta y tenga sus credenciales, aplicar la nueva migración 011, guardar los secretos directamente en Cloudflare y desplegar Worker de nuevo. Solo entonces activar la suscripción webhook. Si Meta no está lista, no correr la migración por costumbre. La funcionalidad de la web no depende del bot.
+
 ## 4. Preparación de D1 (única migración NUEVA, no ejecutada aún)
 
-La integración requiere **`apps/api/migrations/011_whatsapp_bot_foundation.sql`**, que añade tablas separadas para el bot, mensajes deduplicados y vínculos de personal. No modifica clientes ni solicita nuevas credenciales de cuentas existentes. No ejecutar hasta superar las pruebas y tener claro el plan de Meta. Hacer respaldo remoto si no existe uno reciente al momento de la migración.
+La integración requiere **`apps/api/migrations/011_whatsapp_bot_foundation.sql`**, que añade tablas separadas para el bot, mensajes deduplicados y vínculos de personal. No modifica clientes ni solicita nuevas credenciales de cuentas existentes. No ejecutar hasta superar las pruebas y tener claro el plan de Meta. Esta migración NO se requiere para publicar la creación de solicitudes, el contador o el menú de administración. Hacer respaldo remoto si no existe uno reciente al momento de la migración.
 
 ```powershell
 cd "C:\Users\Taliety\Desktop\Energia-Vital\apps\api"
