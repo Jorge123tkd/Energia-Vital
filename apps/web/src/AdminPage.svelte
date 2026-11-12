@@ -44,6 +44,36 @@
   let manualType=$state('consultation'),manualStatus=$state('pending'),manualDate=$state('');
   let manualSearchSequence=0;
   let manualSearchTimer:ReturnType<typeof setTimeout>|undefined;
+  let whatsappLinkOpen=$state(false),whatsappLinkBusy=$state(false),whatsappLinkError=$state('');
+  let whatsappStatus:{linked:boolean;phone_masked:string|null}|null=$state(null);
+  let whatsappLinkCode=$state(''),whatsappLinkExpiry=$state('');
+  async function openWhatsappLink(){
+    whatsappLinkOpen=true;whatsappLinkError='';whatsappLinkCode='';
+    await refreshWhatsappLink();
+  }
+  async function refreshWhatsappLink(){
+    whatsappLinkBusy=true;whatsappLinkError='';
+    try{
+      const status=await api.getWhatsAppStaffLink(token);
+      whatsappStatus={linked:Boolean(status.linked),phone_masked:status.phone_masked||null};
+    }catch(e){whatsappLinkError=e instanceof Error?e.message:'No se pudo consultar la vinculación.';}
+    finally{whatsappLinkBusy=false;}
+  }
+  async function generateWhatsappCode(){
+    whatsappLinkBusy=true;whatsappLinkError='';whatsappLinkCode='';
+    try{
+      const info=await api.createWhatsAppStaffLinkCode(token);
+      whatsappLinkCode=info.code;whatsappLinkExpiry=info.expires_at;
+    }catch(e){whatsappLinkError=e instanceof Error?e.message:'No se pudo generar el código.';}
+    finally{whatsappLinkBusy=false;}
+  }
+  async function unlinkWhatsapp(){
+    if(!window.confirm('¿Desvincular tu WhatsApp de la cuenta de personal Bonaire?'))return;
+    whatsappLinkBusy=true;whatsappLinkError='';
+    try{await api.deleteWhatsAppStaffLink(token);whatsappStatus={linked:false,phone_masked:null};whatsappLinkCode='';}
+    catch(e){whatsappLinkError=e instanceof Error?e.message:'No se pudo desvincular.';}
+    finally{whatsappLinkBusy=false;}
+  }
   async function lookupManualCustomers(query:string) {
     const sequence=++manualSearchSequence;
     if(query.trim().length<2){manualCustomers=[];manualSearchBusy=false;return;}
@@ -213,10 +243,17 @@
     try { await api.updateAdminRequest(token, id, status); await loadRequestPage(requestPage); message = 'Solicitud actualizada.'; }
     catch (e) { error = e instanceof Error ? e.message : 'No se pudo actualizar'; }
   }
+  function manualContactInfo(r:any):{name:string;phone:string;description:string}{
+    const raw=String(r.description||'');
+    const match=raw.match(/^\[Contacto por WhatsApp - sin cuenta\]\nNombre: ([^\n]+)\nTeléfono: ([^\n]+)\n\n/);
+    return {name:r.customer_name||match?.[1]||'Cliente sin cuenta',
+      phone:r.phone||match?.[2]||'',
+      description:match?raw.slice(match[0].length):raw};
+  }
   function openRequestEditor(r:any) {
     error=''; message='';
     requestEditor={
-      id:r.id, title:String(r.title||''), description:String(r.description||''),
+      id:r.id, title:String(r.title||''), description:manualContactInfo(r).description,
       location:String(r.location||''),preferred_date:String(r.preferred_date||'').slice(0,10),
       expected_updated_at:String(r.updated_at||''),customer_name:String(r.customer_name||'Cliente')
     };
@@ -296,6 +333,8 @@
                 <p class="text-xs px-3 py-2 font-bold text-slate-400">{staffRole === 'admin' ? 'Administrador' : 'Moderador'}</p>
                 <a href="/perfil" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Mi perfil</a>
                 <a href="/" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Ver sitio público</a>
+                <button type="button" onclick={()=>{accountMenu=false;void openWhatsappLink();}}
+                  class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">Vincular WhatsApp de equipo</button>
                 <button type="button" disabled={syncBusy} onclick={syncNow} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">{syncBusy ? 'Sincronizando…' : '↻ Sincronizar datos'}</button>
                 <div class="border-t border-slate-100 my-1"></div>
                 <button type="button" onclick={logout} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-red-700 hover:bg-red-50">Cerrar sesión</button>
@@ -325,6 +364,8 @@
         <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2">
           <a href="/perfil" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Mi perfil</a>
           <a href="/" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Ver sitio público</a>
+          <button type="button" onclick={()=>{mobileMenu=false;void openWhatsappLink();}}
+            class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-semibold text-teal-800">Vincular WhatsApp</button>
           <button type="button" disabled={syncBusy} onclick={syncNow} class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700">{syncBusy ? 'Actualizando…' : '↻ Sincronizar'}</button>
           <button type="button" onclick={logout} class="rounded-xl bg-red-50 border border-red-100 px-3 py-3 text-sm font-semibold text-red-700">Cerrar sesión</button>
         </div>
@@ -412,10 +453,10 @@
                   </select>
                 </div>
                 <div class="text-sm text-slate-600 space-y-1">
-                  <p class="font-bold text-slate-800">{r.customer_name||'Cliente'}</p>
-                  <p class="text-xs break-all">{r.phone||'Sin teléfono'} · {r.email||'Sin correo'}</p>
+                  <p class="font-bold text-slate-800">{manualContactInfo(r).name}</p>
+                  <p class="text-xs break-all">{manualContactInfo(r).phone||'Sin teléfono'} · {r.email||'Contacto por WhatsApp / sin cuenta'}</p>
                   {#if r.location}<p class="text-xs">{r.location}</p>{/if}
-                  <p class="text-sm whitespace-pre-line line-clamp-4">{r.description}</p>
+                  <p class="text-sm whitespace-pre-line line-clamp-4">{manualContactInfo(r).description}</p>
                 </div>
                 <div class="flex gap-2 flex-wrap border-t border-slate-100 pt-3">
                   {#if staffRole==='admin'}
@@ -424,11 +465,11 @@
                     <button type="button" disabled={requestActionBusy} onclick={()=>void removeRequest(r)}
                       class="rounded-xl border border-red-200 text-red-700 font-bold text-xs px-3 py-2.5 hover:bg-red-50 disabled:opacity-50">Eliminar</button>
                   {/if}
-                  {#if r.phone && r.phone.replace(/\D/g,'').length>=8}
+                  {#if manualContactInfo(r).phone.replace(/\D/g,'').length>=8}
                     <a target="_blank" rel="noopener noreferrer"
-                      href={'https://wa.me/'+r.phone.replace(/\D/g,'')+'?text='+encodeURIComponent('Hola '+(r.customer_name||'')+', te escribimos desde Bonaire sobre tu solicitud «'+r.title+'» (Ref. '+r.id.slice(0,8).toUpperCase()+'). ¿Podemos conversar?')}
+                      href={'https://wa.me/'+manualContactInfo(r).phone.replace(/\D/g,'')+'?text='+encodeURIComponent('Hola '+manualContactInfo(r).name+', te escribimos desde Bonaire sobre tu solicitud «'+r.title+'» (Ref. '+r.id.slice(0,8).toUpperCase()+'). ¿Podemos conversar?')}
                       class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2.5"
-                      aria-label={'Abrir WhatsApp del cliente '+(r.customer_name||'')}>☎ WhatsApp cliente</a>
+                      aria-label={'Abrir WhatsApp del cliente '+manualContactInfo(r).name}>☎ WhatsApp cliente</a>
                   {/if}
                   <button type="button" onclick={()=>requestPhotosOpen=requestPhotosOpen===r.id?'':r.id}
                     class="rounded-xl border border-teal-200 text-teal-800 font-bold text-xs px-3 py-2.5 hover:bg-teal-50">
@@ -501,6 +542,44 @@
     {/if}
   {/if}
 </div>
+
+{#if whatsappLinkOpen}
+  <div class="fixed inset-0 z-[230] flex justify-center items-center p-3">
+    <button type="button" class="absolute inset-0 bg-slate-950/70"
+      aria-label="Cerrar vinculación de WhatsApp" onclick={()=>{if(!whatsappLinkBusy)whatsappLinkOpen=false;}}></button>
+    <dialog open aria-label="Vincular WhatsApp del equipo"
+      class="relative m-0 w-full max-w-lg rounded-3xl bg-white p-5 sm:p-6 shadow-2xl space-y-4">
+      <div class="flex items-start justify-between gap-2">
+        <h2 class="text-xl font-extrabold text-slate-900">WhatsApp del equipo</h2>
+        <button type="button" disabled={whatsappLinkBusy} onclick={()=>whatsappLinkOpen=false}
+          class="rounded-xl bg-slate-100 px-3 py-2" aria-label="Cerrar">✕</button>
+      </div>
+      <p class="text-sm text-slate-600">Solo vincula tu WhatsApp después de iniciar sesión en Bonaire. El bot oficial debe configurarse primero en Meta y Cloudflare; nunca compartas el código con otros.</p>
+      {#if whatsappLinkError}<p role="alert" class="rounded-xl bg-red-50 p-3 text-sm text-red-700">{whatsappLinkError}</p>{/if}
+      {#if whatsappStatus?.linked}
+        <p class="rounded-xl bg-teal-50 border border-teal-200 p-3 text-sm font-bold text-teal-800">
+          Vinculado al número terminado en {whatsappStatus.phone_masked}
+        </p>
+        <button type="button" disabled={whatsappLinkBusy} onclick={()=>void unlinkWhatsapp()}
+          class="rounded-xl border border-red-200 px-4 py-3 text-sm font-bold text-red-700">Desvincular número</button>
+      {:else}
+        <p class="text-sm text-slate-600">No hay un número vinculado actualmente.</p>
+        <button type="button" disabled={whatsappLinkBusy} onclick={()=>void generateWhatsappCode()}
+          class="rounded-xl bg-teal-700 px-4 py-3 text-sm font-bold text-white">Generar código de vinculación</button>
+        {#if whatsappLinkCode}
+          <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-2">
+            <p class="text-xs font-bold text-teal-900">Código de 8 dígitos (válido 10 minutos)</p>
+            <p class="font-mono font-extrabold tracking-widest text-2xl select-all">{whatsappLinkCode}</p>
+            <p class="text-sm text-slate-700">Desde TU número, envía al WhatsApp oficial del bot: <strong>VINCULAR {whatsappLinkCode}</strong></p>
+            <p class="text-xs text-slate-500">Expira: {new Date(whatsappLinkExpiry).toLocaleString('es-CU')}</p>
+          </div>
+        {/if}
+      {/if}
+      <button type="button" disabled={whatsappLinkBusy} onclick={()=>void refreshWhatsappLink()}
+        class="rounded-xl border border-teal-200 px-4 py-3 text-sm text-teal-800 font-bold">Actualizar estado</button>
+    </dialog>
+  </div>
+{/if}
 
 {#if manualRequestOpen}
   <div class="fixed inset-0 z-[220] flex justify-center items-center p-3 sm:p-5">
