@@ -21,7 +21,7 @@ async function hmac(secret:string,content:Uint8Array):Promise<Uint8Array>{
   const signature=await crypto.subtle.sign('HMAC',key,content);
   return new Uint8Array(signature);
 }
-async function verifyMetaSignature(secret:string,body:Uint8Array,signature:string|null):Promise<boolean>{
+export async function verifyMetaSignature(secret:string,body:Uint8Array,signature:string|null):Promise<boolean>{
   if(!signature||!/^sha256=[0-9a-f]{64}$/i.test(signature))return false;
   const given=new Uint8Array(signature.slice(7).match(/.{2}/g)!.map(s=>parseInt(s,16)));
   const key=await crypto.subtle.importKey('raw',encoder.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['verify']);
