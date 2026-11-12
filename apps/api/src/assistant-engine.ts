@@ -146,7 +146,9 @@ export function isCurrencyQuestion(text: string): boolean {
   const exchange = /\b(?:cambio|cambiar|tasa|tipo de cambio|cotizacion|equivale|equivalencia|cuanto|precio|valor|vale)\b/.test(m);
   const goods = /\b(?:panel(?:es)?|baterias?|inversor(?:es)?|servicios?|equipos?|productos?)\b/.test(m);
   const pair = /\b(?:dolar(?:es)?|euros?|usd|eur)\s+(?:a|al|en|por)\s+(?:dolar(?:es)?|euros?|usd|eur|cup|pesos?|moneda nacional)\b/.test(m);
-  const followup = /^\s*(?:y\s+)?(?:el|los)\s+(?:dolar(?:es)?|euros?)\??\s*$/.test(m);
+  // Aceptar signos de apertura españoles en continuaciones como «¿y el euro?».
+  const followup = /^(?:y\s+)?(?:el|los)\s+(?:dolar(?:es)?|euros?)$/.test(
+    m.replace(/^[¿?¡!\s]+|[¿?¡!\s]+$/g, '').trim());
   return named && (exchange || pair || followup || /^(?:dolar(?:es)?|euros?|usd|eur|mlc)$/.test(m)) &&
     !(goods && !/\b(?:tasa|cambio|cotizacion)\b/.test(m));
 }
