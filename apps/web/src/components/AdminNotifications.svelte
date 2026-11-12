@@ -26,6 +26,7 @@
     finally{historyLoading=false;}
   }
   function audience(row:any){
+    if(row.notification_type==='welcome')return 'Bienvenida automática';
     try{
       const data=JSON.parse(row.campaign_data||'{}');
       if(data.audience==='all')return 'Todos los clientes activos';
@@ -143,7 +144,7 @@
     </article>
     <section class="space-y-3">
       <div class="flex items-center justify-between flex-wrap gap-2">
-        <h3 class="text-lg font-extrabold text-slate-900">Historial de notificaciones enviadas ({historyTotal})</h3>
+        <h3 class="text-lg font-extrabold text-slate-900">Historial de notificaciones y bienvenidas ({historyTotal})</h3>
         <button type="button" disabled={historyLoading} onclick={()=>void loadCampaigns()}
           class="rounded-xl border border-teal-200 bg-white px-4 py-2 text-sm font-bold text-teal-800">Actualizar</button>
       </div>
@@ -160,7 +161,7 @@
         </article>
       {/each}
       {#if !historyLoading&&!campaigns.length}
-        <p class="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-600">Todavía no hay notificaciones manuales enviadas a clientes. Los avisos de solicitudes no aparecen aquí.</p>
+        <p class="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-600">Todavía no hay comunicaciones enviadas a clientes. Los avisos de solicitudes no aparecen aquí.</p>
       {/if}
       <Pagination page={historyPage} total={historyTotal} perPage={historySize}
         disabled={historyLoading} label="envíos" onPage={loadCampaigns}/>

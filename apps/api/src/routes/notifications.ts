@@ -58,12 +58,12 @@ notificationsRoutes.get('/admin/sent', requireAdminAuth, async c => {
   const groupKey=`COALESCE(NULLIF(n.data,''), n.created_at || '|' || n.title || '|' || n.message)`;
   const {results}=await c.env.DB.prepare(`SELECT MIN(n.id) AS id,
     MAX(n.title) AS title,MAX(n.message) AS message,MAX(n.created_at) AS created_at,
-    MIN(n.data) AS campaign_data,COUNT(*) AS recipient_count
-    FROM notifications n WHERE n.user_type='customer' AND n.type='admin_message'
+    MIN(n.data) AS campaign_data,MIN(n.type) AS notification_type,COUNT(*) AS recipient_count
+    FROM notifications n WHERE n.user_type='customer' AND n.type IN ('admin_message','welcome')
     GROUP BY ${groupKey} ORDER BY MAX(n.created_at) DESC LIMIT ? OFFSET ?`)
     .bind(size,(page-1)*size).all();
   const totalRow=await c.env.DB.prepare(`SELECT COUNT(*) AS n FROM (
-    SELECT 1 FROM notifications n WHERE n.user_type='customer' AND n.type='admin_message'
+    SELECT 1 FROM notifications n WHERE n.user_type='customer' AND n.type IN ('admin_message','welcome')
     GROUP BY ${groupKey})`).first<{n:number}>();
   return c.json({campaigns:results||[],total:totalRow?.n||0,page,page_size:size});
 });

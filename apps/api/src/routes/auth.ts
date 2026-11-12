@@ -146,7 +146,7 @@ authRoutes.post('/register', async c => {
       if(configured.welcome_notification_enabled!=='false') {
         await c.env.DB.prepare(`INSERT INTO notifications
           (id,user_id,user_type,type,title,message,is_read,created_at)
-          VALUES (?,?,'customer','system',?,?,0,?)`).bind(
+          VALUES (?,?,'customer','welcome',?,?,0,?)`).bind(
           crypto.randomUUID(),id,
           configured.welcome_notification_title||'¡Bienvenido a Bonaire!',
           configured.welcome_notification_message||
