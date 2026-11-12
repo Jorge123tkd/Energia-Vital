@@ -103,6 +103,8 @@ export const api = {
   getCalendarSlots: (date: string, minutes = 60) => apiRequest(`/api/calendar/slots?date=${encodeURIComponent(date)}&duration_minutes=${minutes}`),
   getNotifications: (page?: number, size = 10) => apiRequest('/api/notifications' + (page ? '?page=' + page + '&page_size=' + size : '')),
   markNotificationRead: (id: string) => patch('/api/notifications/' + encodeURIComponent(id) + '/read', {}),
+  listSentNotifications: (token: string, page = 1, pageSize = 10) =>
+    apiRequest('/api/notifications/admin/sent?page=' + page + '&page_size=' + pageSize, withAdmin(token)),
   getWelcomeAutomation: (token: string) => apiRequest('/api/notifications/admin/automation', withAdmin(token)),
   saveWelcomeAutomation: (token: string, enabled: boolean, title: string, message: string) =>
     apiRequest('/api/notifications/admin/automation', withAdmin(token, {
@@ -163,6 +165,11 @@ export const api = {
         q, page: String(page ?? 1), page_size: String(pageSize),
       }).toString() : ''), withAdmin(token)),
   updateAdminRequest: (token: string, id: string, status: string) => patch(`/api/admin-customers/requests/${id}`, { status }, withAdmin(token)),
+  updateAdminRequestDetails: (token: string, id: string, body: {
+    title: string; description: string; location: string; preferred_date: string | null; expected_updated_at: string;
+  }) => patch('/api/admin-customers/requests/' + encodeURIComponent(id) + '/details', body, withAdmin(token)),
+  deleteAdminRequest: (token: string, id: string) => apiRequest(
+    '/api/admin-customers/requests/' + encodeURIComponent(id), withAdmin(token, {method:'DELETE'})),
   updateAdminAppointment: (token: string, id: string, status: string) => patch(`/api/admin-customers/appointments/${id}`, { status }, withAdmin(token)),
   getAdminProducts: (token: string) => apiRequest('/api/admin/products', withAdmin(token)),
   getAdminServices: (token: string) => apiRequest('/api/admin/services', withAdmin(token)),
