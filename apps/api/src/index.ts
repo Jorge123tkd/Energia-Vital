@@ -11,6 +11,7 @@ import { adminRoutes } from './routes/admin';
 import { adminCustomersRoutes } from './routes/admin-customers';
 import { calendarRoutes } from './routes/calendar';
 import { telegramRoutes } from './routes/telegram';
+import { runTelegramMorningReminders } from './telegram-reminders';
 import { whatsappRoutes } from './routes/whatsapp';
 import { giveawaysRoutes } from './routes/giveaways';
 import { rewardsRoutes } from './routes/rewards';
@@ -67,5 +68,8 @@ export default {
     app.route('/api/notifications', notificationsRoutes);
     app.get('/health', c => c.json({ status: 'ok', service: 'energia-vital-api' }));
     return app.fetch(request, env, ctx);
+  },
+  async scheduled(controller,env,ctx) {
+    ctx.waitUntil(runTelegramMorningReminders(env,new Date(controller.scheduledTime)));
   },
 } satisfies ExportedHandler<Env>;
