@@ -145,7 +145,7 @@ adminCustomersRoutes.get('/requests', async c => {
     LEFT JOIN customers cu ON cu.id = r.customer_id
     LEFT JOIN request_categories rc ON rc.id = r.request_category_id`;
   const query = `SELECT r.id, r.customer_id, r.type, r.request_category_id, r.title, r.description,
-    r.status, r.location, r.preferred_date, r.created_at, cu.name AS customer_name,
+    r.status, r.location, r.preferred_date, r.created_at, r.updated_at, cu.name AS customer_name,
     cu.email, cu.phone, COALESCE(rc.name, r.type) AS category_name,
     (SELECT COUNT(*) FROM request_images im WHERE im.request_id = r.id) AS image_count`
     + joins + where + ' ORDER BY r.created_at DESC LIMIT ? OFFSET ?';
@@ -180,6 +180,72 @@ adminCustomersRoutes.patch('/requests/:id', async c => {
   }
   return c.json({message:'Solicitud actualizada'});
 });
+// Solo administradores pueden cambiar el contenido o eliminar una solicitud.
+// El personal operador conserva el permiso de actualizar el estado de la solicitud.
+adminCustomersRoutes.patch('/requests/:id/details', requireAdminAuth, async c => {
+  const id=c.req.param('id');
+  const b=await c.req.json<Record<string,unknown>>().catch(()=>null);
+  if(!b || Object.keys(b).some(k=>!['title','description','location','preferred_date','expected_updated_at'].includes(k)))
+    return c.json({error:'Solo se pueden editar el asunto, la descripción, la ubicación y la fecha preferida.'},400);
+  if(typeof b.title!=='string'||typeof b.description!=='string'||typeof b.location!=='string'||
+    !(b.preferred_date===null||typeof b.preferred_date==='string')||typeof b.expected_updated_at!=='string')
+    return c.json({error:'Completa los datos de la solicitud antes de guardar.'},400);
+  const title=b.title.trim(),description=b.description.trim(),location=b.location.trim();
+  const preferredDate=typeof b.preferred_date==='string' ? b.preferred_date.trim() : '';
+  if(title.length<3||title.length>180||description.length<6||description.length>3000||
+    location.length>500||(preferredDate && (!/^\d{4}-\d{2}-\d{2}$/.test(preferredDate)||
+      !Number.isFinite(Date.parse(preferredDate+'T00:00:00Z')))))
+    return c.json({error:'Asunto de 3 a 180 caracteres, descripción de 6 a 3000 y fecha válida (opcional).'},400);
+  const old=await c.env.DB.prepare('SELECT id,customer_id,updated_at FROM requests WHERE id=?').bind(id).first<{id:string;customer_id:string;updated_at:string}>();
+  if(!old)return c.json({error:'Solicitud no encontrada.'},404);
+  if(old.updated_at!==b.expected_updated_at)
+    return c.json({error:'La solicitud cambió desde que la abriste. Actualiza el listado antes de editarla.'},409);
+  const now=new Date().toISOString();
+  const changed=await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE requests SET title=?,description=?,location=?,preferred_date=?,updated_at=?
+      WHERE id=? AND updated_at=?`)
+      .bind(title,description,location,preferredDate||null,now,id,b.expected_updated_at),
+    c.env.DB.prepare(`INSERT INTO audit_logs
+      (id,admin_user_id,action,entity_type,entity_id,details,created_at) VALUES (?,?,?,'request',?,?,?)`)
+      .bind(crypto.randomUUID(),c.get('user')?.user_id||null,'request_details_updated',id,
+        JSON.stringify({fields:['title','description','location','preferred_date']}),now),
+  ]);
+  if(!changed[0].meta?.changes)return c.json({error:'La solicitud se modificó mientras la editabas. Actualiza el listado.'},409);
+  return c.json({message:'Solicitud editada.'});
+});
+
+// Eliminación permanente explícita: no borrar citas vinculadas ni dejar archivos sin gestionar.
+adminCustomersRoutes.delete('/requests/:id', requireAdminAuth, async c => {
+  const id=c.req.param('id');
+  const existing=await c.env.DB.prepare('SELECT id,title,customer_id FROM requests WHERE id=?')
+    .bind(id).first<{id:string;title:string;customer_id:string}>();
+  if(!existing)return c.json({error:'Solicitud no encontrada.'},404);
+  const linked=await c.env.DB.prepare('SELECT id FROM appointments WHERE request_id=? LIMIT 1').bind(id).first();
+  if(linked)return c.json({error:'Esta solicitud tiene una cita vinculada. No se puede eliminar sin comprometer el historial; cancela la cita o conserva la solicitud.'},409);
+  const imgs=await c.env.DB.prepare('SELECT r2_key FROM request_images WHERE request_id=?').bind(id).all<{r2_key:string}>();
+  const now=new Date().toISOString();
+  try {
+    const result=await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM request_images WHERE request_id=?').bind(id),
+      c.env.DB.prepare('DELETE FROM requests WHERE id=?').bind(id),
+      c.env.DB.prepare(`INSERT INTO audit_logs (id,admin_user_id,action,entity_type,entity_id,details,created_at)
+        VALUES (?,?,?,'request',?,?,?)`)
+        .bind(crypto.randomUUID(),c.get('user')?.user_id||null,'request_deleted',id,
+          JSON.stringify({title:existing.title,customer_id:existing.customer_id}),now),
+    ]);
+    if(!result[1].meta?.changes)return c.json({error:'Solicitud no encontrada.'},404);
+  } catch(e) {
+    if(/FOREIGN KEY|constraint/i.test(String(e)))
+      return c.json({error:'Existen datos asociados a esta solicitud. Conserva el historial antes de eliminarla.'},409);
+    throw e;
+  }
+  // La limpieza de los blobs ocurre DESPUÉS de confirmar la eliminación en D1.
+  for(const img of imgs.results||[]){
+    if(img.r2_key)await c.env.BUCKET.delete(img.r2_key).catch(e=>console.error('No se pudo limpiar archivo R2 de solicitud',id,e));
+  }
+  return c.json({message:'Solicitud eliminada definitivamente.'});
+});
+
 adminCustomersRoutes.get('/appointments', async c => {
   const {page,pageSize,q,advanced}=paging(c);
   const joins=' FROM appointments a LEFT JOIN customers cu ON cu.id = a.customer_id';
