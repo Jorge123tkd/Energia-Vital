@@ -45,7 +45,7 @@ export async function sendTelegramText(env:Env,chatId:string,text:string):Promis
   if(!env.TELEGRAM_BOT_TOKEN)throw Error('Bot Telegram no configurado');
   const response=await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/sendMessage',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({chat_id:chatId,text:text.slice(0,3900),disable_web_page_preview:true}),
+    body:JSON.stringify({chat_id:chatId,text:text.slice(0,3900),link_preview_options:{is_disabled:true}}),
     signal:AbortSignal.timeout(9000)
   });
   if(!response.ok)throw Error('Telegram no aceptó el mensaje ('+response.status+')');
@@ -281,7 +281,7 @@ telegramRoutes.post('/set-webhook',requireAdminAuth,async c=>{
     signal:AbortSignal.timeout(9000)
   });
   if(!res.ok)return c.json({error:'No se pudo registrar webhook con Telegram.'},502);
-  const result=await res.json<any>();
+  const result:any=await res.json();
   return c.json({ok:result.ok===true,description:result.description||''},result.ok===true?200:502);
 });
 telegramRoutes.get('/webhook-info',requireAdminAuth,async c=>{
