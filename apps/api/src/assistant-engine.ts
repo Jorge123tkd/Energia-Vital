@@ -18,6 +18,7 @@ export type AssistantIntent =
   | 'greeting'
   | 'solar_advice'
   | 'price_inquiry'
+  | 'currency_exchange'
   | 'appointment'
   | 'repair'
   | 'maintenance'
@@ -32,6 +33,9 @@ const DEFAULT_WELCOME =
 
 export function detectIntent(message: string): AssistantIntent {
   const m = normalizeWithTypos(message);
+
+  // El precio del dólar no pertenece al catálogo de productos.
+  if (isCurrencyQuestion(m)) return 'currency_exchange';
 
   // Un saludo solo se detecta si el mensaje es esencialmente un saludo.
   if (isPureGreeting(m)) {
@@ -121,6 +125,15 @@ function normalize(text: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+}
+
+export function isCurrencyQuestion(text: string): boolean {
+  const m = normalize(text);
+  const named = /\b(?:dolares?|euros?|usd|eur|mlc|divisas?|moneda nacional|peso cubano|cup)\b/.test(m);
+  const exchange = /\b(?:cambio|cambiar|tasa|tipo de cambio|cotizacion|equivale|equivalencia|cuanto|precio|valor|vale)\b/.test(m);
+  const goods = /\b(?:panel(?:es)?|baterias?|inversores?|servicios?|equipos?|productos?)\b/.test(m);
+  return named && (exchange || /^(?:dolares?|euros?|usd|eur|mlc)$/.test(m)) &&
+    !(goods && !/\b(?:tasa|cambio|cotizacion)\b/.test(m));
 }
 
 function hasAny(text: string, needles: string[]): boolean {
@@ -286,6 +299,11 @@ export function generateResponse(
     if (previous) intent = detectIntent(previous.content);
   }
   const tokens = tokenize(message);
+
+  if (intent === 'currency_exchange') return {
+    intent, source:'template',
+    text:'Para informarte del dólar, euro y MLC en Cuba, necesito una tasa reciente verificada. La fuente de referencia para el mercado informal es elTOQUE: https://eltoque.com/tasas-de-cambio-cuba/mercado-informal/. No inventaré valores ni confundiré esa referencia con la tasa oficial del banco.'
+  };
 
   // 1) Coincidencia con la FAQ configurada.
   // Solo se considera una FAQ si el usuario menciona al menos una palabra de
@@ -455,16 +473,15 @@ export function generateResponse(
     }
 
     default: {
-      const cats = ctx.categories.map((c) => c.name).slice(0, 8);
-      const catLine = cats.length ? `\n\nTrabajamos con: ${cats.join(', ')}.` : '';
+      if (/\b(?:crisis|economia|inflacion|guerra|conflictos?|situacion mundial|noticias)\b/.test(normalize(message))) {
+        return {
+          text:'Claro, podemos hablar de la crisis mundial. Tiene varias dimensiones: inflación y pérdida de poder adquisitivo, conflictos internacionales, combustibles y energía, suministro de alimentos y cambio climático. Para Cuba, estos temas también repercuten en la importación de alimentos, combustible y tecnología. No dispongo aquí de noticias verificadas en tiempo real, así que no atribuiré cifras ni titulares actuales sin fuente. ¿Quieres profundizar en economía, conflictos, precios o su impacto en Cuba?',
+          intent, source:'template'
+        };
+      }
       return {
-        text:
-          'Gracias por tu mensaje. Soy el asistente de Bonaire. Puedo ayudarte con consultas de ' +
-          'productos, precios, asesoría solar, citas, mantenimiento y reparaciones.' +
-          catLine +
-          '\n\n¿Sobre qué te gustaría saber?',
-        intent,
-        source: 'template',
+        text:'También puedo ayudarte con temas generales, no solo con productos de Bonaire. Cuéntame qué aspecto deseas conocer. Si preguntas por noticias o cifras que cambian hoy, necesitaré una fuente actualizada para confirmarlas.',
+        intent, source:'template'
       };
     }
   }
@@ -485,6 +502,8 @@ export function buildSystemPrompt(ctx: AssistantContext): string {
   return [
     `Eres el asistente de ${business}, una empresa de energía solar y equipos eléctricos.`,
     'Responde en español claro y cercano al contexto de Cuba. Guía paso a paso con una pregunta útil por turno.',
+    'Puedes conversar sobre cultura general, economía y temas mundiales. No respondas siempre con el menú comercial a preguntas generales.',
+    'No inventes noticias actuales ni tasas cambiarias. Distingue el mercado informal elTOQUE de tasas oficiales y exige fuente reciente para cifras.',
     'La información del catálogo es orientativa: no inventes precios, existencias, garantía, compatibilidad, fechas ni trámites.',
     'Nunca afirmes que reservaste una cita, registraste una solicitud o realizaste un pedido: el chat no ejecuta esas acciones.',
     'La persona ya inició sesión. No vuelvas a pedir contraseña, teléfono ni dirección por el chat; indícale Mi perfil si necesita actualizarlos.',
