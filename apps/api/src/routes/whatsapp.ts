@@ -78,7 +78,10 @@ async function staffAccount(env:Env,from:string):Promise<{id:string;name:string;
     .bind(from).first<{id:string;name:string;role:string}>();
 }
 async function staffAppointments(env:Env,tomorrow:boolean):Promise<string>{
-  const now=new Date(),target=new Date(now.getTime()+(tomorrow?86400000:0)),day=cubaDay(target);
+  const now=new Date();
+  const today=cubaDay(now);
+  // Avanzar un día CALENDARIO cubano: evita errores de horario de verano al sumar 24 h.
+  const day=tomorrow?new Date(Date.parse(today+'T12:00:00Z')+86400000).toISOString().slice(0,10):today;
   const start=new Date(now.getTime()-36*3600000).toISOString();
   const end=new Date(now.getTime()+72*3600000).toISOString();
   const result=await env.DB.prepare(`SELECT a.id,a.title,a.starts_at,a.status,
@@ -86,7 +89,10 @@ async function staffAppointments(env:Env,tomorrow:boolean):Promise<string>{
     FROM appointments a LEFT JOIN customers cu ON cu.id=a.customer_id
     WHERE a.status NOT IN ('cancelled','completed') AND a.starts_at BETWEEN ? AND ?
     ORDER BY a.starts_at ASC LIMIT 250`).bind(start,end).all<any>();
-  const rows=(result.results||[]).filter(item=>cubaDay(new Date(item.starts_at))===day);
+  const rows=(result.results||[]).filter(item=>{
+    const stamp=new Date(item.starts_at);
+    return Number.isFinite(stamp.getTime()) && cubaDay(stamp)===day;
+  });
   if(!rows.length)return 'Agenda Bonaire: no hay citas pendientes para '+(tomorrow?'mañana':'hoy')+' ('+day+').';
   const lines=rows.slice(0,15).map((item,i)=>{
     const when=cubaTime(new Date(item.starts_at));
