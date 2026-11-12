@@ -45,7 +45,7 @@
   let manualSearchSequence=0;
   let manualSearchTimer:ReturnType<typeof setTimeout>|undefined;
   let whatsappLinkOpen=$state(false),whatsappLinkBusy=$state(false),whatsappLinkError=$state('');
-  let whatsappStatus:{linked:boolean;phone_masked:string|null}|null=$state(null);
+  let whatsappStatus:{configured:boolean;linked:boolean;phone_masked:string|null}|null=$state(null);
   let whatsappLinkCode=$state(''),whatsappLinkExpiry=$state('');
   async function openWhatsappLink(){
     whatsappLinkOpen=true;whatsappLinkError='';whatsappLinkCode='';
@@ -55,7 +55,8 @@
     whatsappLinkBusy=true;whatsappLinkError='';
     try{
       const status=await api.getWhatsAppStaffLink(token);
-      whatsappStatus={linked:Boolean(status.linked),phone_masked:status.phone_masked||null};
+      whatsappStatus={configured:Boolean(status.configured),linked:Boolean(status.linked),
+        phone_masked:status.phone_masked||null};
     }catch(e){whatsappLinkError=e instanceof Error?e.message:'No se pudo consultar la vinculación.';}
     finally{whatsappLinkBusy=false;}
   }
@@ -70,7 +71,7 @@
   async function unlinkWhatsapp(){
     if(!window.confirm('¿Desvincular tu WhatsApp de la cuenta de personal Bonaire?'))return;
     whatsappLinkBusy=true;whatsappLinkError='';
-    try{await api.deleteWhatsAppStaffLink(token);whatsappStatus={linked:false,phone_masked:null};whatsappLinkCode='';}
+    try{await api.deleteWhatsAppStaffLink(token);whatsappStatus={configured:true,linked:false,phone_masked:null};whatsappLinkCode='';}
     catch(e){whatsappLinkError=e instanceof Error?e.message:'No se pudo desvincular.';}
     finally{whatsappLinkBusy=false;}
   }
@@ -570,7 +571,11 @@
       </div>
       <p class="text-sm text-slate-600">Solo vincula tu WhatsApp después de iniciar sesión en Bonaire. El bot oficial debe configurarse primero en Meta y Cloudflare; nunca compartas el código con otros.</p>
       {#if whatsappLinkError}<p role="alert" class="rounded-xl bg-red-50 p-3 text-sm text-red-700">{whatsappLinkError}</p>{/if}
-      {#if whatsappStatus?.linked}
+      {#if whatsappStatus && !whatsappStatus.configured}
+        <p class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+          El bot de Meta todavía no está configurado. La vinculación se habilitará cuando termine la instalación oficial; las solicitudes y el resto del panel siguen funcionando.
+        </p>
+      {:else if whatsappStatus?.linked}
         <p class="rounded-xl bg-teal-50 border border-teal-200 p-3 text-sm font-bold text-teal-800">
           Vinculado al número terminado en {whatsappStatus.phone_masked}
         </p>
@@ -578,8 +583,8 @@
           class="rounded-xl border border-red-200 px-4 py-3 text-sm font-bold text-red-700">Desvincular número</button>
       {:else}
         <p class="text-sm text-slate-600">No hay un número vinculado actualmente.</p>
-        <button type="button" disabled={whatsappLinkBusy} onclick={()=>void generateWhatsappCode()}
-          class="rounded-xl bg-teal-700 px-4 py-3 text-sm font-bold text-white">Generar código de vinculación</button>
+        <button type="button" disabled={whatsappLinkBusy||!whatsappStatus?.configured} onclick={()=>void generateWhatsappCode()}
+          class="rounded-xl bg-teal-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">Generar código de vinculación</button>
         {#if whatsappLinkCode}
           <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-2">
             <p class="text-xs font-bold text-teal-900">Código de 8 dígitos (válido 10 minutos)</p>
