@@ -5,6 +5,7 @@ import { callAI } from '../assistant-ai';
 import { getUser, requireCustomerAuth } from '../middleware';
 import { rateLimited } from '../rate-limit';
 import { advanceSolarGuidance, type SolarState } from '../solar-guidance';
+import { getElToqueRates, formatExchangeReply } from '../exchange-rates';
 
 export const assistantRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 assistantRoutes.use('*', requireCustomerAuth);
@@ -88,6 +89,19 @@ assistantRoutes.post('/message', async c => {
         .bind(messageId, message, intent, now, sessionId, user.user_id),
     ]);
     if (!batch[1].meta?.changes) return c.json({ error: 'Esta conversación pertenece a otra cuenta' }, 403);
+
+    // Responder consultas de moneda con elTOQUE en vivo (si existe token autorizado).
+    // Nunca permitir que la IA invente tasas ni que el catálogo reemplace la pregunta.
+    if (intent === 'currency_exchange') {
+      const rates = await getElToqueRates(c.env.ELTOQUE_API_TOKEN);
+      const reply = formatExchangeReply(rates);
+      const replyId = crypto.randomUUID();
+      const source = rates ? 'eltoque' : 'eltoque_unavailable';
+      await DB.prepare(`INSERT INTO assistant_messages (id, session_id, role, content, intent, metadata, created_at)
+        VALUES (?, ?, 'assistant', ?, 'currency_exchange', ?, ?)`)
+        .bind(replyId, sessionId, reply, JSON.stringify({ source }), new Date().toISOString()).run();
+      return c.json({session_id:sessionId,response:reply,source,intent,message_id:replyId});
+    }
 
     // El asesoramiento guiado conserva el avance en D1 para esta conversación
     // y no depende de una respuesta probabilística del modelo de IA.

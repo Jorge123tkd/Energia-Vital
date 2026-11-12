@@ -220,6 +220,8 @@ export interface Env {
   AI_API_BASE?: string;
   AI_API_KEY?: string;
   AI_MODEL?: string;
+  /** Token privado de la API de tasas de elTOQUE; configurar con wrangler secret put. */
+  ELTOQUE_API_TOKEN?: string;
 }
 
 // === Auth request/response types ===
