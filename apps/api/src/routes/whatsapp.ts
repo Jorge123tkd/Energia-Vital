@@ -242,10 +242,13 @@ whatsappRoutes.post('/webhook', async c=>{
 });
 
 whatsappRoutes.get('/admin/link',requireStaffAuth,async c=>{
+  if(!c.env.WA_APP_SECRET||!c.env.WA_VERIFY_TOKEN||!c.env.WA_ACCESS_TOKEN||
+    !c.env.WA_PHONE_NUMBER_ID||!c.env.WA_GRAPH_API_VERSION)
+    return c.json({configured:false,linked:false,phone_masked:null,verified_at:null});
   const user=getUser(c)!;
   const linked=await c.env.DB.prepare('SELECT wa_id,verified_at FROM whatsapp_staff_links WHERE admin_user_id=?')
     .bind(user.user_id).first<{wa_id:string;verified_at:string}>();
-  return c.json({linked:!!linked,phone_masked:linked?maskWhatsAppId(linked.wa_id):null,verified_at:linked?.verified_at||null});
+  return c.json({configured:true,linked:!!linked,phone_masked:linked?maskWhatsAppId(linked.wa_id):null,verified_at:linked?.verified_at||null});
 });
 whatsappRoutes.post('/admin/link-code',requireStaffAuth,async c=>{
   if(!c.env.WA_APP_SECRET||!c.env.WA_VERIFY_TOKEN||!c.env.WA_ACCESS_TOKEN||!c.env.WA_PHONE_NUMBER_ID)
