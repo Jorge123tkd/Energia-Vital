@@ -143,8 +143,12 @@ assistantRoutes.post('/message', async c => {
     const { results } = await DB.prepare(`SELECT role, content FROM assistant_messages WHERE session_id = ? AND id != ? ORDER BY created_at DESC LIMIT 10`)
       .bind(sessionId, messageId).all<{ role: string; content: string }>();
     const history = (results || []).reverse();
-    const ai = await callAI(c.env, context, history, message);
     const fallback = generateResponse(message, context, history);
+    // La IA no responde preguntas generales fuera de los servicios Bonaire,
+    // incluso cuando se habilite un proveedor externo.
+    const ai = fallback.intent === 'general'
+      ? {text:'',provider:'none' as const}
+      : await callAI(c.env, context, history, message);
     const reply = ai.text || fallback.text;
     const source = ai.text ? 'ai' : fallback.source;
     const replyId = crypto.randomUUID();
