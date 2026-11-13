@@ -13,6 +13,7 @@ import {
 import { advanceSolarGuidance,type SolarState } from '../solar-guidance';
 import { getElToqueRates,formatExchangeReply } from '../exchange-rates';
 import { agendaForTeam,pendingTicketSummary } from '../telegram-agenda';
+import { classifyTelegramMessage,telegramReplyKeyboard,type TelegramReplyMarkup } from '../telegram-conversation';
 
 export const telegramRoutes = new Hono<{ Bindings:Env; Variables:{user?:any} }>();
 const now=()=>new Date().toISOString();
@@ -41,11 +42,14 @@ export function extractTelegramMessage(payload:any):{updateId:string;chatId:stri
     firstName:typeof msg.from.first_name==='string'?msg.from.first_name.slice(0,60):'cliente'
   };
 }
-export async function sendTelegramText(env:Env,chatId:string,text:string):Promise<void>{
+export async function sendTelegramText(
+  env:Env,chatId:string,text:string,replyMarkup?:TelegramReplyMarkup
+):Promise<void>{
   if(!env.TELEGRAM_BOT_TOKEN)throw Error('Bot Telegram no configurado');
   const response=await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/sendMessage',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({chat_id:chatId,text:text.slice(0,3900),link_preview_options:{is_disabled:true}}),
+    body:JSON.stringify({chat_id:chatId,text:text.slice(0,3900),
+      link_preview_options:{is_disabled:true},reply_markup:replyMarkup}),
     signal:AbortSignal.timeout(9000)
   });
   if(!response.ok)throw Error('Telegram no aceptó el mensaje ('+response.status+')');
@@ -97,85 +101,136 @@ async function redeemCode(env:Env,chatId:string,code:string):Promise<string>{
       .bind(approved.admin_user_id),
     env.DB.prepare('DELETE FROM telegram_staff_link_attempts WHERE chat_id=?').bind(chatId)
   ]);
-  return 'Tu Telegram quedó vinculado a tu cuenta de personal Bonaire.\n\n'+
-    'Comandos privados: /hoy, /manana, /pendientes, /avisos si, /avisos no y /desvincular.\n'+
-    'Los recordatorios diarios están DESACTIVADOS por defecto.';
+  return '¡Listo! Tu Telegram está vinculado de forma segura con tu cuenta del equipo Bonaire.\n\n'+
+    'Ahora puedes preguntarme de forma natural: «¿Qué trabajos tenemos hoy?», '+
+    '«Muéstrame las citas de mañana» o «¿Cuántas solicitudes siguen pendientes?».\n\n'+
+    'Los avisos automáticos de las 7:00 están DESACTIVADOS por defecto; puedes pedirme activarlos.';
 }
 type Session={chat_id:string;thread_id:string;solar_context:string;window_start:string|null;window_count:number};
-type BotDecision={reply:string;state?:SolarState|null;newThread?:boolean;skipHistory?:boolean};
+type BotDecision={
+  reply:string;state?:SolarState|null;newThread?:boolean;skipHistory?:boolean;
+  keyboardView?:'reminders';
+};
 async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string):Promise<BotDecision>{
-  const text=raw.trim(),lower=normalize(text);
-  const claim=lower.match(/^\/?vincular\s+(\d{8})$/);
-  if(claim)return {reply:await redeemCode(env,chatId,claim[1]),skipHistory:true};
+  const text=raw.trim();
+  // Un empleado obtiene su código desde /admin y lo escribe AQUÍ sin comandos.
+  // Por compatibilidad seguimos admitiendo /vincular 12345678.
+  const linkCode=text.match(/^(?:\/?vincular\s+|codigo\s+|mi codigo es\s+)?(\d{8})$/i);
+  if(linkCode)return {reply:await redeemCode(env,chatId,linkCode[1]),skipHistory:true};
+  const action=classifyTelegramMessage(text);
   const staff=await currentTelegramStaff(env,chatId);
-  if(/^\/?(start|hola)$/.test(lower))
-    return {reply:'¡Hola! Soy el asistente de Bonaire ☀️.\nPuedo ayudarte con paneles solares, inversores, baterías, precios publicados y servicios.\n\n'+
-      'Escribe «asesoramiento solar» para empezar.\nComandos: /ayuda, /nuevo, /historial, /borrarhistorial.\n'+
-      (staff?'Equipo autorizado: /hoy, /manana, /pendientes y /avisos si.':'El personal puede vincular su cuenta desde /admin.')};
-  if(/^\/?(ayuda|help)$/.test(lower))
-    return {reply:'Bonaire · Telegram\n/asesor - asesoría solar paso a paso\n/nuevo - iniciar otro chat\n/historial - últimos temas de esta conversación\n/borrarhistorial - borrar mensajes de este chat\n'+
-      'Para compras, citas, solicitudes y datos privados, utiliza tu cuenta en el sitio web de Bonaire.'+
-      (staff?'\n\nEquipo: /hoy, /manana, /pendientes, /avisos si, /avisos no, /desvincular.':'')};
-  if(/^\/?(nuevo|nueva|new)$/.test(lower))
-    return {reply:'Nueva conversación de Bonaire. ¿Necesitas asesoramiento solar, consultar equipos o solicitar un servicio?',
-      state:null,newThread:true,skipHistory:true};
-  if(/^\/?borrarhistorial$/.test(lower)){
-    await env.DB.prepare('DELETE FROM telegram_bot_messages WHERE chat_id=?').bind(chatId).run();
-    return {reply:'Historial de este chat eliminado de Bonaire. Comenzamos una conversación nueva.',
-      state:null,newThread:true,skipHistory:true};
+  const site=env.SITE_URL?.startsWith('https://')?env.SITE_URL:'https://energia-vital-web.pages.dev';
+
+  switch(action){
+    case 'welcome':
+      return {reply:'¡Hola! ☀️ Soy el asistente de Bonaire. Cuéntame con tus palabras qué necesitas.\n\n'+
+        'Puedo ayudarte a elegir un inversor, calcular baterías, consultar equipos del catálogo '+
+        'y conocer nuestros servicios. También puedes tocar una de las opciones que aparecen abajo.\n\n'+
+        (staff?'Como parte del equipo, también puedes preguntarme por la agenda de hoy, mañana o las solicitudes pendientes.':
+          'Si trabajas en Bonaire, puedes vincular tu cuenta de personal de manera segura desde /admin.')};
+    case 'help':
+      return {reply:'Hablemos de forma natural, como con un asesor de Bonaire. 😊\n\n'+
+        'Por ejemplo, puedes decirme «Necesito energía para mi nevera y dos aires acondicionados», '+
+        '«Quiero saber qué inversores venden» o «Necesito una reparación».\n\n'+
+        (staff?'También puedes preguntar «¿Qué trabajos hay mañana?», «¿Cuántas solicitudes faltan?» '+
+          'o «¿Cómo activo el recordatorio de las 7?».':
+          'Para compras, solicitudes y datos de tu cuenta, entra en la web de Bonaire: '+site)};
+    case 'new-chat':
+      return {reply:'Empezamos otra conversación. ¿Qué te gustaría resolver hoy en Bonaire? ☀️',
+        state:null,newThread:true,skipHistory:true};
+    case 'erase-history':{
+      await env.DB.prepare('DELETE FROM telegram_bot_messages WHERE chat_id=?').bind(chatId).run();
+      return {reply:'Eliminé los mensajes que Bonaire guardaba de este chat. '+
+        'Los mensajes que aparecen en tu aplicación Telegram debes borrarlos desde Telegram. '+
+        '¿Con qué empezamos ahora?',state:null,newThread:true,skipHistory:true};
+    }
+    case 'history':{
+      const rows=await env.DB.prepare(
+        "SELECT substr(content,1,120) AS content FROM telegram_bot_messages "+
+        "WHERE chat_id=? AND thread_id=? AND role='user' ORDER BY created_at DESC LIMIT 5"
+      ).bind(chatId,threadId).all<{content:string}>();
+      const topics=(rows.results||[]).reverse();
+      return {reply:topics.length?'Esto es lo último que me contaste en esta conversación:\n'+
+        topics.map((x,i)=>(i+1)+'. '+x.content).join('\n')+
+        '\n\n¿Quieres continuar con alguno de estos temas?':
+        'Todavía no tenemos mensajes anteriores en esta conversación. '+
+        'El historial privado de tu cuenta web se mantiene separado.',
+        skipHistory:true};
+    }
+    case 'link-help':
+      return {reply:staff
+        ?'Tu Telegram ya está vinculado al equipo Bonaire. Puedes consultar agenda y solicitudes con preguntas normales.'
+        :'Si formas parte del equipo, entra con tu usuario autorizado a /admin → Mi cuenta → Vincular Telegram de equipo. '+
+         'Allí genera un código temporal. Luego escríbeme aquí SOLO los ocho números del código; '+
+         'no necesitas aprender comandos ni compartir tu contraseña.',skipHistory:true};
+    case 'unlink':
+      if(!staff)return {reply:'Este Telegram no está vinculado con una cuenta de personal.',skipHistory:true};
+      await env.DB.prepare('DELETE FROM telegram_staff_links WHERE chat_id=? AND admin_user_id=?')
+        .bind(chatId,staff.id).run();
+      return {reply:'Listo: tu Telegram quedó desvinculado del equipo y ya no tiene acceso '+
+        'a citas o solicitudes internas. Para volver a vincularlo, genera un nuevo código en /admin.',
+        skipHistory:true};
+    case 'agenda-today':
+    case 'agenda-tomorrow':
+      if(!staff)return {reply:'La agenda interna de Bonaire es privada. Si trabajas en nuestro equipo, '+
+        'vincula tu cuenta de /admin para consultarla. Si eres cliente y deseas pedir una cita, '+
+        'puedo orientarte sobre cómo solicitarla desde la web.',skipHistory:true};
+      return {reply:await agendaForTeam(env,action==='agenda-today'?'today':'tomorrow'),skipHistory:true};
+    case 'pending':
+      if(!staff)return {reply:'El listado de solicitudes internas pertenece al personal autorizado. '+
+        'Si necesitas presentar una solicitud, puedes hacerlo desde tu cuenta en '+site,
+        skipHistory:true};
+      return {reply:await pendingTicketSummary(env),skipHistory:true};
+    case 'reminders-enable':
+    case 'reminders-disable':
+      if(!staff)return {reply:'Los recordatorios del equipo necesitan una cuenta de personal vinculada. '+
+        'Si trabajas en Bonaire, inicia sesión en /admin para vincular tu Telegram.',skipHistory:true};
+      await env.DB.prepare('UPDATE telegram_staff_links SET reminders_enabled=? WHERE chat_id=? AND admin_user_id=?')
+        .bind(action==='reminders-enable'?1:0,chatId,staff.id).run();
+      return {reply:action==='reminders-enable'
+        ?'He activado tus resúmenes diarios de la agenda GENERAL del equipo para las 7:00 a. m., hora de Cuba. '+
+         'No son asignaciones personales ni confirmaciones de los clientes. Cuando quieras, dime «desactiva los avisos diarios».'
+        :'He desactivado tus avisos diarios. Puedes seguir preguntándome por la agenda cuando lo necesites.',
+        skipHistory:true};
+    case 'reminders-info':
+      if(!staff)return {reply:'Los avisos diarios son exclusivos del personal vinculado de Bonaire. '+
+        'Para acceder, vincula Telegram desde una sesión de /admin.',skipHistory:true};
+      return {reply:'Tus recordatorios de las 7:00 a. m. (hora de Cuba) están '+
+        (staff.reminders_enabled?'ACTIVADOS':'DESACTIVADOS')+'.\n\n'+
+        '¿Quieres cambiarlo? Puedes pulsar «Activar avisos diarios» o «Desactivar avisos» debajo, '+
+        'o simplemente decírmelo.',keyboardView:'reminders',skipHistory:true};
+    case 'solar':{
+      const guided=advanceSolarGuidance('asesoramiento solar',null);
+      return {reply:guided.reply,state:guided.state};
+    }
+    case 'products':{
+      const context=await loadAssistantContext(env.DB);
+      return {reply:generateResponse('¿Qué productos solares tienen disponibles?',context).text,state:null};
+    }
+    case 'services':{
+      const context=await loadAssistantContext(env.DB);
+      return {reply:generateResponse('¿Qué servicios ofrecen?',context).text,state:null};
+    }
+    case 'request-service':
+      return {reply:'Claro. ¿Necesitas instalación, mantenimiento, reparación o una evaluación solar? '+
+        'Cuéntame qué equipo tienes y en qué municipio de Cuba sería el trabajo.\n\n'+
+        'Para que la solicitud quede registrada y podamos darle seguimiento, '+
+        'puedes enviarla desde tu cuenta en Bonaire: '+site+
+        '\nNo programaré una visita sin una solicitud confirmada.',state:null};
+    case 'human':
+      return {reply:'Te ayudo a contactar a una persona del equipo Bonaire. '+
+        'En la sección Contacto de nuestra web encontrarás los canales comerciales configurados: '+
+        site+'\n\nSi me cuentas brevemente tu consulta, también puedo orientarte por aquí.',state:null};
   }
-  if(/^\/?historial$/.test(lower)){
-    const rows=await env.DB.prepare(
-      "SELECT substr(content,1,120) AS content FROM telegram_bot_messages "+
-      "WHERE chat_id=? AND thread_id=? AND role='user' ORDER BY created_at DESC LIMIT 5"
-    ).bind(chatId,threadId).all<{content:string}>();
-    const topics=(rows.results||[]).reverse();
-    return {reply:topics.length?'Tus últimos mensajes en este chat:\n'+
-      topics.map((x,i)=>(i+1)+'. '+x.content).join('\n'):
-      'Aún no hay mensajes guardados en este chat. No se mezclan con tu historial privado de la web.',
-      skipHistory:true};
-  }
-  if(/^\/?desvincular$/.test(lower)){
-    if(!staff)return {reply:'Este Telegram no tiene una cuenta de personal vinculada.',skipHistory:true};
-    await env.DB.prepare('DELETE FROM telegram_staff_links WHERE chat_id=? AND admin_user_id=?')
-      .bind(chatId,staff.id).run();
-    return {reply:'Vínculo eliminado. Este chat ya no puede consultar datos internos. Para volver, genera un nuevo código en /admin.',
-      skipHistory:true};
-  }
-  if(/^\/?(hoy|agenda hoy|trabajos hoy)$/.test(lower)){
-    if(!staff)return {reply:'La agenda es privada. Para acceder, inicia sesión como personal en /admin y vincula Telegram.',skipHistory:true};
-    return {reply:await agendaForTeam(env,'today'),skipHistory:true};
-  }
-  if(/^\/?(manana|agenda manana|trabajos manana)$/.test(lower)){
-    if(!staff)return {reply:'La agenda es privada. Vincula Telegram desde /admin con tu cuenta de personal.',skipHistory:true};
-    return {reply:await agendaForTeam(env,'tomorrow'),skipHistory:true};
-  }
-  if(/^\/?(pendientes|tickets pendientes)$/.test(lower)){
-    if(!staff)return {reply:'Los tickets internos solo están disponibles para personal verificado en /admin.',skipHistory:true};
-    return {reply:await pendingTicketSummary(env),skipHistory:true};
-  }
-  const reminders=lower.match(/^\/?avisos\s+(si|no|on|off)$/);
-  if(reminders){
-    if(!staff)return {reply:'Los avisos de agenda requieren vincular tu cuenta de personal desde /admin.',skipHistory:true};
-    const enabled=['si','on'].includes(reminders[1])?1:0;
-    await env.DB.prepare(
-      'UPDATE telegram_staff_links SET reminders_enabled=? WHERE chat_id=? AND admin_user_id=?'
-    ).bind(enabled,chatId,staff.id).run();
-    return {reply:enabled
-      ?'Activaste los resúmenes diarios de la agenda GENERAL del equipo a las 7:00 a. m., hora de Cuba. No equivale a una asignación personal. Usa /avisos no para desactivarlos.'
-      :'Desactivaste los resúmenes diarios. Puedes consultar /hoy cuando quieras.',
-      skipHistory:true};
-  }
-  if(/^\/?(admin|moderador|personal)$/.test(lower))
-    return {reply:'Para acceder como personal debes vincular esta conversación desde una sesión de /admin. No basta con indicar tu cargo.',skipHistory:true};
+
   if(isOutOfScopeMessage(text))return {reply:OUT_OF_SCOPE_REPLY};
   if(isCurrencyQuestion(text))return {reply:formatExchangeReply(await getElToqueRates(env.ELTOQUE_API_TOKEN))};
   if(detectIntent(text)==='telegram'){
-    return {reply:'Ya estás conversando con el asistente de Bonaire en Telegram.\n'+
-      'Aquí puedo orientarte sobre equipos solares, precios publicados y servicios.\n'+
-      'WhatsApp permanece como canal de atención HUMANA para contactar a nuestros gestores.'};
+    return {reply:'Ya estás conversando conmigo aquí en Telegram. Puedes escribirme con libertad '+
+      'sobre los equipos y servicios de Bonaire. El WhatsApp de la empresa sigue atendido por gestores humanos.'};
   }
-  const solar=advanceSolarGuidance(/^\/asesor$/.test(lower)?'asesoramiento solar':text,state);
+
+  const solar=advanceSolarGuidance(text,state);
   if(solar.handled)return {reply:solar.reply,state:solar.state};
   const context=await loadAssistantContext(env.DB);
   const history=await env.DB.prepare(
@@ -227,9 +282,13 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     let state:SolarState|null=null;
     try{state=JSON.parse(session.solar_context) as SolarState|null;}catch{/* recuperar estado vacío */}
     const decision=await decide(env,input.chatId,input.text,state,session.thread_id);
-    await sendTelegramText(env,input.chatId,decision.reply);
     const nextThread=decision.newThread?crypto.randomUUID():session.thread_id;
     const nextState=decision.newThread?null:decision.state===undefined?state:decision.state;
+    // Refrescar el vínculo después de procesar el mensaje: el OTP puede haberlo creado
+    // o «desvincular» puede haberlo revocado en esta misma interacción.
+    const currentStaff=await currentTelegramStaff(env,input.chatId);
+    const keyboard=telegramReplyKeyboard(Boolean(currentStaff),nextState?.stage,decision.keyboardView||'normal');
+    await sendTelegramText(env,input.chatId,decision.reply,keyboard);
     const audit=decision.skipHistory?[]:[
       env.DB.prepare(
         "INSERT INTO telegram_bot_messages (id,chat_id,thread_id,role,content,created_at) VALUES (?,?,?,'user',?,?)"
@@ -326,7 +385,7 @@ telegramRoutes.post('/admin/link-code',requireStaffAuth,async c=>{
     c.env.DB.prepare('INSERT INTO telegram_staff_link_codes (code_hash,admin_user_id,expires_at,created_at) VALUES (?,?,?,?)')
       .bind(hashed,user.user_id,until,time)
   ]);
-  return c.json({code,expires_at:until,instruction:'Desde tu Telegram abre el bot oficial y envía /vincular '+code});
+  return c.json({code,expires_at:until,instruction:'Abre el chat privado con el bot de Bonaire y envía solo estos ocho dígitos: '+code});
 });
 telegramRoutes.delete('/admin/link',requireStaffAuth,async c=>{
   const user=getUser(c)!;
