@@ -72,7 +72,7 @@ export function businessProposalReply(message: string, history: {role:string;con
     const initial = [...history.slice(0,start)].reverse().find(h => h.role === 'user');
     return 'Gracias. Este es el resumen de tu propuesta para revisar antes de compartirla con el equipo de Bonaire:\n\n'
       + [initial?.content, message].filter(Boolean).join('\n\n')
-      + '\n\nPuedes corregir o completar estos datos al contactar al equipo: empresa y país, persona de contacto, productos o marca, y qué colaboración buscas (suministro, promoción, distribución en Cuba o asociación). No necesitas enviar documentos fiscales en este primer contacto.'
+      + '\n\nPuedes corregir o completar estos datos al contactar al equipo: empresa y país, persona de contacto, productos o marca, y qué colaboración buscas (suministro, promoción, distribución en Cuba o asociación). En este primer contacto no pedimos anticipos, saldos ni plazos. Si ya conoces presupuesto orientativo en USD y forma de pago propuesta, puedes indicarlos; si no, seguimos igualmente.'
       + '\n\nContacta con el equipo comercial por los canales publicados aquí: https://energia-vital-web.pages.dev/contacto#contacto-comercial'
       + '\n\nLa propuesta permanece en esta conversación; no se ha enviado como solicitud ni aceptado ningún acuerdo. El equipo evaluará condiciones, disponibilidad y alcance contigo.';
   }

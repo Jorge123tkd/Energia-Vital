@@ -11,6 +11,8 @@ Actualizado: 13 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
+2026-11-13 — Aclarada la guía y la respuesta comercial del asistente web: presupuesto USD aproximado y forma de pago opcionales solo cuando proceda, sin anticipos/saldos/plazos/aprobaciones en primer contacto; eso corresponde a negociación/contrato. Código/documentación en GitHub, NO comprobado con tests ni desplegado. Siguiente: validar localmente API/web y migración 012 antes de despliegue remoto.
+
 2026-11-13 — Código etapa 1 conectado: los formularios web y alta manual aceptan datos económicos opcionales; contacto permite una propuesta comercial sin elegir servicio, las rutas D1 insertan/consultan request_intake y los listados de usuario/staff los muestran. REQUIERE migración 012 antes del despliegue API/web; aún NO ejecutados typechecks, pruebas, migración D1 ni publicación. No se ha conectado el chat a creación de solicitudes ni expedientes/contratos avanzados.
 
 2026-11-13 — **Inicio de implementación, etapa 1:** preparada migración aditiva 012 para datos de contacto comercial declarados (USD aproximados disponibles, modalidad y moneda de pago, clase de cliente opcional) y categoría de propuesta comercial; helper de validación y prueba focalizada. No se exigen anticipo, saldo, plazos, solvencia ni autorizaciones en primer contacto. Esto es esquema/código en GitHub, **NO migración D1 remota aplicada**, ni prueba local/compilación/despliegue. Siguiente paso inmediato: conectar rutas existentes y vistas web/administración, ejecutar validación local y, previa revisión de D1, migrar y publicar.
