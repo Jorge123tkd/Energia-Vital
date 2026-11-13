@@ -17,6 +17,8 @@ function load(file,fakeRequire){
   return transpiledModule.exports;
 }
 const agenda=load('../src/telegram-agenda.ts',()=>({}));
+const conversation=load('../src/telegram-conversation.ts',()=>({}));
+const solar=load('../src/solar-guidance.ts',()=>({}));
 const route=load('../src/routes/telegram.ts',(name)=>{
   if(name==='hono')return {Hono};
   if(name==='../middleware')return {
@@ -31,6 +33,7 @@ const route=load('../src/routes/telegram.ts',(name)=>{
   if(name==='../solar-guidance')return {advanceSolarGuidance:()=>({handled:false})};
   if(name==='../exchange-rates')return {getElToqueRates:()=>null,formatExchangeReply:()=>''};
   if(name==='../telegram-agenda')return agenda;
+  if(name==='../telegram-conversation')return conversation;
   throw Error('Unexpected dependency '+name);
 });
 async function run(){
@@ -70,6 +73,58 @@ async function run(){
  assert.equal(agenda.cubaHour(new Date('2026-07-15T12:00:00Z')),8);
  assert.equal(agenda.cubaTomorrow(new Date('2026-03-07T18:00:00Z')),'2026-03-08');
  assert.equal(agenda.cubaTomorrow(new Date('2026-11-01T18:00:00Z')),'2026-11-02');
- console.log('PASS telegram bot smoke: private chat, webhook secret, staff auth, DST Cuba, disabled-by-default');
+
+ // Conversación natural; no necesita comandos /hoy o /pendientes.
+ const act=conversation.classifyTelegramMessage;
+ assert.equal(act('¿Qué trabajos tenemos mañana?'),'agenda-tomorrow');
+ assert.equal(act('Muéstrame las citas de hoy'),'agenda-today');
+ assert.equal(act('¿Cuántas solicitudes tenemos pendientes?'),'pending');
+ assert.equal(act('Quiero reservar una cita mañana'),null,
+   'Una solicitud de cita NO debe confundirse con consultar la agenda del equipo');
+ assert.equal(act('Activa mis recordatorios de las 7'),'reminders-enable');
+ assert.equal(act('Desactiva los avisos diarios'),'reminders-disable');
+ assert.equal(act('¿Me puedes recordar las citas?'),'reminders-info',
+   'Consultar si existen recordatorios no debe activar consentimiento');
+ assert.equal(act('Necesito un sistema solar'),'solar');
+ assert.equal(act('☀️ Asesoría solar'),'solar');
+ assert.equal(act('🛍️ Ver productos'),'products');
+ assert.equal(act('🧾 Solicitar servicio'),'request-service');
+ assert.equal(act('🙋 Hablar con una persona'),'human');
+ assert.equal(act('Soy del equipo'),'link-help');
+ assert.equal(act('✏️ Nuevo chat'),'new-chat');
+
+ const client=conversation.telegramReplyKeyboard(false);
+ const staff=conversation.telegramReplyKeyboard(true);
+ const flatten=k=>JSON.stringify(k);
+ assert.match(flatten(client),/Asesoría solar/);
+ assert.doesNotMatch(flatten(client),/Agenda del equipo|Solicitudes pendientes|Recordatorios/,
+   'Las sugerencias del personal no se ofrecen a chats no verificados');
+ assert.match(flatten(staff),/Agenda del equipo hoy/);
+ assert.match(flatten(staff),/Solicitudes pendientes/);
+ assert.match(flatten(conversation.telegramReplyKeyboard(false,'essential')),/Solo esenciales/);
+ assert.equal(conversation.telegramReplyKeyboard(false,'simple-loads').remove_keyboard,true);
+ const stage=solar.advanceSolarGuidance('Solo esenciales',{
+   stage:'essential',level:'basico',simpleLoads:[{
+     name:'Refrigerador',watts:150,hours:8,units:1,critical:true,duty:0.4
+   }]
+ });
+ assert.equal(stage.handled,true);
+ assert.equal(stage.state?.stage,'backup');
+ assert.equal(stage.state?.onlyCritical,true);
+
+ // Verificar estructura REAL enviada a Bot API sin red ni token real.
+ const previousFetch=global.fetch;
+ let outgoing;
+ try{
+   global.fetch=async(url,options)=>{
+     outgoing={url,body:JSON.parse(options.body)};
+     return {ok:true,json:async()=>({ok:true})};
+   };
+   await route.sendTelegramText({TELEGRAM_BOT_TOKEN:'TEST_NO_REAL'},'535001','Hola',client);
+ }finally{global.fetch=previousFetch;}
+ assert.equal(outgoing.body.chat_id,'535001');
+ assert.equal(outgoing.body.reply_markup.keyboard[0][0].text,'☀️ Asesoría solar');
+ assert.equal(outgoing.body.link_preview_options.is_disabled,true);
+ console.log('PASS telegram bot smoke: webhook security, Cuban time, natural chat, role-aware buttons, solar choices');
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});
