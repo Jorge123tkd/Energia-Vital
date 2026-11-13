@@ -123,6 +123,45 @@ Preparar: objetivo, público, territorio, materiales, canales propuestos, calend
 
 Preparar: objetivo común, aportaciones propuestas, responsabilidades por definir, alcance inicial y decisiones pendientes. Inversión, reparto de resultados, exclusividad y contratos son asuntos para revisión humana, nunca acuerdos automáticos.
 
+## Forma de pago y disponibilidad de fondos
+
+Política expresada por el propietario: Bonaire admite distintas formas de pago, pero las condiciones, el anticipo y las verificaciones dependen de la operación. No asumir que aceptar un medio significa aceptar crédito o comenzar un trabajo pendiente de financiación. No iniciar ejecución con la expectativa de cobrar meses después por trámites de aprobación. Las condiciones concretas deben quedar revisadas por el equipo y acordadas antes del inicio.
+
+Preguntar al preparar una contratación, presupuesto concreto o condiciones comerciales, no para responder una consulta general. No posponer esta información hasta después de realizar el trabajo. Aplicar a todos los clientes; profundizar según el proceso real de pago, especialmente en entidades estatales, sin dar por hecho que todas operan igual ni que una mipyme o vivienda está exenta de verificación.
+
+### Preguntas naturales y orden adaptativo
+
+1. «Para preparar las condiciones de la propuesta, ¿cómo prevén realizar el pago y en qué moneda?».
+2. Si hay trámites, pago diferido o entidad estatal: «¿Los fondos ya están disponibles para efectuar el pago o todavía dependen de alguna aprobación o desembolso?».
+3. Si solo tienen presupuesto aprobado: «Entiendo que el presupuesto está aprobado. ¿También está autorizada y disponible la ejecución del pago, o queda algún trámite pendiente?».
+4. Si faltan pasos: «¿Qué pasos faltan y qué área los gestiona? ¿Qué plazo estiman para poder efectuar el pago?».
+5. Para preparar condiciones, sin imponer un porcentaje: «¿Podrían realizar el anticipo que se acuerde antes de iniciar el trabajo?».
+6. Si es relevante: «¿El pago lo realizaría la misma persona o entidad que contrataría el servicio?».
+
+No preguntar todo junto. Recuperar respuestas ya conocidas. Diferenciar medio (transferencia, efectivo u otro) de moneda (por ejemplo CUP o USD). La transcripción del usuario contiene «USB»: no convertirla automáticamente en una moneda o medio aceptado; aclarar «¿Se refiere a dólares estadounidenses (USD)?» si aparece ese término en una conversación.
+
+Presupuesto aprobado, orden de pago emitida, comprobante enviado y fondos recibidos/verificados son estados distintos. Un plazo estimado por el cliente no es garantía ni compromiso de Bonaire. El asistente puede registrar lo declarado, pero no validar una cuenta, certificar un ingreso ni declarar pagado basándose solo en una captura o en el texto del cliente.
+
+### Explicación al cliente
+
+«Podemos valorar distintas formas de pago. Antes de iniciar el trabajo, necesitamos dejar acordadas las condiciones y verificar el pago o anticipo que corresponda. Si el pago depende de aprobaciones o desembolsos pendientes, podemos avanzar en la evaluación de la solicitud, pero el inicio del trabajo quedará sujeto a que se cumplan las condiciones acordadas. No trabajamos bajo la expectativa de cobrar meses después por esos trámites».
+
+Adaptar la explicación al caso, sin sonar acusatorio. No atribuir mala fe a una entidad estatal. No prometer reserva de equipos, compra de materiales, fecha de ejecución ni financiación antes de la revisión y confirmación correspondiente. Una reunión exploratoria puede celebrarse aunque los fondos sigan pendientes.
+
+### Información y controles del expediente
+
+Registrar medio propuesto, moneda, pagador, estado de fondos declarado, aprobaciones pendientes, área responsable y plazo estimado; además de anticipo propuesto/acordado, evidencia recibida y verificación del equipo cuando exista. Separar siempre declaraciones del cliente de comprobaciones internas.
+
+Antes de comenzar ejecución, exigir revisión humana de las condiciones y confirmación verificable del pago/anticipo acordado. Mantener pendiente el inicio si solo hay promesa, presupuesto aprobado o un comprobante sin verificar. El asistente no puede saltarse ese control ni conceder excepciones por iniciativa propia.
+
+Solicitar documentación de pago únicamente cuando sea necesaria, por el canal privado autorizado. No pedir claves, códigos de un solo uso, credenciales bancarias ni números completos de tarjeta. Definir con el equipo qué significa verificar una cuenta y qué evidencia mínima se requiere; no inventar requisitos bancarios o legales.
+
+### Decisiones comerciales todavía pendientes
+
+El propietario aún no ha definido una matriz de medios/monedas, porcentajes o importes de anticipo, momentos de pago del saldo, condiciones por tipo de operación, evidencia aceptable ni responsable de verificación. No fijar automáticamente un 50 %, pago total o condiciones distintas solo por el tipo de cliente. Esta guía expresa la política general; no sustituye las condiciones concretas del presupuesto y contrato ni afirma derechos automáticos de retirar equipos por impago.
+
+Incluir en la ficha previa un punto de agenda «Forma de pago, disponibilidad de fondos y condiciones previas al inicio». Mostrar pendientes sin divulgar notas financieras internas ni documentos de otro expediente.
+
 ## Ejemplo de conversación adaptativa (ficticio)
 
 Empresa: «Fabricamos equipos de refrigeración y buscamos un distribuidor en Cuba. Podemos enviar catálogo».
@@ -165,3 +204,5 @@ Ejemplo de agenda de distribución: 1) líneas y mercado objetivo; 2) suministro
 - Antes de preguntar, comprobar si está contestado, si sigue siendo pertinente y si puede posponerse. No transcribir esta guía completa al cliente.
 - Probar: consulta informativa sin clasificación empresarial; empresa que solo pide proyecto; proveedor frente a comprador; distribución en ambas direcciones; cambio de intención; respuestas que cubren varias preguntas; datos desconocidos; solicitud de atención humana; dos casos del mismo cliente sin mezcla; cita preferida sin falsa confirmación.
 - Integrar después de disponer del expediente privado y su persistencia. El resumen comercial actual de dos turnos no implementa todavía esta entrevista ni garantiza memoria entre chats o paridad Telegram.
+
+Casos de aceptación de pago: transferencia sin moneda indicada; USD sin medio indicado; presupuesto estatal aprobado pero fondos no disponibles; comprobante recibido sin verificación; cliente residencial o mipyme con pago pendiente; anticipo sin porcentaje definido; término ambiguo «USB»; petición de cita con fondos pendientes sin bloquear la reunión ni confirmar ejecución.
