@@ -190,10 +190,13 @@ export function advanceSolarGuidance(input:string,previous?:SolarState|null):Ste
     }
     case 'essential':{
       if(previous.level==='basico'){
-        if(message!=='1'&&message!=='2')return invalid('Responde 1 para solo cargas esenciales o 2 para todos los equipos.');
-        if(message==='1' && !(previous.simpleLoads||[]).some(x=>x.critical))
-          return invalid('De los aparatos que nombraste, ninguno está clasificado como esencial en esta guía. Responde 2 para respaldar los que anotaste, o usa el formulario para marcar los equipos indispensables.');
-        return {handled:true,state:{...previous,onlyCritical:message==='1',stage:'backup'},
+        // Aceptar opciones conversacionales de Telegram sin romper 1/2 en la web.
+        const essentials=message==='1'||/^(solo|solamente|los esenciales|cargas esenciales)/.test(message);
+        const all=message==='2'||/^(todos|todo|todos los equipos|todos los aparatos)/.test(message);
+        if(!essentials&&!all)return invalid('¿Quieres respaldar solo las cargas esenciales o todos los equipos? Puedes responder con palabras o con 1 / 2.');
+        if(essentials && !(previous.simpleLoads||[]).some(x=>x.critical))
+          return invalid('De los aparatos que nombraste, ninguno está clasificado como esencial en esta guía. Elige todos los equipos o usa el formulario para indicar cuáles son indispensables.');
+        return {handled:true,state:{...previous,onlyCritical:essentials,stage:'backup'},
           reply:'¿Cuántas horas de energía necesitas durante un apagón? Por ejemplo, «10». Si no conoces los vatios de cada aparato usaremos referencias y te diremos cuáles debes confirmar.'};
       }
       const v=numbers(message);
