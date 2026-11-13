@@ -176,6 +176,7 @@ export const api = {
   deleteAdminRequestCategory: (token: string, id: string) =>
     apiRequest('/api/admin/extras/request-categories/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
 
+  getStaffCalendar: (token: string, month: string) => apiRequest('/api/admin-customers/calendar?month='+encodeURIComponent(month), withAdmin(token)),
   adminAppointments: (token: string, q = '', page?: number, pageSize = 20) =>
     apiRequest('/api/admin-customers/appointments' +
       (page !== undefined || q ? '?' + new URLSearchParams({

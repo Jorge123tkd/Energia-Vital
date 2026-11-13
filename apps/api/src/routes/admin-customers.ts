@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAdminAuth, requireStaffAuth } from '../middleware';
 import { parseRequestIntake } from '../request-intake';
+import { calendarMonthWindow } from '../staff-calendar';
 
 export const adminCustomersRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 adminCustomersRoutes.use('*', requireStaffAuth);
@@ -310,6 +311,31 @@ adminCustomersRoutes.delete('/requests/:id', requireAdminAuth, async c => {
     if(img.r2_key)await c.env.BUCKET.delete(img.r2_key).catch(e=>console.error('No se pudo limpiar archivo R2 de solicitud',id,e));
   }
   return c.json({message:'Solicitud eliminada definitivamente.'});
+});
+
+/** Agenda mensual del equipo. Solo personal activo (middleware requireStaffAuth).
+ * Las fechas preferidas no equivalen a citas confirmadas.
+ */
+adminCustomersRoutes.get('/calendar', async c => {
+  const month=c.req.query('month')||'';
+  const range=calendarMonthWindow(month);
+  if(!range)return c.json({error:'Mes inválido (AAAA-MM).'},400);
+  const [appointments,datedRequests]=await Promise.all([
+    c.env.DB.prepare(`SELECT a.id,a.title,a.starts_at,a.ends_at,a.status,
+      cu.name AS customer_name,cu.phone
+      FROM appointments a LEFT JOIN customers cu ON cu.id=a.customer_id
+      WHERE a.status!='cancelled' AND a.starts_at < ? AND a.ends_at > ?
+      ORDER BY a.starts_at ASC LIMIT 501`)
+      .bind(range.end,range.start).all(),
+    c.env.DB.prepare(`SELECT r.id,r.title,r.preferred_date,r.status,cu.name AS customer_name
+      FROM requests r LEFT JOIN customers cu ON cu.id=r.customer_id
+      WHERE r.status!='cancelled' AND r.preferred_date >= ? AND r.preferred_date < ?
+      ORDER BY r.preferred_date ASC,r.created_at ASC LIMIT 501`)
+      .bind(range.monthStart,range.monthEnd).all()
+  ]);
+  const a=appointments.results||[],rs=datedRequests.results||[];
+  return c.json({month,timezone:'America/Havana',appointments:a.slice(0,500),
+    dated_requests:rs.slice(0,500),truncated:a.length>500||rs.length>500});
 });
 
 adminCustomersRoutes.get('/appointments', async c => {
