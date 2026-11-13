@@ -8,6 +8,7 @@
   import AdminNotifications from './components/AdminNotifications.svelte';
   import AdminRequestCategories from './components/AdminRequestCategories.svelte';
   import RequestPhotoGallery from './components/RequestPhotoGallery.svelte';
+  import StaffCalendar from './components/StaffCalendar.svelte';
   let token = $state('');
   let staffRole = $state<'admin' | 'operator'>('admin');
   let ownId = $state('');
@@ -20,6 +21,7 @@
   let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'notifications'>('requests');
   let mobileMenu = $state(false);
   let accountMenu = $state(false);
+  let calendarOpen = $state(false);
   let syncBusy = $state(false);
   let requestPhotosOpen = $state('');
   let requestEditor: {
@@ -256,7 +258,7 @@
   async function logout() {
     try { await apiRequest('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: '{}' }); } catch { /* Limpiar sesión local. */ }
     token = ''; sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    mobileMenu = false; accountMenu = false;
+    mobileMenu = false; accountMenu = false; calendarOpen = false;
     customers = []; requests = []; appointments = []; products = []; services = []; categories = [];
     pendingRequests=0;manualRequestOpen=false;
   }
@@ -367,6 +369,9 @@
 
       <div class="flex items-center justify-end gap-2 ml-auto shrink-0">
         {#if token}
+          <button type="button" onclick={() => {calendarOpen=true;accountMenu=false;mobileMenu=false;}}
+            title="Calendario del equipo" aria-label="Abrir calendario de citas y solicitudes"
+            class="flex items-center justify-center w-11 h-11 rounded-xl border border-teal-200 bg-teal-50 text-teal-800 text-xl hover:bg-teal-100">🗓️</button>
           <div class="hidden xl:block relative">
             <button type="button" class="flex items-center gap-2 rounded-xl border border-slate-200 text-slate-700 px-3 py-2.5 text-sm font-bold bg-white hover:bg-slate-50"
               aria-label="Abrir menú de mi cuenta" aria-expanded={accountMenu} onclick={() => accountMenu = !accountMenu}>
@@ -377,6 +382,8 @@
               <div class="absolute right-0 top-full mt-2 bg-white w-60 border border-slate-200 rounded-2xl p-2 shadow-xl z-[110]">
                 <p class="text-xs px-3 py-2 font-bold text-slate-400">{staffRole === 'admin' ? 'Administrador' : 'Moderador'}</p>
                 <a href="/perfil" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Mi perfil</a>
+                 <button type="button" onclick={() => {calendarOpen=true;accountMenu=false;}}
+                   class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">🗓️ Calendario del equipo</button>
                 <a href="/" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Ver sitio público</a>
                 <button type="button" onclick={()=>{accountMenu=false;void openTelegramLink();}}
                   class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">Vincular Telegram de equipo</button>
@@ -408,6 +415,8 @@
         </div>
         <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2">
           <a href="/perfil" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Mi perfil</a>
+           <button type="button" onclick={() => {calendarOpen=true;mobileMenu=false;}}
+             class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-semibold text-teal-800">🗓️ Calendario</button>
           <a href="/" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Ver sitio público</a>
           <button type="button" onclick={()=>{mobileMenu=false;void openTelegramLink();}}
             class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-semibold text-teal-800">Vincular Telegram</button>
@@ -590,6 +599,11 @@
     {/if}
   {/if}
 </div>
+
+{#if calendarOpen && token}
+  <StaffCalendar {token} onClose={() => calendarOpen=false}
+    onOpenAppointments={() => chooseTab('appointments')}/>
+{/if}
 
 {#if telegramLinkOpen}
   <div class="fixed inset-0 z-[230] flex justify-center items-center p-3">
