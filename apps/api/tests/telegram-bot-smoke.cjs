@@ -79,10 +79,15 @@ async function run(){
  assert.equal(act('¿Qué trabajos tenemos mañana?'),'agenda-tomorrow');
  assert.equal(act('Muéstrame las citas de hoy'),'agenda-today');
  assert.equal(act('¿Cuántas solicitudes tenemos pendientes?'),'pending');
+ assert.equal(act('¿Cuántas solicitudes faltan?'),'pending');
  assert.equal(act('Quiero reservar una cita mañana'),null,
    'Una solicitud de cita NO debe confundirse con consultar la agenda del equipo');
  assert.equal(act('Activa mis recordatorios de las 7'),'reminders-enable');
+ assert.equal(act('✅ Activar avisos diarios'),'reminders-enable',
+   'El botón debe ejecutar la misma acción que una petición conversacional');
+ assert.equal(act('🔕 Desactivar avisos'),'reminders-disable');
  assert.equal(act('Desactiva los avisos diarios'),'reminders-disable');
+ assert.equal(act('¿Cómo activo el recordatorio de las 7?'),'reminders-info');
  assert.equal(act('¿Me puedes recordar las citas?'),'reminders-info',
    'Consultar si existen recordatorios no debe activar consentimiento');
  assert.equal(act('Necesito un sistema solar'),'solar');
