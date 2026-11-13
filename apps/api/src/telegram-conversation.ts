@@ -74,6 +74,18 @@ export function classifyTelegramMessage(input:string):TelegramAction {
   return null;
 }
 
+/** Evita presentar el estudio solar como una secuencia de órdenes numéricas.
+ * Las preguntas abiertas y los cálculos siguen siendo los del asesor solar web.
+ */
+export function presentTelegramReply(reply:string,stage?:SolarStage|null):string {
+  if(!stage)return reply;
+  return reply
+    .replace(/(^|\n)([123])\.\s/g,'$1• ')
+    .replace(/Responde 1 o 2\./g,'Puedes tocar una opción o responderme con tus palabras.')
+    .replace(/Responde 1, 2 o 3\./g,'Puedes tocar una opción o responderme con tus palabras.')
+    .replace(/Responde 1 o 2 para continuar\./g,'Puedes elegir una opción o decírmelo.');
+}
+
 export type TelegramReplyMarkup =
   | {keyboard:{text:string}[][];resize_keyboard:true;one_time_keyboard:true;input_field_placeholder:string}
   | {remove_keyboard:true};
