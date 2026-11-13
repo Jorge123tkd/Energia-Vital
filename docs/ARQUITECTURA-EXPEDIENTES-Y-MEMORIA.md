@@ -8,6 +8,10 @@ Convertir Solicitudes en el expediente privado que une atención técnica y come
 
 Mantener consultas y asesoramiento libres de formularios empresariales. Preguntar tipo de cliente únicamente cuando solicite un servicio. Pedir datos de empresa/propuesta cuando quiera suministro, promoción, distribución o asociación. Crear una solicitud solo tras una acción explícita de envío, mostrar referencia después de persistirla y no confundir un borrador conversacional con una solicitud registrada.
 
+## Preparación conversacional de reuniones
+
+Aplicar [GUIA-CONVERSACIONAL-PREVIA-A-CITAS.md](GUIA-CONVERSACIONAL-PREVIA-A-CITAS.md): preguntas adaptativas por intención, sin repetir datos conocidos, cierre con ficha y agenda revisables. Es especificación pendiente de integración; no un formulario obligatorio ni una funcionalidad ya desplegada.
+
 ## Estado real encontrado
 
 | Área | Implementado actualmente | Falta para esta ampliación |
