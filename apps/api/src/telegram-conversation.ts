@@ -40,7 +40,7 @@ export function classifyTelegramMessage(input:string):TelegramAction {
   if(/^(?:avisos si|recordatorios si|activar recordatorios|activa recordatorios|activar avisos|activa los avisos diarios|quiero recibir avisos diarios|quiero recibir recordatorios|enviame recordatorios diarios|recuerdame los trabajos todos los dias|avisame todos los dias a las 7|activa mis recordatorios de las 7)$/.test(s))
     return 'reminders-enable';
   if(/^(?:recordatorios|mis avisos|avisos diarios|recordatorios diarios|configurar avisos|configurar recordatorios|quiero configurar los recordatorios)$/.test(s) ||
-      /(?:puedes|podrias) (?:recordarme|avisarme) (?:las citas|los trabajos|la agenda)/.test(s))
+      /(?:puedes|podrias) (?:recordar(?:me)?|avisar(?:me)?) (?:las citas|los trabajos|la agenda)/.test(s))
     return 'reminders-info';
 
   if(/^(?:hoy|agenda hoy|agenda de hoy|trabajos hoy|trabajos de hoy|citas de hoy|agenda del equipo hoy|mi agenda de hoy)$/.test(s))
