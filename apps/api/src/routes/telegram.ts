@@ -13,7 +13,7 @@ import {
 import { advanceSolarGuidance,type SolarState } from '../solar-guidance';
 import { getElToqueRates,formatExchangeReply } from '../exchange-rates';
 import { agendaForTeam,pendingTicketSummary } from '../telegram-agenda';
-import { classifyTelegramMessage,telegramReplyKeyboard,type TelegramReplyMarkup } from '../telegram-conversation';
+import { classifyTelegramMessage,telegramReplyKeyboard,presentTelegramReply,type TelegramReplyMarkup } from '../telegram-conversation';
 
 export const telegramRoutes = new Hono<{ Bindings:Env; Variables:{user?:any} }>();
 const now=()=>new Date().toISOString();
@@ -288,14 +288,15 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     // o «desvincular» puede haberlo revocado en esta misma interacción.
     const currentStaff=await currentTelegramStaff(env,input.chatId);
     const keyboard=telegramReplyKeyboard(Boolean(currentStaff),nextState?.stage,decision.keyboardView||'normal');
-    await sendTelegramText(env,input.chatId,decision.reply,keyboard);
+    const renderedReply=presentTelegramReply(decision.reply,nextState?.stage);
+    await sendTelegramText(env,input.chatId,renderedReply,keyboard);
     const audit=decision.skipHistory?[]:[
       env.DB.prepare(
         "INSERT INTO telegram_bot_messages (id,chat_id,thread_id,role,content,created_at) VALUES (?,?,?,'user',?,?)"
       ).bind(crypto.randomUUID(),input.chatId,nextThread,input.text,time),
       env.DB.prepare(
         "INSERT INTO telegram_bot_messages (id,chat_id,thread_id,role,content,created_at) VALUES (?,?,?,'assistant',?,?)"
-      ).bind(crypto.randomUUID(),input.chatId,nextThread,decision.reply,time)
+      ).bind(crypto.randomUUID(),input.chatId,nextThread,renderedReply,time)
     ];
     await env.DB.batch([
       env.DB.prepare(
