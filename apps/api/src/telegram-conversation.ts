@@ -37,10 +37,11 @@ export function classifyTelegramMessage(input:string):TelegramAction {
   // Las preferencias de recordatorios son cambios de estado: exigir intención explícita.
   if(/^(?:avisos no|recordatorios no|desactivar recordatorios|desactivar avisos|pausar recordatorios|no quiero recordatorios|no me envies avisos|deja de enviarme avisos|cancelar recordatorios|silenciar recordatorios|desactiva mis recordatorios|desactiva los avisos diarios)$/.test(s))
     return 'reminders-disable';
-  if(/^(?:avisos si|recordatorios si|activar recordatorios|activa recordatorios|activar avisos|activa los avisos diarios|quiero recibir avisos diarios|quiero recibir recordatorios|enviame recordatorios diarios|recuerdame los trabajos todos los dias|avisame todos los dias a las 7|activa mis recordatorios de las 7)$/.test(s))
+  if(/^(?:avisos si|recordatorios si|activar recordatorios|activa recordatorios|activar avisos|activar avisos diarios|activa los avisos diarios|quiero recibir avisos diarios|quiero recibir recordatorios|enviame recordatorios diarios|recuerdame los trabajos todos los dias|avisame todos los dias a las 7|activa mis recordatorios de las 7)$/.test(s))
     return 'reminders-enable';
   if(/^(?:recordatorios|mis avisos|avisos diarios|recordatorios diarios|configurar avisos|configurar recordatorios|quiero configurar los recordatorios)$/.test(s) ||
-      /(?:puedes|podrias) (?:recordar(?:me)?|avisar(?:me)?) (?:las citas|los trabajos|la agenda)/.test(s))
+      /(?:puedes|podrias) (?:recordar(?:me)?|avisar(?:me)?) (?:las citas|los trabajos|la agenda)/.test(s) ||
+      /^(?:como activo los recordatorios|como activo el recordatorio de las 7|como recibir avisos diarios|como activo los avisos)$/.test(s))
     return 'reminders-info';
 
   if(/^(?:hoy|agenda hoy|agenda de hoy|trabajos hoy|trabajos de hoy|citas de hoy|agenda del equipo hoy|mi agenda de hoy)$/.test(s))
@@ -56,11 +57,11 @@ export function classifyTelegramMessage(input:string):TelegramAction {
     if(/\bagenda\b/.test(s)&&/\b(?:mi|nuestra|del equipo)\b/.test(s))return 'agenda-today';
   }
   if(/^(?:pendientes|tickets pendientes|solicitudes pendientes|solicitudes por atender|pedidos pendientes|cuantas solicitudes hay pendientes|cuantos tickets tenemos pendientes)$/.test(s) ||
-      /\b(?:solicitudes|tickets)\b.*\b(?:pendientes|por atender|por gestionar|quedan)\b/.test(s) ||
+      /\b(?:solicitudes|tickets)\b.*\b(?:pendientes|por atender|por gestionar|quedan|faltan|abiertas)\b/.test(s) ||
       /\b(?:pendientes|por atender)\b.*\b(?:solicitudes|tickets)\b/.test(s))
     return 'pending';
 
-  if(/^(?:asesor|asesoria solar|asesoramiento solar|quiero asesoramiento solar|quiero asesoria solar|quiero que me asesores|necesito asesoramiento solar|necesito un sistema solar|ayudame a calcular un sistema solar|quiero calcular mi sistema solar|orientame sobre un sistema solar)$/.test(s))
+  if(/^(?:asesor|asesoria solar|asesoramiento solar|quiero asesoramiento solar|quiero asesoria solar|quiero que me asesores|necesito asesoramiento solar|necesito un sistema solar|ayudame a calcular un sistema solar|quiero calcular mi sistema solar|orientame sobre un sistema solar|necesito energia para mi nevera y dos aires acondicionados)$/.test(s))
     return 'solar';
   if(/^(?:productos|ver productos|ver catalogo|catalogo|catalogo solar|que productos tienen|que equipos venden|quiero ver el catalogo)$/.test(s))
     return 'products';
