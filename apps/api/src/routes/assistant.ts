@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { detectIntent, generateResponse, loadAssistantContext, isOutOfScopeMessage, OUT_OF_SCOPE_REPLY } from '../assistant-engine';
+import { businessProposalReply, detectIntent, generateResponse, loadAssistantContext, isOutOfScopeMessage, OUT_OF_SCOPE_REPLY } from '../assistant-engine';
 import { callAI } from '../assistant-ai';
 import { getUser, requireCustomerAuth } from '../middleware';
 import { rateLimited } from '../rate-limit';
@@ -90,6 +90,20 @@ assistantRoutes.post('/message', async c => {
     ]);
     if (!batch[1].meta?.changes) return c.json({ error: 'Esta conversación pertenece a otra cuenta' }, 403);
 
+    // Propuestas comerciales antes del asesor solar/FAQ/IA, con historial privado del dueño.
+    const { results: recentMessages } = await DB.prepare(`SELECT role, content FROM assistant_messages
+      WHERE session_id = ? AND id != ? ORDER BY created_at DESC, rowid DESC LIMIT 10`)
+      .bind(sessionId, messageId).all<{role:string;content:string}>();
+    const history = (recentMessages || []).reverse();
+    const commercial = businessProposalReply(message, history);
+    if (commercial) {
+      const replyId = crypto.randomUUID();
+      await DB.prepare(`INSERT INTO assistant_messages (id,session_id,role,content,intent,metadata,created_at)
+        VALUES (?,?,'assistant',?,'business_proposal',?,?)`)
+        .bind(replyId,sessionId,commercial,JSON.stringify({source:'commercial'}),new Date().toISOString()).run();
+      return c.json({session_id:sessionId,response:commercial,source:'commercial',intent:'business_proposal',message_id:replyId});
+    }
+
     // Respetar el alcance de Bonaire antes de IA y antes de una asesoría solar activa.
     // Nunca perder ni reiniciar el estado de una asesoría por una pregunta externa.
     if (isOutOfScopeMessage(message)) {
@@ -140,9 +154,6 @@ assistantRoutes.post('/message', async c => {
     let context;
     try { context = await loadAssistantContext(DB); }
     catch { context = { config: {}, faq: [], categories: [], products: [], services: [] }; }
-    const { results } = await DB.prepare(`SELECT role, content FROM assistant_messages WHERE session_id = ? AND id != ? ORDER BY created_at DESC LIMIT 10`)
-      .bind(sessionId, messageId).all<{ role: string; content: string }>();
-    const history = (results || []).reverse();
     const fallback = generateResponse(message, context, history);
     // La IA no responde preguntas generales fuera de los servicios Bonaire,
     // incluso cuando se habilite un proveedor externo.

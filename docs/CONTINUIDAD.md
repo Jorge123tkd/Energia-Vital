@@ -11,6 +11,11 @@ Actualizado: 13 de noviembre de 2026 (America/Havana).
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
 ## Último paso realizado
+2026-11-13 — Añadida orientación para propuestas comerciales en el asistente WEB: proveedores, promoción de marcas, distribución en Cuba y asociaciones, también fuera del sector solar. Detección explícita con prioridad sobre catálogo, FAQ, asesor solar e IA. La continuación usa exclusivamente historial privado de la sesión, prepara un resumen y enlaza a los canales comerciales publicados en Contacto. No crea solicitudes, no envía mensajes al personal y no aprueba acuerdos. Consultas normales, asesoramiento, preguntas por servicios y compra para mipyme NO activan preguntas comerciales por sí solas. Política explícita del usuario: preguntar tipo residencial/estatal/mipyme/privado solo cuando solicite contratar servicio, no durante asesoramiento; se documentó esa regla en el prompt, sin implementar un perfil empresarial persistente ni una bandeja B2B. Se añadió ancla y descripción comercial al panel de contacto.
+
+Validación LOCAL del agente: typecheck API PASS; Svelte 0 errores/0 advertencias; build web PASS; assistant-regression PASS con casos B2B y separación de asesoramiento; telegram-bot-smoke PASS por motor compartido. No QA visual ni despliegue de esta tanda. El flujo prioritario nuevo está conectado en la ruta web; no afirmar que Telegram tenga el mismo flujo multivuelta (mantiene su enrutador propio). Sin migración D1 ni secretos nuevos. Detalles: docs/ASISTENTE-PROPUESTAS-COMERCIALES.md.
+
+### Antecedentes (conservar como historial, no como instrucciones vigentes)
 2026-11-13 — **VALIDACIÓN DE LA NUEVA EXPERIENCIA CONVERSACIONAL TELEGRAM CONFIRMADA POR EL USUARIO EN WINDOWS/POWERSHELL.** `git pull --ff-only` avanzó correctamente `7ca59f7..ee6b802` en rama `feat/cloudflare-customer-accounts-hardening`. `npm run typecheck --workspace=apps/api` → **PASS** (`tsc --noEmit` sin errores). `npm run typecheck --workspace=apps/web` → **PASS** (`svelte-check found 0 errors and 0 warnings`). `node apps/api/tests/telegram-bot-smoke.cjs` → **PASS telegram bot smoke: webhook security, Cuban time, natural chat, role-aware buttons, solar choices**. `$env:VITE_API_URL="https://energia-vital-api.astrustrus.workers.dev"; npm run build:web` → **PASS** Vite 5.4.21, 155 módulos, 21.40 s, archivos `dist/assets/index-CT-ZQgJI.js` (416.77 kB) y `dist/assets/index-Be6RefGe.css` (48.52 kB). No hace falta repetir typechecks, smoke ni compilación sin cambios de código productivo. **Todavía NO se ha confirmado despliegue de esta nueva versión conversacional**, solo el anterior Worker `845819f9-e630-428a-b58b-ae2b7710e4d2` y Pages Production/main `d9d41604-9770-43f8-8559-daa8eb9c035c`. D1 remota 011_telegram_bot.sql ya aplicada con respaldo previo, ambos secretos Telegram guardados; NO repetir migraciones ni secretos. El `TELEGRAM_WEBHOOK_SECRET` inseguro por bytes cero fue ROTADO y confirmado antes de publicar versión anterior. La URL BotFather/@usuario público no ha sido compartida y no existe confirmación de webhook real activado o chat con Telegram.
 
 2026-11-12 — usuario corrigió el diseño funcional del bot: **«quiero que quede como un chat interactivo, no con comandos»**. Implementación en GitHub rama `feat/cloudflare-customer-accounts-hardening`, **NO desplegada**:
@@ -115,16 +120,9 @@ QA de esta tanda TODAVÍA NO ejecutada (solo inspección estática y bloques Sve
 
 La rama de trabajo incluye la pantalla /asistente a viewport completo (commit fa2b1db) y el gestor del carrusel con botones de crear/editar/eliminar, 1–6 diapositivas y validación nueva en la API (commit 4d8ca8f). Confirmados por salida PowerShell: `npm ci`, typecheck API, typecheck web (0 errores, 0 advertencias), `npm run build:web`, `$env:VITE_API_URL=https://energia-vital-api.astrustrus.workers.dev`, `npm audit --omit=dev` (0 vulnerabilidades). El audit completo reporta 9 avisos pendientes de clasificación; no impedir el avance por repetir comandos sin cambios. No hay evidencia todavía de validación visual de los dos cambios de interfaz ni de despliegue de estos commits a producción. Último despliegue confirmado previamente: Worker 07e2b3b8-0832-42d2-851c-fb401f142909 y Pages Production/main ad66cfa7-024c-4935-aad9-f7f313404533, fuente 98011f0.
 ## Siguiente paso exacto
-Estado vigente al retomar el 13 de noviembre: el usuario ya confirmó pull a ee6b802, typechecks API/web, prueba Telegram y build index-CT-ZQgJI.js correctos. NO repetir esos pasos ni npm ci. D1 011 aplicada y secretos Telegram guardados/rotados; NO repetir migraciones, respaldo ni secretos sin un cambio nuevo que lo justifique.
+Obtener esta actualización de la rama feat/cloudflare-customer-accounts-hardening. Publicación nueva requiere Worker por cambio del asistente y frontend por ancla/texto de contacto; no hay D1 ni secretos nuevos. Las pruebas focalizadas ya pasaron en el entorno del agente. El dist antiguo index-CT-ZQgJI.js del usuario ya no contiene el ajuste de Contacto: compilar web con VITE_API_URL del Worker cuando se vaya a publicar, sin repetir migraciones ni instalar dependencias (no cambiaron). Registrar versiones reales después del despliegue; todavía no se ha confirmado ni la publicación Telegram conversacional anterior ni esta tanda.
 
-1. En PowerShell, comprobar que existe apps/web/dist/assets/index-CT-ZQgJI.js antes de iniciar publicación. Si falta, detener y recuperar contexto del build.
-2. Desde apps/api ejecutar npx wrangler deploy y comprobar código de salida. Guardar el nuevo Current Version ID y verificar /health.
-3. Desde raíz publicar apps/web/dist con --project-name energia-vital-web --branch=main. Consultar despliegues Production y guardar ID/URL. Mantener rama Git feat/cloudflare-customer-accounts-hardening.
-4. Con salida del usuario, registrar publicación real. Si falla, diagnosticar sin declarar éxito.
-5. Después abrir /admin > Mi cuenta > Vincular Telegram de equipo; Activar webhook si aún no está activado y Comprobar conexión. Pedir solo el @usuario público BotFather si hace falta; nunca tokens ni códigos privados.
-6. Probar bot real: Iniciar, Hola, Necesito un sistema solar, botones y escritura libre. Verificar que un cliente no pueda consultar agenda interna. Personal vinculado mediante código de ocho cifras puede consultar agenda y pendientes. Avisos solo por consentimiento explícito. No afirmar entrega de recordatorios hasta observarla.
-
-La última publicación confirmada sigue siendo Worker 845819f9-e630-428a-b58b-ae2b7710e4d2 y Pages d9d41604-9770-43f8-8559-daa8eb9c035c. La nueva versión conversacional está probada/compilada, NO confirmada como desplegada. Esta actualización solo cambia documentación; no invalida el build.
+QA incremental pendiente: desde /asistente decir «Queremos que Bonaire distribuya nuestros productos en Cuba», responder con datos ficticios de empresa y comprobar resumen/contacto sin alta automática. Probar «Necesito asesoramiento solar» por separado, y cambiar desde propuesta a una pregunta técnica: no debe forzar clasificación empresarial. Solicitudes B2B estructuradas en administración y persistencia de tipo de cliente no forman parte de esta implementación. Mantener pendiente activación/QA real de Telegram del paso anterior.
 
 ## Trabajo completado y evidencia
 ### Cambios previos presentes en el repositorio
@@ -157,7 +155,8 @@ La última publicación confirmada sigue siendo Worker 845819f9-e630-428a-b58b-a
 | Secretos Telegram | Guardados; webhook secret rotado correctamente |
 | Último Worker publicado confirmado | 845819f9-e630-428a-b58b-ae2b7710e4d2, versión anterior |
 | Último Pages publicado confirmado | d9d41604-9770-43f8-8559-daa8eb9c035c, Production/main, versión anterior |
-| Publicación de la nueva experiencia | Pendiente de evidencia |
+| Publicación de la nueva experiencia | Pendiente de evidencia; incluye nueva tanda comercial web |
+| Propuestas comerciales web | Código preparado y comprobado localmente; no desplegado |
 | Webhook y chat Telegram reales | No confirmados |
 | Recordatorios reales | No confirmados; requieren opt-in |
 | WhatsApp | Atención humana; bot automatizado no es el objetivo vigente |
@@ -165,6 +164,7 @@ La última publicación confirmada sigue siendo Worker 845819f9-e630-428a-b58b-a
 | Stash original del usuario | No consta recuperación selectiva |
 
 ## Bitácora
+- 2026-11-13: implementada orientación comercial web y resumen privado; pruebas focalizadas API/web/regresión/Telegram smoke y build locales PASS. Sin cambios D1, secretos o producción. Solo prompt recoge regla de clasificación para contratación; no afirmar perfil empresarial o bandeja comercial implementados.
 - 2026-11-13: retomado este chat leyendo el registro actual de GitHub. Se consolidó Siguiente paso exacto y la tabla de estado, retirando instrucciones operativas antiguas contradictorias; se conserva la bitácora histórica. Preparado bloque para publicar build ya validado, sin repetir pruebas, migraciones ni secretos. No se ha ejecutado despliegue desde este chat.
 - 2026-11-13: usuario confirmó actualización Git al commit ee6b802 y validaciones NUEVO CHAT TELEGRAM completas: API tsc PASS, Svelte 0 errores/0 advertencias, smoke Telegram natural/chat/botones/solar PASS, Vite build PASS index-CT-ZQgJI.js. Próximo deploy Worker y Pages Production/main, sin repetir D1/secrets/tests/build.
 - 2026-11-12: rediseño conversacional Telegram en rama, sin comandos obligatorios, reply keyboards por rol, soporte frases habituales y código de vinculación de 8 cifras; smoke ampliado. Solo revisión estática, nuevo typecheck/test/build y deploy pendiente. Producción anterior permanece activa.

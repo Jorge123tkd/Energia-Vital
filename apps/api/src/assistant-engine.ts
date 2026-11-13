@@ -25,6 +25,7 @@ export type AssistantIntent =
   | 'product_inquiry'
   | 'complaint'
   | 'telegram'
+  | 'business_proposal'
   | 'service_request'
   | 'general';
 
@@ -33,7 +34,7 @@ const DEFAULT_WELCOME =
 
 /** Un mensaje fuera del ámbito comercial debe recibir una redirección breve, no una explicación inventada. */
 export const OUT_OF_SCOPE_REPLY =
-  'Sobre ese tema no tengo información para ofrecerte. Soy el asistente de Bonaire y puedo asesorarte sobre paneles solares, inversores, baterías, autonomía eléctrica, productos y servicios de instalación o mantenimiento. ¿En qué puedo ayudarte?';
+  'Sobre ese tema no tengo información para ofrecerte. Soy el asistente de Bonaire y puedo asesorarte sobre paneles solares, inversores, baterías, autonomía eléctrica, productos, servicios y propuestas comerciales de suministro, promoción, distribución o asociación con Bonaire. ¿En qué puedo ayudarte?';
 
 /** Preguntas ajenas a Bonaire: interceptarlas incluso cuando el modelo de IA esté activado. */
 export function isOutOfScopeMessage(message:string): boolean {
@@ -44,8 +45,46 @@ export function isOutOfScopeMessage(message:string): boolean {
   return external && !business;
 }
 
+/** Propuestas dirigidas a Bonaire; mencionar una empresa no basta para iniciar este flujo. */
+export function isBusinessProposal(message: string): boolean {
+  const m = normalize(message);
+  if (/\b(?:no quiero|no queremos|no deseo|no buscamos)\b.{0,35}\b(?:asociar|colaborar|distribu|proveedor|negocio|promocion)/.test(m)) return false;
+  return /\b(?:ser|seremos|somos|como) (?:su |vuestro |un |el |sus |uno de sus )?(?:proveedor(?:es)?|distribuidor(?:es)?)\b/.test(m)
+    || /\b(?:queremos|quiero|buscamos|nos interesa|me interesa|interesad[oa]s? en)\b.{0,90}\b(?:asociarnos|asociarme|colaborar|alianza|asociacion|distribu(?:yan|ir|idor(?:es)?)|promocion(?:en|ar)?|represent(?:en|arnos|acion)|negocios? con (?:ustedes|bonaire))\b/.test(m)
+    || /\b(?:propuesta|alianza|asociacion|colaboracion|representacion) comercial\b/.test(m)
+    || /\b(?:ofrecemos|ofrezco|suministramos|fabricamos)\b.{0,100}\b(?:a bonaire|a ustedes|para ustedes|distribuidores|distribuyan)\b/.test(m)
+    || /\b(?:que|para que) (?:ustedes |bonaire )?(?:nos |los |las )?(?:promocionen|distribuyan|representen)\b/.test(m);
+}
+
+/** Respuesta comercial determinista: no crea solicitudes ni promete acuerdos. */
+export function businessProposalReply(message: string, history: {role:string;content:string}[] = []): string | null {
+  const previous = [...history].reverse().find(h => h.role === 'assistant');
+  const pending = previous?.content.startsWith('Propuesta comercial · Bonaire');
+  const m = normalize(message);
+  const explicit = isBusinessProposal(message);
+  if (!explicit && !pending) return null;
+  if (pending && /^(?:cancelar|cancela|olvidalo|otra cosa|no gracias)[.! ]*$/.test(m))
+    return 'De acuerdo, dejamos la propuesta comercial aquí. ¿En qué más puedo ayudarte?';
+  // Una pregunta nueva de asesoramiento/servicio no debe convertirse en datos de la empresa.
+  if (!explicit && (/\?|\b(?:asesoramiento|asesorame|como|que es|cuanto|necesito|solicitar|contratar|agendar)\b/.test(m) || isOutOfScopeMessage(message))) return null;
+  if (pending) {
+    const start = history.length - 1 - [...history].reverse().findIndex(h => h.role === 'assistant' && h.content.startsWith('Propuesta comercial · Bonaire'));
+    const initial = [...history.slice(0,start)].reverse().find(h => h.role === 'user');
+    return 'Gracias. Este es el resumen de tu propuesta para revisar antes de compartirla con el equipo de Bonaire:\n\n'
+      + [initial?.content, message].filter(Boolean).join('\n\n')
+      + '\n\nPuedes corregir o completar estos datos al contactar al equipo: empresa y país, persona de contacto, productos o marca, y qué colaboración buscas (suministro, promoción, distribución en Cuba o asociación). No necesitas enviar documentos fiscales en este primer contacto.'
+      + '\n\nContacta con el equipo comercial por los canales publicados aquí: https://energia-vital-web.pages.dev/contacto#contacto-comercial'
+      + '\n\nLa propuesta permanece en esta conversación; no se ha enviado como solicitud ni aceptado ningún acuerdo. El equipo evaluará condiciones, disponibilidad y alcance contigo.';
+  }
+  return 'Propuesta comercial · Bonaire\n\nPodemos orientarte para presentar una propuesta como proveedor, promocionar tu marca, proponer que Bonaire distribuya tus productos en Cuba o explorar una asociación comercial. No tiene que tratarse de energía solar.'
+    + '\n\nCuéntame brevemente qué empresa representas, de qué país es y qué colaboración propones. Añade solo los datos que todavía no hayas mencionado; si actúas por cuenta propia, puedes indicarlo.'
+    + '\n\nEsto prepara la conversación con nuestro equipo; no confirma un acuerdo ni crea una solicitud de servicio. Si prefieres hablar directamente con una persona: https://energia-vital-web.pages.dev/contacto#contacto-comercial';
+}
+
 export function detectIntent(message: string): AssistantIntent {
   const m = normalizeWithTypos(message);
+
+  if (isBusinessProposal(message)) return 'business_proposal';
 
   // El precio del dólar no pertenece al catálogo de productos.
   if (isCurrencyQuestion(m)) return 'currency_exchange';
@@ -307,6 +346,8 @@ export function generateResponse(
   ctx: AssistantContext,
   history: { role: string; content: string }[] = []
 ): { text: string; intent: AssistantIntent; source: 'faq' | 'catalog' | 'template' } {
+  const commercial = businessProposalReply(message, history);
+  if (commercial) return {text:commercial,intent:'business_proposal',source:'template'};
   let intent = detectIntent(message);
   // Una respuesta corta ("sí", "48 voltios", "dos horas") continúa el asunto
   // de la conversación, en lugar de reiniciar el diálogo con una plantilla.
@@ -521,9 +562,10 @@ export function buildSystemPrompt(ctx: AssistantContext): string {
     .join('\n');
 
   return [
-    `Eres el asistente de ${business}, una empresa de energía solar y equipos eléctricos.`,
+    `Eres el asistente de ${business}, una empresa comercial que ofrece actualmente soluciones solares y también recibe propuestas de suministro, promoción, distribución en Cuba y asociaciones en otros sectores.`,
     'Responde en español claro y cercano al contexto de Cuba. Guía paso a paso con una pregunta útil por turno.',
-    'Alcance obligatorio: responde SOLO consultas relacionadas con Bonaire, sistemas solares, baterías, inversores, energía de respaldo, catálogo, servicios de instalación, mantenimiento y reparación; además, las consultas de tasas de Cuba mediante el servicio de tasas autorizado.',
+    'Alcance obligatorio: responde SOLO consultas relacionadas con Bonaire, sistemas solares, baterías, inversores, energía de respaldo, catálogo, servicios de instalación, mantenimiento y reparación, y propuestas comerciales de proveedores, promoción de marcas, distribución y asociaciones con Bonaire; además, las consultas de tasas de Cuba mediante el servicio de tasas autorizado.',
+    'No preguntes el tipo de cliente o empresa durante una consulta informativa o asesoramiento. Solo al solicitar o contratar un servicio pregunta, si no se conoce ya, si es residencial, empresa estatal, mipyme u otro negocio privado. Ante una propuesta comercial pregunta por empresa, país y colaboración deseada, sin repetir información ya aportada. Nunca confirmes contratos, representación exclusiva ni aprobación de una asociación.',
     'Si te preguntan sobre crisis mundial, política, guerras, deportes u otros temas ajenos a Bonaire, no expliques esos temas ni compartas noticias: responde que no ofreces información sobre ellos y redirige de forma amable a productos y servicios de Bonaire.',
     'No inventes noticias actuales ni tasas cambiarias. Distingue el mercado informal elTOQUE de tasas oficiales y exige fuente reciente para cifras.',
     'La información del catálogo es orientativa: no inventes precios, existencias, garantía, compatibilidad, fechas ni trámites.',

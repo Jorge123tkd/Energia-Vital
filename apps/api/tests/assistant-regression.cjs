@@ -95,3 +95,42 @@ assert.match(reply,/1 MLC =/);
 assert.match(reply,/no una cotización directa/i);
 assert.doesNotMatch(formatExchangeReply(null),/1 USD = [0-9]/);
 console.log('PASS assistant regression: business-only scope, currency exception, 2 ACs, truthful rates, unknown loads');
+
+// Propuestas B2B no se confunden con compra, asesoría o solicitudes de servicio.
+const businessCases = [
+ 'Quiero ser su proveedor',
+ 'Somos fabricantes de baterías y queremos que Bonaire sea nuestro distribuidor en Cuba',
+ 'Queremos que promocionen nuestra marca de alimentos',
+ 'Me interesa una asociación comercial con Bonaire',
+ 'Queremos hacer negocios con ustedes',
+ 'Buscamos distribuidores en Cuba',
+ 'Ofrecemos productos a Bonaire',
+];
+for (const message of businessCases) {
+ assert.equal(detectIntent(message),'business_proposal',message);
+ const answer=generateResponse(message,ctx);
+ assert.equal(answer.intent,'business_proposal');
+ assert.match(answer.text,/país/);
+ assert.match(answer.text,/no confirma un acuerdo/i);
+ assert.doesNotMatch(answer.text,/qué inversor|cuántas baterías/i);
+}
+for (const message of ['Necesito asesoramiento solar','¿Qué servicios ofrecen?',
+ 'Quiero comprar un inversor para mi mipyme','¿Qué es un distribuidor?',
+ 'Soy una empresa estatal y necesito saber cuánto consume un aire',
+ 'No quiero ser proveedor, necesito asesoramiento']) {
+ assert.notEqual(detectIntent(message),'business_proposal',message);
+ assert.doesNotMatch(generateResponse(message,ctx).text,/qué empresa representas/i);
+}
+const first=generateResponse('Queremos que distribuyan nuestros productos',ctx);
+const commercialHistory=[{role:'user',content:'Queremos que distribuyan nuestros productos'},
+ {role:'assistant',content:first.text}];
+const follow=generateResponse('Somos Ejemplo SA, de España, fabricamos paneles solares',ctx,commercialHistory);
+assert.equal(follow.intent,'business_proposal');
+assert.match(follow.text,/Ejemplo SA/);
+assert.match(follow.text,/no se ha enviado/i);
+assert.match(follow.text,/contacto#contacto-comercial/);
+assert.notEqual(generateResponse('¿Cuánto cuesta un inversor?',ctx,commercialHistory).intent,'business_proposal');
+assert.notEqual(generateResponse('Necesito asesoramiento solar',ctx,commercialHistory).intent,'business_proposal');
+assert.match(generateResponse('Cancelar',ctx,commercialHistory).text,/dejamos la propuesta/i);
+assert.match(buildSystemPrompt(ctx),/No preguntes el tipo de cliente/);
+console.log('PASS commercial proposals: suppliers, promotion, distribution, partnerships, follow-up and advice separation');

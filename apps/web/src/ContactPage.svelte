@@ -158,9 +158,9 @@
         </button>
         <p class="text-xs text-slate-500">No se confirma una cita automáticamente. Nuestro equipo revisará tu solicitud.</p>
       </form>
-      <aside class="bg-slate-950 text-white rounded-3xl p-5 sm:p-7 space-y-5 shadow-lg min-w-0">
+      <aside id="contacto-comercial" class="bg-slate-950 text-white rounded-3xl p-5 sm:p-7 space-y-5 shadow-lg min-w-0">
         <div><span class="text-xs font-bold uppercase tracking-wider text-teal-300">Estamos para ayudarte</span><h2 class="text-2xl font-bold mt-2">Contacta a Bonaire</h2></div>
-        <p class="text-sm text-slate-300 leading-relaxed">Asesoramiento para paneles solares, baterías, inversores, instalaciones y mantenimiento.</p>
+        <p class="text-sm text-slate-300 leading-relaxed">Asesoramiento, atención de servicios y propuestas comerciales: proveedores, promoción de marcas, distribución en Cuba y asociaciones. Para proponer un negocio, contacta directamente al equipo por estos canales; no necesitas elegir un servicio.</p>
         {#if settings.business_phone}
           <div class="border-t border-white/15 pt-4"><p class="text-xs text-teal-300 font-bold mb-1">Atención del equipo · Teléfono / WhatsApp</p><a class="text-white font-semibold hover:text-teal-200 break-words" href={'https://wa.me/' + settings.business_phone.replace(/\D/g,'')} target="_blank" rel="noopener noreferrer">{settings.business_phone}</a></div>
         {/if}
