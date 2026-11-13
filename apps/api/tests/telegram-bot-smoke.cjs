@@ -107,6 +107,10 @@ async function run(){
  assert.match(flatten(staff),/Agenda del equipo hoy/);
  assert.match(flatten(staff),/Solicitudes pendientes/);
  assert.match(flatten(conversation.telegramReplyKeyboard(false,'essential')),/Solo esenciales/);
+ const conversationalSolar=conversation.presentTelegramReply(
+   '¿Ya tienes inversor?\n\n1. No\n2. Sí\n\nResponde 1 o 2.','ownership');
+ assert.doesNotMatch(conversationalSolar,/Responde 1 o 2|1\. No|2\. Sí/);
+ assert.match(conversationalSolar,/Puedes tocar una opción/);
  assert.equal(conversation.telegramReplyKeyboard(false,'simple-loads').remove_keyboard,true);
  const stage=solar.advanceSolarGuidance('Solo esenciales',{
    stage:'essential',level:'basico',simpleLoads:[{
