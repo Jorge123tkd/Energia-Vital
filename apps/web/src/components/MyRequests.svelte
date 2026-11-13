@@ -46,6 +46,12 @@
       <article class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
           <div class="flex flex-wrap justify-between gap-3 items-start"><strong class="text-slate-900">{item.title}</strong><span class="text-xs font-bold rounded-full px-2 py-1 bg-teal-50 text-teal-800">{statusText[item.status] || item.status}</span></div>
           <p class="text-sm text-slate-600 whitespace-pre-line">{item.description}</p>
+          {#if item.available_budget_usd_cents!==null&&item.available_budget_usd_cents!==undefined}
+            <p class="text-xs text-slate-600">Importe declarado: {(item.available_budget_usd_cents/100).toLocaleString('es-CU',{minimumFractionDigits:2,maximumFractionDigits:2})} USD</p>
+          {/if}
+          {#if item.payment_method||item.payment_currency}
+            <p class="text-xs text-slate-600">Pago propuesto: {[item.payment_method,item.payment_currency].filter(Boolean).join(' · ')}</p>
+          {/if}
           <div class="flex flex-wrap justify-between gap-2 items-center">
             <div class="min-w-0">
               <p class="text-xs text-slate-500">{new Date(item.created_at).toLocaleDateString('es-CU')} · Ref. {item.id.slice(0,8).toUpperCase()}</p>

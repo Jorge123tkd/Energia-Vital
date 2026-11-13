@@ -42,6 +42,7 @@
   let manualContactName=$state(''),manualContactPhone=$state('');
   let manualTitle=$state(''),manualDescription=$state(''),manualLocation=$state('');
   let manualType=$state('consultation'),manualStatus=$state('pending'),manualDate=$state('');
+  let manualCustomerType=$state(''),manualBudget=$state(''),manualPaymentMethod=$state(''),manualPaymentCurrency=$state('');
   let manualSearchSequence=0;
   let manualSearchTimer:ReturnType<typeof setTimeout>|undefined;
   let telegramLinkOpen=$state(false),telegramLinkBusy=$state(false),telegramLinkError=$state('');
@@ -121,6 +122,7 @@
     manualRecipientMode='guest';manualSelectedCustomer=null;manualCustomerQuery='';manualCustomers=[];
     manualContactName='';manualContactPhone='';manualTitle='';manualDescription='';
     manualLocation='';manualType='consultation';manualStatus='pending';manualDate='';
+    manualCustomerType='';manualBudget='';manualPaymentMethod='';manualPaymentCurrency='';
     manualRequestError='';
   }
   async function createManualRequest(e:SubmitEvent){
@@ -135,7 +137,9 @@
         ...(manualRecipientMode==='customer'?{customer_id:manualSelectedCustomer.id}:
           {contact_name:manualContactName.trim(),contact_phone:manualContactPhone.trim()}),
         type:manualType,title:manualTitle.trim(),description:manualDescription.trim(),
-        status:manualStatus,location:manualLocation.trim(),preferred_date:manualDate||null
+        status:manualStatus,location:manualLocation.trim(),preferred_date:manualDate||null,
+        customer_type:manualCustomerType||undefined,available_budget_usd:manualBudget||undefined,
+        payment_method:manualPaymentMethod||undefined,payment_currency:manualPaymentCurrency||undefined
       });
       manualRequestOpen=false;resetManualRequest();
       requestQuery='';await loadRequestPage(1);
@@ -498,6 +502,9 @@
                   <p class="text-xs break-all">{manualContactInfo(r).phone||'Sin teléfono'} · {r.email||'Contacto por WhatsApp / sin cuenta'}</p>
                   {#if r.location}<p class="text-xs">{r.location}</p>{/if}
                   <p class="text-sm whitespace-pre-line line-clamp-4">{manualContactInfo(r).description}</p>
+                  {#if r.available_budget_usd_cents!==null&&r.available_budget_usd_cents!==undefined}<p class="text-xs">Importe declarado: {(r.available_budget_usd_cents/100).toLocaleString('es-CU',{minimumFractionDigits:2,maximumFractionDigits:2})} USD</p>{/if}
+                  {#if r.payment_method||r.payment_currency}<p class="text-xs">Pago propuesto: {[r.payment_method,r.payment_currency].filter(Boolean).join(' · ')}</p>{/if}
+                  {#if r.customer_type}<p class="text-xs">Tipo declarado: {r.customer_type}</p>{/if}
                 </div>
                 <div class="flex gap-2 flex-wrap border-t border-slate-100 pt-3">
                   {#if staffRole==='admin'}
@@ -698,6 +705,23 @@
         <label class="block text-sm font-semibold">Descripción del trabajo o consulta
           <textarea required minlength="6" maxlength="3000" rows="4" bind:value={manualDescription}
             class="block w-full mt-1 p-3 rounded-xl border border-slate-300"></textarea></label>
+        <fieldset class="rounded-xl border border-slate-200 p-3 space-y-3">
+          <legend class="text-sm font-bold">Información comercial inicial (opcional)</legend>
+          <p class="text-xs text-slate-600">Solo lo declarado por el cliente; sin anticipos, saldos o plazos.</p>
+          <label class="block text-sm font-semibold">Tipo de cliente
+            <select bind:value={manualCustomerType} class="block w-full mt-1 p-3 rounded-xl border border-slate-300">
+              <option value="">No indicado</option><option value="persona">Persona natural</option>
+              <option value="mipyme">Mipyme</option><option value="estatal">Entidad estatal</option>
+              <option value="tcp">TCP</option><option value="cooperativa">Cooperativa</option>
+              <option value="empresa_privada">Empresa privada</option><option value="otro">Otro</option>
+            </select></label>
+          <label class="block text-sm font-semibold">Importe disponible aproximado (USD)
+            <input inputmode="decimal" maxlength="15" bind:value={manualBudget} class="block w-full mt-1 p-3 rounded-xl border border-slate-300"/></label>
+          <label class="block text-sm font-semibold">Forma de pago propuesta
+            <input maxlength="160" bind:value={manualPaymentMethod} class="block w-full mt-1 p-3 rounded-xl border border-slate-300"/></label>
+          <label class="block text-sm font-semibold">Moneda o medio de pago
+            <input maxlength="30" bind:value={manualPaymentCurrency} class="block w-full mt-1 p-3 rounded-xl border border-slate-300"/></label>
+        </fieldset>
         <div class="grid sm:grid-cols-2 gap-3">
           <label class="block text-sm font-semibold">Tipo
             <select bind:value={manualType} class="block w-full mt-1 p-3 rounded-xl border border-slate-300">

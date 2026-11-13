@@ -88,7 +88,8 @@ export const api = {
   logout: () => post('/api/auth/logout', {}),
   refreshToken: (body: { refresh_token: string }) => post('/api/auth/refresh', body),
   getMyRequests: () => apiRequest('/api/private/requests'),
-  createRequest: (body: { service_id?: string; type?: string; category_id?: string; title: string; description: string; preferred_date?: string }) => post('/api/private/requests', body),
+  createRequest: (body: { service_id?: string; type?: string; category_id?: string; title: string; description: string; preferred_date?: string;
+    available_budget_usd?: string;payment_method?: string;payment_currency?: string;customer_type?: string }) => post('/api/private/requests', body),
   uploadRequestImage: (id: string, file: File) => {
     const body = new FormData(); body.append('file', file);
     return apiRequest('/api/private/extras/requests/' + encodeURIComponent(id) + '/images', { method: 'POST', body });
@@ -159,6 +160,7 @@ export const api = {
     customer_id?: string;contact_name?: string;contact_phone?: string;
     type: string; title: string; description: string; status: string;
     location: string; preferred_date: string | null;
+    available_budget_usd?:string; payment_method?:string; payment_currency?:string; customer_type?:string;
   }) => post('/api/admin-customers/requests', body, withAdmin(token)),
   adminRequests: (token: string, q = '', page?: number, pageSize = 20) =>
     apiRequest('/api/admin-customers/requests' +

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { getUser, requireCustomerAuth } from '../middleware';
+import { parseRequestIntake } from '../request-intake';
 
 export const privateRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 privateRoutes.use('*', requireCustomerAuth);
@@ -9,9 +10,11 @@ const allowedTypes = new Set(['installation', 'maintenance', 'repair', 'consulta
 
 privateRoutes.get('/requests', async c => {
   const user = getUser(c)!;
-  const { results } = await c.env.DB.prepare(`SELECT id, type, request_category_id, title, description, status, preferred_date, created_at,
-    (SELECT COUNT(*) FROM request_images im WHERE im.request_id=requests.id) AS image_count
-    FROM requests WHERE customer_id = ? ORDER BY created_at DESC`)
+  const { results } = await c.env.DB.prepare(`SELECT r.id, r.type, r.request_category_id, r.title, r.description, r.status, r.preferred_date, r.created_at,
+    ri.available_budget_usd_cents, ri.payment_method, ri.payment_currency, ri.customer_type,
+    (SELECT COUNT(*) FROM request_images im WHERE im.request_id=r.id) AS image_count
+    FROM requests r LEFT JOIN request_intake ri ON ri.request_id=r.id
+    WHERE r.customer_id = ? ORDER BY r.created_at DESC`)
     .bind(user.user_id).all();
   return c.json({ requests: results ?? [] });
 });
@@ -20,6 +23,8 @@ privateRoutes.post('/requests', async c => {
   const user = getUser(c)!;
   const b = await c.req.json<any>().catch(() => null);
   if (!b || typeof b !== 'object') return c.json({ error: 'Solicitud inválida.' },400);
+  const intake = parseRequestIntake(b);
+  if (intake.error) return c.json({error:intake.error},400);
   const selectedId = typeof b.service_id === 'string' ? b.service_id.trim() : '';
   const selectedService = selectedId
     ? await c.env.DB.prepare('SELECT id, name FROM services WHERE id = ? AND is_active = 1')
@@ -44,9 +49,14 @@ privateRoutes.post('/requests', async c => {
   const customer = await c.env.DB.prepare('SELECT address, city, province FROM customers WHERE id = ?').bind(user.user_id).first<any>();
   const location = [customer?.address, customer?.city, customer?.province].filter(Boolean).join(', ');
   const id = crypto.randomUUID(), now = new Date().toISOString();
-  await c.env.DB.prepare(`INSERT INTO requests (id, customer_id, type, request_category_id, title, description, status, priority, location, preferred_date, created_at, updated_at)
+  const writes = [c.env.DB.prepare(`INSERT INTO requests (id, customer_id, type, request_category_id, title, description, status, priority, location, preferred_date, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 'pending', 'medium', ?, ?, ?, ?)`)
-    .bind(id, user.user_id, type, categoryId, title, description, location, typeof b.preferred_date === 'string' ? b.preferred_date.slice(0, 32) : null, now, now).run();
+    .bind(id, user.user_id, type, categoryId, title, description, location, typeof b.preferred_date === 'string' ? b.preferred_date.slice(0, 32) : null, now, now)];
+  if (intake.value) writes.push(c.env.DB.prepare(`INSERT INTO request_intake
+    (request_id,available_budget_usd_cents,payment_method,payment_currency,customer_type,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?)`).bind(id,intake.value.available_budget_usd_cents,intake.value.payment_method,
+      intake.value.payment_currency,intake.value.customer_type,now,now));
+  await c.env.DB.batch(writes);
   // El contador de solicitudes pendientes del panel es la referencia del equipo.
   // No duplicar el ticket con avisos internos.
   try {

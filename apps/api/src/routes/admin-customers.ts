@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAdminAuth, requireStaffAuth } from '../middleware';
+import { parseRequestIntake } from '../request-intake';
 
 export const adminCustomersRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 adminCustomersRoutes.use('*', requireStaffAuth);
@@ -143,9 +144,12 @@ adminCustomersRoutes.get('/requests', async c => {
   const args = q ? [q,q,q,q,q,q] : [];
   const joins = ` FROM requests r
     LEFT JOIN customers cu ON cu.id = r.customer_id
-    LEFT JOIN request_categories rc ON rc.id = r.request_category_id`;
+    LEFT JOIN request_categories rc ON rc.id = r.request_category_id
+    LEFT JOIN request_intake ri ON ri.request_id = r.id`;
   const query = `SELECT r.id, r.customer_id, r.type, r.request_category_id, r.title, r.description,
-    r.status, r.location, r.preferred_date, r.created_at, r.updated_at, cu.name AS customer_name,
+    r.status, r.location, r.preferred_date, r.created_at, r.updated_at,
+    ri.available_budget_usd_cents, ri.payment_method, ri.payment_currency, ri.customer_type,
+    cu.name AS customer_name,
     cu.email, cu.phone, COALESCE(rc.name, r.type) AS category_name,
     (SELECT COUNT(*) FROM request_images im WHERE im.request_id = r.id) AS image_count`
     + joins + where + ' ORDER BY r.created_at DESC LIMIT ? OFFSET ?';
@@ -160,8 +164,10 @@ adminCustomersRoutes.get('/requests', async c => {
 // incluso si el contacto aún NO tiene cuenta de cliente. No crea usuarios falsos.
 adminCustomersRoutes.post('/requests', async c => {
   const b=await c.req.json<Record<string,unknown>>().catch(()=>null);
-  if(!b||Object.keys(b).some(k=>!['customer_id','contact_name','contact_phone','type','title','description','location','preferred_date','status'].includes(k)))
+  if(!b||Object.keys(b).some(k=>!['customer_id','contact_name','contact_phone','type','title','description','location','preferred_date','status','available_budget_usd','payment_method','payment_currency','customer_type'].includes(k)))
     return c.json({error:'La solicitud tiene campos no permitidos.'},400);
+  const intake=parseRequestIntake(b);
+  if(intake.error)return c.json({error:intake.error},400);
   const title=typeof b.title==='string'?b.title.trim():'';
   const description=typeof b.description==='string'?b.description.trim():'';
   const status=typeof b.status==='string'?b.status:'pending';
@@ -192,7 +198,7 @@ adminCustomersRoutes.post('/requests', async c => {
     '\nTeléfono: '+contactPhone+'\n\n'+description;
   if(details.length>3300)return c.json({error:'Descripción demasiado extensa.'},400);
   const id=crypto.randomUUID(),now=new Date().toISOString();
-  await c.env.DB.batch([
+  const writes = [
     c.env.DB.prepare(`INSERT INTO requests
       (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at)
       VALUES (?,?,?,NULL,?,?,?,'medium',?,?,?,?)`)
@@ -202,7 +208,12 @@ adminCustomersRoutes.post('/requests', async c => {
       VALUES (?,?,?,'request',?,?,?)`)
       .bind(crypto.randomUUID(),c.get('user')?.user_id||null,'request_created_manual',id,
         JSON.stringify({origin:'whatsapp',linked_customer:!!customer,status}),now),
-  ]);
+  ];
+  if(intake.value)writes.push(c.env.DB.prepare(`INSERT INTO request_intake
+    (request_id,available_budget_usd_cents,payment_method,payment_currency,customer_type,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?)`).bind(id,intake.value.available_budget_usd_cents,intake.value.payment_method,
+      intake.value.payment_currency,intake.value.customer_type,now,now));
+  await c.env.DB.batch(writes);
   return c.json({id,status,message:'Solicitud creada desde administración.'},201);
 });
 

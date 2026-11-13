@@ -42,6 +42,8 @@
   let title = $state('');
   let description = $state('');
   let preferredDate = $state('');
+  let commercialRequest = $state(false);
+  let customerType = $state(''), availableBudgetUSD = $state(''), paymentMethod = $state(''), paymentCurrency = $state('');
   let message = $state('');
   let error = $state('');
   let busy = $state(false);
@@ -80,9 +82,12 @@
   async function submit(event: SubmitEvent) {
     event.preventDefault(); busy = true; error = ''; message = '';
     try {
-      if (!serviceId || !selectedService) throw new Error('Selecciona uno de los servicios disponibles.');
+      if (!commercialRequest && (!serviceId || !selectedService)) throw new Error('Selecciona uno de los servicios disponibles.');
       const result = await api.createRequest({
-        service_id: serviceId, title, description, preferred_date: preferredDate || undefined
+        ...(commercialRequest ? {category_id:'commercial-proposal'} : {service_id:serviceId}),
+        title, description, preferred_date: preferredDate || undefined,
+        customer_type:customerType||undefined, available_budget_usd:availableBudgetUSD||undefined,
+        payment_method:paymentMethod||undefined, payment_currency:paymentCurrency||undefined
       });
       let uploaded = 0;
       for (const entry of attachments) {
@@ -94,6 +99,7 @@
         (total ? ` Fotografías guardadas: ${uploaded} de ${total}.` : '') +
         (uploaded < total ? ' Algunas fotos no se cargaron; puedes añadirlas desde Mis solicitudes.' : '');
       clearImages(); title = ''; description = ''; preferredDate = '';
+      availableBudgetUSD='';paymentMethod='';paymentCurrency='';customerType='';
     } catch (e) { error = e instanceof Error ? e.message : 'No se pudo enviar la solicitud'; }
     finally { busy = false; }
   }
@@ -106,6 +112,12 @@
     <div class="grid lg:grid-cols-[minmax(0,1.45fr)_minmax(0,0.85fr)] gap-5 lg:gap-7 items-start">
       <form onsubmit={submit} class="bg-white rounded-3xl border border-slate-200 shadow-lg shadow-slate-200/50 p-5 sm:p-8 space-y-5 min-w-0">
         <div class="flex items-center gap-3 mb-2"><span class="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center font-extrabold">01</span><div><h2 class="text-xl font-bold text-slate-900">Cuéntanos tu solicitud</h2><p class="text-xs text-slate-500">Los campos obligatorios están señalados.</p></div></div>
+        <fieldset class="rounded-xl border border-slate-200 p-3 space-y-2">
+          <legend class="font-bold text-slate-800 text-sm">¿Qué deseas presentar?</legend>
+          <label class="flex items-center gap-2 text-sm"><input type="radio" name="request-mode" checked={!commercialRequest} onchange={()=>commercialRequest=false}/> Solicitud de servicio</label>
+          <label class="flex items-center gap-2 text-sm"><input type="radio" name="request-mode" checked={commercialRequest} onchange={()=>{commercialRequest=true;if(!title.trim()||title.startsWith('Solicitud de '))title='Propuesta comercial';}}/> Propuesta de suministro, distribución, promoción o asociación</label>
+        </fieldset>
+        {#if !commercialRequest}
         <label class="contact-label">Servicio que necesitas *
           <select required value={serviceId} disabled={serviceLoading || !services.length}
             onchange={e => selectService(e.currentTarget.value)} class="contact-control">
@@ -120,12 +132,31 @@
         {#if selectedService?.description}
           <p class="rounded-xl border border-teal-100 bg-teal-50 p-3 text-xs text-teal-900">{selectedService.description}</p>
         {/if}
+        {/if}
         <label class="contact-label">Asunto *
           <input required minlength="3" maxlength="180" bind:value={title} class="contact-control" placeholder="Ej. Instalación solar para mi vivienda" />
         </label>
         <label class="contact-label">Descripción *
           <textarea required minlength="6" maxlength="3000" rows="5" bind:value={description} class="contact-control resize-y" placeholder="Cuéntanos lo que necesitas, tus equipos y cualquier detalle importante…"></textarea>
         </label>
+        <fieldset class="rounded-xl border border-slate-200 p-4 space-y-3">
+          <legend class="text-sm font-bold text-slate-800 px-1">Información comercial inicial (opcional)</legend>
+          <p class="text-xs text-slate-600">Puedes dejar los campos en blanco. No se piden anticipos, saldos ni plazos.</p>
+          <label class="contact-label">Tipo de cliente
+            <select bind:value={customerType} class="contact-control">
+              <option value="">No indicado</option><option value="persona">Persona natural</option>
+              <option value="mipyme">Mipyme</option><option value="estatal">Entidad estatal</option>
+              <option value="tcp">Trabajador por cuenta propia</option><option value="cooperativa">Cooperativa</option>
+              <option value="empresa_privada">Otra empresa privada</option><option value="otro">Otro</option>
+            </select></label>
+          <label class="contact-label">Presupuesto disponible aproximado (USD)
+            <input type="text" inputmode="decimal" maxlength="15" bind:value={availableBudgetUSD} class="contact-control" placeholder="Ej. 1500, si ya lo conoces"/></label>
+          <label class="contact-label">¿Cómo propones pagar?
+            <input maxlength="160" bind:value={paymentMethod} class="contact-control" placeholder="Transferencia, efectivo, otra modalidad…"/></label>
+          <label class="contact-label">Moneda o medio previsto
+            <input maxlength="30" bind:value={paymentCurrency} class="contact-control" placeholder="USD, CUP, EUR, MLC u otra…"/></label>
+          <p class="text-xs text-slate-500">Información declarada, no verificada ni pactada contractualmente.</p>
+        </fieldset>
         <label class="contact-label">Fecha preferida (opcional)
           <input type="date" bind:value={preferredDate} class="contact-control" />
         </label>
@@ -153,7 +184,7 @@
         </fieldset>
         {#if error}<p role="alert" class="text-red-700 bg-red-50 border border-red-200 rounded-xl p-3 text-sm">{error}</p>{/if}
         {#if message}<p role="status" class="text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm font-semibold break-words">{message}</p>{/if}
-        <button disabled={busy || serviceLoading || !serviceId} type="submit" class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white px-5 py-3.5 font-extrabold rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600">
+        <button disabled={busy || (!commercialRequest && (serviceLoading || !serviceId))} type="submit" class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white px-5 py-3.5 font-extrabold rounded-xl shadow-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-600">
           {busy ? 'Enviando solicitud…' : 'Enviar mi solicitud →'}
         </button>
         <p class="text-xs text-slate-500">No se confirma una cita automáticamente. Nuestro equipo revisará tu solicitud.</p>
