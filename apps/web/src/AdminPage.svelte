@@ -628,7 +628,7 @@
           <div class="rounded-xl border border-teal-200 bg-teal-50 p-4 space-y-2">
             <p class="text-xs font-bold text-teal-900">Código de 8 dígitos (válido 10 minutos)</p>
             <p class="font-mono font-extrabold tracking-widest text-2xl select-all">{telegramLinkCode}</p>
-            <p class="text-sm text-slate-700">Abre TU chat privado con el bot oficial de Telegram, pulsa Iniciar y envía: <strong>/vincular {telegramLinkCode}</strong></p>
+            <p class="text-sm text-slate-700">Abre TU chat privado con el bot oficial de Telegram, pulsa Iniciar y envía solo estos ocho números: <strong>{telegramLinkCode}</strong>. El bot reconocerá la vinculación sin comandos.</p>
             <p class="text-xs text-slate-500">Expira: {new Date(telegramLinkExpiry).toLocaleString('es-CU')}</p>
           </div>
         {/if}
