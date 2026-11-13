@@ -1,6 +1,24 @@
 # Bonaire — Bot oficial de Telegram desde cero
 Actualizado: 12 de noviembre de 2026. Rama de trabajo: `feat/cloudflare-customer-accounts-hardening`.
 
+## Experiencia conversacional nueva: sin memorizar comandos
+
+El bot es un **chat de Telegram**: cada persona simplemente abre la conversación, pulsa **Iniciar** (botón propio de Telegram) y comienza a hablar en español. Los comandos con barra siguen aceptándose solo por compatibilidad, pero **NO son la interfaz principal** y no hace falta enseñarlos a clientes.
+
+- Cliente: «Hola, necesito un sistema solar», «Quiero saber qué productos tienen», «¿Qué servicios ofrecen?», «Necesito una reparación», «Quiero hablar con una persona». También puede tocar opciones sugeridas: ☀️ Asesoría solar, 🛍️ Ver productos, 🛠️ Servicios, 🧾 Solicitar servicio, 🙋 Hablar con una persona, ✏️ Nuevo chat.
+- Asesoría solar: el bot pregunta progresivamente si tiene inversor, si es vivienda o negocio, qué cargas necesita, qué quiere respaldar y cuánta autonomía busca. Ofrece **botones para opciones cerradas** y permite contestar escribiendo con libertad en las preguntas abiertas. Las estimaciones son comerciales y no sustituirán el diseño eléctrico profesional. El contexto de ese chat se conserva entre mensajes.
+- Trabajador VINCULADO: puede preguntar «¿Qué trabajos tenemos hoy?», «Muéstrame las citas de mañana», «¿Cuántas solicitudes siguen pendientes?» y el bot le responde con los datos reales del panel. Sus botones especiales solo se presentan después de verificar su vínculo: 📅 Agenda del equipo hoy, 📆 Agenda del equipo mañana, 📋 Solicitudes pendientes, 🔔 Recordatorios.
+- Avisos: «¿Cómo funcionan los recordatorios?» muestra estado y botones sin cambiar consentimiento. «Activar avisos diarios» o «Quiero recibir recordatorios» opta expresamente por el resumen general de las 7:00; «Desactivar avisos» lo suspende. Una pregunta genérica no debe activar avisos inadvertidamente.
+- Identidad: si el trabajador escribe «Soy del equipo», el bot le explica cómo generar el código desde /admin; después envía **solo los ocho dígitos**, sin comandos ni contraseñas. Las consultas privadas siempre vuelven a validar la cuenta de personal activa. Un cliente no vinculado nunca podrá consultar citas internas, aunque escriba las mismas frases o botones.
+- «Nuevo chat», «Historial» o «Borra mi historial» se admiten como texto normal, sin barra inicial. El historial del bot sigue SEPARADO del historial privado del asistente web.
+- Reservas y solicitudes: el bot puede conversar, orientar y remitir al portal de Bonaire para registrar solicitudes autenticadas. **Aún no crea solicitudes, reserva citas ni transfiere una conversación a un gestor automáticamente**. Los botones son sugerencias de texto, no promesas de acciones que no estén conectadas.
+
+Esta interfaz usa **ReplyKeyboardMarkup** de la API oficial de Telegram. Las teclas muestran sugerencias y envían el texto escogido como parte del chat; también se puede ocultar el teclado y escribir libremente. No es una Mini App separada ni una IA abierta como ChatGPT: las respuestas reutilizan el motor comercial y solar actual de Bonaire (Workers AI general sigue desactivado).
+
+Referencias: https://core.telegram.org/bots/features y https://core.telegram.org/bots/api#replykeyboardmarkup
+
+**Estado:** el código conversacional está en GitHub y necesita nuevos typecheck API/web, prueba smoke y compilación del frontend antes de reemplazar el Worker/Pages que ya estaban publicados con la versión previa.
+
 ## Objetivo
 Automatizar el mismo asesor comercial y solar de la web Bonaire en Telegram, separando estrictamente **clientes** de **personal verificado**. Conservar WhatsApp Business App para atención HUMANA del mercado cubano; no depender de Meta Developers ni simular bots de WhatsApp Web.
 
@@ -11,6 +29,8 @@ Automatizar el mismo asesor comercial y solar de la web Bonaire en Telegram, sep
 - `/hoy` y `/manana` presentan las citas **generales abiertas del equipo**, con cliente, hora cubana y dirección cuando exista. NO son asignaciones personales de técnicos. `/pendientes` cuenta solicitudes en estado `pending`.
 - Recordatorio opcional a las **7:00 a. m. hora de Cuba** mediante dos Cron Triggers UTC de Cloudflare (11:00 y 12:00 UTC para horario verano/invierno). El Worker comprueba la hora real `America/Havana` antes de enviar, y guarda fecha de envío por usuario para evitar repeticiones. **DESACTIVADO POR DEFECTO** hasta `/avisos si` del personal vinculado. No se envía a clientes ni a trabajadores no vinculados.
 - `POST /api/telegram/set-webhook` (admin autenticado) registra únicamente la URL fija `https://energia-vital-api.astrustrus.workers.dev/api/telegram/webhook`; `GET /api/telegram/webhook-info` permite comprobar el estado. El panel incluye botones para estas acciones después de configurar Telegram.
+
+> Nota actualizada: desde ahora la forma recomendada de utilizar el bot es hablarle con frases normales y tocar sugerencias. Los comandos precedidos por `/` documentados más abajo son atajos antiguos opcionales y se mantienen por compatibilidad. La autorización de datos privados no cambia.
 
 ## Paso 1 — Crear el bot con BotFather
 1. Instala Telegram y verifica que tú y el equipo pueden utilizarlo, y que Telegram está disponible para los clientes a quienes quieres atender.

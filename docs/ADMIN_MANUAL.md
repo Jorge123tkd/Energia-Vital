@@ -132,11 +132,17 @@ La configuración de **bienvenida automática** tiene su propio editor. Los mens
 
 Los enlaces HTTPS dentro de las respuestas del asistente se muestran como **texto de color y subrayado**, sin desplegar una URL larga. Al pulsarlos se abre la dirección correspondiente. Al utilizar **Compartir texto** el contenido de la conversación se copia/compartirá sin modificar y mantiene la URL original completa (`https://...`).
 
+## Telegram de Bonaire: conversaciones naturales
+
+La interacción de Telegram es un chat en español, no un menú de comandos. Un cliente puede escribir «Necesito un inversor para mi casa» y recibir orientación; también puede tocar botones de Asesoría solar, Productos, Servicios, Solicitar servicio o Hablar con una persona. Los botones para datos internos solo se muestran a personal con identidad vinculada; ninguna frase o botón sustituye la verificación de permisos.
+
+Para el equipo se admiten preguntas como «¿Qué trabajos tenemos mañana?», «¿Cuántos tickets están pendientes?» y «¿Cómo activo los recordatorios?». El bot no agenda citas ni asigna técnicos de forma automática. El código temporal se envía como **ocho números**, sin necesidad de `/vincular`.
+
 ## Bot oficial de Telegram para el equipo Bonaire
 
 El panel mantiene la gestión directa de Solicitudes (contador de pendientes, creación manual, edición y estados) y Citas. Ya no dispone de un apartado duplicado de «Avisos internos».
 
-Para vincular Telegram, entrar como administrador o moderador en **Mi cuenta → Vincular Telegram de equipo**, tras completar BotFather, la migración `011_telegram_bot.sql` y los secretos del Worker. Generar un código personal de **8 dígitos con 10 minutos de vigencia** y enviarlo desde el chat **privado** del bot como `/vincular CODIGO`. Nadie gana privilegios por escribir «soy admin».
+Para vincular Telegram, entrar como administrador o moderador en **Mi cuenta → Vincular Telegram de equipo**, tras completar BotFather, la migración `011_telegram_bot.sql` y los secretos del Worker. Generar un código personal de **8 dígitos con 10 minutos de vigencia** y enviar **solo los ocho números** desde el chat privado con el bot; no hay que escribir comandos. Nadie gana privilegios por escribir «soy admin».
 
 Una vez vinculado, los comandos `/hoy` y `/manana` muestran la agenda GENERAL del equipo, y `/pendientes` cuenta las solicitudes sin atender. `/desvincular` corta el acceso. Los recordatorios de la agenda general a las **7:00 a. m. hora de Cuba** solo se enviarán a usuarios del equipo que hayan optado expresamente por `/avisos si`; usar `/avisos no` para desactivarlos. No son asignaciones individuales a técnicos.
 
