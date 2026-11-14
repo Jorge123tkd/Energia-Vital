@@ -1,5 +1,7 @@
 # Bonaire — Control de salida 1.0 (PENDIENTE)
 
+**Lanzamiento de Brigadas y Expediente 360°:** aplicar antes el plan [PUBLICACION-SEGURA-BRIGADAS-EXPEDIENTES.md](./PUBLICACION-SEGURA-BRIGADAS-EXPEDIENTES.md). La rama de desarrollo estaba 460 commits adelante de `main` en la auditoría del 13-11-2026: no fusionar ni publicar el conjunto sin revisar alcance y base real. Las pruebas sintéticas no sustituyen un ensayo sobre copia privada de producción.
+
 Este documento define pruebas de aceptación, no constituye certificación de seguridad ni autorización para publicar. No modificar datos reales durante la auditoría.
 
 ## Preparación

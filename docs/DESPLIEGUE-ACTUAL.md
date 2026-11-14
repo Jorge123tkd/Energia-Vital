@@ -1,4 +1,6 @@
 # Despliegue actual — Bonaire
+
+**ADVERTENCIA NOV-2026:** Guía histórica con pasos de ejecución real. NO seguir sus comandos `--remote`, `wrangler deploy` ni `pages deploy` sin superar primero todas las puertas y la autorización explícita recogidas en [PUBLICACION-SEGURA-BRIGADAS-EXPEDIENTES.md](./PUBLICACION-SEGURA-BRIGADAS-EXPEDIENTES.md). El propietario no desea realizar pruebas con servidores locales en su PC: se validan en GitHub Actions. Esta guía no documenta una publicación ya efectuada.
 Preparado el 11 de noviembre de 2026. Esta guía describe pasos por ejecutar; el estado real está en CONTINUIDAD.md.
 
 Ejecutar bloques de uno en uno en PowerShell. Si un comando falla, detener ese bloque y revisar su salida. No pegar contraseñas ni tokens en el chat.
