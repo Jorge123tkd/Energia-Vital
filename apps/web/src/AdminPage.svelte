@@ -611,7 +611,8 @@
 
 {#if calendarOpen && token}
   <StaffCalendar {token} onClose={() => calendarOpen=false}
-    onOpenAppointments={() => chooseTab('appointments')}/>
+    onOpenAppointments={() => chooseTab('appointments')}
+    onOpenBrigades={() => chooseTab('brigades')}/>
 {/if}
 
 {#if telegramLinkOpen}
