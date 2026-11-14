@@ -40,6 +40,9 @@ jobs:
       - name: Construir frontend (sin publicar)
         run: npm run build --workspace=apps/web
 
+      - name: Ensayo de preservación de datos históricos ficticios (sin Cloudflare real)
+        run: python3 apps/api/tests/migration-preservation.py
+
       - name: Pruebas integrales en Worker y D1 temporales del runner
         shell: bash
         env:
