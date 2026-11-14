@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import BrigadePlanner from './BrigadePlanner.svelte';
 
   type Brigade = {
     id:string;name:string;leader_name:string;specialty:string|null;
@@ -10,7 +11,7 @@
     id:string;brigade_id:string;full_name:string;function_name:string|null;
     is_active:number;updated_at:string;
   };
-  let {token,canManage}:{token:string;canManage:boolean}=$props();
+  let {token,canManage,prefillRequestId=''}:{token:string;canManage:boolean;prefillRequestId?:string}=$props();
   let brigades:Brigade[]=$state([]),members:Member[]=$state([]);
   let loading=$state(false),busy=$state(false),error=$state(''),success=$state('');
   let expanded=$state('');
@@ -123,8 +124,8 @@
     </div>
   </div>
   <p class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-    <strong>Etapa de registro:</strong> el calendario, reparto equitativo y asignación de trabajos
-    todavía no están activados. Registrar una brigada aquí no programa ningún trabajo.
+    <strong>Agenda técnica:</strong> cada trabajo se vincula a una solicitud. Con una o dos brigadas se exige
+    revisar la ocupación; con más de dos, el segundo trabajo del día necesita autorización del administrador.
   </p>
   {#if error}<p role="alert" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>{/if}
   {#if success}<p role="status" class="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900">{success}</p>{/if}
@@ -197,6 +198,7 @@
       </article>
     {/each}
   </div>
+  <BrigadePlanner {token} canApprove={canManage} {prefillRequestId}/>
 </section>
 
 {#if showEditor && canManage}

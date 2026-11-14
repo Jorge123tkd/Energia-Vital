@@ -25,6 +25,7 @@
   let calendarOpen = $state(false);
   let syncBusy = $state(false);
   let requestPhotosOpen = $state('');
+  let brigadeRequestId = $state('');
   let requestEditor: {
     id:string; title:string; description:string; location:string; preferred_date:string;
     expected_updated_at:string; customer_name:string;
@@ -530,6 +531,10 @@
                       class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2.5"
                       aria-label={'Abrir WhatsApp del cliente '+manualContactInfo(r).name}>☎ WhatsApp cliente</a>
                   {/if}
+                  <button type="button" onclick={()=>{brigadeRequestId=r.id;chooseTab('brigades');}}
+                    class="rounded-xl border border-teal-200 text-teal-800 font-bold text-xs px-3 py-2.5 hover:bg-teal-50">
+                    🗓 Asignar brigada
+                  </button>
                   <button type="button" onclick={()=>requestPhotosOpen=requestPhotosOpen===r.id?'':r.id}
                     class="rounded-xl border border-teal-200 text-teal-800 font-bold text-xs px-3 py-2.5 hover:bg-teal-50">
                     ▧ {requestPhotosOpen===r.id?'Ocultar fotos':'Ver fotos ('+(r.image_count||0)+')'}
@@ -546,7 +551,7 @@
         </section>
       </div>
     {:else if tab === 'brigades'}
-      <AdminBrigades {token} canManage={staffRole === 'admin'} />
+      <AdminBrigades {token} canManage={staffRole === 'admin'} prefillRequestId={brigadeRequestId} />
     {:else if tab === 'appointments'}
       <section class="space-y-4">
         <h2 class="font-extrabold text-xl text-slate-900">Citas ({appointmentTotal})</h2>
