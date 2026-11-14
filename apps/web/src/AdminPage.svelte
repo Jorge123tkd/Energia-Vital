@@ -6,6 +6,7 @@
   import AdminCustomers from './components/AdminCustomers.svelte';
   import AdminStaff from './components/AdminStaff.svelte';
   import AdminBrigades from './components/AdminBrigades.svelte';
+  import DossierPanel from './components/DossierPanel.svelte';
   import AdminNotifications from './components/AdminNotifications.svelte';
   import AdminRequestCategories from './components/AdminRequestCategories.svelte';
   import RequestPhotoGallery from './components/RequestPhotoGallery.svelte';
@@ -26,6 +27,11 @@
   let syncBusy = $state(false);
   let requestPhotosOpen = $state('');
   let brigadeRequestId = $state('');
+  let dossierCustomerId = $state(''), dossierRequestId = $state('');
+  function openDossier(customerId:string,requestId=''){
+    dossierCustomerId=customerId;dossierRequestId=requestId;
+  }
+  function closeDossier(){dossierCustomerId='';dossierRequestId='';}
   let requestEditor: {
     id:string; title:string; description:string; location:string; preferred_date:string;
     expected_updated_at:string; customer_name:string;
@@ -264,6 +270,7 @@
     token = ''; sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     mobileMenu = false; accountMenu = false; calendarOpen = false;
     customers = []; requests = []; appointments = []; products = []; services = []; categories = [];
+    closeDossier();
     pendingRequests=0;manualRequestOpen=false;
   }
   async function reload(t = token) {
@@ -469,7 +476,8 @@
     {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
     {#if tab === 'customers'}
-      <AdminCustomers {token} {customers} canManage={staffRole === 'admin'} onRefresh={async () => { await reload(); }} />
+      <AdminCustomers {token} {customers} canManage={staffRole === 'admin'}
+        onOpenDossier={(id:string)=>openDossier(id)} onRefresh={async () => { await reload(); }} />
     {:else if tab === 'requests'}
       <div class="space-y-5">
         {#if staffRole === 'admin'}<AdminRequestCategories {token}/>{/if}
@@ -532,6 +540,10 @@
                       class="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2.5"
                       aria-label={'Abrir WhatsApp del cliente '+manualContactInfo(r).name}>☎ WhatsApp cliente</a>
                   {/if}
+                  <button type="button" onclick={()=>openDossier('',r.id)}
+                    class="rounded-xl bg-teal-700 text-white font-bold text-xs px-3 py-2.5 hover:bg-teal-800">
+                    ▣ Expediente 360°
+                  </button>
                   <button type="button" onclick={()=>{brigadeRequestId=r.id;chooseTab('brigades');}}
                     class="rounded-xl border border-teal-200 text-teal-800 font-bold text-xs px-3 py-2.5 hover:bg-teal-50">
                     🗓 Asignar brigada
@@ -609,6 +621,11 @@
     {/if}
   {/if}
 </div>
+
+{#if token && (dossierCustomerId || dossierRequestId)}
+  <DossierPanel {token} customerId={dossierCustomerId}
+    requestId={dossierRequestId} onClose={closeDossier}/>
+{/if}
 
 {#if calendarOpen && token}
   <StaffCalendar {token} onClose={() => calendarOpen=false}

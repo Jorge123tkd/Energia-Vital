@@ -2,8 +2,9 @@
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import Pagination from './Pagination.svelte';
-  let { token, customers, onRefresh, canManage = true }: {
-    token: string; customers: any[]; onRefresh: () => Promise<void>; canManage?: boolean;
+  let { token, customers, onRefresh, onOpenDossier, canManage = true }: {
+    token: string; customers: any[]; onRefresh: () => Promise<void>;
+    onOpenDossier:(id:string)=>void; canManage?: boolean;
   } = $props();
 
   let query = $state('');
@@ -121,13 +122,17 @@
             <p>Teléfono: {c.phone || 'No registrado'}</p>
             <p class="line-clamp-2" title={[c.address, c.city, c.province].filter(Boolean).join(', ')}>{[c.address, c.city, c.province].filter(Boolean).join(', ') || 'Sin dirección'}</p>
           </div>
-          {#if canManage}
           <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+            <button type="button" onclick={()=>onOpenDossier(c.id)}
+              class="rounded-lg bg-teal-700 text-white font-semibold text-xs px-2.5 py-2">
+              ▣ Expediente 360°
+            </button>
+            {#if canManage}
             <button class="rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs px-2.5 py-2" onclick={() => openEditor(c)}>Editar</button>
             <button disabled={busy} class="rounded-lg border border-slate-300 px-2.5 py-2 text-xs font-semibold hover:bg-slate-50" onclick={() => setStatus(c)}>{c.is_active ? 'Bloquear' : 'Reactivar'}</button>
             <button disabled={busy} class="rounded-lg border border-red-200 text-red-700 hover:bg-red-50 px-2.5 py-2 text-xs font-semibold" onclick={() => remove(c)}>Eliminar</button>
+            {/if}
           </div>
-          {/if}
         </article>
       {/each}
     </div>
