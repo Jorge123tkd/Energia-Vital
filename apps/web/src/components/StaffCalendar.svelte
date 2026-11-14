@@ -50,7 +50,7 @@
       appointments=result.appointments||[];
       requests=result.dated_requests||[];
       brigadeWorks=works.works||[];
-      truncated=Boolean(result.truncated);
+      truncated=Boolean(result.truncated||works.truncated);
     }catch(e){
       if(seq!==requestSequence)return;
       appointments=[];requests=[];brigadeWorks=[];

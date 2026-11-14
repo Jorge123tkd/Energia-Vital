@@ -202,6 +202,7 @@
   ]);
   function chooseTab(next: typeof tab) {
     tab = next;
+    if (next !== 'brigades') brigadeRequestId = '';
     if (token && next === 'requests') void loadRequestPage(1);
     if (token && next === 'appointments') void loadAppointmentPage(1);
     mobileMenu = false;
