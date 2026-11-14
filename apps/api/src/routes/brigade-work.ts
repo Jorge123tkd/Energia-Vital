@@ -22,9 +22,13 @@ function nextMonth(s:string){
   const [y,m]=s.split('-').map(Number);
   return new Date(Date.UTC(y,m,1)).toISOString().slice(0,10);
 }
-const audit=(db:Env['DB'],actor:string,action:string,id:string,details:Record<string,unknown>)=>
-  db.prepare("INSERT INTO audit_logs (id,admin_user_id,action,entity_type,entity_id,details,created_at) SELECT ?,? ,?,'brigade_work',?, ?,? FROM brigade_work WHERE id=?")
-    .bind(crypto.randomUUID(),actor,action,id,JSON.stringify(details),new Date().toISOString(),id);
+const audit=(db:Env['DB'],actor:string,action:string,id:string,details:Record<string,unknown>,
+  guard?:{status:string;updated_at:string})=>
+  db.prepare("INSERT INTO audit_logs (id,admin_user_id,action,entity_type,entity_id,details,created_at) "+
+    "SELECT ?,? ,?,'brigade_work',?, ?,? FROM brigade_work WHERE id=? "+
+    "AND (? IS NULL OR (status=? AND updated_at=?))")
+    .bind(crypto.randomUUID(),actor,action,id,JSON.stringify(details),new Date().toISOString(),id,
+      guard?.status??null,guard?.status??null,guard?.updated_at??null);
 
 function sqlConflict(error:unknown){
   return /constraint|la brigada tiene ocupaci|autoriza|UNIQUE/i.test(
@@ -150,7 +154,8 @@ brigadeWorkRoutes.patch('/:id/review',requireAdminAuth,async c=>{
         "UPDATE brigade_work SET status=?,reviewed_by=?,reviewed_at=?,review_reason=?,updated_at=? "+
         "WHERE id=? AND status='pending_approval'"
       ).bind(status,actor,now,reason.trim()||null,now,id),
-      audit(c.env.DB,actor,'brigade_work_'+status,id,{status,reason:reason.trim()})
+      audit(c.env.DB,actor,'brigade_work_'+status,id,{status,reason:reason.trim()},
+        {status,updated_at:now})
     ]);
     if(!result[0]?.meta?.changes)return c.json({error:'Autorización inexistente o ya resuelta.'},409);
   }catch(e){
@@ -173,7 +178,8 @@ brigadeWorkRoutes.patch('/:id/cancel',async c=>{
       "UPDATE brigade_work SET status='cancelled',updated_at=? WHERE id=? AND status IN ('scheduled','pending_approval')"
     ).bind(now,id),
     audit(c.env.DB,actor,'brigade_work_cancelled',id,
-      {reason:typeof body.reason==='string'?body.reason.trim():''})
+      {reason:typeof body.reason==='string'?body.reason.trim():''},
+      {status:'cancelled',updated_at:now})
   ]);
   if(!results[0]?.meta?.changes)return c.json({error:'Trabajo inexistente, cancelado o cerrado.'},409);
   return c.json({status:'cancelled',message:'Trabajo cancelado; historial conservado.'});
