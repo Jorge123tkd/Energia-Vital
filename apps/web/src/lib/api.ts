@@ -146,6 +146,14 @@ export const api = {
   deactivateStaff: (token: string, id: string) =>
     apiRequest('/api/admin/users/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
 
+  getCustomerDossier: (token:string,id:string) =>
+    apiRequest('/api/dossiers/customers/'+encodeURIComponent(id),withAdmin(token)),
+  getRequestDossier: (token:string,id:string) =>
+    apiRequest('/api/dossiers/requests/'+encodeURIComponent(id),withAdmin(token)),
+  logRequestActivity: (token:string,id:string,body:{
+    activity_type:'call'|'whatsapp'|'visit'|'follow_up'|'internal_note';
+    note:string;next_step?:string;follow_up_date?:string
+  }) => post('/api/dossiers/requests/'+encodeURIComponent(id)+'/activities',body,withAdmin(token)),
   adminCustomers: (token: string, q = '', page?: number, pageSize = 12) =>
     apiRequest('/api/admin-customers/customers' + (page !== undefined || q
       ? '?' + new URLSearchParams({ q, page: String(page ?? 1), page_size: String(pageSize) }).toString() : ''),
