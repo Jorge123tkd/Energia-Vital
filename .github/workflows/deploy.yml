@@ -5,6 +5,21 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      publish_confirmation:
+        description: 'Escribe PUBLICAR_BONAIRE solo tras aprobar el lanzamiento'
+        required: true
+        type: string
+      backup_confirmed:
+        description: 'Respaldo externo cifrado de D1 creado y verificado'
+        required: true
+        type: boolean
+        default: false
+      migrations_reviewed:
+        description: 'Migraciones remotas y prueba sobre copia histórica revisadas'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   checks:
@@ -43,7 +58,12 @@ jobs:
         run: npm test --workspace=apps/api
 
   deploy-api:
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.publish_confirmation == 'PUBLICAR_BONAIRE' &&
+      inputs.backup_confirmed == true &&
+      inputs.migrations_reviewed == true
     needs: checks
     runs-on: ubuntu-latest
     steps:
@@ -53,6 +73,28 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Confirmar esquema D1 remoto antes de publicar (solo SELECT)
+        working-directory: apps/api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute energia-vital-db --remote --json \
+            --command "SELECT COUNT(*) AS present FROM sqlite_master WHERE type='table' AND name IN ('brigades','brigade_members','brigade_work','request_activities')" \
+            > "$RUNNER_TEMP/bonaire-schema-count.json"
+          node -e '
+            const fs = require("fs");
+            const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const result = Array.isArray(raw) ? raw[0] : raw;
+            const count = Number(result?.results?.[0]?.present);
+            if (count !== 4) {
+              console.error("D1 remota NO tiene las 4 tablas requeridas. Detenido antes de deploy.");
+              process.exit(1);
+            }
+            console.log("Verificación de estructura D1 remota correcta (4 tablas esperadas).");
+          ' "$RUNNER_TEMP/bonaire-schema-count.json"
       - name: Publicar Cloudflare Worker
         working-directory: apps/api
         run: npx wrangler deploy
