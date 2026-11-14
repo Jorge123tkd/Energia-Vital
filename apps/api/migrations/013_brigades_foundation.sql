@@ -92,3 +92,14 @@ WHEN NEW.status='scheduled' AND OLD.status<>'scheduled'
 BEGIN
   SELECT RAISE(ABORT,'La segunda asignación requiere administrador general activo');
 END;
+
+-- No mover silenciosamente una asignación a otra brigada, solicitud o día:
+-- cancelar y crear otra conserva la historia y obliga a revisar el nuevo día.
+CREATE TRIGGER IF NOT EXISTS trg_brigade_work_immutable_target
+BEFORE UPDATE OF brigade_id, request_id, work_date ON brigade_work
+WHEN NEW.brigade_id<>OLD.brigade_id
+  OR NEW.request_id<>OLD.request_id
+  OR NEW.work_date<>OLD.work_date
+BEGIN
+  SELECT RAISE(ABORT,'Para reprogramar, cancela la asignación y crea una nueva');
+END;
