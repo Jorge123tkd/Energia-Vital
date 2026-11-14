@@ -10,6 +10,7 @@ import { authRoutes } from './routes/auth';
 import { adminRoutes } from './routes/admin';
 import { adminCustomersRoutes } from './routes/admin-customers';
 import { brigadeRoutes } from './routes/brigades';
+import { brigadeWorkRoutes } from './routes/brigade-work';
 import { calendarRoutes } from './routes/calendar';
 import { telegramRoutes } from './routes/telegram';
 import { runTelegramMorningReminders } from './telegram-reminders';
@@ -62,6 +63,7 @@ export default {
     app.route('/api/admin', adminRoutes);
     app.route('/api/admin-customers', adminCustomersRoutes);
     app.route('/api/brigades', brigadeRoutes);
+    app.route('/api/brigade-work', brigadeWorkRoutes);
     app.route('/api/calendar', calendarRoutes);
     app.route('/api/telegram', telegramRoutes);
     app.route('/api/whatsapp', whatsappRoutes);

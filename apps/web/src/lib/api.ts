@@ -176,6 +176,19 @@ export const api = {
   deleteAdminRequestCategory: (token: string, id: string) =>
     apiRequest('/api/admin/extras/request-categories/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
 
+  brigadeAvailability: (token:string,date:string) =>
+    apiRequest('/api/brigade-work/availability?date='+encodeURIComponent(date),withAdmin(token)),
+  brigadeWorkMonth: (token:string,month:string) =>
+    apiRequest('/api/brigade-work/month?month='+encodeURIComponent(month),withAdmin(token)),
+  pendingBrigadeApprovals: (token:string) =>
+    apiRequest('/api/brigade-work/pending',withAdmin(token)),
+  assignBrigadeWork: (token:string,body:{
+    brigade_id:string;request_id:string;work_date:string;estimated_minutes:number;busy_acknowledged:boolean
+  }) => post('/api/brigade-work',body,withAdmin(token)),
+  reviewBrigadeWork: (token:string,id:string,decision:'approve'|'reject',reason:string) =>
+    patch('/api/brigade-work/'+encodeURIComponent(id)+'/review',{decision,reason},withAdmin(token)),
+  cancelBrigadeWork: (token:string,id:string,reason:string) =>
+    patch('/api/brigade-work/'+encodeURIComponent(id)+'/cancel',{reason},withAdmin(token)),
   listBrigades: (token: string) => apiRequest('/api/brigades', withAdmin(token)),
   createBrigade: (token: string, body: {name:string;leader_name:string;specialty:string}) =>
     post('/api/brigades', body, withAdmin(token)),
