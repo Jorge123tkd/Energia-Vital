@@ -176,6 +176,18 @@ export const api = {
   deleteAdminRequestCategory: (token: string, id: string) =>
     apiRequest('/api/admin/extras/request-categories/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
 
+  listBrigades: (token: string) => apiRequest('/api/brigades', withAdmin(token)),
+  createBrigade: (token: string, body: {name:string;leader_name:string;specialty:string}) =>
+    post('/api/brigades', body, withAdmin(token)),
+  updateBrigade: (token:string,id:string,body:{
+    name?:string;leader_name?:string;specialty?:string;is_active?:boolean;expected_updated_at:string
+  }) => patch('/api/brigades/'+encodeURIComponent(id),body,withAdmin(token)),
+  addBrigadeMember: (token:string,id:string,body:{full_name:string;function_name:string}) =>
+    post('/api/brigades/'+encodeURIComponent(id)+'/members',body,withAdmin(token)),
+  updateBrigadeMember: (token:string,id:string,memberId:string,body:{
+    full_name?:string;function_name?:string;is_active?:boolean;expected_updated_at:string
+  }) => patch('/api/brigades/'+encodeURIComponent(id)+'/members/'+encodeURIComponent(memberId),body,withAdmin(token)),
+
   getStaffCalendar: (token: string, month: string) => apiRequest('/api/admin-customers/calendar?month='+encodeURIComponent(month), withAdmin(token)),
   adminAppointments: (token: string, q = '', page?: number, pageSize = 20) =>
     apiRequest('/api/admin-customers/appointments' +

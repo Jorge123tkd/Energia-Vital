@@ -5,6 +5,7 @@
   import Pagination from './components/Pagination.svelte';
   import AdminCustomers from './components/AdminCustomers.svelte';
   import AdminStaff from './components/AdminStaff.svelte';
+  import AdminBrigades from './components/AdminBrigades.svelte';
   import AdminNotifications from './components/AdminNotifications.svelte';
   import AdminRequestCategories from './components/AdminRequestCategories.svelte';
   import RequestPhotoGallery from './components/RequestPhotoGallery.svelte';
@@ -18,7 +19,7 @@
   let checking = $state(true);
   let error = $state('');
   let message = $state('');
-  let tab = $state<'customers' | 'requests' | 'appointments' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'notifications'>('requests');
+  let tab = $state<'customers' | 'requests' | 'appointments' | 'brigades' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'notifications'>('requests');
   let mobileMenu = $state(false);
   let accountMenu = $state(false);
   let calendarOpen = $state(false);
@@ -187,6 +188,7 @@
   let menuItems = $derived([
     { id: 'requests', title: 'Solicitudes' },
     { id: 'appointments', title: 'Citas' },
+    { id: 'brigades', title: 'Brigadas' },
     { id: 'customers', title: 'Clientes' },
     ...(staffRole === 'admin' ? [
       { id: 'products', title: 'Productos' },
@@ -543,6 +545,8 @@
           disabled={pagingBusy} label="solicitudes" onPage={loadRequestPage} />
         </section>
       </div>
+    {:else if tab === 'brigades'}
+      <AdminBrigades {token} canManage={staffRole === 'admin'} />
     {:else if tab === 'appointments'}
       <section class="space-y-4">
         <h2 class="font-extrabold text-xl text-slate-900">Citas ({appointmentTotal})</h2>
