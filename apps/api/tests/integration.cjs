@@ -264,6 +264,68 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const created = await request('Customer A creates request', '/api/private/requests', 'POST', {
     type: 'installation', title: 'Instalación solar residencial', description: 'Deseo instalar paneles y baterías en mi vivienda.'
   }, at, 201);
+  // Expediente 360°: permisos, datos vinculados y gestiones inmutables.
+  await request('Anonymous cannot access customer dossier',
+    '/api/dossiers/customers/'+ar.user.id,'GET',null,null,401);
+  await request('Customer cannot open internal dossier',
+    '/api/dossiers/customers/'+ar.user.id,'GET',null,at,401);
+  await request('Other customer cannot open request dossier',
+    '/api/dossiers/requests/'+created.id,'GET',null,bt,401);
+  await request('Unrecognized dossier returns 404',
+    '/api/dossiers/customers/'+crypto.randomUUID(),'GET',null,staffToken,404);
+  const originalDossier=await request('Staff reads existing customer dossier',
+    '/api/dossiers/customers/'+ar.user.id,'GET',null,staffToken);
+  assert.equal(originalDossier.customer.email,a.email);
+  assert.ok(originalDossier.requests.some(x=>x.id===created.id));
+  assert.equal('password_hash' in originalDossier.customer,false);
+  assert.equal('telegram_chat_id' in originalDossier.customer,false);
+  assert.ok('assistant_conversations_count' in originalDossier);
+  const requestDossier=await request('Staff reads linked request dossier',
+    '/api/dossiers/requests/'+created.id,'GET',null,staffToken);
+  assert.equal(requestDossier.request.customer_id,ar.user.id);
+  assert.equal(requestDossier.request.title,'Instalación solar residencial');
+  assert.ok(Array.isArray(requestDossier.activities));
+  assert.ok(Array.isArray(requestDossier.works));
+  await request('Customer cannot insert an internal activity',
+    '/api/dossiers/requests/'+created.id+'/activities','POST',
+    {activity_type:'call',note:'No autorizado'},at,401);
+  await request('Anonymous cannot add internal activity',
+    '/api/dossiers/requests/'+created.id+'/activities','POST',
+    {activity_type:'call',note:'No autorizado'},null,401);
+  await request('Staff cannot forge activity actor ID',
+    '/api/dossiers/requests/'+created.id+'/activities','POST',
+    {activity_type:'call',note:'Contacto de prueba',actor_id:adminEmail},staffToken,400);
+  await request('Staff rejects empty commercial activity',
+    '/api/dossiers/requests/'+created.id+'/activities','POST',
+    {activity_type:'call',note:' '},staffToken,400);
+  await request('Staff rejects fictional payment verification field',
+    '/api/dossiers/requests/'+created.id+'/activities','POST',
+    {activity_type:'call',note:'Pago reportado',payment_verified:true},staffToken,400);
+  const loggedCall=await request('Gestor records a customer call',
+    '/api/dossiers/requests/'+created.id+'/activities','POST',
+    {activity_type:'call',note:'Se atendió la consulta del cliente.',
+      next_step:'Confirmar fecha de visita'},staffToken,201);
+  assert.ok(loggedCall.id);
+  const loggedByAdmin=await request('Administrador also records independent intervention',
+    '/api/dossiers/requests/'+created.id+'/activities','POST',
+    {activity_type:'follow_up',note:'Revisada la posibilidad de visita.'},adminToken,201);
+  assert.notEqual(loggedCall.id,loggedByAdmin.id);
+  const recorded=await request('Dossier contains activity from both staff accounts',
+    '/api/dossiers/requests/'+created.id,'GET',null,staffToken);
+  assert.ok(recorded.activities.some(x=>x.id===loggedCall.id&&x.actor_email===staffEmail));
+  assert.ok(recorded.activities.some(x=>x.id===loggedByAdmin.id&&x.actor_email===adminEmail));
+  assert.ok(recorded.audit.some(x=>x.action==='commercial_activity_logged'));
+  await request('No endpoint for erasing staff activity',
+    '/api/dossiers/requests/'+created.id+'/activities/'+loggedCall.id,
+    'DELETE',null,adminToken,404);
+  const customerDossierAfter=await request('Customer dossier groups linked interventions',
+    '/api/dossiers/customers/'+ar.user.id,'GET',null,staffToken);
+  assert.ok(customerDossierAfter.activities.some(x=>x.id===loggedCall.id));
+  // Una actividad impide eliminar una solicitud y perder su historia,
+  // incluso si no está vinculada a una cita.
+  await request('Admin cannot delete request with commercial history',
+    '/api/admin-customers/requests/'+created.id,'DELETE',null,adminToken,409);
+
   // Brigadas Bonaire: integración real con Worker + D1 local y JWT.
   // La administración de fichas NO asigna trabajos ni altera citas.
   await request('Brigades require a staff login','/api/brigades','GET',null,null,401);
