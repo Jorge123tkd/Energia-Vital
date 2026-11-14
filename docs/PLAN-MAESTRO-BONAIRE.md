@@ -76,6 +76,32 @@ Proceso objetivo: captación → solicitud → expediente 360° → gestor → p
 6. La recomendación por carga es orientativa: horas estimadas sin conocer aún transporte, equipamiento ni eventual indisponibilidad. El gestor decide según condiciones reales.
 7. La identidad interna es la cuenta de personal validada; no asignar permisos basándose en el nombre de WhatsApp.
 
+## Entrega 2A — Expediente Bonaire 360° con gestiones de gestores (GitHub, NO desplegado)
+
+**Objetivo:** expediente único lógico que enlaza datos reales ya existentes sin duplicarlos.
+Se han preparado `apps/api/src/routes/dossiers.ts`, `apps/web/src/components/DossierPanel.svelte`, sus accesos desde Clientes y Solicitudes y la migración **014_request_activities.sql**.
+
+- **Por cuenta de cliente:** contacto, solicitudes, citas, asignaciones de brigadas, intervenciones de gestores, presupuesto y forma de pago **declarados**. Se muestra número de conversaciones del asistente vinculadas a esa cuenta, pero no el contenido de chats privados ni coincidencias dudosas por teléfono/nombre. No se seleccionan contraseñas, tokens, Telegram IDs ni otros secretos.
+- **Por solicitud:** funciona tanto si el cliente tiene una cuenta como si es contacto sin cuenta de WhatsApp registrado manualmente; ficha, estado, descripción original, ubicación, fecha preferida, fotos adjuntas (cantidad), formas de pago declaradas, citas, trabajos, auditoría de movimientos y bitácora de actuaciones.
+- **Bitácora nueva e inmutable:** llamada, WhatsApp, visita, seguimiento o nota interna, texto breve y próxima acción/fecha opcionales. Cada evento queda asociado automáticamente al `actor_id` de un JWT de empleado activo; ni gestor ni administrador pueden elegir un autor distinto, modificar o borrar una intervención. La inserción de actividad y su auditoría usa `D1.batch`. Los registros protegen la solicitud contra eliminación accidental por FK con `ON DELETE RESTRICT`.
+- **1–2 gestores:** ambos pueden consultar y registrar gestiones en los mismos expedientes sin asignaciones obligatorias. Se conserva la identidad REAL de quien atendió.
+- **Privacidad:** requiere `requireStaffAuth` para toda lectura o escritura. El cliente y el bot no pueden acceder al expediente interno. Este primer corte no publica datos en la web pública ni envía mensajes o notificaciones.
+- **Control financiero:** NO crea presupuestos oficiales ni confirma transferencias, saldo, depósitos o pagos; solo muestra lo declarado y advierte que falta verificar.
+- **Sin duplicar archivos:** las fotos siguen en su almacenamiento existente; el expediente enlaza al flujo autorizado de solicitudes. No añade nuevas rutas de descarga ni comparte R2 por defecto.
+- **Escala y límites:** máximo 100 registros recientes por sección del expediente, indica truncamiento y conserva el resto de la historia en D1.
+
+**Pruebas añadidas a `apps/api/tests/integration.cjs`:** acceso anónimo/cliente denegado, gestor y administrador comparten expedientes, resumen correcto de cuenta y solicitud, ocultación de secretos, creación de intervenciones con actor real, rechazo de `actor_id` enviado por cliente, no declaración de `payment_verified`, historial inmutable, protección ante borrado y ficha de solicitud de WhatsApp sin cuenta. La versión más reciente de estos casos (`9ac63b3f`) **requiere comprobar GitHub Actions antes de afirmar PASS**.
+
+**Requisito de publicación:** nuevo SQL 014 y SQL 013 deben aplicarse solo después de respaldar D1 remota y ensayar en copia de datos representativa, y SIEMPRE antes de publicar la API/Pages que leen esas tablas. No publicar desde el workflow de PR. Revisión de permisos e integridad posterior al despliegue. El expediente no equivale a ERP, gestión contractual ni contabilidad.
+
+### Pendiente de 2B / fases futuras
+
+- Gestión opcional de reparto de clientes cuando haya más de 2 gestores, SIN encerrar un cliente en un único operador.
+- Integrar estados de seguimiento técnico, evidencia de ejecución, versiones de cotización y comprobación de pagos mediante permisos propios.
+- Seguimiento con recordatorios solo si se definen canales/consentimientos y periodicidad, no emitirlos por registrar una fecha.
+- Historias paginadas y política de conservación de datos.
+- Distinguir chat histórico privado y trazas comerciales sin exponer conversaciones a personal sin permiso correspondiente.
+
 ## Validaciones antes de activar la función
 
 - Test de 1/2/3+ brigadas; 2 asignaciones un día; rechazo, aprobación solo admin y auditoría.
