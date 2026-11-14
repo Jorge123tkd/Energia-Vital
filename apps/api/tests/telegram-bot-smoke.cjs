@@ -98,6 +98,11 @@ async function run(){
  assert.equal(act('🧾 Solicitar servicio'),'request-service');
  assert.equal(act('🙋 Hablar con una persona'),'human');
  assert.equal(act('Quiero hablar con un gestor'),'human');
+  assert.equal(act('Quiero hablar con una persona'),'human');
+  assert.equal(act('Quisiera hablar con un gestor'),'human');
+  assert.equal(act('Necesito hablar con ventas'),'human');
+  assert.equal(act('Me gustaría hablar con un asesor'),'human');
+  assert.equal(act('Quiero reservar una cita mañana'),null);
  assert.equal(act('WhatsApp de los gestores'),'human');
  assert.equal(act('Soy del equipo'),'link-help');
  assert.equal(act('✏️ Nuevo chat'),'new-chat');
