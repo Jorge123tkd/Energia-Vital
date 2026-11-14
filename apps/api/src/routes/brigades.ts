@@ -81,7 +81,9 @@ brigadeRoutes.post('/',requireAdminAuth,async c=>{
 });
 
 brigadeRoutes.patch('/:id',requireAdminAuth,async c=>{
-  const id=c.req.param('id'),body=await c.req.json().catch(()=>null),parsed=validateBrigade(body,true);
+  const id=c.req.param('id');
+  if(!id)return c.json({error:'Identificador de brigada inválido.'},400);
+  const body=await c.req.json().catch(()=>null),parsed=validateBrigade(body,true);
   if(parsed.error)return c.json({error:parsed.error},400);
   const expected=object(body)&&typeof body.expected_updated_at==='string'?body.expected_updated_at:'';
   if(!expected)return c.json({error:'Actualiza la ficha antes de guardar.'},400);
@@ -117,7 +119,9 @@ brigadeRoutes.post('/:id/members',requireAdminAuth,async c=>{
 });
 
 brigadeRoutes.patch('/:id/members/:memberId',requireAdminAuth,async c=>{
-  const brigadeId=c.req.param('id'),id=c.req.param('memberId'),body=await c.req.json().catch(()=>null);
+  const brigadeId=c.req.param('id'),id=c.req.param('memberId');
+  if(!brigadeId||!id)return c.json({error:'Identificador de brigada o integrante inválido.'},400);
+  const body=await c.req.json().catch(()=>null);
   const parsed=validateMember(body,true);
   if(parsed.error)return c.json({error:parsed.error},400);
   const expected=object(body)&&typeof body.expected_updated_at==='string'?body.expected_updated_at:'';
