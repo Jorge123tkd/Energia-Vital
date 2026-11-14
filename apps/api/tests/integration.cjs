@@ -315,6 +315,120 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
     '/api/brigades','GET',null,staffToken);
   assert.equal(Boolean(inactiveBrigades.brigades.find(x=>x.id===newBrigade.id)?.is_active),false);
 
+  // Brigadas 1C: los gestores asignan; 1/2 requieren reconocer ocupación;
+  // con 3+ el segundo trabajo queda pendiente de ADMIN GENERAL.
+  await request('Anonymous cannot consult brigade availability',
+    '/api/brigade-work/availability?date=2026-11-14','GET',null,null,401);
+  await request('Customer cannot consult internal brigade work',
+    '/api/brigade-work/month?month=2026-11','GET',null,at,401);
+  await request('Brigade rejects impossible date','/api/brigade-work/availability?date=2026-02-30',
+    'GET',null,staffToken,400);
+  const workDate=new Date(Date.now()+5*86400000).toISOString().slice(0,10);
+  const anotherDate=new Date(Date.now()+6*86400000).toISOString().slice(0,10);
+  const futureRequest=async index=>request('Customer creates technical request '+index,'/api/private/requests','POST',
+    {type:'installation',title:'Instalación para brigada '+index,
+      description:'Prueba de distribución, brigadas y autorización en GitHub CI.'},at,201);
+  const r2=await futureRequest('dos'),r3=await futureRequest('tres'),r4=await futureRequest('cuatro'),
+    r5=await futureRequest('cinco'),r6=await futureRequest('seis'),r7=await futureRequest('siete'),
+    r8=await futureRequest('ocho'),r9=await futureRequest('nueve');
+
+  const bg1=await request('Admin registers active brigade 1','/api/brigades','POST',
+    {name:'Brigada A '+uid,leader_name:'Jefe A'},adminToken,201);
+  const initialAvailability=await request('One active brigade is available',
+    '/api/brigade-work/availability?date='+workDate,'GET',null,staffToken);
+  assert.equal(initialAvailability.active_count,1);
+  assert.equal(initialAvailability.recommended_brigade_id,bg1.id);
+  const firstWork=await request('Operator assigns available brigade',
+    '/api/brigade-work','POST',{brigade_id:bg1.id,request_id:created.id,
+      work_date:workDate,estimated_minutes:360,busy_acknowledged:false},staffToken,201);
+  assert.equal(firstWork.work.status,'scheduled');
+  await request('Operator cannot skip occupied-day warning with one brigade',
+    '/api/brigade-work','POST',{brigade_id:bg1.id,request_id:r2.id,
+      work_date:workDate,estimated_minutes:180,busy_acknowledged:false},staffToken,409);
+  const acknowledgedWork=await request('Operator confirms feasible second work with one brigade',
+    '/api/brigade-work','POST',{brigade_id:bg1.id,request_id:r2.id,
+      work_date:workDate,estimated_minutes:180,busy_acknowledged:true},staffToken,201);
+  assert.equal(acknowledgedWork.work.status,'scheduled');
+  await request('A work cannot be duplicated for same request and day',
+    '/api/brigade-work','POST',{brigade_id:bg1.id,request_id:r2.id,
+      work_date:workDate,estimated_minutes:180,busy_acknowledged:true},staffToken,409);
+  const bg2=await request('Admin adds second brigade','/api/brigades','POST',
+    {name:'Brigada B '+uid,leader_name:'Jefe B'},adminToken,201);
+  const balanced=await request('System recommends free brigade with two active',
+    '/api/brigade-work/availability?date='+workDate,'GET',null,staffToken);
+  assert.equal(balanced.active_count,2);
+  assert.equal(balanced.recommended_brigade_id,bg2.id);
+  const toB=await request('Operator assigns recommended brigade','/api/brigade-work',
+    'POST',{brigade_id:bg2.id,request_id:r3.id,
+      work_date:workDate,estimated_minutes:480,busy_acknowledged:false},staffToken,201);
+  assert.equal(toB.work.status,'scheduled');
+  const secondB=await request('Two brigades still allow a warned second job',
+    '/api/brigade-work','POST',{brigade_id:bg2.id,request_id:r4.id,
+      work_date:workDate,estimated_minutes:60,busy_acknowledged:true},staffToken,201);
+  assert.equal(secondB.work.status,'scheduled');
+
+  const bg3=await request('Admin adds third brigade','/api/brigades','POST',
+    {name:'Brigada C '+uid,leader_name:'Jefe C'},adminToken,201);
+  const three=await request('Three brigades enabled','/api/brigade-work/availability?date='+anotherDate,
+    'GET',null,staffToken);
+  assert.equal(three.active_count,3);
+  const workThree=await request('Operator assigns first job of day with three brigades',
+    '/api/brigade-work','POST',{brigade_id:bg1.id,request_id:r5.id,
+      work_date:anotherDate,estimated_minutes:360,busy_acknowledged:false},staffToken,201);
+  assert.equal(workThree.work.status,'scheduled');
+  const awaiting=await request('Second same-day work goes pending admin approval',
+    '/api/brigade-work','POST',{brigade_id:bg1.id,request_id:r6.id,
+      work_date:anotherDate,estimated_minutes:120,busy_acknowledged:true},staffToken,201);
+  assert.equal(awaiting.work.status,'pending_approval','Gestor nunca confirma excepción de 3+ brigadas');
+  await request('Moderator cannot see pending approvals',
+    '/api/brigade-work/pending','GET',null,staffToken,403);
+  await request('Moderator cannot approve special assignment',
+    '/api/brigade-work/'+awaiting.work.id+'/review','PATCH',
+    {decision:'approve',reason:'Operador intentando aprobar'},staffToken,403);
+  const waitingList=await request('Admin sees pending work','/api/brigade-work/pending',
+    'GET',null,adminToken);
+  assert.ok(waitingList.pending.some(x=>x.id===awaiting.work.id));
+  await request('Admin cannot reject without reason',
+    '/api/brigade-work/'+awaiting.work.id+'/review','PATCH',
+    {decision:'reject',reason:''},adminToken,400);
+  await request('Admin rejects second job with recorded reason',
+    '/api/brigade-work/'+awaiting.work.id+'/review','PATCH',
+    {decision:'reject',reason:'No cabe la instalación el mismo día.'},adminToken);
+  await request('Already rejected job cannot be approved',
+    '/api/brigade-work/'+awaiting.work.id+'/review','PATCH',
+    {decision:'approve',reason:''},adminToken,409);
+  const secondAttempt=await request('Operator requests second job after rejection',
+    '/api/brigade-work','POST',{brigade_id:bg1.id,request_id:r7.id,
+      work_date:anotherDate,estimated_minutes:60,busy_acknowledged:false},staffToken,201);
+  assert.equal(secondAttempt.work.status,'pending_approval');
+  await request('Admin approves pending second job',
+    '/api/brigade-work/'+secondAttempt.work.id+'/review','PATCH',
+    {decision:'approve',reason:'Jefe de brigada confirma viabilidad.'},adminToken);
+  const monthWork=await request('Staff reads month calendar with decisions',
+    '/api/brigade-work/month?month='+anotherDate.slice(0,7),'GET',null,staffToken);
+  assert.ok(monthWork.works.some(x=>x.id===secondAttempt.work.id&&
+    x.status==='scheduled'&&x.reviewed_by_email===adminEmail));
+  assert.ok(monthWork.works.some(x=>x.id===awaiting.work.id&&x.status==='rejected'));
+  await request('Operator cancels assigned work retaining history',
+    '/api/brigade-work/'+firstWork.work.id+'/cancel','PATCH',
+    {reason:'Reprogramación solicitada'},staffToken);
+  await request('Operator cannot cancel already cancelled job',
+    '/api/brigade-work/'+firstWork.work.id+'/cancel','PATCH',
+    {reason:'Intento duplicado'},staffToken,409);
+
+  // Dos gestores concurrentes con más de dos brigadas, misma fecha/brigada:
+  // exactamente uno queda programado, otro necesita aprobación.
+  const concurrentDate=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  const submitConcurrent=id=>request('Concurrent assignment '+id,
+    '/api/brigade-work','POST',{brigade_id:bg3.id,request_id:id,
+      work_date:concurrentDate,estimated_minutes:480,busy_acknowledged:false},staffToken,201);
+  const races=await Promise.all([submitConcurrent(r8.id),submitConcurrent(r9.id)]);
+  assert.deepEqual(races.map(x=>x.work.status).sort(),['pending_approval','scheduled'],
+    'Dos solicitudes concurrentes no pueden producir doble asignación directa sin administrador');
+  const queue=await request('Admin queue includes concurrent exception','/api/brigade-work/pending',
+    'GET',null,adminToken);
+  assert.ok(queue.pending.some(x=>x.id===races.find(y=>y.work.status==='pending_approval').work.id));
+
   const searchedRequest=await request('Staff searches request by exact ID, first page',
     '/api/admin-customers/requests?q='+encodeURIComponent(created.id)+'&page=1&page_size=20',
     'GET',null,staffToken);
