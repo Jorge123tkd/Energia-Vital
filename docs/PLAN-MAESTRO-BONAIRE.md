@@ -37,6 +37,22 @@ Proceso objetivo: captación → solicitud → expediente 360° → gestor → p
 
 **Nota:** la entrega 1A no cambia ninguna ruta API, panel, tabla existente ni estado actual. La migración no debe ejecutarse en producción solo porque aparezca en GitHub. No existe todavía una pantalla funcional de brigadas. Las etapas 1B y 1C se habilitarán juntas tras pruebas de integración, y pueden adelantarse a la etapa 2 solo si la base es estable.
 
+## Entrega 1A verificada en D1 local (evidencia del usuario, 13-11-2026)
+
+- Usuario realizó `git pull --ff-only` hasta `aadcae6` correctamente.
+- Ejecutó `wrangler@4.161.0 d1 migrations apply energia-vital-db --local --persist-to "$sandbox"` en la carpeta TEMP `bonaire-brigadas-d1-prueba`, sobre base **LOCAL aislada**.
+- Las **13 migraciones 001–013** terminaron con ✅, incluido `013_brigades_foundation.sql`.
+- Consulta de `sqlite_master` comprobó tablas `brigades`, `brigade_members`, `brigade_work` y triggers `trg_brigade_work_guard_insert`, `trg_brigade_work_guard_approval` y `trg_brigade_work_immutable_target`.
+- **No se aplicó ninguna migración a D1 remoto**. Esta prueba de instalación no equivale a pruebas de asignación concurrente.
+
+## Entrega 1B preparada para pruebas (no desplegada)
+
+- `apps/api/src/routes/brigades.ts`: API privada en `/api/brigades`. Lectura exclusivamente a personal validado; crear/editar brigadas y sus integrantes solo para admin. Conserva historial: desactivación, no borrado; impide desactivar brigada con trabajos programados; auditoría de cambios y control de versión para evitar pisar ediciones simultáneas.
+- `apps/web/src/components/AdminBrigades.svelte`: nueva pestaña «Brigadas» en /admin; lista privada, ficha de jefe/especialidad, altas, edición y activación de integrantes; informa explícitamente que la asignación/calendario NO se han implementado.
+- `apps/web/src/lib/api.ts` y `apps/api/src/index.ts`: conectan módulo sin alterar rutas antiguas de solicitudes ni citas.
+- `apps/api/tests/brigades-admin-smoke.cjs`: pruebas sin red con middleware y DB simulados; complementan `brigade-policy.cjs`; añadidas al script npm test. **No se ejecutaron ni typecheck/build desde esta sesión.**
+- Pendiente obligatorio antes de publicar: typecheck API + web, build web, pruebas smoke, regresión completa y pruebas integrales con D1 local y autorización real; respaldo y revisión de la migración 013 sobre copia representativa de datos remotos. La nueva pestaña y rutas no deben publicarse antes de que la migración 013 esté instalada en producción de forma segura.
+
 ## Validaciones antes de activar la función
 
 - Test de 1/2/3+ brigadas; 2 asignaciones un día; rechazo, aprobación solo admin y auditoría.
