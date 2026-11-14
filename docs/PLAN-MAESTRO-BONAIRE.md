@@ -35,7 +35,7 @@ Proceso objetivo: captación → solicitud → expediente 360° → gestor → p
 | 5 | Agenda técnica y posventa integral con brigadas | No solapar sin regla, evidencias y cierres claros |
 | 6 | Asistente conectado a expedientes autorizados, análisis de oportunidades y crecimiento | Chat ágil, sin interrogatorio, seguimiento medible |
 
-**Nota:** la entrega 1A no cambia ninguna ruta API, panel, tabla existente ni estado actual. La migración no debe ejecutarse en producción solo porque aparezca en GitHub. No existe todavía una pantalla funcional de brigadas. Las etapas 1B y 1C se habilitarán juntas tras pruebas de integración, y pueden adelantarse a la etapa 2 solo si la base es estable.
+**Nota actualizada:** 1A, 1B y 1C están preparadas y verificadas mediante GitHub Actions (Worker+D1 temporal, permisos reales, regresión de la web y APIs). **NO se han desplegado** y la migración 013 sigue sin aplicarse a D1 remota. Solo se habilitarán en producción tras respaldo, revisión de compatibilidad con datos históricos y autorización del propietario.
 
 ## Entrega 1A verificada en D1 local (evidencia del usuario, 13-11-2026)
 
@@ -52,6 +52,29 @@ Proceso objetivo: captación → solicitud → expediente 360° → gestor → p
 - `apps/web/src/lib/api.ts` y `apps/api/src/index.ts`: conectan módulo sin alterar rutas antiguas de solicitudes ni citas.
 - `apps/api/tests/brigades-admin-smoke.cjs`: pruebas sin red con middleware y DB simulados; complementan `brigade-policy.cjs`; añadidas al script npm test. **No se ejecutaron ni typecheck/build desde esta sesión.**
 - Pendiente obligatorio antes de publicar: typecheck API + web, build web, pruebas smoke, regresión completa y pruebas integrales con D1 local y autorización real; respaldo y revisión de la migración 013 sobre copia representativa de datos remotos. La nueva pestaña y rutas no deben publicarse antes de que la migración 013 esté instalada en producción de forma segura.
+
+## Entrega 1C — Agenda técnica y asignaciones (GitHub, sin despliegue)
+
+- API `apps/api/src/routes/brigade-work.ts`, accesible solo con cuentas de personal activas:
+  - `GET /api/brigade-work/availability?date=AAAA-MM-DD`: identifica brigadas ocupadas por fecha cubana, número de trabajos, minutos estimados acumulados en el mes y recomienda una brigada, sin asignarla automáticamente.
+  - `GET /api/brigade-work/month?month=AAAA-MM`: agenda privada del mes, con responsables, estado y fecha; incluye trabajos pendientes y aprobaciones.
+  - `POST /api/brigade-work`: gestores (`operator` y `admin`) registran trabajos vinculados a solicitud existente y no cerrada. La operación usa una inserción SQL que decide, atómicamente, si queda `scheduled` o `pending_approval`. En 1–2 brigadas, si ya hay trabajo, exige que el gestor confirme que revisó la ocupación; en 3+ nunca puede confirmar por sí mismo el segundo trabajo.
+  - `GET /api/brigade-work/pending` y `PATCH /api/brigade-work/:id/review`: solo administrador principal puede consultar la cola de excepciones y aprobarlas/rechazarlas. El rechazo exige motivo; se registran identidad y fecha del revisor.
+  - `PATCH /api/brigade-work/:id/cancel`: personal puede cancelar una asignación activa sin borrar historial, indicando motivo opcional.
+- Se respetan los tres triggers de la migración 013. El sistema NO modifica el estado comercial de la solicitud al asignar, NI altera las citas del cliente, NI permite autoprogramación desde el asistente.
+- La interfaz `apps/web/src/components/BrigadePlanner.svelte` amplía `/admin → Brigadas` con vista mensual, advertencias de ocupación, reparto sugerido, asignación y cola de aprobación exclusiva de admin. La tarjeta de solicitudes contiene enlace directo «Asignar brigada» con el ID precargado.
+- El calendario general `StaffCalendar.svelte` combina citas, solicitudes con fecha orientativa y trabajos técnicos, distinguiendo claramente los pendientes de autorización.
+- GitHub Actions verificó CI PASS en run `43551000617` (commit `c2569bc7`): TypeScript API/web, build web, migración D1 en runner, pruebas `integration.cjs` incluyendo asignación 1, 2 y 3 brigadas, concurrencia de dos gestores, rechazo y aprobación, y regresión de funciones anteriores. Se agregó posteriormente prueba para CUATRO brigadas en commit `3d1f214f`; **ese nuevo commit requiere un resultado CI posterior para confirmar PASS**.
+
+### Riesgos y operaciones pendientes para publicación
+
+1. **No hacer despliegue automático:** el flujo `deploy.yml` ejecutó comprobaciones pero los jobs de publicación quedaron `skipped`.
+2. **No migrar D1 remota sin respaldo verificado** y ensayo de migración 013 en una copia representativa de datos reales. Las pruebas sobre D1 vacía/temporal no sustituyen ese ensayo.
+3. **Orden de liberación imprescindible:** copia D1 remota → validación de migraciones pendientes → aplicar solo las aprobadas → desplegar Worker → comprobar endpoints privados, permisos e integridad → publicar Pages → comprobar UI y calendario. Tener plan de rollback de Worker/Pages; no borrar filas ni migraciones para revertir D1.
+4. **Trabajo técnico no completado automáticamente:** la fase actual programa y cancela, pero la confirmación de ejecución y evidencias del jefe de brigada pertenecen a la etapa de seguimiento técnico. No marcar completado sin esa evidencia.
+5. La solicitud comercial y la agenda de brigadas tienen estados independientes. Esto es intencional; se integrarán en el expediente 360° sin cambiar el historial previo.
+6. La recomendación por carga es orientativa: horas estimadas sin conocer aún transporte, equipamiento ni eventual indisponibilidad. El gestor decide según condiciones reales.
+7. La identidad interna es la cuenta de personal validada; no asignar permisos basándose en el nombre de WhatsApp.
 
 ## Validaciones antes de activar la función
 
