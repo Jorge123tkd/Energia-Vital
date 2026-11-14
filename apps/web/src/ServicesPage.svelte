@@ -1,54 +1,123 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
-
-  let services: any[] = $state([]);
-  let loading = $state(true);
-
-  onMount(async () => {
-    try {
-      const res = await api.getServices();
-      services = res.services ?? [];
-    } catch (e) {
-      console.error(e);
-    } finally {
-      loading = false;
-    }
+  import CardImage from './components/CardImage.svelte';
+  import Pagination from './components/Pagination.svelte';
+  import PageHero from './components/PageHero.svelte';
+  let { featured = false }: { featured?: boolean } = $props();
+  let services:any[]=$state([]);
+  let page=$state(1);
+  let perPage = $derived(featured ? 5 : 10);
+  let pages=$derived(Math.max(1,Math.ceil(services.length/perPage)));
+  let visibleServices=$derived(services.slice((Math.min(page,pages)-1)*perPage,Math.min(page,pages)*perPage));
+  let loading=$state(true),error=$state('');
+  let selected:any=$state(null),images:{id:string;url:string}[]=$state([]);
+  let photoIndex=$state(0),loadingPhotos=$state(false);
+  onMount(()=>{
+    api.getServices(featured).then(r=>{services=r.services??[];})
+      .catch(e=>error=e instanceof Error?e.message:'No se pudieron cargar los servicios.')
+      .finally(()=>loading=false);
   });
+  function request(service:any){window.location.href='/contacto?service_id='+encodeURIComponent(service.id);}
+  function price(service:any){
+    return service.price_type==='fixed'&&service.price!=null
+      ? Number(service.price).toLocaleString('es-CU')+' USD'
+      :service.price_type==='free'?'Gratuito':'Bajo presupuesto';
+  }
+  async function details(service:any){
+    selected=service;photoIndex=0;images=service.image_url?[{id:'cover',url:service.image_url}]:[];
+    loadingPhotos=true;
+    try{
+      const res=await api.getServiceImages(service.id);
+      if(selected?.id!==service.id)return;
+      const list=res.images||[];
+      images=list.length?list:(service.image_url?[{id:'cover',url:service.image_url}]:[]);
+    }catch{/* Si falla la galería, se conserva la foto principal. */}
+    finally{loadingPhotos=false;}
+  }
+  function close(){selected=null;images=[];}
 </script>
-
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <h1 class="text-3xl font-bold text-gray-900 mb-8">Nuestros servicios</h1>
-
-  {#if loading}
-    <div class="text-center py-20">Cargando servicios...</div>
-  {:else if services.length === 0}
-    <div class="text-center py-20 text-gray-500">No hay servicios disponibles.</div>
+<svelte:window onkeydown={e=>{
+  if(!selected)return;
+  if(e.key==='Escape')close();
+  if(e.key==='ArrowRight')photoIndex=(photoIndex+1)%Math.max(1,images.length);
+  if(e.key==='ArrowLeft')photoIndex=(photoIndex+Math.max(1,images.length)-1)%Math.max(1,images.length);
+}}/>
+<section class={featured ? "w-full" : "w-full max-w-[1600px] mx-auto px-2 sm:px-4 py-8"}>
+  {#if !featured}
+  <div class="mb-8">
+    <PageHero eyebrow="Bonaire · Servicios técnicos" title="Soluciones para cada necesidad"
+      description="Instalación, reparación, mantenimiento y asesoría. Consulta los servicios disponibles y solicita atención personalizada." />
+  </div>
+  {/if}
+  {#if loading}<p class="text-slate-500">Cargando servicios…</p>
+  {:else if error}<p role="alert" class="text-red-700">{error}</p>
+  {:else if !services.length}<div class="rounded-2xl bg-white p-8 border border-slate-200 text-slate-600">{featured ? "Pronto publicaremos servicios destacados." : "Pronto publicaremos nuestros servicios."}</div>
   {:else}
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {#each services as service}
-        <div class="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
-          <h3 class="text-xl font-bold text-gray-900 mb-2">{service.name}</h3>
-          {#if service.description}
-            <p class="text-gray-600 mb-4 line-clamp-3">{service.description}</p>
-          {/if}
-          {#if service.scope}
-            <p class="text-sm text-gray-500 mb-4"><strong>Alcance:</strong> {service.scope}</p>
-          {/if}
-          <div class="mb-4">
-            {#if service.price_type === 'fixed' && service.price !== null}
-              <span class="text-energia-600 font-bold text-lg">${service.price.toLocaleString()} {service.currency || 'USD'}</span>
-            {:else if service.price_type === 'quote'}
-              <span class="text-gray-500 text-sm">Precio bajo consulta</span>
-            {:else}
-              <span class="text-green-600 text-sm font-medium">Servicio gratuito</span>
-            {/if}
+    {#if featured}<p class="text-xs text-slate-500 mb-2 sm:hidden">Desliza para ver los cinco servicios destacados →</p>{/if}
+    <div aria-label={featured ? 'Servicios destacados, desplazamiento horizontal' : 'Listado de servicios'}
+      class={featured ? 'flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth overscroll-x-contain pb-4 [scrollbar-width:thin]' : 'grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4'}>
+      {#each visibleServices as service (service.id)}
+        <article class="group relative bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col hover:shadow-lg transition min-w-0 {featured ? 'shrink-0 w-[82vw] sm:w-[44vw] md:w-[31vw] lg:w-[calc(20%_-_0.6rem)] snap-start' : ''}">
+          <div class="w-full relative overflow-hidden bg-teal-50">
+            <CardImage src={service.image_url} alt={service.name} />
           </div>
-          <button class="w-full bg-energia-600 text-white py-3 rounded-lg text-sm font-medium hover:bg-energia-700 transition-colors">
-            Solicitar visita o cita
-          </button>
-        </div>
+          <div class="p-4 flex flex-col flex-1 space-y-2">
+            <h2 class="font-extrabold text-sm sm:text-base text-slate-900 line-clamp-2">{service.name}</h2>
+            <p class="text-xs text-slate-600 line-clamp-3 flex-1">{service.description||'Consulta los detalles del servicio con nuestro equipo.'}</p>
+            <p class="font-bold text-sm text-teal-800">{price(service)}</p>
+            <div class="pt-2">
+              <button type="button" onclick={()=>request(service)}
+                class="relative z-20 w-full rounded-xl bg-teal-700 text-white text-xs font-bold px-3 py-2.5 hover:bg-teal-800">Solicitar servicio</button>
+            </div>
+          </div>
+          <button type="button" class="absolute inset-0 z-10 rounded-2xl cursor-pointer focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-[-4px] focus-visible:outline-teal-700"
+            onclick={()=>details(service)} aria-label={'Abrir detalles de '+service.name}></button>
+        </article>
       {/each}
     </div>
+    {#if !featured}
+      <Pagination page={Math.min(page,pages)} total={services.length} perPage={perPage}
+        label="servicios" onPage={n => page = n} />
+    {/if}
   {/if}
-</div>
+</section>
+{#if selected}
+  <div class="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-5">
+    <button type="button" onclick={close} aria-label="Cerrar detalles" class="absolute inset-0 bg-slate-950/80"></button>
+    <dialog open aria-label={'Servicio '+selected.name} class="relative m-0 w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white shadow-2xl">
+      <div class="sticky top-0 bg-white z-10 border-b border-slate-100 flex justify-between items-start gap-4 px-5 py-4">
+        <div><p class="text-xs uppercase font-bold text-teal-700">Bonaire · Servicios</p><h2 class="font-extrabold text-xl text-slate-900 mt-1">{selected.name}</h2></div>
+        <button type="button" onclick={close} aria-label="Cerrar" class="rounded-xl bg-slate-100 w-10 h-10 shrink-0">✕</button>
+      </div>
+      <div class="p-5 space-y-4">
+        {#if images.length}
+          <div class="relative">
+            <img src={images[photoIndex]?.url||images[0].url} alt={selected.name} class="w-full h-60 sm:h-[340px] rounded-2xl object-contain bg-slate-100"/>
+            {#if images.length>1}
+              <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                <button type="button" class="rounded-full bg-slate-950/80 text-white w-10 h-10" onclick={()=>photoIndex=(photoIndex+images.length-1)%images.length}>‹</button>
+                <span class="bg-slate-950/80 text-white rounded-lg px-3 py-1.5 text-xs">{photoIndex+1} / {images.length}</span>
+                <button type="button" class="rounded-full bg-slate-950/80 text-white w-10 h-10" onclick={()=>photoIndex=(photoIndex+1)%images.length}>›</button>
+              </div>
+            {/if}
+          </div>
+          {#if images.length>1}
+            <div class="flex gap-2 overflow-x-auto">
+              {#each images as photo,i (photo.id)}
+                <button type="button" onclick={()=>photoIndex=i} aria-label={'Mostrar foto '+(i+1)}
+                  class="rounded-xl border-2 {photoIndex===i?'border-teal-700':'border-slate-200'} p-1 shrink-0">
+                  <img src={photo.url} alt="" class="w-16 h-14 rounded-lg object-cover"/>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        {:else if loadingPhotos}<p>Cargando fotos…</p>{/if}
+        <p class="text-sm text-slate-700 whitespace-pre-line">{selected.description||'Consulta los detalles de este servicio con Bonaire.'}</p>
+        {#if selected.scope}<p class="text-sm text-slate-600 border-l-4 border-teal-500 pl-4 whitespace-pre-line">{selected.scope}</p>{/if}
+        <p class="text-lg text-teal-800 font-extrabold">{price(selected)}</p>
+        <button type="button" onclick={()=>request(selected)} class="rounded-xl w-full bg-teal-700 hover:bg-teal-800 text-white font-bold px-5 py-3">Solicitar este servicio →</button>
+      </div>
+    </dialog>
+  </div>
+{/if}

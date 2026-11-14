@@ -1,0 +1,94 @@
+name: Validar rama Cloudflare (sin despliegue)
+
+on:
+  push:
+    branches:
+      - feat/cloudflare-customer-accounts-hardening
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-feature-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: API, web y pruebas reales con D1 aislada
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Validar TypeScript API
+        run: npm run typecheck --workspace=apps/api
+
+      - name: Validar Svelte y TypeScript
+        run: npm run typecheck --workspace=apps/web
+
+      - name: Construir frontend (sin publicar)
+        run: npm run build --workspace=apps/web
+
+      - name: Ensayo de preservación de datos históricos ficticios (sin Cloudflare real)
+        run: python3 apps/api/tests/migration-preservation.py
+
+      - name: Pruebas integrales en Worker y D1 temporales del runner
+        shell: bash
+        env:
+          BASE_URL: http://127.0.0.1:8787
+          TEST_ADMIN_SETUP_KEY: ClaveSetupCIExclusivaParaPruebasDe36Caracteres123
+        run: |
+          set -euo pipefail
+          SANDBOX="$(mktemp -d)"
+          WORKER_PID=""
+          cleanup() {
+            if [[ -n "$WORKER_PID" ]]; then
+              kill "$WORKER_PID" 2>/dev/null || true
+              wait "$WORKER_PID" 2>/dev/null || true
+            fi
+            rm -rf "$SANDBOX"
+          }
+          trap cleanup EXIT
+
+          cd apps/api
+          npx wrangler d1 migrations apply energia-vital-db --local --persist-to "$SANDBOX"
+
+          npx wrangler dev --local --port 8787 --persist-to "$SANDBOX" \
+            --var "JWT_SECRET:ClaveCIExclusivaParaPruebasDe36Caracteres123" \
+            --var "ADMIN_SETUP_KEY:$TEST_ADMIN_SETUP_KEY" \
+            >"$RUNNER_TEMP/bonaire-worker-ci.log" 2>&1 &
+          WORKER_PID=$!
+
+          HEALTH_OK=0
+          for attempt in $(seq 1 90); do
+            if curl --silent --fail --max-time 2 "$BASE_URL/health" >/dev/null; then
+              HEALTH_OK=1
+              break
+            fi
+            if ! kill -0 "$WORKER_PID" 2>/dev/null; then break; fi
+            sleep 1
+          done
+
+          if [[ "$HEALTH_OK" != 1 ]]; then
+            echo "No arrancó el Worker aislado de GitHub Actions."
+            cat "$RUNNER_TEMP/bonaire-worker-ci.log"
+            exit 1
+          fi
+
+          cd ../..
+          npm test --workspace=apps/api
+
+      - name: Confirmar que no hubo despliegue
+        if: always()
+        run: echo "Este flujo solo valida; no ejecuta wrangler deploy, Pages deploy ni migraciones remotas."

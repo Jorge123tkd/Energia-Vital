@@ -1,53 +1,122 @@
 <script lang="ts">
-  interface Props {
-    settings?: any;
-  }
-
-  let { settings = {} }: Props = $props();
+  import { onMount } from 'svelte';
+  import { api } from '../lib/api';
+  import { messagingBotUrl } from '../lib/messaging-links';
+  let { settings = {} }: { settings?: Record<string, string> } = $props();
+  let published: Record<string, string> = $state({});
+  onMount(() => { api.getSettings().then(r => { published = r.settings ?? {}; }).catch(() => {}); });
+  let site = $derived({ ...settings, ...published });
+  const defaults = [
+    { label: 'Inicio', url: '/' },
+    { label: 'Catálogo solar', url: '/catalogo' },
+    { label: 'Servicios', url: '/servicios' },
+    { label: 'Nuestros trabajos', url: '/galeria' },
+    { label: 'Asesor solar', url: '/asesor-solar' }
+  ];
+  let links = $derived.by(() => {
+    if (site.footer_links === undefined) return defaults;
+    try {
+      const items = JSON.parse(site.footer_links);
+      if (!Array.isArray(items)) return defaults;
+      return items.filter((item: any) => item && typeof item.label === 'string' && typeof item.url === 'string'
+        && (/^\/(?!\/)/.test(item.url) || /^https:\/\//i.test(item.url)));
+    } catch { return defaults; }
+  });
+  let social = $derived([
+    { label: 'YouTube', url: site.youtube_channel_url },
+    { label: 'Facebook', url: site.facebook_url },
+    { label: 'Instagram', url: site.instagram_url },
+    { label: 'Canal de Telegram', url: site.telegram_public_url }
+  ].filter(link => link.url && /^https:\/\/[^\s]+$/i.test(link.url)));
+  let bots = $derived([
+    { label: 'WhatsApp · Asistente', url: messagingBotUrl(site.bot_whatsapp_url, 'whatsapp'), icon: '◉' },
+    { label: 'Telegram · Asistente', url: messagingBotUrl(site.bot_telegram_url, 'telegram'), icon: '➤' }
+  ].filter(item => Boolean(item.url)));
+  let phones = $derived.by(() => {
+    let additional: { label: string; number: string }[] = [];
+    try {
+      const parsed = JSON.parse(site.business_phones || '[]');
+      if (Array.isArray(parsed)) additional = parsed.filter((p: any) =>
+        typeof p?.number === 'string' && (p.number.match(/\d/g) || []).length >= 8)
+        .map((p: any) => ({ label: String(p.label || 'Contacto'), number: String(p.number) }));
+    } catch { /* Sin números adicionales configurados */ }
+    const main = site.business_phone?.trim() ? [{ label: 'Atención del equipo', number: site.business_phone.trim() }] : [];
+    return [...main, ...additional];
+  });
 </script>
 
-<footer class="bg-gray-900 text-white mt-auto py-8 border-t border-gray-800">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-      <div>
-        <h3 class="text-lg font-bold mb-4 text-energia-400">Energía Vital</h3>
-        <p class="text-gray-400 text-sm">
-          Soluciones solares para tu hogar y negocio. Asesoramiento, venta, instalación y mantenimiento.
-        </p>
+<footer class="bg-slate-950 text-slate-100 mt-auto border-t border-slate-800">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
+    <section class="flex flex-col lg:flex-row lg:items-center justify-between gap-5 rounded-3xl bg-gradient-to-r from-teal-900 to-teal-700 border border-teal-600/70 p-5 sm:p-7 shadow-xl">
+      <div class="max-w-2xl">
+        <p class="text-xs font-extrabold uppercase tracking-[.2em] text-teal-200">Bonaire · Atención a tu proyecto</p>
+        <h2 class="text-xl sm:text-2xl font-extrabold text-white mt-2">{site.footer_cta_title || '¿Necesitas una solución solar para tu vivienda o empresa?'}</h2>
+        <p class="text-sm text-teal-50 mt-2">{site.footer_cta_description || 'Explora los equipos, calcula una orientación inicial o solicita a nuestro equipo una revisión de tus necesidades.'}</p>
+      </div>
+      <div class="flex flex-wrap gap-2 shrink-0">
+        <a href="/asesor-solar" class="rounded-xl bg-white text-teal-900 hover:bg-teal-50 px-4 py-3 text-sm font-extrabold text-center">Asesor solar</a>
+        <a href="/contacto" class="rounded-xl border border-white/50 bg-teal-950/20 text-white hover:bg-white/15 px-4 py-3 text-sm font-bold text-center">Solicitar servicio</a>
+      </div>
+    </section>
+  </div>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-7">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
+      <div class="lg:col-span-1">
+        <a href="/" class="font-bold text-xl text-white flex items-center gap-2 mb-4"><span class="h-10 w-10 rounded-xl bg-teal-600 flex items-center justify-center text-sm">B</span> Bonaire</a>
+        <p class="text-slate-400 text-sm leading-relaxed">{site.footer_description || 'Soluciones de energía solar para tu hogar y negocio. Venta de equipos, instalación, mantenimiento y asesoría personalizada.'}</p>
       </div>
       <div>
-        <h4 class="font-semibold mb-4">Servicios</h4>
-        <ul class="space-y-2 text-sm text-gray-400">
-          <li><a href="/servicios" class="hover:text-white">Instalación solar</a></li>
-          <li><a href="/servicios" class="hover:text-white">Mantenimiento</a></li>
-          <li><a href="/servicios" class="hover:text-white">Reparación de inversores</a></li>
-          <li><a href="/asesor-solar" class="hover:text-white">Asesor solar</a></li>
+        <h3 class="text-white font-semibold mb-5">Explorar</h3>
+        <ul class="space-y-3 text-sm">{#each links as link}
+          <li><a href={link.url} target={link.url.startsWith('https://') ? '_blank' : undefined} rel={link.url.startsWith('https://') ? 'noopener noreferrer' : undefined} class="text-slate-400 hover:text-teal-300 transition">{link.label}</a></li>
+        {/each}</ul>
+      </div>
+      <div>
+        <h3 class="text-white font-semibold mb-5">Contacto</h3>
+        <ul class="space-y-3 text-sm text-slate-400">
+          {#each phones as contact}
+            <li><a href={'https://wa.me/' + contact.number.replace(/\D/g, '')}
+                target="_blank" rel="noopener noreferrer" class="hover:text-teal-300">
+              {contact.label || 'Teléfono'}: {contact.number}
+            </a></li>
+          {/each}
+          {#if site.business_email}
+            <li><a href={'mailto:' + site.business_email} class="hover:text-teal-300">{site.business_email}</a></li>
+          {/if}
+          {#if site.business_address}<li>{site.business_address}</li>{/if}
+          {#if site.business_hours}<li>{site.business_hours}</li>{/if}
         </ul>
       </div>
-      <div>
-        <h4 class="font-semibold mb-4">Contacto</h4>
-        <ul class="space-y-2 text-sm text-gray-400">
-        <li>WhatsApp: <span class="hover:text-white cursor-pointer"><a href="https://wa.me/+5356085711">+5356085711</a></span></li>
-          <li>WhatsApp: <span class="hover:text-white cursor-pointer"><a href="https://wa.me/+5356085711">+5356085711</a></span></li>
-          <li>Email: <a href="mailto:info@energiavital.com" class="hover:text-white">info@energiavital.com</a></li>
-          <li>Playa, Cuba</li>
-        </ul>
-      </div>
-      <div>
-        <h4 class="font-semibold mb-4">Síguenos</h4>
-        <div class="flex gap-4">
-          <a href="{settings.youtube_channel_url || '#'}" class="text-gray-400 hover:text-white" target="_blank" rel="noopener noreferrer">YouTube</a>
-          <span class="text-gray-400 hover:text-white cursor-default">Instagram</span>
-          <span class="text-gray-400 hover:text-white cursor-default">Facebook</span>
-        </div>
-        <p class="mt-4 text-xs text-gray-500">
-          {settings.youtube_channel_url || 'Canal de YouTube'}
-        </p>
+      <div class="space-y-6">
+        {#if bots.length}
+          <section>
+            <h3 class="text-white font-semibold mb-3">Habla con el asistente</h3>
+            <p class="text-xs text-slate-400 mb-3">Canales automáticos de Bonaire, separados de los contactos del equipo.</p>
+            <div class="flex flex-col gap-2">
+              {#each bots as bot}
+                <a href={bot.url} target="_blank" rel="noopener noreferrer"
+                  class="rounded-xl border border-teal-600/60 bg-teal-950/40 px-3 py-2.5 text-sm font-bold text-teal-100 hover:bg-teal-900">
+                  <span aria-hidden="true">{bot.icon}</span> {bot.label}
+                </a>
+              {/each}
+            </div>
+          </section>
+        {/if}
+        <h3 class="text-white font-semibold mb-5">Síguenos</h3>
+        {#if social.length}
+          <div class="flex flex-wrap gap-2">{#each social as item}<a href={item.url} target="_blank" rel="noopener noreferrer" class="px-3 py-2 rounded-lg border border-slate-700 text-sm text-slate-300 hover:text-white hover:border-teal-500">{item.label}</a>{/each}</div>
+        {:else}
+          <p class="text-sm text-slate-500">Muy pronto compartiremos novedades y proyectos en nuestras redes.</p>
+        {/if}
       </div>
     </div>
-
-    <div class="border-t border-gray-800 pt-8 text-center text-xs text-gray-500">
-      © 2026 Energía Vital. Todos los derechos reservados.
+    <div class="border-t border-slate-800 pt-6 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+      <span>© {new Date().getFullYear()} Bonaire. Todos los derechos reservados.</span>
+      <span class="flex items-center flex-wrap gap-x-4 gap-y-2">
+        <a href="/contacto" class="text-slate-400 hover:text-teal-300">Ayuda y solicitudes</a>
+        <a href="/mis-solicitudes" class="text-slate-400 hover:text-teal-300">Seguimiento de solicitudes</a>
+        <span>Energía para avanzar.</span>
+      </span>
     </div>
   </div>
 </footer>

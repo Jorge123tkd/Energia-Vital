@@ -1,195 +1,97 @@
-/**
- * Módulo de autenticación JWT y hashing de contraseñas.
- *
- * - Hashing de contraseñas con PBKDF2 / SHA-256 (Web Crypto).
- * - Firmado y verificación de JWTs HS256 (Web Crypto crypto.subtle).
- * - No depende de paquetes externos: funciona dentro de Cloudflare Workers.
- *
- * Formatos:
- *   password_hash → "pbkdf2$<iterations>$<saltHex>$<hashHex>"
- *   JWT           → estándar HS256 (header.payload.signature)
- */
-
+/** Tokens de acceso y sesiones para Cloudflare Workers (Web Crypto). */
 export interface JwtPayload {
   user_id: string;
   type: 'customer' | 'admin';
   role?: string;
-  exp: number;
+  sid: string;
+  kind: 'access' | 'refresh';
   iat: number;
+  exp: number;
 }
 
-const ACCESS_TOKEN_TTL = 60 * 60;           // 1 hora  (segundos)
-const REFRESH_TOKEN_TTL = 60 * 60 * 24 * 30; // 30 días
+export const ACCESS_TTL = 60 * 60;
+export const REFRESH_TTL = 30 * 24 * 60 * 60;
 const PBKDF2_ITERATIONS = 100_000;
 
-/* -------------------------------------------------------------------------- */
-/*  Utilidades de codificación                                                */
-/* -------------------------------------------------------------------------- */
-
-/** Codifica un ArrayBuffer a string hexadecimal. */
-function buf2hex(buf: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+function toHex(buffer: ArrayBufferLike): string {
+  return Array.from(new Uint8Array(buffer)).map(x => x.toString(16).padStart(2, '0')).join('');
 }
-
-/** Decodifica un string hexadecimal a Uint8Array. */
-function hex2buf(hex: string): Uint8Array {
-  const len = hex.length / 2;
-  const arr = new Uint8Array(len);
-  for (let i = 0; i < len; i++) arr[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return arr;
+function fromHex(hex: string): Uint8Array {
+  if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) throw new Error('Hash inválido');
+  return new Uint8Array(hex.match(/.{2}/g)!.map(x => parseInt(x, 16)));
 }
-
-/** Codifica un ArrayBuffer a base64url sin padding. */
-function base64urlEncode(buf: ArrayBuffer | Uint8Array): string {
-  if (buf instanceof Uint8Array) buf = buf.buffer as ArrayBuffer;
-  const bytes = Array.from(new Uint8Array(buf));
+function base64url(bytes: Uint8Array): string {
   let binary = '';
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
-
-/** Decodifica un base64url string a Uint8Array. */
-function base64urlDecode(str: string): Uint8Array {
-  let padded = str.replace(/-/g, '+').replace(/_/g, '/');
-  while (padded.length % 4) padded += '=';
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+function unbase64url(encoded: string): Uint8Array {
+  const base = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(base.padEnd(Math.ceil(base.length / 4) * 4, '='));
+  return Uint8Array.from(binary, x => x.charCodeAt(0));
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Password hashing (PBKDF2)                                                 */
-/* -------------------------------------------------------------------------- */
-
-/** Genera un salt aleatorio de 16 bytes (hex). */
-function randomSalt(): string {
-  const salt = new Uint8Array(16);
-  crypto.getRandomValues(salt);
-  return buf2hex(salt.buffer);
-}
-
-/**
- * Hash una contraseña con PBKDF2-SHA-256.
- * Resultado: "pbkdf2$<iterations>$<saltHex>$<hashHex>"
- */
-export async function hashPassword(password: string): Promise<string> {
-  const salt = randomSalt();
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
-  const derived = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: enc.encode(salt), iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
-    key,
-    256,
-  );
-  return `pbkdf2$${PBKDF2_ITERATIONS}$${salt}$${buf2hex(derived)}`;
-}
-
-/**
- * Verifica una contraseña contra un hash PBKDF2.
- */
-export async function comparePassword(password: string, stored: string): Promise<boolean> {
-  if (!stored || !stored.startsWith('pbkdf2$')) return false;
-  const parts = stored.split('$');
-  if (parts.length !== 4) return false;
-  const iterations = parseInt(parts[1], 10);
-  const salt = parts[2];
-  const expectedHash = parts[3];
-
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
-  const derived = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: enc.encode(salt), iterations, hash: 'SHA-256' },
-    key,
-    256,
-  );
-  const computed = buf2hex(derived);
-  return constTimeEqual(hex2buf(computed), hex2buf(expectedHash));
-}
-
-/** Verifica dos buffers de la misma longitud de forma const-time. */
-function constTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
-  return diff === 0;
-}
-
-/* -------------------------------------------------------------------------- */
-/*  JWT (HS256) — implementación nativa                                      */
-/* -------------------------------------------------------------------------- */
-
-/** Obtiene el secret de JWT del env, lanza si falta. */
-function getJwtSecret(env: { JWT_SECRET?: string }): string {
-  if (!env.JWT_SECRET || env.JWT_SECRET.length < 16) {
-    throw new Error('JWT_SECRET no configurado o demasiado corto (>=16 chars)');
+function secret(env: { JWT_SECRET?: string }): string {
+  if (!env.JWT_SECRET || env.JWT_SECRET.length < 32) {
+    throw new Error('JWT_SECRET debe estar configurado con 32 caracteres o más');
   }
   return env.JWT_SECRET;
 }
-
-/** Firma y devuelve un JWT HS256. */
-export async function signToken(
-  payload: Omit<JwtPayload, 'exp' | 'iat'>,
-  secret: string,
-  ttlSeconds: number,
-): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const full: JwtPayload = { ...payload, iat: now, exp: now + ttlSeconds };
-  const header = { alg: 'HS256', typ: 'JWT' };
-  const enc = new TextEncoder();
-  const headerB64 = base64urlEncode(enc.encode(JSON.stringify(header)));
-  const payloadB64 = base64urlEncode(enc.encode(JSON.stringify(full)));
-  const signingInput = `${headerB64}.${payloadB64}`;
-  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: { name: 'SHA-256' } }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(signingInput));
-  const sigB64 = base64urlEncode(sig);
-  return `${signingInput}.${sigB64}`;
+export async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, key, 256);
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${toHex(salt.buffer)}$${toHex(bits)}`;
 }
-
-/** Verifica un JWT HS256 y devuelve el payload, o null si es inválido/expirado. */
-export async function verifyToken(token: string, secret: string): Promise<JwtPayload | null> {
+export async function comparePassword(password: string, stored: string): Promise<boolean> {
   try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    const [headerB64, payloadB64, sigB64] = parts;
-    const enc = new TextEncoder();
-    const signingInput = `${headerB64}.${payloadB64}`;
-    const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: { name: 'SHA-256' } }, false, ['verify']);
-    const decoder = new TextDecoder();
-    const payloadJson = decoder.decode(base64urlDecode(payloadB64));
-    const payload: JwtPayload = JSON.parse(payloadJson);
-    const sigBytes = base64urlDecode(sigB64);
-    const valid = await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(signingInput));
-    if (!valid) return null;
-    if (payload.exp && Math.floor(Date.now() / 1000) >= payload.exp) return null;
+    const [algo, iter, saltHex, hashHex] = (stored || '').split('$');
+    if (algo !== 'pbkdf2' || !/^\d+$/.test(iter)) return false;
+    const iterations = Number(iter);
+    if (iterations < 50_000 || iterations > 100_000) return false;
+    const salt = fromHex(saltHex);
+    const expected = fromHex(hashHex);
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+    const result = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, key, expected.length * 8));
+    if (result.length !== expected.length) return false;
+    let diff = 0;
+    for (let i = 0; i < result.length; i++) diff |= result[i] ^ expected[i];
+    return diff === 0;
+  } catch { return false; }
+}
+async function signingKey(value: string, operation: 'sign' | 'verify'): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(value), { name: 'HMAC', hash: 'SHA-256' }, false, [operation]);
+}
+async function sign(payload: JwtPayload, value: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = `${base64url(encoder.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })))}.${base64url(encoder.encode(JSON.stringify(payload)))}`;
+  const signature = await crypto.subtle.sign('HMAC', await signingKey(value, 'sign'), encoder.encode(data));
+  return `${data}.${base64url(new Uint8Array(signature))}`;
+}
+export async function verifyToken(token: string, value: string): Promise<JwtPayload | null> {
+  try {
+    const pieces = token.split('.');
+    if (pieces.length !== 3) return null;
+    const header = JSON.parse(new TextDecoder().decode(unbase64url(pieces[0])));
+    if (header.alg !== 'HS256' || header.typ !== 'JWT') return null;
+    const ok = await crypto.subtle.verify('HMAC', await signingKey(value, 'verify'), unbase64url(pieces[2]), new TextEncoder().encode(`${pieces[0]}.${pieces[1]}`));
+    if (!ok) return null;
+    const payload = JSON.parse(new TextDecoder().decode(unbase64url(pieces[1]))) as JwtPayload;
+    const now = Math.floor(Date.now() / 1000);
+    if (!payload.sid || !payload.user_id || !['admin', 'customer'].includes(payload.type) || !['access', 'refresh'].includes(payload.kind) || !Number.isSafeInteger(payload.exp) || payload.exp <= now || payload.iat > now + 60) return null;
     return payload;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
-
-/** Genera un par access + refresh token. */
-export async function generateTokenPair(
-  env: { JWT_SECRET?: string },
-  userId: string,
-  type: 'customer' | 'admin',
-  role?: string,
-): Promise<{ access_token: string; refresh_token: string }> {
-  const secret = getJwtSecret(env);
-  const commonPayload = { user_id: userId, type, ...(role ? { role } : {}) };
-  const access = await signToken(commonPayload, secret, ACCESS_TOKEN_TTL);
-  const refresh = await signToken(commonPayload, secret, REFRESH_TOKEN_TTL);
-  return { access_token: access, refresh_token: refresh };
+export async function generateTokenPair(env: { JWT_SECRET?: string }, userId: string, type: 'customer' | 'admin', role: string, sessionId: string): Promise<{ access_token: string; refresh_token: string }> {
+  const now = Math.floor(Date.now() / 1000);
+  const common = { user_id: userId, type, role, sid: sessionId, iat: now };
+  const value = secret(env);
+  return {
+    access_token: await sign({ ...common, kind: 'access', exp: now + ACCESS_TTL }, value),
+    refresh_token: await sign({ ...common, kind: 'refresh', exp: now + REFRESH_TTL }, value),
+  };
 }
-
-/** Extrae y verifica el Bearer token del header Authorization. */
-export async function extractToken(
-  authHeader: string | null | undefined,
-  env: { JWT_SECRET?: string },
-): Promise<JwtPayload | null> {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.substring(7);
-  return verifyToken(token, env.JWT_SECRET || '');
+export async function extractToken(header: string | null | undefined, env: { JWT_SECRET?: string }): Promise<JwtPayload | null> {
+  if (!header?.startsWith('Bearer ')) return null;
+  const token = await verifyToken(header.slice(7), env.JWT_SECRET || '');
+  return token?.kind === 'access' ? token : null;
 }

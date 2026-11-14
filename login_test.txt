@@ -1,1 +1,0 @@
-200 {"user":{"id":"d0fb4389-78e1-46e6-993e-25a38cfc229a","email":"taliety@energiavital.com","role":"admin"},"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiZDBmYjQzODktNzhlMS00NmU2LTk5M2UtMj

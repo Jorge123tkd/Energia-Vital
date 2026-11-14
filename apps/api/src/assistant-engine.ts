@@ -18,20 +18,76 @@ export type AssistantIntent =
   | 'greeting'
   | 'solar_advice'
   | 'price_inquiry'
+  | 'currency_exchange'
   | 'appointment'
   | 'repair'
   | 'maintenance'
   | 'product_inquiry'
   | 'complaint'
   | 'telegram'
+  | 'business_proposal'
   | 'service_request'
   | 'general';
 
 const DEFAULT_WELCOME =
-  '¡Hola! Soy el asistente de Energía Vital. ¿En qué puedo ayudarte hoy?';
+  '¡Hola! Soy el asistente de Bonaire. ¿En qué puedo ayudarte hoy?';
+
+/** Un mensaje fuera del ámbito comercial debe recibir una redirección breve, no una explicación inventada. */
+export const OUT_OF_SCOPE_REPLY =
+  'Sobre ese tema no tengo información para ofrecerte. Soy el asistente de Bonaire y puedo asesorarte sobre paneles solares, inversores, baterías, autonomía eléctrica, productos, servicios y propuestas comerciales de suministro, promoción, distribución o asociación con Bonaire. ¿En qué puedo ayudarte?';
+
+/** Preguntas ajenas a Bonaire: interceptarlas incluso cuando el modelo de IA esté activado. */
+export function isOutOfScopeMessage(message:string): boolean {
+  const m = normalize(message);
+  const external = /\b(?:crisis mundial|crisis global|economia mundial|inflacion|guerras?|conflictos? internacionales|politica|politicos?|elecciones?|presidentes?|futbol|deportes?|mundial de futbol|peliculas?|musica|cantantes?|horoscopos?|historia universal|noticias mundiales|noticias internacionales)\b/.test(m);
+  // Permitir cuestiones sobre crisis del suministro o coste energético vinculadas a Bonaire.
+  const business = /\b(?:bonaire|panel(?:es)?|solar(?:es)?|inversor(?:es)?|baterias?|electricidad|apagones?|corriente|energia|fotovoltaic[oa]s?|reparacion(?:es)?|mantenimiento|servicio(?:s)?|instalacion(?:es)?|catalogo)\b/.test(m);
+  return external && !business;
+}
+
+/** Propuestas dirigidas a Bonaire; mencionar una empresa no basta para iniciar este flujo. */
+export function isBusinessProposal(message: string): boolean {
+  const m = normalize(message);
+  if (/\b(?:no quiero|no queremos|no deseo|no buscamos)\b.{0,35}\b(?:asociar|colaborar|distribu|proveedor|negocio|promocion)/.test(m)) return false;
+  return /\b(?:ser|seremos|somos|como) (?:su |vuestro |un |el |sus |uno de sus )?(?:proveedor(?:es)?|distribuidor(?:es)?)\b/.test(m)
+    || /\b(?:queremos|quiero|buscamos|nos interesa|me interesa|interesad[oa]s? en)\b.{0,90}\b(?:asociarnos|asociarme|colaborar|alianza|asociacion|distribu(?:yan|ir|idor(?:es)?)|promocion(?:en|ar)?|represent(?:en|arnos|acion)|negocios? con (?:ustedes|bonaire))\b/.test(m)
+    || /\b(?:propuesta|alianza|asociacion|colaboracion|representacion) comercial\b/.test(m)
+    || /\b(?:ofrecemos|ofrezco|suministramos|fabricamos)\b.{0,100}\b(?:a bonaire|a ustedes|para ustedes|distribuidores|distribuyan)\b/.test(m)
+    || /\b(?:que|para que) (?:ustedes |bonaire )?(?:nos |los |las )?(?:promocionen|distribuyan|representen)\b/.test(m);
+}
+
+/** Respuesta comercial determinista: no crea solicitudes ni promete acuerdos. */
+export function businessProposalReply(message: string, history: {role:string;content:string}[] = []): string | null {
+  const previous = [...history].reverse().find(h => h.role === 'assistant');
+  const pending = previous?.content.startsWith('Propuesta comercial · Bonaire');
+  const m = normalize(message);
+  const explicit = isBusinessProposal(message);
+  if (!explicit && !pending) return null;
+  if (pending && /^(?:cancelar|cancela|olvidalo|otra cosa|no gracias)[.! ]*$/.test(m))
+    return 'De acuerdo, dejamos la propuesta comercial aquí. ¿En qué más puedo ayudarte?';
+  // Una pregunta nueva de asesoramiento/servicio no debe convertirse en datos de la empresa.
+  if (!explicit && (/\?|\b(?:asesoramiento|asesorame|como|que es|cuanto|necesito|solicitar|contratar|agendar)\b/.test(m) || isOutOfScopeMessage(message))) return null;
+  if (pending) {
+    const start = history.length - 1 - [...history].reverse().findIndex(h => h.role === 'assistant' && h.content.startsWith('Propuesta comercial · Bonaire'));
+    const initial = [...history.slice(0,start)].reverse().find(h => h.role === 'user');
+    return 'Gracias. Este es el resumen de tu propuesta para revisar antes de compartirla con el equipo de Bonaire:\n\n'
+      + [initial?.content, message].filter(Boolean).join('\n\n')
+      + '\n\nPuedes corregir o completar estos datos al contactar al equipo: empresa y país, persona de contacto, productos o marca, y qué colaboración buscas (suministro, promoción, distribución en Cuba o asociación). En este primer contacto no pedimos anticipos, saldos ni plazos. Si ya conoces presupuesto orientativo en USD y forma de pago propuesta, puedes indicarlos; si no, seguimos igualmente.'
+      + '\n\nContacta con el equipo comercial por los canales publicados aquí: https://energia-vital-web.pages.dev/contacto#contacto-comercial'
+      + '\n\nLa propuesta permanece en esta conversación; no se ha enviado como solicitud ni aceptado ningún acuerdo. El equipo evaluará condiciones, disponibilidad y alcance contigo.';
+  }
+  return 'Propuesta comercial · Bonaire\n\nPodemos orientarte para presentar una propuesta como proveedor, promocionar tu marca, proponer que Bonaire distribuya tus productos en Cuba o explorar una asociación comercial. No tiene que tratarse de energía solar.'
+    + '\n\nCuéntame brevemente qué empresa representas, de qué país es y qué colaboración propones. Añade solo los datos que todavía no hayas mencionado; si actúas por cuenta propia, puedes indicarlo.'
+    + '\n\nEsto prepara la conversación con nuestro equipo; no confirma un acuerdo ni crea una solicitud de servicio. Si prefieres hablar directamente con una persona: https://energia-vital-web.pages.dev/contacto#contacto-comercial';
+}
 
 export function detectIntent(message: string): AssistantIntent {
   const m = normalizeWithTypos(message);
+
+  if (isBusinessProposal(message)) return 'business_proposal';
+
+  // El precio del dólar no pertenece al catálogo de productos.
+  if (isCurrencyQuestion(m)) return 'currency_exchange';
 
   // Un saludo solo se detecta si el mensaje es esencialmente un saludo.
   if (isPureGreeting(m)) {
@@ -45,6 +101,12 @@ export function detectIntent(message: string): AssistantIntent {
   }
   if (hasAny(m, ['cita', 'agendar', 'agenda', 'reservar', 'visita', 'calendario', 'horario'])) {
     return 'appointment';
+  }
+  if (hasAny(m, ['disponibilidad', 'existencia', 'venden', 'comprar', 'compraria', 'tienen en venta', 'en stock', 'hay disponible'])) {
+    return 'product_inquiry';
+  }
+  if (hasAny(m, ['servicios', 'solicitar servicio', 'servicio tecnico', 'instalacion a domicilio', 'hacen instalaciones', 'servicio de instalacion'])) {
+    return 'service_request';
   }
   if (hasAny(m, ['precio', 'cuanto', 'cotizar', 'cotizacion', 'valor', 'costo', 'presupuesto', 'cuesta'])) {
     return 'price_inquiry';
@@ -96,6 +158,7 @@ function isPureGreeting(m: string): boolean {
   const GREETINGS = ['hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches', 'hey', 'saludos', 'que tal', 'hi', 'hello', 'inicio', 'start'];
   const FILLERS = ['gracias', 'por favor', 'amigo', 'estimado', 'que', 'tal', 'como', 'andas'];
 
+  if (/^(buenos dias|buenas tardes|buenas noches|que tal|hola|buenas|saludos|hey|hello|hi)([!?. ]*)$/.test(m.trim())) return true;
   const words = m.split(/[^a-z0-9]+/).filter((w) => w.length > 0);
 
   // Sin palabras -> no es saludo.
@@ -114,6 +177,19 @@ function normalize(text: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+}
+
+export function isCurrencyQuestion(text: string): boolean {
+  const m = normalize(text);
+  const named = /\b(?:dolar(?:es)?|euros?|usd|eur|mlc|divisas?|moneda nacional|peso cubano|cup)\b/.test(m);
+  const exchange = /\b(?:cambio|cambiar|tasa|tipo de cambio|cotizacion|equivale|equivalencia|cuanto|precio|valor|vale)\b/.test(m);
+  const goods = /\b(?:panel(?:es)?|baterias?|inversor(?:es)?|servicios?|equipos?|productos?)\b/.test(m);
+  const pair = /\b(?:dolar(?:es)?|euros?|usd|eur)\s+(?:a|al|en|por)\s+(?:dolar(?:es)?|euros?|usd|eur|cup|pesos?|moneda nacional)\b/.test(m);
+  // Aceptar signos de apertura españoles en continuaciones como «¿y el euro?».
+  const followup = /^(?:y\s+)?(?:el|los)\s+(?:dolar(?:es)?|euros?)$/.test(
+    m.replace(/^[¿?¡!\s]+|[¿?¡!\s]+$/g, '').trim());
+  return named && (exchange || pair || followup || /^(?:dolar(?:es)?|euros?|usd|eur|mlc)$/.test(m)) &&
+    !(goods && !/\b(?:tasa|cambio|cotizacion)\b/.test(m));
 }
 
 function hasAny(text: string, needles: string[]): boolean {
@@ -267,10 +343,30 @@ function formatServicePrice(s: AssistantContext['services'][number]): string {
  */
 export function generateResponse(
   message: string,
-  ctx: AssistantContext
+  ctx: AssistantContext,
+  history: { role: string; content: string }[] = []
 ): { text: string; intent: AssistantIntent; source: 'faq' | 'catalog' | 'template' } {
-  const intent = detectIntent(message);
+  const commercial = businessProposalReply(message, history);
+  if (commercial) return {text:commercial,intent:'business_proposal',source:'template'};
+  let intent = detectIntent(message);
+  // Una respuesta corta ("sí", "48 voltios", "dos horas") continúa el asunto
+  // de la conversación, en lugar de reiniciar el diálogo con una plantilla.
   const tokens = tokenize(message);
+  // Solo una respuesta realmente breve puede heredar la intención anterior.
+  // «Saber de la crisis mundial» no debe convertirse en el último tema de catálogo.
+  const subject = normalize(message);
+  const newTopic = isOutOfScopeMessage(message);
+  if (intent === 'general' && message.length < 45 && tokens.length <= 1 && !newTopic) {
+    const previous = [...history].reverse().find(entry =>
+      entry.role === 'user' && !['general', 'greeting'].includes(detectIntent(entry.content)));
+    if (previous) intent = detectIntent(previous.content);
+  }
+
+  if (isOutOfScopeMessage(message)) return {text:OUT_OF_SCOPE_REPLY,intent:'general',source:'template'};
+  if (intent === 'currency_exchange') return {
+    intent, source:'template',
+    text:'Para informarte del dólar, euro y MLC en Cuba, necesito una tasa reciente verificada. La fuente de referencia para el mercado informal es elTOQUE: https://eltoque.com/tasas-de-cambio-cuba/mercado-informal/. No inventaré valores ni confundiré esa referencia con la tasa oficial del banco.'
+  };
 
   // 1) Coincidencia con la FAQ configurada.
   // Solo se considera una FAQ si el usuario menciona al menos una palabra de
@@ -293,8 +389,8 @@ export function generateResponse(
     case 'greeting':
       return {
         text:
-          ctx.config.welcome_message ||
-          '¡Hola! Soy el asistente de Energía Vital. ¿En qué puedo ayudarte hoy?\n\n' +
+          (ctx.config.welcome_message || '').replaceAll('Energía Vital', 'Bonaire') ||
+          '¡Hola! Soy el asistente de Bonaire. ¿En qué puedo ayudarte hoy?\n\n' +
             'Puedo ayudarte con:\n' +
             '- Equipos solares (inversores, paneles, baterías)\n' +
             '- Precios y disponibilidad del catálogo\n' +
@@ -307,41 +403,50 @@ export function generateResponse(
 
     case 'product_inquiry':
     case 'price_inquiry': {
-      const prods = ctx.products
-        .filter((p) => p.price !== null && p.price !== undefined)
-        .map((p) => `- ${p.name}: ${formatPrice(p)} (${stockLabel(p.stock_status)})`)
-        .slice(0, 8);
-      const svc = ctx.services
-        .filter((s) => s.price !== null && s.price !== undefined && s.price_type === 'fixed')
-        .map((s) => `- ${s.name}: ${formatServicePrice(s)}`)
-        .slice(0, 8);
-      const lines = [...prods, ...svc];
-      const header =
-        lines.length > 0
-          ? '\n\nEstos son algunos precios de referencia:\n' + lines.join('\n')
-          : '';
+      const current = normalize(message);
+      const topic = ['bateria', 'inversor', 'panel', 'estacion', 'ecoflow', 'regulador', 'controlador']
+        .find(word => current.includes(word));
+      const terms = tokenize(message).filter(t => !GENERIC_DOMAIN_WORDS.has(t));
+      const units = current.match(/\b\d+(?:[.,]\d+)?\s*(?:kw|kwh|w|ah|v)\b/g) || [];
+      const scored = ctx.products.map(product => {
+        const name = normalize(product.name);
+        let score = topic && name.includes(topic) ? 5 : 0;
+        score += terms.filter(t => name.includes(t)).length * 2;
+        score += units.filter(t => name.includes(t.replace(/\s+/g, '')) || name.includes(t)).length * 3;
+        return { product, score };
+      }).filter(x => x.score > 0).sort((x, y) => y.score - x.score).slice(0, 5);
+      const featured = scored.length ? scored.map(x => x.product) : (topic ? [] : ctx.products.slice(0, 5));
+      const products = featured.map(p => `- ${p.name}: ${formatPrice(p)} (estado publicado: ${stockLabel(p.stock_status)})`);
+      const line = products.length ? `\n\nEn el catálogo aparecen:\n${products.join('\n')}` :
+        '\n\nNo encuentro un equipo que coincida claramente con tu consulta en el catálogo publicado.';
       return {
-        text:
-          'Para darte un precio exacto necesitamos conocer los detalles de tu proyecto ' +
-          '(potencia, equipos, zona, distancia). ' +
-          '¿Quieres que te contactemos para una cotización personalizada?' + header,
+        text: `Te ayudo a comparar equipos y preparar una cotización.${line}\n\nLa disponibilidad y la compatibilidad se confirman con nuestro equipo antes de cualquier pedido. ¿Qué potencia, voltaje o modelo necesitas? Puedes enviar la solicitud en «Solicitar servicio».`,
+        intent,
+        source: products.length ? 'catalog' : 'template',
+      };
+    }
+
+    case 'solar_advice': {
+      const prior = history.filter(h => h.role === 'user').slice(-4).map(h => h.content).join(' ');
+      const combined = normalize(prior + ' ' + message);
+      const consumption = /\d+(?:[.,]\d+)?\s*(?:kw|kwh|watts?|amperios?|ampere|a\b)/.test(combined)
+        || /nevera|refrigerador|aire acondicionado|equipos a alimentar/.test(combined);
+      const autonomy = /\d+(?:[.,]\d+)?\s*(?:horas?|h\b)|autonomia|durante apagones/.test(combined);
+      const choice = /solo respaldo|solo baterias|con paneles|tambien paneles|generacion solar/.test(combined);
+      const question = !consumption
+        ? 'Primero dime qué equipos necesitas alimentar y, si la conoces, su potencia en W o consumo diario en kWh.'
+        : !autonomy
+        ? '¿Cuántas horas de autonomía necesitas cuando falle la electricidad?'
+        : !choice
+        ? '¿Buscas solo respaldo con baterías o quieres generar también con paneles solares?'
+        : 'Con esos datos podemos preparar una evaluación. Ve a «Asesor solar» para una estimación inicial y a «Solicitar servicio» para que un técnico revise el proyecto.';
+      return {
+        text: 'Vamos por partes para evitar recomendar equipos incompatibles. ' + question +
+          '\n\nLa estimación no sustituye la revisión de cargas, picos de arranque, protecciones y compatibilidad eléctrica.',
         intent,
         source: 'template',
       };
     }
-
-    case 'solar_advice':
-      return {
-        text:
-          'Con gusto te ayudo a dimensionar tu sistema solar. Para darte una estimación necesito:\n\n' +
-          '1. ¿Cuánta energía consume tu vivienda (o qué equipos quieres alimentar)?\n' +
-          '2. ¿A qué voltaje funciona (120V, 220V)?\n' +
-          '3. ¿Cuántas horas de autonomía necesitas?\n' +
-          '4. ¿Solo respaldo con baterías o también paneles solares?\n\n' +
-          'Con esos datos te indico el equipo recomendado.',
-        intent,
-        source: 'template',
-      };
 
     case 'appointment':
       return {
@@ -350,7 +455,7 @@ export function generateResponse(
           '1. ¿Qué servicio necesitas (instalación, mantenimiento, reparación o evaluación)?\n' +
           '2. ¿En qué ciudad o zona te encuentras?\n' +
           '3. ¿Qué fecha te gustaría?\n\n' +
-          'Con eso consulto la disponibilidad y te propongo horarios.',
+          'Puedes registrar una solicitud en «Solicitar servicio». El equipo te confirmará fecha y horario; no reservaré una cita desde este chat sin registrarla.',
         intent,
         source: 'template',
       };
@@ -362,7 +467,7 @@ export function generateResponse(
           '1. ¿Qué equipo falla (inversor, panel, batería u otro)?\n' +
           '2. ¿Marca y modelo?\n' +
           '3. ¿Qué error o síntoma presenta?\n' +
-          '4. ¿Tu nombre y teléfono para contactarte?\n\n' +
+          '4. ¿En qué municipio está el equipo?\n\n' +
           '¿Me los puedes compartir?',
         intent,
         source: 'template',
@@ -380,8 +485,8 @@ export function generateResponse(
           'Ofrecemos mantenimiento preventivo para sistemas solares. Para agendar la visita necesito:\n\n' +
           '1. ¿Qué tipo de sistema tienes?\n' +
           '2. ¿Cuándo fue tu última instalación o mantenimiento?\n' +
-          '3. ¿Tu zona y datos de contacto?\n\n' +
-          '¿Te gustaría agendar una visita?' + priceLine,
+          '3. ¿Qué síntoma o necesidad de mantenimiento presenta?\n\n' +
+          'Si deseas una visita, regístrala en «Solicitar servicio» para que quede vinculada a tu cuenta.' + priceLine,
         intent,
         source: 'template',
       };
@@ -399,8 +504,9 @@ export function generateResponse(
     case 'telegram':
       return {
         text:
-          'Puedes continuar la conversación por Telegram con nuestro bot oficial. ' +
-          '¿Quieres que te indique cómo contactarnos?',
+          'Bonaire está preparando la conexión de este mismo asistente con Telegram y WhatsApp. ' +
+          'Los enlaces de contacto todavía no garantizan un bot conectado ni que tu historial viaje entre canales. ' +
+          'Puedes seguir utilizando el asistente web mientras completamos la integración segura.',
         intent,
         source: 'template',
       };
@@ -431,16 +537,13 @@ export function generateResponse(
     }
 
     default: {
-      const cats = ctx.categories.map((c) => c.name).slice(0, 8);
-      const catLine = cats.length ? `\n\nTrabajamos con: ${cats.join(', ')}.` : '';
+      const m = normalize(message);
+      const business = /\b(?:bonaire|panel(?:es)?|solar(?:es)?|inversor(?:es)?|baterias?|electricidad|apagones?|energia|fotovoltaic[oa]s?|reparacion(?:es)?|mantenimiento|servicio(?:s)?|instalacion(?:es)?|catalogo)\b/.test(m);
       return {
-        text:
-          'Gracias por tu mensaje. Soy el asistente de Energía Vital. Puedo ayudarte con consultas de ' +
-          'productos, precios, asesoría solar, citas, mantenimiento y reparaciones.' +
-          catLine +
-          '\n\n¿Sobre qué te gustaría saber?',
-        intent,
-        source: 'template',
+        text: business
+          ? 'Con gusto te ayudo con Bonaire. Puedo orientarte sobre equipos solares, baterías, inversores, precios del catálogo y servicios de instalación, mantenimiento o reparación. ¿Qué necesitas saber?'
+          : OUT_OF_SCOPE_REPLY,
+        intent, source:'template'
       };
     }
   }
@@ -448,7 +551,7 @@ export function generateResponse(
 
 /** Construye el prompt de sistema con el contexto real del negocio. */
 export function buildSystemPrompt(ctx: AssistantContext): string {
-  const business = ctx.config.business_name || 'Energía Vital';
+  const business = ctx.config.business_name === 'Energía Vital' ? 'Bonaire' : ctx.config.business_name || 'Bonaire';
   const catalog = ctx.products
     .map((p) => `- ${p.name} (${formatPrice(p)}, ${stockLabel(p.stock_status)})`)
     .join('\n');
@@ -459,8 +562,17 @@ export function buildSystemPrompt(ctx: AssistantContext): string {
     .join('\n');
 
   return [
-    `Eres el asistente de ${business}, una empresa de energía solar y equipos eléctricos.`,
-    'Responde en español, de forma breve, amable y profesional. No inventes precios, productos ni fechas.',
+    `Eres el asistente de ${business}, una empresa comercial que ofrece actualmente soluciones solares y también recibe propuestas de suministro, promoción, distribución en Cuba y asociaciones en otros sectores.`,
+    'Responde en español claro y cercano al contexto de Cuba. Guía paso a paso con una pregunta útil por turno.',
+    'Alcance obligatorio: responde SOLO consultas relacionadas con Bonaire, sistemas solares, baterías, inversores, energía de respaldo, catálogo, servicios de instalación, mantenimiento y reparación, y propuestas comerciales de proveedores, promoción de marcas, distribución y asociaciones con Bonaire; además, las consultas de tasas de Cuba mediante el servicio de tasas autorizado.',
+    'No preguntes el tipo de cliente o empresa durante una consulta informativa o asesoramiento. Solo al solicitar o contratar un servicio pregunta, si no se conoce ya, si es residencial, empresa estatal, mipyme u otro negocio privado. Ante una propuesta comercial pregunta por empresa, país y colaboración deseada, sin repetir información ya aportada. Nunca confirmes contratos, representación exclusiva ni aprobación de una asociación.',
+    'Si te preguntan sobre crisis mundial, política, guerras, deportes u otros temas ajenos a Bonaire, no expliques esos temas ni compartas noticias: responde que no ofreces información sobre ellos y redirige de forma amable a productos y servicios de Bonaire.',
+    'No inventes noticias actuales ni tasas cambiarias. Distingue el mercado informal elTOQUE de tasas oficiales y exige fuente reciente para cifras.',
+    'La información del catálogo es orientativa: no inventes precios, existencias, garantía, compatibilidad, fechas ni trámites.',
+    'Nunca afirmes que reservaste una cita, registraste una solicitud o realizaste un pedido: el chat no ejecuta esas acciones.',
+    'La persona ya inició sesión. No vuelvas a pedir contraseña, teléfono ni dirección por el chat; indícale Mi perfil si necesita actualizarlos.',
+    'Para solicitar cotización, instalación o visita indícale la sección Solicitar servicio. Para seguimiento, Mis solicitudes.',
+    'Las estimaciones solares son orientativas: pide consumo, tensión, autonomía y propósito antes de hablar de dimensionamiento; exige revisión técnica.',
     'Si no tienes la información, indica que el equipo la confirmará contactando al cliente.',
     ctx.config.tone ? `Tono: ${ctx.config.tone}.` : '',
     catalog ? `Catálogo disponible:\n${catalog}` : '',

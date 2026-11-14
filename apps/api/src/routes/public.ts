@@ -1,135 +1,151 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
+import type { Env } from '../types';
 
 export const publicRoutes = new Hono<{ Bindings: Env }>();
 
-// Catálogo de productos
-publicRoutes.get('/products', async (c) => {
-  const { DB } = c.env;
-  const categoryId = c.req.query('category_id');
-  const featured = c.req.query('featured');
-  const search = c.req.query('search');
+function listPaging(c: any) {
+  const requested = c.req.query('page') !== undefined;
+  const page = Math.max(1, Math.min(100000, Number.parseInt(c.req.query('page') || '1', 10) || 1));
+  const size = Math.max(1, Math.min(200, Number.parseInt(c.req.query('page_size') || '100', 10) || 100));
+  return { requested, page, size, limit: requested ? size + 1 : 200, offset: requested ? (page - 1) * size : 0 };
+}
 
-  let sql = `
-    SELECT p.*, c.name as category_name, c.slug as category_slug
+publicRoutes.get('/products', async c => {
+  const category = c.req.query('category_id'), search = c.req.query('search'), featured = c.req.query('featured');
+  let sql = `SELECT p.*, cat.name AS category_name, cat.slug AS category_slug,
+    (SELECT pi.url FROM product_images pi WHERE pi.product_id = p.id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1) AS primary_image_url
     FROM products p
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE p.is_active = 1
-  `;
-  const params: any[] = [];
-
-  if (categoryId) {
-    sql += ' AND p.category_id = ?';
-    params.push(categoryId);
-  }
-  if (featured === 'true') {
-    sql += ' AND p.is_featured = 1';
-  }
-  if (search) {
-    sql += ' AND (p.name LIKE ? OR p.brand LIKE ? OR p.model LIKE ?)';
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-  }
-
-  sql += ' ORDER BY p.sort_order ASC, p.created_at DESC';
-
-  const { results } = await DB.prepare(sql).bind(...params).all();
-  return c.json({ products: results ?? [] });
+    LEFT JOIN categories cat ON p.category_id = cat.id WHERE p.is_active = 1`;
+  const params: string[] = [];
+  if (category) { sql += ' AND p.category_id = ?'; params.push(category); }
+  if (featured === 'true') sql += ' AND p.is_featured = 1';
+  if (search) { sql += ' AND (p.name LIKE ? OR p.brand LIKE ? OR p.model LIKE ?)';
+    const match = `%${search.slice(0, 100)}%`; params.push(match, match, match); }
+  const paging = listPaging(c);
+  const onlyFeatured = featured === 'true';
+  sql += ' ORDER BY p.sort_order, p.created_at DESC LIMIT ? OFFSET ?';
+  const { results } = await c.env.DB.prepare(sql).bind(...params,
+    onlyFeatured ? 5 : paging.limit, onlyFeatured ? 0 : paging.offset).all();
+  const rows = results ?? [];
+  return c.json({ products: onlyFeatured ? rows : paging.requested ? rows.slice(0, paging.size) : rows,
+    ...(paging.requested ? { page: paging.page, has_more: !onlyFeatured && rows.length > paging.size } : {}) });
 });
-
-// Detalle de producto
-publicRoutes.get('/products/:id', async (c) => {
-  const { DB } = c.env;
-  const id = c.req.param('id');
-
-  const product = await DB.prepare(`
-    SELECT p.*, c.name as category_name
-    FROM products p
-    LEFT JOIN categories c ON p.category_id = c.id
-    WHERE p.id = ? AND p.is_active = 1
-  `).bind(id).first();
-
+// R2 se sirve por identificador de imagen; no se expone el nombre del objeto.
+publicRoutes.get('/products/image/:id', async c => {
+  const row = await c.env.DB.prepare(`SELECT pi.r2_key FROM product_images pi
+    JOIN products p ON p.id = pi.product_id WHERE pi.id = ? AND p.is_active = 1`)
+    .bind(c.req.param('id')).first<{ r2_key: string }>();
+  if (!row?.r2_key) return c.notFound();
+  const object = await c.env.BUCKET.get(row.r2_key);
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=86400');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
+});
+publicRoutes.get('/products/:id', async c => {
+  const product = await c.env.DB.prepare(`SELECT p.*, cat.name AS category_name FROM products p
+    LEFT JOIN categories cat ON p.category_id = cat.id WHERE p.id = ? AND p.is_active = 1`).bind(c.req.param('id')).first();
   if (!product) return c.notFound();
-
-  const images = await DB.prepare(
-    'SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order ASC'
-  ).bind(id).all();
-
-  return c.json({ product, images: images.results ?? [] });
+  const { results } = await c.env.DB.prepare('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order').bind(c.req.param('id')).all();
+  return c.json({ product, images: results ?? [] });
 });
-
-// Categorías
-publicRoutes.get('/categories', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare(
-    'SELECT * FROM categories WHERE is_active = 1 ORDER BY sort_order ASC'
-  ).all();
+publicRoutes.get('/categories', async c => {
+  const { results } = await c.env.DB.prepare('SELECT * FROM categories WHERE is_active = 1 ORDER BY sort_order LIMIT 200').all();
   return c.json({ categories: results ?? [] });
 });
-
-// Servicios
-publicRoutes.get('/services', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare(
-    'SELECT * FROM services WHERE is_active = 1 ORDER BY sort_order ASC'
-  ).all();
-  return c.json({ services: results ?? [] });
+publicRoutes.get('/services', async c => {
+  const paging = listPaging(c);
+  const onlyFeatured = c.req.query('featured') === 'true';
+  const { results } = await c.env.DB.prepare(`SELECT * FROM services WHERE is_active = 1 ${onlyFeatured ? 'AND is_featured = 1' : ''} ORDER BY sort_order, id LIMIT ? OFFSET ?`)
+    .bind(onlyFeatured ? 5 : paging.limit, onlyFeatured ? 0 : paging.offset).all();
+  const rows = results ?? [];
+  return c.json({ services: onlyFeatured ? rows : paging.requested ? rows.slice(0, paging.size) : rows,
+    ...(paging.requested ? { page: paging.page, has_more: !onlyFeatured && rows.length > paging.size } : {}) });
 });
-
-// Detalle de servicio
-publicRoutes.get('/services/:id', async (c) => {
-  const { DB } = c.env;
-  const id = c.req.param('id');
-  const service = await DB.prepare('SELECT * FROM services WHERE id = ? AND is_active = 1').bind(id).first();
-  if (!service) return c.notFound();
-  return c.json({ service });
+publicRoutes.get('/services/image/:id', async c => {
+  const service = await c.env.DB.prepare('SELECT image_r2_key FROM services WHERE id = ? AND is_active = 1')
+    .bind(c.req.param('id')).first<{ image_r2_key: string | null }>();
+  if (!service?.image_r2_key) return c.notFound();
+  const object = await c.env.BUCKET.get(service.image_r2_key);
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=3600');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
-
-// Preguntas frecuentes
-publicRoutes.get('/faq', async (c) => {
-  const { DB } = c.env;
-  const categoryId = c.req.query('category_id');
-  let sql = 'SELECT * FROM frequently_asked_questions WHERE is_active = 1';
-  const params: any[] = [];
-  if (categoryId) {
-    sql += ' AND (category_id = ? OR category_id IS NULL)';
-    params.push(categoryId);
-  }
-  sql += ' ORDER BY sort_order ASC';
-  const { results } = await DB.prepare(sql).bind(...params).all();
+publicRoutes.get('/services/:id', async c => {
+  const service = await c.env.DB.prepare('SELECT * FROM services WHERE id = ? AND is_active = 1').bind(c.req.param('id')).first();
+  return service ? c.json({ service }) : c.notFound();
+});
+publicRoutes.get('/faq', async c => {
+  const category = c.req.query('category_id');
+  const query = category ? 'SELECT * FROM frequently_asked_questions WHERE is_active = 1 AND (category_id = ? OR category_id IS NULL) ORDER BY sort_order LIMIT 100'
+    : 'SELECT * FROM frequently_asked_questions WHERE is_active = 1 ORDER BY sort_order LIMIT 100';
+  const prepared = c.env.DB.prepare(query);
+  const { results } = await (category ? prepared.bind(category) : prepared).all();
   return c.json({ faqs: results ?? [] });
 });
-
-// Galería de trabajos
-// Servir imagen de R2 (galería)
-publicRoutes.get('/gallery/image/:key', async (c) => {
-  const { BUCKET } = c.env;
+// Imágenes sin datos personales: acceso desde <img>, que no envía Authorization.
+publicRoutes.get('/gallery/image/:key', async c => {
   const key = decodeURIComponent(c.req.param('key'));
-  const obj = await BUCKET.get(key);
-  if (!obj) return c.notFound();
+  if (!key.startsWith('gallery/') || key.includes('..')) return c.notFound();
+  const object = await c.env.BUCKET.get(key);
+  if (!object) return c.notFound();
   const headers = new Headers();
-  obj.writeHttpMetadata(headers);
-  headers.set('etag', obj.httpEtag);
-  headers.set('cache-control', 'public, max-age=31536000, immutable');
-  return c.body(obj.body, 200, headers);
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=86400');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
-publicRoutes.get('/gallery', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare(
-    'SELECT * FROM work_gallery WHERE is_active = 1 ORDER BY sort_order ASC'
-  ).all();
-  return c.json({ gallery: results ?? [] });
+publicRoutes.get('/site/media/:id', async c => {
+  const record = await c.env.DB.prepare('SELECT r2_key FROM site_media WHERE id = ?')
+    .bind(c.req.param('id')).first<{ r2_key: string }>();
+  if (!record) return c.notFound();
+  const object = await c.env.BUCKET.get(record.r2_key);
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=3600');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
 });
-
-// Configuración pública (YouTube, sitio, etc.)
-publicRoutes.get('/settings', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare('SELECT key, value FROM system_settings').all<{
-    key: string;
-    value: string;
-  }>();
-  const settings: Record<string, string> = {};
-  for (const row of results ?? []) {
-    settings[row.key] = row.value;
-  }
-  return c.json({ settings });
+publicRoutes.get('/gallery/media/:id', async c => {
+  const record = await c.env.DB.prepare('SELECT r2_key FROM work_gallery WHERE id = ? AND is_active = 1')
+    .bind(c.req.param('id')).first<{ r2_key: string | null }>();
+  if (!record?.r2_key) return c.notFound();
+  const object = await c.env.BUCKET.get(record.r2_key);
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=3600');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  return c.body(object.body, 200, Object.fromEntries(headers.entries()));
+});
+publicRoutes.get('/gallery', async c => {
+  const paging = listPaging(c);
+  const onlyFeatured = c.req.query('featured') === 'true';
+  const { results } = await c.env.DB.prepare(`SELECT w.*, (SELECT COUNT(*) FROM work_gallery_images im WHERE im.project_id=w.id) AS image_count FROM work_gallery w WHERE w.is_active = 1 ${onlyFeatured ? 'AND w.is_featured = 1' : ''} ORDER BY w.sort_order, w.id LIMIT ? OFFSET ?`)
+    .bind(onlyFeatured ? 5 : paging.limit, onlyFeatured ? 0 : paging.offset).all();
+  const rows = results ?? [];
+  return c.json({ gallery: onlyFeatured ? rows : paging.requested ? rows.slice(0, paging.size) : rows,
+    ...(paging.requested ? { page: paging.page, has_more: !onlyFeatured && rows.length > paging.size } : {}) });
+});
+// Solo configuración comercial publicada; nunca claves internas ni datos privados.
+const publicSettingKeys = ['youtube_channel_url', 'facebook_url', 'instagram_url', 'business_phone',
+  'business_phones', 'sales_managers', 'business_email', 'business_address', 'business_hours', 'telegram_public_url',
+  'bot_whatsapp_url', 'bot_telegram_url',
+  'home_title', 'home_subtitle', 'home_slides', 'footer_description', 'footer_links',
+  'footer_cta_title', 'footer_cta_description'];
+publicRoutes.get('/settings', async c => {
+  const marks = publicSettingKeys.map(() => '?').join(', ');
+  const { results } = await c.env.DB.prepare(`SELECT key, value FROM system_settings WHERE key IN (${marks})`).bind(...publicSettingKeys).all<{key:string;value:string}>();
+  return c.json({ settings: Object.fromEntries((results || []).map(r => [r.key,r.value])) });
 });

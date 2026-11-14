@@ -1,190 +1,296 @@
-const API_BASE = (import.meta.env.VITE_API_URL as string) || '';
+/** Cliente REST para Cloudflare Workers. Evita tokens Bearer manuales en cada pantalla. */
+const API_BASE = (import.meta.env.VITE_API_URL as string || '').replace(/\/$/, '');
+export const CUSTOMER_TOKEN_KEY = 'energia_vital_customer_session';
+export const ADMIN_TOKEN_KEY = 'energia_vital_admin_session';
 
-function getApiBase(): string {
-  // En producción, si no hay VITE_API_URL, intentamos detectar si estamos en el mismo dominio
-  // Si no, el usuario debe configurar la variable en Cloudflare Pages
-  const base = (import.meta.env.VITE_API_URL as string) || '';
-  return base;
+export function customerToken(): string | null {
+  return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(CUSTOMER_TOKEN_KEY) : null;
+}
+export function setCustomerToken(token: string | null) {
+  if (token) sessionStorage.setItem(CUSTOMER_TOKEN_KEY, token);
+  else sessionStorage.removeItem(CUSTOMER_TOKEN_KEY);
+}
+export async function apiRequest(path: string, options: RequestInit = {}): Promise<any> {
+  const headers = new Headers(options.headers);
+  if (!(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+  const token = customerToken();
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.message || `Error HTTP ${response.status}`);
+  return data;
+}
+function withAdmin(token: string, options: RequestInit = {}): RequestInit {
+  return { ...options, headers: { ...Object.fromEntries(new Headers(options.headers).entries()), Authorization: `Bearer ${token}` } };
+}
+const post = (path: string, body: unknown, options: RequestInit = {}) => apiRequest(path, { ...options, method: 'POST', body: JSON.stringify(body) });
+const patch = (path: string, body: unknown, options: RequestInit = {}) => apiRequest(path, { ...options, method: 'PATCH', body: JSON.stringify(body) });
+
+/** Descarga una imagen privada con la sesión adecuada para mostrarla en un objeto URL local. */
+export async function authorizedImageBlob(path: string, token?: string): Promise<Blob> {
+  const auth = token || customerToken();
+  if (!auth) throw new Error('Necesitas iniciar sesión para ver este archivo.');
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${auth}` }
+  });
+  if (!response.ok) throw new Error('No se pudo cargar esta imagen privada.');
+  const blob = await response.blob();
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(blob.type))
+    throw new Error('El archivo no tiene un formato de imagen válido.');
+  return blob;
 }
 
-async function request(path: string, options?: RequestInit) {
-  const isFormData = options?.body instanceof FormData;
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: isFormData
-      ? { ...options?.headers }
-      : {
-          'Content-Type': 'application/json',
-          ...options?.headers,
-        },
-    ...options,
-  });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: 'Error desconocido' }));
-    throw new Error(error.error || `Error ${res.status}`);
+async function getAllPublic(path: string, key: 'products' | 'services' | 'gallery', params: Record<string, string> = {}): Promise<any> {
+  const all: any[] = [];
+  for (let page = 1; page <= 200; page++) {
+    const query = new URLSearchParams({ ...params, page: String(page), page_size: '200' });
+    const result = await apiRequest(path + '?' + query.toString());
+    all.push(...(Array.isArray(result[key]) ? result[key] : []));
+    if (!result.has_more) return { [key]: all };
   }
-  return res.json();
+  throw new Error('La lista es muy extensa. Ajusta los filtros o consulta al equipo.');
 }
 
 export const api = {
-  // Productos
-  getProducts: (params?: { category_id?: string; featured?: string; search?: string }) => {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return request(`/api/public/products${qs}`);
+  getProducts: (params?: Record<string, string>) => getAllPublic('/api/public/products', 'products', params),
+  getProduct: (id: string) => apiRequest(`/api/public/products/${encodeURIComponent(id)}`),
+  getCategories: () => apiRequest('/api/public/categories'),
+  getServices: (featured = false) => getAllPublic('/api/public/services', 'services', featured ? { featured: 'true' } : {}),
+  getService: (id: string) => apiRequest(`/api/public/services/${encodeURIComponent(id)}`),
+  getFAQ: (params?: Record<string, string>) => apiRequest(`/api/public/faq${params ? '?' + new URLSearchParams(params).toString() : ''}`),
+  getGallery: (featured = false) => getAllPublic('/api/public/gallery', 'gallery', featured ? { featured: 'true' } : {}),
+  getGalleryCategories: () => apiRequest('/api/public/extras/gallery/categories'),
+  getGalleryImages: (id: string) => apiRequest('/api/public/extras/gallery/' + encodeURIComponent(id) + '/images'),
+  getServiceImages: (id: string) => apiRequest('/api/public/extras/services/' + encodeURIComponent(id) + '/images'),
+  getRequestCategories: () => apiRequest('/api/public/extras/request-categories'),
+  getProductReviews: (id: string) => apiRequest('/api/public/extras/products/' + encodeURIComponent(id) + '/reviews'),
+
+  getSettings: () => apiRequest('/api/public/settings'),
+  getAssistantConfig: () => apiRequest('/api/assistant/config'),
+  getAssistantSessions: (page = 1) => apiRequest('/api/assistant/sessions?page=' + page),
+  createAssistantSession: () => post('/api/assistant/sessions', {}),
+  renameAssistantSession: (id: string, title: string) =>
+    patch('/api/assistant/session/' + encodeURIComponent(id), {title}),
+  deleteAssistantSession: (id: string) =>
+    apiRequest('/api/assistant/session/' + encodeURIComponent(id), {method:'DELETE'}),
+  getAssistantMessages: (id: string) => apiRequest(`/api/assistant/session/${encodeURIComponent(id)}/messages`),
+  postAssistantMessage: (body: { session_id?: string; message: string; channel?: string }) => post('/api/assistant/message', body),
+
+  register: (body: { name: string; email: string; phone: string; address: string; city: string; province: string; password: string }) => post('/api/auth/register', body),
+  customerLogin: (body: { email: string; password: string }) => post('/api/auth/customer/login', body),
+  signIn: (body: { email: string; password: string }) => post('/api/auth/sign-in', body),
+  logoutAdmin: (token: string) => post('/api/auth/logout', {}, withAdmin(token)),
+  me: () => apiRequest('/api/auth/me'),
+  updateProfile: (body: { name: string; phone: string; address: string; city: string; province: string }) =>
+    apiRequest('/api/auth/me', { method: 'PUT', body: JSON.stringify(body) }),
+  changePassword: (body: { current_password: string; new_password: string }) =>
+    apiRequest('/api/auth/password', { method: 'PUT', body: JSON.stringify(body) }),
+  logout: () => post('/api/auth/logout', {}),
+  refreshToken: (body: { refresh_token: string }) => post('/api/auth/refresh', body),
+  getMyRequests: () => apiRequest('/api/private/requests'),
+  createRequest: (body: { service_id?: string; type?: string; category_id?: string; title: string; description: string; preferred_date?: string;
+    available_budget_usd?: string;payment_method?: string;payment_currency?: string;customer_type?: string }) => post('/api/private/requests', body),
+  uploadRequestImage: (id: string, file: File) => {
+    const body = new FormData(); body.append('file', file);
+    return apiRequest('/api/private/extras/requests/' + encodeURIComponent(id) + '/images', { method: 'POST', body });
   },
-  getProduct: (id: string) => request(`/api/public/products/${id}`),
-  getCategories: () => request('/api/public/categories'),
-  getServices: () => request('/api/public/services'),
-  getService: (id: string) => request(`/api/public/services/${id}`),
-  getFAQ: (params?: { category_id?: string }) => {
-    const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
-    return request(`/api/public/faq${qs}`);
-  },
-  getGallery: () => request('/api/public/gallery'),
-  getSettings: () => request('/api/public/settings'),
+  getMyRequestImages: (id: string) => apiRequest('/api/private/extras/requests/' + encodeURIComponent(id) + '/images'),
+  getReviewEligibility: (id: string) => apiRequest('/api/private/extras/products/' + encodeURIComponent(id) + '/review-eligibility'),
+  sendProductReview: (id: string, rating: number, comment: string) =>
+    post('/api/private/extras/products/' + encodeURIComponent(id) + '/reviews', { rating, comment }),
 
-  // Asistente
-  getAssistantConfig: () => request('/api/assistant/config'),
-  postAssistantMessage: (body: { session_id?: string; message: string; channel?: string; telegram_chat_id?: string }) =>
-    request('/api/assistant/message', { method: 'POST', body: JSON.stringify(body) }),
+  getMyAppointments: () => apiRequest('/api/private/appointments'),
+  createAppointment: (body: { title: string; starts_at: string; ends_at: string }) => post('/api/private/appointments', body),
+  getCalendarSlots: (date: string, minutes = 60) => apiRequest(`/api/calendar/slots?date=${encodeURIComponent(date)}&duration_minutes=${minutes}`),
+  getNotifications: (page?: number, size = 10) => apiRequest('/api/notifications' + (page ? '?page=' + page + '&page_size=' + size : '')),
+  markNotificationRead: (id: string) => patch('/api/notifications/' + encodeURIComponent(id) + '/read', {}),
+  listSentNotifications: (token: string, page = 1, pageSize = 10) =>
+    apiRequest('/api/notifications/admin/sent?page=' + page + '&page_size=' + pageSize, withAdmin(token)),
+  getWelcomeAutomation: (token: string) => apiRequest('/api/notifications/admin/automation', withAdmin(token)),
+  saveWelcomeAutomation: (token: string, enabled: boolean, title: string, message: string) =>
+    apiRequest('/api/notifications/admin/automation', withAdmin(token, {
+      method: 'PUT', body: JSON.stringify({enabled,title,message}),
+    })),
+  getStaffInbox: (token: string, page?: number, size = 10) => apiRequest('/api/notifications/inbox' + (page ? '?page=' + page + '&page_size=' + size : ''), withAdmin(token)),
+  markStaffNotificationRead: (token: string, id: string) =>
+    patch('/api/notifications/inbox/' + encodeURIComponent(id) + '/read', {}, withAdmin(token)),
+  sendCustomerNotification: (token: string, customer_ids: string[], title: string, message: string) =>
+    post('/api/notifications/admin/send', { customer_ids, title, message }, withAdmin(token)),
+  sendAllCustomerNotifications: (token: string, title: string, message: string) =>
+    post('/api/notifications/admin/send-all', { title, message }, withAdmin(token)),
 
-  // Auth (dual login: Telegram + Phone)
-  login: (body: { email: string; password: string }) =>
-    request('/api/auth/login', { method: 'POST', body: JSON.stringify(body) }),
-  setup: (body: { email: string; password: string }) =>
-    request('/api/auth/setup', { method: 'POST', body: JSON.stringify(body) }),
-  register: (body: { name: string; email: string; password: string; phone?: string }) =>
-    request('/api/auth/register', { method: 'POST', body: JSON.stringify(body) }),
-  customerLogin: (body: { email: string; password: string }) =>
-    request('/api/auth/customer/login', { method: 'POST', body: JSON.stringify(body) }),
-  refreshToken: (body: { refresh_token: string }) =>
-    request('/api/auth/refresh', { method: 'POST', body: JSON.stringify(body) }),
-  logout: () => request('/api/auth/logout', { method: 'POST' }),
-  me: () => request('/api/auth/me'),
-  adminMe: () => request('/api/auth/admin/me'),
-  phoneRequest: (body: { phone?: string; email?: string; telegram_chat_id?: string }) =>
-    request('/api/auth/phone/request', { method: 'POST', body: JSON.stringify(body) }),
-  phoneVerify: (body: { phone?: string; email?: string; code: string }) =>
-    request('/api/auth/phone/verify', { method: 'POST', body: JSON.stringify(body) }),
-  telegramLink: (body: { telegram_chat_id: string; name?: string; email?: string }) =>
-    request('/api/auth/telegram/link', { method: 'POST', body: JSON.stringify(body) }),
-  telegramExchange: (body: { link_code: string }) =>
-    request('/api/auth/telegram/exchange', { method: 'POST', body: JSON.stringify(body) }),
-  telegramWebhook: (body: any) =>
-    request('/api/auth/telegram/webhook', { method: 'POST', body: JSON.stringify(body) }),
+  getRewards: () => apiRequest('/api/rewards'),
+  getRewardBalance: () => apiRequest('/api/rewards/balance'),
+  getRewardRedemptions: () => apiRequest('/api/rewards/redemptions'),
+  getGiveawaysPublic: () => apiRequest('/api/giveaways/public/list'),
+  getGiveawayPublic: (id: string) => apiRequest(`/api/giveaways/public/${id}`),
+  participateGiveaway: (id: string, body: unknown) => post(`/api/giveaways/public/${id}/participate`, body),
 
-  // Giveaways
-  getGiveaways: (token: string) =>
-    request('/api/giveaways', { headers: { Authorization: `Bearer ${token}` } }),
-  createGiveaway: (token: string, body: any) =>
-    request('/api/giveaways', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  getGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
-  updateGiveaway: (token: string, id: string, body: any) =>
-    request(`/api/giveaways/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  deleteGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-  activateGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}/activate`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
-  deactivateGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}/deactivate`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
-  getGiveawayParticipants: (token: string, id: string) =>
-    request(`/api/giveaways/${id}/participants`, { headers: { Authorization: `Bearer ${token}` } }),
-  drawGiveaway: (token: string, id: string) =>
-    request(`/api/giveaways/${id}/draw`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
-  getGiveawayPublic: (id: string) =>
-    request(`/api/giveaways/public/${id}`),
-  getGiveawaysPublic: () =>
-    request('/api/giveaways/public/list'),
-  participateGiveaway: (id: string, body: any) =>
-    request(`/api/giveaways/public/${id}/participate`, { method: 'POST', body: JSON.stringify(body) }),
+  adminLogin: (body: { email: string; password: string }) => post('/api/auth/login', body),
+  setupTelegramWebhook: (token:string) => post('/api/telegram/set-webhook',{},withAdmin(token)),
+  getTelegramWebhookInfo: (token:string) => apiRequest('/api/telegram/webhook-info',withAdmin(token)),
+  getTelegramStaffLink: (token:string) => apiRequest('/api/telegram/admin/link', withAdmin(token)),
+  createTelegramStaffLinkCode: (token:string) => post('/api/telegram/admin/link-code', {}, withAdmin(token)),
+  deleteTelegramStaffLink: (token:string) => apiRequest('/api/telegram/admin/link',
+    withAdmin(token,{method:'DELETE'})),
+  getWhatsAppStaffLink: (token:string) => apiRequest('/api/whatsapp/admin/link', withAdmin(token)),
+  createWhatsAppStaffLinkCode: (token:string) => post('/api/whatsapp/admin/link-code', {}, withAdmin(token)),
+  deleteWhatsAppStaffLink: (token:string) => apiRequest('/api/whatsapp/admin/link',
+    withAdmin(token,{method:'DELETE'})),
+  adminMe: (token: string) => apiRequest('/api/auth/admin/me', withAdmin(token)),
+  listStaff: (token: string) => apiRequest('/api/admin/users', withAdmin(token)),
+  createStaff: (token: string, body: { email: string; password: string; role: 'admin' | 'operator' }) =>
+    post('/api/admin/users', body, withAdmin(token)),
+  updateStaff: (token: string, id: string, body: { role?: 'admin' | 'operator'; is_active?: boolean }) =>
+    patch('/api/admin/users/' + encodeURIComponent(id), body, withAdmin(token)),
+  deactivateStaff: (token: string, id: string) =>
+    apiRequest('/api/admin/users/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
 
-  // Rewards
-  getRewards: () => request('/api/rewards'),
-  createReward: (token: string, body: any) =>
-    request('/api/rewards', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  updateReward: (token: string, id: string, body: any) =>
-    request(`/api/rewards/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  deleteReward: (token: string, id: string) =>
-    request(`/api/rewards/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-  getRewardBalance: () => request('/api/rewards/balance'),
-  redeemReward: (token: string, id: string) =>
-    request(`/api/rewards/${id}/redeem`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),
-  getRewardRedemptions: () => request('/api/rewards/redemptions'),
-  getRewardRedemptionsById: (token: string, id: string) =>
-    request(`/api/rewards/${id}/redemptions`, { headers: { Authorization: `Bearer ${token}` } }),
+  getCustomerDossier: (token:string,id:string) =>
+    apiRequest('/api/dossiers/customers/'+encodeURIComponent(id),withAdmin(token)),
+  getRequestDossier: (token:string,id:string) =>
+    apiRequest('/api/dossiers/requests/'+encodeURIComponent(id),withAdmin(token)),
+  logRequestActivity: (token:string,id:string,body:{
+    activity_type:'call'|'whatsapp'|'visit'|'follow_up'|'internal_note';
+    note:string;next_step?:string;follow_up_date?:string
+  }) => post('/api/dossiers/requests/'+encodeURIComponent(id)+'/activities',body,withAdmin(token)),
+  adminCustomers: (token: string, q = '', page?: number, pageSize = 12) =>
+    apiRequest('/api/admin-customers/customers' + (page !== undefined || q
+      ? '?' + new URLSearchParams({ q, page: String(page ?? 1), page_size: String(pageSize) }).toString() : ''),
+      withAdmin(token)),
+  updateAdminCustomer: (token: string, id: string, body: Record<string, string>) =>
+    patch(`/api/admin-customers/customers/${encodeURIComponent(id)}`, body, withAdmin(token)),
+  setAdminCustomerStatus: (token: string, id: string, is_active: boolean) =>
+    patch(`/api/admin-customers/customers/${encodeURIComponent(id)}/status`, { is_active }, withAdmin(token)),
+  deleteAdminCustomer: (token: string, id: string) =>
+    apiRequest(`/api/admin-customers/customers/${encodeURIComponent(id)}`, withAdmin(token, { method: 'DELETE' })),
+  createAdminRequest: (token: string, body: {
+    customer_id?: string;contact_name?: string;contact_phone?: string;
+    type: string; title: string; description: string; status: string;
+    location: string; preferred_date: string | null;
+    available_budget_usd?:string; payment_method?:string; payment_currency?:string; customer_type?:string;
+  }) => post('/api/admin-customers/requests', body, withAdmin(token)),
+  adminRequests: (token: string, q = '', page?: number, pageSize = 20) =>
+    apiRequest('/api/admin-customers/requests' +
+      (page !== undefined || q ? '?' + new URLSearchParams({
+        q, page: String(page ?? 1), page_size: String(pageSize),
+      }).toString() : ''), withAdmin(token)),
+  getStaffRequestImages: (token: string, id: string) =>
+    apiRequest('/api/admin-customers/extras/requests/' + encodeURIComponent(id) + '/images', withAdmin(token)),
+  listAdminRequestCategories: (token: string) => apiRequest('/api/admin/extras/request-categories', withAdmin(token)),
+  createAdminRequestCategory: (token: string, body: unknown) => post('/api/admin/extras/request-categories', body, withAdmin(token)),
+  updateAdminRequestCategory: (token: string, id: string, body: unknown) =>
+    patch('/api/admin/extras/request-categories/' + encodeURIComponent(id), body, withAdmin(token)),
+  deleteAdminRequestCategory: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/request-categories/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
 
-  // Notifications
-  getNotifications: () => request('/api/notifications'),
-  markNotificationRead: (token: string, id: string) =>
-    request(`/api/notifications/${id}/read`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` } }),
-  getAdminNotifications: (token: string) =>
-    request('/api/notifications/admin', { headers: { Authorization: `Bearer ${token}` } }),
-  sendNotification: (token: string, body: { customer_ids: string[]; title: string; message: string; type?: string; data?: string }) =>
-    request('/api/notifications/admin/send', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-  broadcastNotification: (token: string, body: { title: string; message: string; type?: string; data?: string }) =>
-    request('/api/notifications/admin/send-all', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+  brigadeAvailability: (token:string,date:string) =>
+    apiRequest('/api/brigade-work/availability?date='+encodeURIComponent(date),withAdmin(token)),
+  brigadeWorkMonth: (token:string,month:string) =>
+    apiRequest('/api/brigade-work/month?month='+encodeURIComponent(month),withAdmin(token)),
+  pendingBrigadeApprovals: (token:string) =>
+    apiRequest('/api/brigade-work/pending',withAdmin(token)),
+  assignBrigadeWork: (token:string,body:{
+    brigade_id:string;request_id:string;work_date:string;estimated_minutes:number;busy_acknowledged:boolean
+  }) => post('/api/brigade-work',body,withAdmin(token)),
+  reviewBrigadeWork: (token:string,id:string,decision:'approve'|'reject',reason:string) =>
+    patch('/api/brigade-work/'+encodeURIComponent(id)+'/review',{decision,reason},withAdmin(token)),
+  cancelBrigadeWork: (token:string,id:string,reason:string) =>
+    patch('/api/brigade-work/'+encodeURIComponent(id)+'/cancel',{reason},withAdmin(token)),
+  listBrigades: (token: string) => apiRequest('/api/brigades', withAdmin(token)),
+  createBrigade: (token: string, body: {name:string;leader_name:string;specialty:string}) =>
+    post('/api/brigades', body, withAdmin(token)),
+  updateBrigade: (token:string,id:string,body:{
+    name?:string;leader_name?:string;specialty?:string;is_active?:boolean;expected_updated_at:string
+  }) => patch('/api/brigades/'+encodeURIComponent(id),body,withAdmin(token)),
+  addBrigadeMember: (token:string,id:string,body:{full_name:string;function_name:string}) =>
+    post('/api/brigades/'+encodeURIComponent(id)+'/members',body,withAdmin(token)),
+  updateBrigadeMember: (token:string,id:string,memberId:string,body:{
+    full_name?:string;function_name?:string;is_active?:boolean;expected_updated_at:string
+  }) => patch('/api/brigades/'+encodeURIComponent(id)+'/members/'+encodeURIComponent(memberId),body,withAdmin(token)),
 
-  // --- Admin CRUD (productos, servicios, categorías, FAQ, galería, config) ---
-  createAdminProduct: (token: string, body: any) =>
-    request('/api/admin/products', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  updateAdminProduct: (token: string, id: string, body: any) =>
-    request(`/api/admin/products/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  deleteAdminProduct: (token: string, id: string) =>
-    request(`/api/admin/products/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-
-  createAdminService: (token: string, body: any) =>
-    request('/api/admin/services', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  updateAdminService: (token: string, id: string, body: any) =>
-    request(`/api/admin/services/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  deleteAdminService: (token: string, id: string) =>
-    request(`/api/admin/services/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-
-  createAdminCategory: (token: string, body: any) =>
-    request('/api/admin/categories', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  updateAdminCategory: (token: string, id: string, body: any) =>
-    request(`/api/admin/categories/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
+  getStaffCalendar: (token: string, month: string) => apiRequest('/api/admin-customers/calendar?month='+encodeURIComponent(month), withAdmin(token)),
+  adminAppointments: (token: string, q = '', page?: number, pageSize = 20) =>
+    apiRequest('/api/admin-customers/appointments' +
+      (page !== undefined || q ? '?' + new URLSearchParams({
+        q, page: String(page ?? 1), page_size: String(pageSize),
+      }).toString() : ''), withAdmin(token)),
+  updateAdminRequest: (token: string, id: string, status: string) => patch(`/api/admin-customers/requests/${id}`, { status }, withAdmin(token)),
+  updateAdminRequestDetails: (token: string, id: string, body: {
+    title: string; description: string; location: string; preferred_date: string | null; expected_updated_at: string;
+  }) => patch('/api/admin-customers/requests/' + encodeURIComponent(id) + '/details', body, withAdmin(token)),
+  deleteAdminRequest: (token: string, id: string) => apiRequest(
+    '/api/admin-customers/requests/' + encodeURIComponent(id), withAdmin(token, {method:'DELETE'})),
+  updateAdminAppointment: (token: string, id: string, status: string) => patch(`/api/admin-customers/appointments/${id}`, { status }, withAdmin(token)),
+  getAdminProducts: (token: string) => apiRequest('/api/admin/products', withAdmin(token)),
+  getAdminServices: (token: string) => apiRequest('/api/admin/services', withAdmin(token)),
+  createAdminProduct: (token: string, body: unknown) => post('/api/admin/products', body, withAdmin(token)),
+  createAdminService: (token: string, body: unknown) => post('/api/admin/services', body, withAdmin(token)),
+  updateAdminProduct: (token: string, id: string, body: unknown) => patch(`/api/admin/products/${id}`, body, withAdmin(token)),
+  updateAdminService: (token: string, id: string, body: unknown) => patch(`/api/admin/services/${id}`, body, withAdmin(token)),
+  deleteAdminProduct: (token: string, id: string) => apiRequest(`/api/admin/products/${id}`, withAdmin(token, { method: 'DELETE' })),
+  deleteAdminService: (token: string, id: string) => apiRequest(`/api/admin/services/${id}`, withAdmin(token, { method: 'DELETE' })),
+  getAdminCategories: (token: string) => apiRequest('/api/admin/categories', withAdmin(token)),
+  createAdminCategory: (token: string, body: unknown) => post('/api/admin/categories', body, withAdmin(token)),
+  updateAdminCategory: (token: string, id: string, body: unknown) => patch(`/api/admin/categories/${id}`, body, withAdmin(token)),
   deleteAdminCategory: (token: string, id: string) =>
-    request(`/api/admin/categories/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
+    apiRequest('/api/admin/categories/' + encodeURIComponent(id), withAdmin(token, {method:'DELETE'})),
+  uploadProductImage: (token: string, id: string, file: File, altText = '') => {
+    const body = new FormData();
+    body.append('file', file); body.append('alt_text', altText);
+    return apiRequest(`/api/admin/products/${id}/image`, withAdmin(token, { method: 'POST', body }));
+  },
+  uploadServiceImage: (token: string, id: string, file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return apiRequest(`/api/admin/services/${id}/image`, withAdmin(token, { method: 'POST', body }));
+  },
+  setProductImageUrl: (token: string, id: string, url: string) =>
+    post(`/api/admin/products/${encodeURIComponent(id)}/image-url`, { url }, withAdmin(token)),
+  setServiceImageUrl: (token: string, id: string, url: string) =>
+    post(`/api/admin/services/${encodeURIComponent(id)}/image-url`, { url }, withAdmin(token)),
+  uploadSiteMedia: (token: string, file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return apiRequest('/api/admin/site-media', withAdmin(token, { method: 'POST', body }));
+  },
+  getAdminGallery: (token: string) => apiRequest('/api/admin/gallery', withAdmin(token)),
+  listAdminGalleryCategories: (token: string) => apiRequest('/api/admin/extras/gallery/categories', withAdmin(token)),
+  createAdminGalleryCategory: (token: string, name: string) =>
+    post('/api/admin/extras/gallery/categories', { name }, withAdmin(token)),
+  updateAdminGalleryCategory: (token: string, id: string, body: unknown) =>
+    patch('/api/admin/extras/gallery/categories/' + encodeURIComponent(id), body, withAdmin(token)),
+  deleteAdminGalleryCategory: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/gallery/categories/' + encodeURIComponent(id), withAdmin(token, { method: 'DELETE' })),
+  getAdminGalleryImages: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/gallery/' + encodeURIComponent(id) + '/images', withAdmin(token)),
+  uploadAdminGalleryImage: (token: string, id: string, file: File) => {
+    const form = new FormData(); form.append('file', file);
+    return apiRequest('/api/admin/extras/gallery/' + encodeURIComponent(id) + '/images', withAdmin(token, { method: 'POST', body: form }));
+  },
+  deleteAdminGalleryImage: (token: string, id: string, imageId: string) =>
+    apiRequest('/api/admin/extras/gallery/' + encodeURIComponent(id) + '/images/' + encodeURIComponent(imageId), withAdmin(token, { method: 'DELETE' })),
+  getAdminProductImages: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/products/' + encodeURIComponent(id) + '/images', withAdmin(token)),
+  deleteAdminProductImage: (token: string, id: string, imageId: string) =>
+    apiRequest('/api/admin/extras/products/' + encodeURIComponent(id) + '/images/' + encodeURIComponent(imageId), withAdmin(token, { method: 'DELETE' })),
+  getAdminServiceImages: (token: string, id: string) =>
+    apiRequest('/api/admin/extras/services/' + encodeURIComponent(id) + '/images', withAdmin(token)),
+  uploadAdminServiceImage: (token: string, id: string, file: File) => {
+    const form = new FormData(); form.append('file', file);
+    return apiRequest('/api/admin/extras/services/' + encodeURIComponent(id) + '/images', withAdmin(token, { method: 'POST', body: form }));
+  },
+  deleteAdminServiceImage: (token: string, id: string, imageId: string) =>
+    apiRequest('/api/admin/extras/services/' + encodeURIComponent(id) + '/images/' + encodeURIComponent(imageId), withAdmin(token, { method: 'DELETE' })),
+  verifyProductPurchase: (token: string, id: string, customerId: string, reference = '') =>
+    post('/api/admin/extras/products/' + encodeURIComponent(id) + '/verify-purchase', { customer_id: customerId, reference }, withAdmin(token)),
+  listAdminProductReviews: (token: string) => apiRequest('/api/admin/extras/product-reviews', withAdmin(token)),
+  moderateProductReview: (token: string, id: string, status: 'published' | 'rejected' | 'pending') =>
+    patch('/api/admin/extras/product-reviews/' + encodeURIComponent(id), { status }, withAdmin(token)),
 
-  createAdminFAQ: (token: string, body: any) =>
-    request('/api/admin/faq', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  updateAdminFAQ: (token: string, id: string, body: any) =>
-    request(`/api/admin/faq/${id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  deleteAdminFAQ: (token: string, id: string) =>
-    request(`/api/admin/faq/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-
-  createAdminGalleryImage: (token: string, body: FormData) =>
-    request('/api/admin/gallery', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body }),
-
-  deleteAdminGalleryImage: (token: string, id: string) =>
-    request(`/api/admin/gallery/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-
-  getAdminConfig: (token: string) =>
-    request('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } }),
-
-  updateAdminConfig: (token: string, body: any) =>
-    request('/api/admin/settings', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
-
-  // --- Lectura admin ---
-  getAdminProducts: (token: string) =>
-    request('/api/admin/products', { headers: { Authorization: `Bearer ${token}` } }),
-  getAdminServices: (token: string) =>
-    request('/api/admin/services', { headers: { Authorization: `Bearer ${token}` } }),
-  getAdminCategories: (token: string) =>
-    request('/api/admin/categories', { headers: { Authorization: `Bearer ${token}` } }),
-  getAdminFAQ: (token: string) =>
-    request('/api/admin/faq', { headers: { Authorization: `Bearer ${token}` } }),
-  getAdminGallery: (token: string) =>
-    request('/api/admin/gallery', { headers: { Authorization: `Bearer ${token}` } }),
-  deleteAdminConfig: (token: string, id: string) =>
-    request(`/api/admin/settings/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }),
-};
+  createAdminGallery: (token: string, body: FormData) => apiRequest('/api/admin/gallery', withAdmin(token, { method: 'POST', body })),
+  updateAdminGallery: (token: string, id: string, body: unknown) => patch(`/api/admin/gallery/${id}`, body, withAdmin(token)),
+  deleteAdminGallery: (token: string, id: string) => apiRequest(`/api/admin/gallery/${id}`, withAdmin(token, { method: 'DELETE' })),
+  saveSiteSettings: (token: string, body: Record<string, string>) => apiRequest('/api/admin/site-settings', withAdmin(token, { method: 'PUT', body: JSON.stringify(body) })),
+  getAdminConfig: (token: string) => apiRequest('/api/admin/settings', withAdmin(token)),
 };

@@ -220,7 +220,10 @@ giveawaysRoutes.post('/public/:id/participate', optionalAuth, async (c) => {
   const { DB } = c.env;
   const giveawayId = c.req.param('id');
   const user = getUser(c);
-  const b = await c.req.json<any>();
+  if (!user || user.type !== 'customer') return c.json({ error: 'Inicia sesión para participar' }, 401);
+  const profile = await DB.prepare('SELECT id, name, email, phone, telegram_chat_id, telegram_username FROM customers WHERE id = ?')
+    .bind(user.user_id).first<any>();
+  if (!profile) return c.json({ error: 'Cuenta de cliente inexistente' }, 401);
 
   const giveaway = await DB.prepare('SELECT * FROM giveaways WHERE id = ?').bind(giveawayId).first<any>();
   if (!giveaway) return c.json({ error: 'Sorteo no encontrado' }, 404);
@@ -231,18 +234,19 @@ giveawaysRoutes.post('/public/:id/participate', optionalAuth, async (c) => {
     return c.json({ error: 'El sorteo no está en curso' }, 400);
   }
 
-  const name = b.name?.trim();
-  const email = b.email?.toLowerCase();
-  const phone = b.phone;
-  const telegramChatId = b.telegram_chat_id;
-  const telegramUsername = b.telegram_username;
-
-  let customerId: string | null = user ? user.user_id : null;
+  // Los datos se obtienen del perfil autenticado, no del cuerpo manipulable de la petición.
+  const name = profile.name;
+  const email = profile.email;
+  const phone = profile.phone;
+  const telegramChatId = profile.telegram_chat_id;
+  const telegramUsername = profile.telegram_username;
+  const customerId: string = user.user_id;
 
   if (giveaway.requires_email && !email) return c.json({ error: 'Este sorteo requiere email' }, 400);
   if (giveaway.requires_phone && !phone) return c.json({ error: 'Este sorteo requiere teléfono' }, 400);
-  if (giveaway.requires_telegram && (!telegramChatId && !b.telegram)) {
-    return c.json({ error: 'Este sorteo requiere vinculación de Telegram' }, 400);
+  if (giveaway.requires_telegram) {
+    // Evitar declarar como verificado un chat_id que nunca se vinculó de forma segura.
+    return c.json({ error: 'La participación por Telegram estará disponible cuando se habilite la vinculación verificada' }, 409);
   }
   if (!name) return c.json({ error: 'El nombre es requerido' }, 400);
 

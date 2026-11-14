@@ -1,103 +1,98 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
+import type { Env } from '../types';
+import { getUser, requireCustomerAuth } from '../middleware';
+import { parseRequestIntake } from '../request-intake';
 
-export const privateRoutes = new Hono<{ Bindings: Env }>();
+export const privateRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
+privateRoutes.use('*', requireCustomerAuth);
 
-// Middleware simple de autenticación por bearer token
-privateRoutes.use('*', async (c, next) => {
-  const auth = c.req.header('Authorization');
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return c.json({ error: 'Token requerido' }, 401);
-  }
-  const token = auth.substring(7);
-  // Validar token contra D1 o variable de entorno (simplificado)
-  const validToken = c.env.ADMIN_PASSWORD_HASH ? token === c.env.ADMIN_PASSWORD_HASH : true;
-  if (!validToken) return c.json({ error: 'Token inválido' }, 401);
-  await next();
-});
+const allowedTypes = new Set(['installation', 'maintenance', 'repair', 'consultation', 'complaint', 'suggestion']);
 
-// Solicitudes del cliente
-privateRoutes.get('/requests', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare('SELECT * FROM requests ORDER BY created_at DESC').all();
+privateRoutes.get('/requests', async c => {
+  const user = getUser(c)!;
+  const { results } = await c.env.DB.prepare(`SELECT r.id, r.type, r.request_category_id, r.title, r.description, r.status, r.preferred_date, r.created_at,
+    ri.available_budget_usd_cents, ri.payment_method, ri.payment_currency, ri.customer_type,
+    (SELECT COUNT(*) FROM request_images im WHERE im.request_id=r.id) AS image_count
+    FROM requests r LEFT JOIN request_intake ri ON ri.request_id=r.id
+    WHERE r.customer_id = ? ORDER BY r.created_at DESC`)
+    .bind(user.user_id).all();
   return c.json({ requests: results ?? [] });
 });
 
-privateRoutes.post('/requests', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<any>();
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-
-  await DB.prepare(
-    'INSERT INTO requests (id, customer_id, type, title, description, status, priority, location, preferred_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    id,
-    body.customer_id || null,
-    body.type || 'consultation',
-    body.title,
-    body.description || null,
-    'pending',
-    body.priority || 'medium',
-    body.location || null,
-    body.preferred_date || null,
-    now,
-    now
-  ).run();
-
-  return c.json({ id, message: 'Solicitud creada' });
+privateRoutes.post('/requests', async c => {
+  const user = getUser(c)!;
+  const b = await c.req.json<any>().catch(() => null);
+  if (!b || typeof b !== 'object') return c.json({ error: 'Solicitud inválida.' },400);
+  const intake = parseRequestIntake(b);
+  if (intake.error) return c.json({error:intake.error},400);
+  const selectedId = typeof b.service_id === 'string' ? b.service_id.trim() : '';
+  const selectedService = selectedId
+    ? await c.env.DB.prepare('SELECT id, name FROM services WHERE id = ? AND is_active = 1')
+      .bind(selectedId).first<{id: string; name: string}>() : null;
+  if (selectedId && !selectedService) return c.json({ error: 'El servicio ya no está disponible. Actualiza la lista.' }, 400);
+  const requestedTitle = typeof b.title === 'string' ? b.title.trim().slice(0, 180) : '';
+  const requestedDescription = typeof b.description === 'string' ? b.description.trim().slice(0, 3000) : '';
+  // Conservar el servicio elegido sin una migración adicional ni depender de un título del navegador.
+  const title = selectedService ? ('Servicio: ' + selectedService.name + ' · ' + requestedTitle).slice(0, 180) : requestedTitle;
+  const description = selectedService
+    ? ('Servicio elegido: ' + selectedService.name + ' (ID: ' + selectedService.id + ').\n' + requestedDescription).slice(0, 3000)
+    : requestedDescription;
+  const requestedCategory = typeof b.category_id === 'string' ? b.category_id.slice(0,80) : '';
+  const chosen = requestedCategory
+    ? await c.env.DB.prepare('SELECT id,legacy_type FROM request_categories WHERE id=? AND is_active=1')
+      .bind(requestedCategory).first<{id:string;legacy_type:string}>() : null;
+  if (requestedCategory && !chosen) return c.json({ error: 'El tipo de solicitud seleccionado no está disponible.' },400);
+  const type = chosen?.legacy_type || (allowedTypes.has(b.type) ? b.type : 'consultation');
+  const categoryId = chosen?.id || type;
+  if (requestedTitle.length < 3 || requestedDescription.length < 6)
+    return c.json({ error: 'Escribe un título y una descripción' }, 400);
+  const customer = await c.env.DB.prepare('SELECT address, city, province FROM customers WHERE id = ?').bind(user.user_id).first<any>();
+  const location = [customer?.address, customer?.city, customer?.province].filter(Boolean).join(', ');
+  const id = crypto.randomUUID(), now = new Date().toISOString();
+  const writes = [c.env.DB.prepare(`INSERT INTO requests (id, customer_id, type, request_category_id, title, description, status, priority, location, preferred_date, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', 'medium', ?, ?, ?, ?)`)
+    .bind(id, user.user_id, type, categoryId, title, description, location, typeof b.preferred_date === 'string' ? b.preferred_date.slice(0, 32) : null, now, now)];
+  if (intake.value) writes.push(c.env.DB.prepare(`INSERT INTO request_intake
+    (request_id,available_budget_usd_cents,payment_method,payment_currency,customer_type,created_at,updated_at)
+    VALUES (?,?,?,?,?,?,?)`).bind(id,intake.value.available_budget_usd_cents,intake.value.payment_method,
+      intake.value.payment_currency,intake.value.customer_type,now,now));
+  await c.env.DB.batch(writes);
+  // El contador de solicitudes pendientes del panel es la referencia del equipo.
+  // No duplicar el ticket con avisos internos.
+  try {
+    await c.env.DB.prepare(`INSERT INTO notifications
+      (id,user_id,user_type,type,title,message,is_read,created_at)
+      VALUES (?,?,'customer','system',?,?,0,?)`).bind(
+      crypto.randomUUID(),user.user_id,'Recibimos tu solicitud',
+      'Tu solicitud «'+title+'» se registró correctamente. Referencia: '+id+
+        '. Puedes consultar su estado en Mis solicitudes.',now
+    ).run();
+  }catch(e){console.error('No se pudo registrar confirmación de solicitud',e);}
+  return c.json({ id, message: 'Solicitud creada', status: 'pending' }, 201);
 });
 
-// Citas
-privateRoutes.get('/appointments', async (c) => {
-  const { DB } = c.env;
-  const { results } = await DB.prepare('SELECT * FROM appointments ORDER BY starts_at ASC').all();
+privateRoutes.get('/appointments', async c => {
+  const user = getUser(c)!;
+  const { results } = await c.env.DB.prepare('SELECT id, title, starts_at, ends_at, status, service_id, created_at FROM appointments WHERE customer_id = ? ORDER BY starts_at DESC')
+    .bind(user.user_id).all();
   return c.json({ appointments: results ?? [] });
 });
 
-privateRoutes.post('/appointments', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<any>();
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-
-  // Verificar disponibilidad (no solapamiento)
-  const conflict = await DB.prepare(
-    'SELECT id FROM appointments WHERE status != ? AND starts_at < ? AND ends_at > ?'
-  ).bind('cancelled', body.ends_at, body.starts_at).first();
-
-  if (conflict) {
-    return c.json({ error: 'Horario no disponible' }, 409);
-  }
-
-  await DB.prepare(
-    'INSERT INTO appointments (id, customer_id, service_id, request_id, title, starts_at, ends_at, status, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    id,
-    body.customer_id || null,
-    body.service_id || null,
-    body.request_id || null,
-    body.title,
-    body.starts_at,
-    body.ends_at,
-    'pending',
-    body.notes || null,
-    now,
-    now
-  ).run();
-
-  return c.json({ id, message: 'Cita creada' });
+privateRoutes.post('/appointments', async c => {
+  const user = getUser(c)!;
+  const b = await c.req.json<any>();
+  const title = typeof b.title === 'string' ? b.title.trim().slice(0, 180) : '';
+  const starts = new Date(b.starts_at), ends = new Date(b.ends_at);
+  if (title.length < 3 || !Number.isFinite(starts.getTime()) || !Number.isFinite(ends.getTime()) || ends <= starts || ends.getTime() - starts.getTime() > 4 * 3600000 || starts.getTime() < Date.now())
+    return c.json({ error: 'Fecha u horario inválidos' }, 400);
+  const id = crypto.randomUUID(), now = new Date().toISOString();
+  // Una única sentencia SQL comprueba e inserta; evita la carrera SELECT + INSERT.
+  const result = await c.env.DB.prepare(`INSERT INTO appointments (id, customer_id, service_id, request_id, title, starts_at, ends_at, status, notes, created_at, updated_at)
+    SELECT ?, ?, NULL, NULL, ?, ?, ?, 'pending', NULL, ?, ?
+    WHERE NOT EXISTS (SELECT 1 FROM appointments WHERE status != 'cancelled' AND starts_at < ? AND ends_at > ?)`)
+    .bind(id, user.user_id, title, starts.toISOString(), ends.toISOString(), now, now, ends.toISOString(), starts.toISOString()).run();
+  if (!result.meta?.changes) return c.json({ error: 'Horario no disponible' }, 409);
+  // El equipo gestiona la nueva cita desde el calendario del panel, sin aviso duplicado.
+  return c.json({ id, message: 'Cita solicitada', status: 'pending' }, 201);
 });
-
-// Actualizar estado de cita
-privateRoutes.patch('/appointments/:id', async (c) => {
-  const { DB } = c.env;
-  const id = c.req.param('id');
-  const body = await c.req.json<any>();
-
-  await DB.prepare(
-    'UPDATE appointments SET status = ?, notes = COALESCE(?, notes), updated_at = ? WHERE id = ?'
-  ).bind(body.status, body.notes || null, new Date().toISOString(), id).run();
-
-  return c.json({ message: 'Cita actualizada' });
-});
+// Cambios de estado, notas y asignaciones solo desde endpoints del administrador.
