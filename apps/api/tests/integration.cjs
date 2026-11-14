@@ -416,6 +416,13 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
     '/api/brigade-work/'+firstWork.work.id+'/cancel','PATCH',
     {reason:'Intento duplicado'},staffToken,409);
 
+  const bg4=await request('Admin adds fourth brigade','/api/brigades','POST',
+    {name:'Brigada D '+uid,leader_name:'Jefe D'},adminToken,201);
+  assert.ok(bg4.id);
+  const four=await request('Four brigades remain under special-approval rule',
+    '/api/brigade-work/availability?date='+anotherDate,'GET',null,staffToken);
+  assert.equal(four.active_count,4);
+
   // Dos gestores concurrentes con más de dos brigadas, misma fecha/brigada:
   // exactamente uno queda programado, otro necesita aprobación.
   const concurrentDate=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
