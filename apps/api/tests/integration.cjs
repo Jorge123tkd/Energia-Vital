@@ -326,6 +326,24 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   await request('Admin cannot delete request with commercial history',
     '/api/admin-customers/requests/'+created.id,'DELETE',null,adminToken,409);
 
+  const guestRequest=await request('Operator opens dossier for WhatsApp guest with no account',
+    '/api/admin-customers/requests','POST',{
+      contact_name:'Contacto de WhatsApp',contact_phone:'5355555555',
+      type:'consultation',title:'Consulta de contacto sin cuenta',
+      description:'Solicitud creada manualmente sin cuenta de cliente.',
+      status:'pending',location:'La Habana',preferred_date:null
+    },staffToken,201);
+  const guestDossier=await request('Guest request dossier works without fake customer',
+    '/api/dossiers/requests/'+guestRequest.id,'GET',null,staffToken);
+  assert.equal(guestDossier.request.customer_id,null);
+  assert.match(guestDossier.request.description,/Contacto de WhatsApp/);
+  const guestActivity=await request('Operator logs guest contact without creating customer account',
+    '/api/dossiers/requests/'+guestRequest.id+'/activities','POST',{
+      activity_type:'whatsapp',note:'Se recibió una consulta por WhatsApp.'
+    },staffToken,201);
+  const guestHistory=await request('Guest dossier retains responsible operator',
+    '/api/dossiers/requests/'+guestRequest.id,'GET',null,adminToken);
+  assert.ok(guestHistory.activities.some(x=>x.id===guestActivity.id&&x.actor_email===staffEmail));
   // Brigadas Bonaire: integración real con Worker + D1 local y JWT.
   // La administración de fichas NO asigna trabajos ni altera citas.
   await request('Brigades require a staff login','/api/brigades','GET',null,null,401);
