@@ -264,6 +264,57 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const created = await request('Customer A creates request', '/api/private/requests', 'POST', {
     type: 'installation', title: 'Instalación solar residencial', description: 'Deseo instalar paneles y baterías en mi vivienda.'
   }, at, 201);
+  // Brigadas Bonaire: integración real con Worker + D1 local y JWT.
+  // La administración de fichas NO asigna trabajos ni altera citas.
+  await request('Brigades require a staff login','/api/brigades','GET',null,null,401);
+  await request('Customer cannot view internal brigades','/api/brigades','GET',null,at,401);
+  await request('Moderator cannot create a brigade','/api/brigades','POST',
+    {name:'Brigada no autorizada',leader_name:'Jefe de prueba'},staffToken,403);
+  const initialBrigades=await request('Staff sees private brigade catalog',
+    '/api/brigades','GET',null,staffToken);
+  assert.ok(Array.isArray(initialBrigades.brigades));
+  assert.ok(Array.isArray(initialBrigades.members));
+  const newBrigade=await request('Admin creates brigade in D1','/api/brigades','POST',
+    {name:'Brigada integración '+uid,leader_name:'Responsable de prueba',specialty:'Instalación solar'},
+    adminToken,201);
+  assert.ok(newBrigade.id);
+  await request('Admin cannot create brigade with same name','/api/brigades','POST',
+    {name:'Brigada integración '+uid,leader_name:'Otro responsable'},adminToken,409);
+  const brigadeList=await request('Staff reads created brigade',
+    '/api/brigades','GET',null,staffToken);
+  const brigade=brigadeList.brigades.find(x=>x.id===newBrigade.id);
+  assert.ok(brigade&&brigade.leader_name==='Responsable de prueba');
+  await request('Moderator cannot register brigade members',
+    '/api/brigades/'+newBrigade.id+'/members','POST',
+    {full_name:'Integrante de prueba'},staffToken,403);
+  const member=await request('Admin registers brigade member','/api/brigades/'+newBrigade.id+'/members',
+    'POST',{full_name:'Integrante de prueba',function_name:'Electricista'},adminToken,201);
+  const memberList=await request('Staff sees brigade member in D1','/api/brigades','GET',null,staffToken);
+  const savedMember=memberList.members.find(x=>x.id===member.id);
+  assert.ok(savedMember&&savedMember.brigade_id===newBrigade.id);
+  await request('Moderator cannot edit brigade','/api/brigades/'+newBrigade.id,'PATCH',
+    {name:'Nombre prohibido',expected_updated_at:brigade.updated_at},staffToken,403);
+  await request('Admin cannot overwrite stale brigade version','/api/brigades/'+newBrigade.id,'PATCH',
+    {name:'Nombre obsoleto',expected_updated_at:'2000-01-01T00:00:00.000Z'},adminToken,409);
+  await request('Admin updates brigade profile','/api/brigades/'+newBrigade.id,'PATCH',
+    {name:'Brigada verificada '+uid,expected_updated_at:brigade.updated_at},adminToken);
+  await request('Admin cannot change stale member version',
+    '/api/brigades/'+newBrigade.id+'/members/'+member.id,'PATCH',
+    {is_active:false,expected_updated_at:'2000-01-01T00:00:00.000Z'},adminToken,409);
+  await request('Admin deactivates brigade member preserving history',
+    '/api/brigades/'+newBrigade.id+'/members/'+member.id,'PATCH',
+    {is_active:false,expected_updated_at:savedMember.updated_at},adminToken);
+  const postMember=await request('Brigade remains visible after member deactivation',
+    '/api/brigades','GET',null,staffToken);
+  assert.equal(Boolean(postMember.members.find(x=>x.id===member.id)?.is_active),false);
+  const latestBrigade=postMember.brigades.find(x=>x.id===newBrigade.id);
+  await request('Admin deactivates brigade without deleting record',
+    '/api/brigades/'+newBrigade.id,'PATCH',
+    {is_active:false,expected_updated_at:latestBrigade.updated_at},adminToken);
+  const inactiveBrigades=await request('Staff can audit inactive brigade',
+    '/api/brigades','GET',null,staffToken);
+  assert.equal(Boolean(inactiveBrigades.brigades.find(x=>x.id===newBrigade.id)?.is_active),false);
+
   const searchedRequest=await request('Staff searches request by exact ID, first page',
     '/api/admin-customers/requests?q='+encodeURIComponent(created.id)+'&page=1&page_size=20',
     'GET',null,staffToken);
