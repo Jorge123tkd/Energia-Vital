@@ -1,10 +1,10 @@
 /**
- * Contacto HUMANO de gestores de Bonaire para clientes del asistente Telegram.
- * Comparte exclusivamente los gestores publicados en la configuración comercial.
+ * Contactos humanos publicados para Telegram; no utiliza enlaces de bots.
+ * Los URL van en botones inline, no se imprimen en el texto del chat.
  */
 import type { Env } from './types';
 export type PublishedSalesManager={name:string;phone:string};
-
+export type HumanContact={reply:string;buttons:Array<{text:string;url:string}>};
 export function parsePublishedSalesManagers(value:unknown):PublishedSalesManager[]{
   if(typeof value!=='string')return [];
   try{
@@ -22,29 +22,33 @@ export function parsePublishedSalesManagers(value:unknown):PublishedSalesManager
   }catch{return [];}
 }
 const greeting='Hola, deseo hablar con un gestor de Bonaire por WhatsApp para una consulta.';
-export function formatHumanWhatsAppReply(value:unknown):string{
+export function formatHumanWhatsAppReply(value:unknown):HumanContact{
   const managers=parsePublishedSalesManagers(value);
-  if(!managers.length){
-    return 'Por el momento Bonaire no tiene gestores de atención humana por WhatsApp publicados. '+
-      'No te enviaré a otro bot ni inventaré un número. Inténtalo de nuevo más adelante.';
-  }
-  const contacts=managers.map((manager,index)=>{
-    const url='https://wa.me/'+manager.phone.replace(/\D/g,'')+'?text='+encodeURIComponent(greeting);
-    return (managers.length>1?(index+1)+'. ':'')+manager.name+'\n'+url;
-  });
-  return (managers.length===1
-      ?'Para hablar con una persona de Bonaire, escribe directamente a este gestor por WhatsApp:\n\n'
-      :'Para hablar con una persona de Bonaire, elige uno de nuestros gestores por WhatsApp:\n\n')+
-    contacts.join('\n\n')+
-    '\n\nEstos enlaces son de gestores humanos, no del asistente automático.';
+  if(!managers.length)return {
+    reply:'Por el momento Bonaire no tiene gestores de atención humana por WhatsApp publicados. '+
+      'No te enviaré a otro bot ni inventaré un número. Inténtalo de nuevo más adelante.',
+    buttons:[]
+  };
+  return {
+    reply:managers.length===1
+      ?'¡Claro! 💬 Toca el botón del gestor de Bonaire para abrir su WhatsApp:'
+      :'¡Claro! 💬 Elige uno de los gestores de Bonaire y toca su botón de WhatsApp:',
+    buttons:managers.map(m=>({
+      text:'💬 '+m.name,
+      url:'https://wa.me/'+m.phone.replace(/\D/g,'')+'?text='+encodeURIComponent(greeting)
+    }))
+  };
 }
-export async function humanWhatsAppReply(db:Env['DB']):Promise<string>{
+export async function humanWhatsAppReply(db:Env['DB']):Promise<HumanContact>{
   try{
     const row=await db.prepare("SELECT value FROM system_settings WHERE key='sales_managers' LIMIT 1")
       .first<{value:string}>();
     return formatHumanWhatsAppReply(row?.value);
   }catch{
-    return 'Ahora mismo no puedo consultar los WhatsApp de los gestores de Bonaire. '+
-      'Inténtalo de nuevo más adelante; no te enviaré a un bot por error.';
+    return {
+      reply:'Ahora mismo no puedo consultar los WhatsApp de los gestores de Bonaire. '+
+        'Inténtalo de nuevo más adelante; no te enviaré a un bot por error.',
+      buttons:[]
+    };
   }
 }

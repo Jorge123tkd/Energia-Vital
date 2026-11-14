@@ -143,6 +143,18 @@ async function run(){
  assert.equal(outgoing.body.chat_id,'535001');
  assert.equal(outgoing.body.reply_markup.keyboard[0][0].text,'☀️ Asesoría solar');
  assert.equal(outgoing.body.link_preview_options.is_disabled,true);
+  const handoff=human.formatHumanWhatsAppReply(JSON.stringify([{name:'Gestor Prueba',phone:'+53 5 123 4567'}]));
+  let direct;
+  try{
+    global.fetch=async(_url,options)=>{
+      direct=JSON.parse(options.body);return {ok:true,json:async()=>({ok:true})};
+    };
+    await route.sendTelegramText({TELEGRAM_BOT_TOKEN:'TEST_NO_REAL'},'535001',handoff.reply,
+      {inline_keyboard:handoff.buttons.map(b=>[{text:b.text,url:b.url}])});
+  }finally{global.fetch=previousFetch;}
+  assert.equal(direct.reply_markup.inline_keyboard[0][0].text,'💬 Gestor Prueba');
+  assert.match(direct.reply_markup.inline_keyboard[0][0].url,/^https:\/\/wa\.me\/5351234567\?text=/);
+  assert.doesNotMatch(direct.text,/wa\.me|https?:\/\/|5351234567/);
  console.log('PASS telegram bot smoke: webhook security, Cuban time, natural chat, role-aware buttons, solar choices');
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});

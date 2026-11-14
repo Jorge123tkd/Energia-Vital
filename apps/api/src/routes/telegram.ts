@@ -110,7 +110,7 @@ async function redeemCode(env:Env,chatId:string,code:string):Promise<string>{
 type Session={chat_id:string;thread_id:string;solar_context:string;window_start:string|null;window_count:number};
 type BotDecision={
   reply:string;state?:SolarState|null;newThread?:boolean;skipHistory?:boolean;
-  keyboardView?:'reminders';
+  keyboardView?:'reminders';replyMarkup?:TelegramReplyMarkup;
 };
 async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string):Promise<BotDecision>{
   const text=raw.trim();
@@ -218,9 +218,13 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
         'Para que la solicitud quede registrada y podamos darle seguimiento, '+
         'puedes enviarla desde tu cuenta en Bonaire: '+site+
         '\nNo programaré una visita sin una solicitud confirmada.',state:null};
-    case 'human':
-      // Traspaso a los WhatsApp HUMANOS publicados por administración, nunca la web o bot.
-      return {reply:await humanWhatsAppReply(env.DB),state:null};
+    case 'human':{
+      const contact=await humanWhatsAppReply(env.DB);
+      return {reply:contact.reply,state:null,
+        replyMarkup:contact.buttons.length
+          ?{inline_keyboard:contact.buttons.map(b=>[{text:b.text,url:b.url}])}
+          :undefined};
+    }
   }
 
   if(isOutOfScopeMessage(text))return {reply:OUT_OF_SCOPE_REPLY};
@@ -287,7 +291,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     // Refrescar el vínculo después de procesar el mensaje: el OTP puede haberlo creado
     // o «desvincular» puede haberlo revocado en esta misma interacción.
     const currentStaff=await currentTelegramStaff(env,input.chatId);
-    const keyboard=telegramReplyKeyboard(Boolean(currentStaff),nextState?.stage,decision.keyboardView||'normal');
+    const keyboard=decision.replyMarkup||telegramReplyKeyboard(Boolean(currentStaff),nextState?.stage,decision.keyboardView||'normal');
     const renderedReply=presentTelegramReply(decision.reply,nextState?.stage);
     await sendTelegramText(env,input.chatId,renderedReply,keyboard);
     const audit=decision.skipHistory?[]:[
