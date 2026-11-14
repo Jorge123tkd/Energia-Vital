@@ -18,6 +18,7 @@ function load(file,fakeRequire){
 }
 const agenda=load('../src/telegram-agenda.ts',()=>({}));
 const conversation=load('../src/telegram-conversation.ts',()=>({}));
+const human=load('../src/telegram-human-contact.ts',()=>({}));
 const solar=load('../src/solar-guidance.ts',()=>({}));
 const route=load('../src/routes/telegram.ts',(name)=>{
   if(name==='hono')return {Hono};
@@ -34,6 +35,7 @@ const route=load('../src/routes/telegram.ts',(name)=>{
   if(name==='../exchange-rates')return {getElToqueRates:()=>null,formatExchangeReply:()=>''};
   if(name==='../telegram-agenda')return agenda;
   if(name==='../telegram-conversation')return conversation;
+  if(name==='../telegram-human-contact')return human;
   throw Error('Unexpected dependency '+name);
 });
 async function run(){
@@ -95,6 +97,8 @@ async function run(){
  assert.equal(act('🛍️ Ver productos'),'products');
  assert.equal(act('🧾 Solicitar servicio'),'request-service');
  assert.equal(act('🙋 Hablar con una persona'),'human');
+ assert.equal(act('Quiero hablar con un gestor'),'human');
+ assert.equal(act('WhatsApp de los gestores'),'human');
  assert.equal(act('Soy del equipo'),'link-help');
  assert.equal(act('✏️ Nuevo chat'),'new-chat');
 

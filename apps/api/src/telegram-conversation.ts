@@ -69,7 +69,7 @@ export function classifyTelegramMessage(input:string):TelegramAction {
     return 'services';
   if(/^(?:solicitar servicio|quiero solicitar servicio|pedir servicio|necesito una reparacion|quiero una visita tecnica|registrar solicitud)$/.test(s))
     return 'request-service';
-  if(/^(?:hablar con una persona|hablar con asesor|hablar con un asesor|hablar con alguien|hablar con humano|necesito atencion humana|contactar al equipo|atencion al cliente|contacto|gestor comercial|hablar con ventas)$/.test(s))
+  if(/^(?:hablar con una persona|hablar con asesor|hablar con un asesor|hablar con alguien|hablar con humano|necesito atencion humana|contactar al equipo|atencion al cliente|contacto|gestor comercial|hablar con un gestor|hablar con gestor|hablar con un comercial|hablar con ventas|whatsapp de los gestores|contactar con un gestor)$/.test(s))
     return 'human';
   return null;
 }

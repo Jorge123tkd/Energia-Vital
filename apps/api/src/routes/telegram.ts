@@ -14,6 +14,7 @@ import { advanceSolarGuidance,type SolarState } from '../solar-guidance';
 import { getElToqueRates,formatExchangeReply } from '../exchange-rates';
 import { agendaForTeam,pendingTicketSummary } from '../telegram-agenda';
 import { classifyTelegramMessage,telegramReplyKeyboard,presentTelegramReply,type TelegramReplyMarkup } from '../telegram-conversation';
+import { humanWhatsAppReply } from '../telegram-human-contact';
 
 export const telegramRoutes = new Hono<{ Bindings:Env; Variables:{user?:any} }>();
 const now=()=>new Date().toISOString();
@@ -218,9 +219,8 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
         'puedes enviarla desde tu cuenta en Bonaire: '+site+
         '\nNo programaré una visita sin una solicitud confirmada.',state:null};
     case 'human':
-      return {reply:'Te ayudo a contactar a una persona del equipo Bonaire. '+
-        'En la sección Contacto de nuestra web encontrarás los canales comerciales configurados: '+
-        site+'\n\nSi me cuentas brevemente tu consulta, también puedo orientarte por aquí.',state:null};
+      // Traspaso a los WhatsApp HUMANOS publicados por administración, nunca la web o bot.
+      return {reply:await humanWhatsAppReply(env.DB),state:null};
   }
 
   if(isOutOfScopeMessage(text))return {reply:OUT_OF_SCOPE_REPLY};
