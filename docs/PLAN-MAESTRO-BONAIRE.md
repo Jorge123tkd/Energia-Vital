@@ -167,6 +167,18 @@ Flujo de autenticación del jefe de brigada, pruebas/firmas técnicas y relació
 
 Estudiar firma electrónica/certificación de identidad, mantenimiento preventivo y protocolos de aceptación, política de retención y limpieza de EXIF, avisos consentidos, controles antimalware/validación más profunda de ficheros y firma contractual de garantías. La identidad técnica por contraseña NO equivale a identidad verificada ni firma jurídica.
 
+## Entrega 5B2a — Cierre técnico directo del jefe con revisión humana (GitHub, NO publicada)
+
+**Se completó un bloque entero y se validó automáticamente, sin despliegue.** El jefe autenticado puede registrar un informe de finalización en su portal. En el expediente 360°, un administrador activo puede aceptarlo o rechazarlo con motivo desde el propio informe; si acepta, se cierra **solo el trabajo técnico**, nunca la solicitud comercial, el contrato, la garantía ni los cobros.
+
+- `019_chief_completion_review_bridge.sql` añade exclusivamente `chief_completion_reviews`: vínculo inmutable y único entre informe original del jefe y snapshot de revisión administrativa de `technical_work_reports`. Trigger de D1 exige que ambos informes correspondan al mismo trabajo, tengan exactamente los mismos textos de evidencia, que el informe sea `completion_proposed` y que el administrador esté activo. No se modifica ningún dato histórico ni las restricciones originales de brigadas.
+- `apps/api/src/routes/technical-followup.ts` añade `PATCH /api/technical/chief-reports/:id/review` bajo `requireAdminAuth`: validaciones de decisión, justificación, confirmación técnica y un solo `DB.batch` para preservar informe del jefe, registrar snapshot técnico, revisión, cierre (si procede) y auditoría. Rechazo deja el trabajo programado. Una revisión duplicada, rol insuficiente, propuesta pendiente concurrente o trabajo ya cerrado es rechazada. La lista de expediente muestra quién ingresó el informe y quién revisó.
+- El frontend `TechnicalFollowUp.svelte` presenta la decisión junto al informe original y el historial. Se conserva el circuito 5A de informes internos para los casos que no procedan del jefe autenticado.
+- **Validación:** GitHub Actions `43750910764` y `43751037341` finalizaron **success**: typecheck backend, Svelte, build web, Worker+D1 temporal, casos de aceptación/rechazo, permisos, auditoría y pruebas con SQLite ficticio aplicando migraciones 001–019. Los nombres de usuario, informes y fotos en pruebas son sintéticos; NO se consultó D1/R2 de producción.
+- Gate de publicación reforzado: exigir **15 tablas nuevas (013–019)** y auditar migración 019 solo mediante el workflow manual read-only. Quedan pendientes backup real de D1 y R2, ensayo de restauración/copia representativa, consentimiento/EXIF de imágenes, política documental de certificados, aprobación del propietario y despliegue.
+
+**Aún no implementado:** una firma electrónica o certificado jurídico válido, pólizas y cobertura contractual de garantías, conciliación bancaria, ni aceptación automática de un trabajo por parte del jefe.
+
 ## Validaciones antes de activar la función
 
 - Test de 1/2/3+ brigadas; 2 asignaciones un día; rechazo, aprobación solo admin y auditoría.

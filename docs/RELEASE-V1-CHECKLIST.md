@@ -35,6 +35,14 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Revisar backups y política de conservación R2, protección WAF contra abuso de login y carga, permisos Cloudflare y CORS de Pages.
 - [ ] NO fusionar ni publicar sin aprobación explícita, auditoría remota read-only y ensayos sobre copia representativa.
 
+## Nueva fase 5B2a: informe directo del jefe y revisión de dirección
+- [ ] Ensayar migración 019 sobre copia de D1 real: **15 tablas nuevas**, nueve conjuntos históricos íntegros.
+- [ ] Confirmar identidad y trabajo de origen del informe del jefe; no asumir que su token constituye firma electrónica o identidad civil verificada.
+- [ ] Confirmar que solo administrador principal puede aceptar/rechazar directamente informe; gestor, cliente y jefe no pueden cerrar.
+- [ ] Rechazo conserva trabajo programado; aceptación crea snapshot de revisión, auditoría y cierre técnico, sin cambiar solicitudes comerciales, garantías o pagos.
+- [ ] Probar concurrencia y doble decisión, referencia de informe original, historia y preservación de fotos en R2 privado.
+- [ ] Exigir auditoría read-only y copia/restauración D1 y R2 antes de cualquier despliegue.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
