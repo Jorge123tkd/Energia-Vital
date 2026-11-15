@@ -37,7 +37,7 @@ Realizar desde un entorno de administración controlado de Cloudflare o un job G
 - Anotar un bookmark/time stamp de recuperación de D1 Time Travel si el almacenamiento lo soporta. **Time Travel no reemplaza un respaldo durable fuera del sistema**, y restaurar el estado de una DB activa puede revertir escrituras hechas después del punto elegido.
 - Las imágenes en R2 **no están dentro del respaldo SQL de D1**. Confirmar que R2 sigue accesible y evaluar su política de versiones/copias por separado.
 - Restaurar/importar el respaldo en **otro entorno privado aislado**, con acceso limitado, sin bot activo y sin envíos de Telegram, WhatsApp, correo o notificaciones.
-- Correr allí únicamente migraciones que realmente falten (incluidas 013/014 si aplica). Revisar resultados, `PRAGMA foreign_key_check`, conteos por tabla antes/después, enlaces cliente→solicitud→cita, fotos/R2, actividades y restricciones de brigadas. Los conteos históricos y referencias deben permanecer intactos.
+- Correr allí únicamente migraciones que realmente falten (incluidas 013/014/015 si aplica). Revisar resultados, `PRAGMA foreign_key_check`, conteos por tabla antes/después, enlaces cliente→solicitud→cita, fotos/R2, actividades y restricciones de brigadas. Los conteos históricos y referencias deben permanecer intactos.
 - Si la copia falla, no tocar producción: resolver SQL/compatibilidad primero.
 
 ## Puerta de salida 4 — Aprobación del propietario antes de producción

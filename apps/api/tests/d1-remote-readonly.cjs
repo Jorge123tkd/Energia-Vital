@@ -12,7 +12,7 @@ const database='energia-vital-db';
 const allowlist=[
  'customers','requests','appointments','assistant_sessions','assistant_messages',
  'request_images','request_intake','audit_logs','brigades','brigade_members',
- 'brigade_work','request_activities','d1_migrations'
+ 'brigade_work','request_activities','commercial_quote_versions','d1_migrations'
 ];
 function wrangler(args){
  try{
@@ -47,7 +47,7 @@ async function main(){
  if(names.includes('d1_migrations')){
    const applied=select('SELECT name FROM d1_migrations ORDER BY id').map(x=>x.name);
    for(const [num,name] of [
-     ['013','013_brigades_foundation.sql'],['014','014_request_activities.sql']
+     ['013','013_brigades_foundation.sql'],['014','014_request_activities.sql'],['015','015_commercial_quote_versions.sql']
    ]){
      console.log('MIGRACION '+num+': '+(applied.includes(name)?'APLICADA':'NO_APLICADA'));
    }
