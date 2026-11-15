@@ -1,4 +1,4 @@
-# Bonaire — Protocolo propuesto de evidencias técnicas, cierre y garantía (5B2c–5B2d)
+# Bonaire — Protocolo propuesto de evidencias técnicas, cierre y garantía (5B2c–5B2e)
 
 **ESTADO: BORRADOR INTERNO. NO ES CERTIFICADO, CONTRATO NI POLÍTICA LEGAL APROBADA.**
 Rama de trabajo: `feat/cloudflare-customer-accounts-hardening`. Sin aprobación para Cloudflare de producción.
@@ -19,6 +19,10 @@ Rama de trabajo: `feat/cloudflare-customer-accounts-hardening`. Sin aprobación 
 - **Fase 5B2d, protección de orientación:** JPEG y WebP con orientación EXIF 2–8 conservan solamente una etiqueta de orientación reconstruida (sin copiar el EXIF de cámara/GPS). EXIF con orientación normal 1 no se conserva. Las pruebas de código cubren las ocho orientaciones y metadatos sintéticos; esto NO es prueba visual en teléfonos reales.
 - En WebP, orientación no predeterminada sin cabecera extendida VP8X no se acepta, porque preservar ese dato no sería seguro sin convertir la imagen. PNG con etiqueta eXIf de orientación 2–8 se rechaza hasta disponer de una normalización de píxeles controlada.
 - **Pendiente de aceptación:** comprobar visualmente fotografías consentidas de teléfonos Android e iPhone en el navegador y en la vista privada del expediente; comprobar también si la cámara o el editor aplica orientación a los píxeles antes de subir. Si alguna gira, no publicar sin corrección verificada.
+- **Fase 5B2e — integridad de PNG:** todos los bloques PNG se comprueban mediante CRC-32, incluidos los bloques de metadatos que se eliminan. Una foto PNG corrupta se rechaza y no llega a R2/D1. Las pruebas automáticas incorporan un archivo 1×1 válido y casos negativos con CRC erróneo en IHDR, IDAT y tEXt.
+- **Privacidad residual importante:** se conservan perfiles de color ICC (JPEG APP2, PNG iCCP, WebP ICCP) para no alterar silenciosamente la representación de colores durante la revisión técnica. Esos perfiles pueden contener identificadores, textos u otros datos internos; por tanto, el procesamiento actual NO demuestra ausencia absoluta de información sensible en el archivo final. Antes de usar fotografías reales, debe revisarse una muestra autorizada de cada formato y decidir si se requiere un conversor seguro de color y perfiles. No anunciar una eliminación total y certificada de metadatos.
+- La privacidad de los bytes no equivale a privacidad del contenido visible: etiquetas, matrículas, personas, pantallas o coordenadas superpuestas, así como notas de los técnicos, pueden revelar información. El portal del jefe advierte esto antes de la carga; se requiere política operativa aprobada y supervisión humana.
+
 - Antes de empezar a pedir fotografías reales: revisar texto de información al cliente, base de tratamiento y permisos del inmueble/equipo, y acordar mecanismos de consentimiento cuando corresponda. No subir documentos de identidad, números de cuentas ni imágenes de personas si no son necesarios.
 - Definir con asesoría jurídica y de negocio los **periodos de conservación**, restricciones legales de borrado y trazabilidad. No establecer días de retención ficticios ni activar borrado automático sin procedimiento aprobado.
 - Cualquier borrado futuro exige auditoría de alcance e impacto, comprobación de vínculos con D1 y copia segura de R2. El borrado de evidencias históricas no forma parte de esta fase.
