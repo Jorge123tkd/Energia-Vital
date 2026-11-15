@@ -202,6 +202,18 @@ try:
     raise AssertionError("Se pudo cerrar trabajo sin informe técnico aceptado.")
 except sqlite3.IntegrityError:
     pass
+try:
+    db.execute("""INSERT INTO technical_work_reports
+      (id,work_id,actor_id,report_type,information_source,summary,
+       evidence_note,review_status,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?)""",
+      ("fake-accepted","work-new","staff-old","completion_proposed","staff_observed",
+       "Intento de crear directamente un cierre autorizado.",
+       "Las evidencias reportadas aún no han sido revisadas por dirección.",
+       "accepted","2026-11-14T00:00:00Z"))
+    raise AssertionError("Se pudo insertar informe preaprobado sin revisión.")
+except sqlite3.IntegrityError:
+    pass
 db.execute("""INSERT INTO technical_work_reports
   (id,work_id,actor_id,report_type,information_source,summary,evidence_note,review_status,created_at)
   VALUES(?,?,?,?,?,?,?,?,?)""",
@@ -242,6 +254,17 @@ db.execute("""INSERT INTO service_followup_cases(
   "Reclamación de garantía","Cliente reclama fallo posterior a la visita.",
   "Garantía mencionada pero sin aceptación de cobertura.",
   "open","staff-old","2026-11-14T04:00:00Z","2026-11-14T04:00:00Z"))
+try:
+    db.execute("""INSERT INTO service_followup_cases(
+       id,request_id,case_type,priority,title,description,status,opened_by,
+       created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?)""",
+       ("fake-closed-case","request-old","incident","medium",
+        "Caso falsamente cerrado","No se puede crear un caso cerrado de origen.",
+        "resolved","staff-old","2026-11-14T04:00:00Z","2026-11-14T04:00:00Z"))
+    raise AssertionError("Se creó caso cerrado sin administrador.")
+except sqlite3.IntegrityError:
+    pass
 db.execute("""INSERT INTO service_case_notes(id,case_id,actor_id,note,created_at)
   VALUES(?,?,?,?,?)""",
  ("case-note-old","warranty-old","staff-old",
@@ -262,6 +285,13 @@ db.execute("""UPDATE service_followup_cases SET status='resolved',
 try:
     db.execute("DELETE FROM service_case_notes WHERE id='case-note-old'")
     raise AssertionError("Se borró una nota histórica de posventa.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("""INSERT INTO service_case_notes(id,case_id,actor_id,note,created_at)
+      VALUES(?,?,?,?,?)""",("fake-note-late","warranty-old","staff-old",
+      "No se pueden agregar notas a caso ya cerrado.","2026-11-14T06:00:00Z"))
+    raise AssertionError("Se pudo añadir nota a un caso de posventa ya cerrado.")
 except sqlite3.IntegrityError:
     pass
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
