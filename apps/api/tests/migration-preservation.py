@@ -2,7 +2,7 @@
 """Bonaire: ensayo REPRODUCIBLE con registros FICTICIOS de una D1 histórica.
 
 Ejecuta 001..012, inserta datos relacionados (sin datos de producción),
-aplica 013, 014, 015, 016, 017 y 018, compara cada fila histórica y comprueba referencias.
+aplica 013, 014, 015, 016, 017, 018 y 019, compara cada fila histórica y comprueba referencias.
 Usa SQLite de Python en memoria; la suite separada Worker+D1 verifica
 compatibilidad real con Cloudflare. NO accede a Cloudflare.
 """
@@ -73,6 +73,7 @@ migration(15)
 migration(16)
 migration(17)
 migration(18)
+migration(19)
 after = {name:snapshot(name) for name in tables}
 for name in tables:
     assert before[name] == after[name], f"La migración alteró datos existentes: {name}"
@@ -81,7 +82,7 @@ for new_table in ("brigades","brigade_members","brigade_work","request_activitie
                   "commercial_quote_versions","request_financial_declarations","request_payment_reports",
                   "technical_work_reports","service_followup_cases","service_case_notes",
                   "brigade_chief_accounts","brigade_chief_sessions",
-                  "brigade_chief_reports","brigade_evidence_images"):
+                  "brigade_chief_reports","brigade_evidence_images","chief_completion_reviews"):
     assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
                       (new_table,)).fetchone()[0] == 1
 
@@ -378,6 +379,63 @@ try:
     raise AssertionError("Un jefe pudo agregar foto a trabajo de otra brigada.")
 except sqlite3.IntegrityError:
     pass
+# 019: puente exacto informe autenticado -> control humano del cierre 5A.
+summary_chief="El jefe informa cierre de montaje y prueba funcional para revisión."
+evidence_chief="Las mediciones y verificaciones de conexión quedaron documentadas."
+db.execute("""INSERT INTO brigade_chief_reports
+ (id,work_id,chief_id,report_type,summary,evidence_note,created_at)
+ VALUES(?,?,?,?,?,?,?)""",
+ ("close-chief","work-chief-new","chief-old","completion_proposed",
+  summary_chief,evidence_chief,"2026-11-14T10:50:00Z"))
+db.execute("""INSERT INTO technical_work_reports
+ (id,work_id,actor_id,report_type,information_source,summary,
+ evidence_note,review_status,created_at)
+ VALUES(?,?,?,?,?,?,?,?,?)""",
+ ("close-tech","work-chief-new","admin-old","completion_proposed",
+  "chief_relayed",summary_chief,evidence_chief,"pending_review",
+  "2026-11-14T11:00:00Z"))
+try:
+    db.execute("""INSERT INTO chief_completion_reviews
+      (id,chief_report_id,technical_report_id,reviewed_by,created_at)
+      VALUES(?,?,?,?,?)""",
+      ("fake-chief-approval","close-chief","close-tech","staff-old",
+       "2026-11-14T11:00:00Z"))
+    raise AssertionError("Operador vinculó cierre del jefe sin admin.")
+except sqlite3.IntegrityError:
+    pass
+db.execute("""INSERT INTO chief_completion_reviews
+ (id,chief_report_id,technical_report_id,reviewed_by,created_at)
+ VALUES(?,?,?,?,?)""",
+ ("review-chief","close-chief","close-tech","admin-old",
+  "2026-11-14T11:00:00Z"))
+db.execute("""UPDATE technical_work_reports
+ SET review_status='accepted',reviewed_by='admin-old',
+ reviewed_at='2026-11-14T11:01:00Z',
+ review_note='Revisado por dirección y documentado.'
+ WHERE id='close-tech'""")
+db.execute("""UPDATE brigade_work SET status='completed',
+ updated_at='2026-11-14T11:01:00Z' WHERE id='work-chief-new'""")
+assert db.execute("SELECT status FROM brigade_work WHERE id='work-chief-new'").fetchone()[0]=="completed"
+try:
+    db.execute("""INSERT INTO chief_completion_reviews
+      (id,chief_report_id,technical_report_id,reviewed_by,created_at)
+      VALUES(?,?,?,?,?)""",
+      ("double-approval","close-chief","close-tech","admin-old",
+       "2026-11-14T11:02:00Z"))
+    raise AssertionError("Una propuesta del jefe admitió doble validación.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("UPDATE chief_completion_reviews SET reviewed_by='staff-old' WHERE id='review-chief'")
+    raise AssertionError("Se modificó la autoría de una revisión.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("DELETE FROM chief_completion_reviews WHERE id='review-chief'")
+    raise AssertionError("Se eliminó la revisión histórica del jefe.")
+except sqlite3.IntegrityError:
+    pass
+
 # Cambio de jefe de brigada: cuenta anterior desactivada y sesión revocada.
 assert db.execute("SELECT is_active FROM brigade_chief_accounts WHERE id='chief-old'").fetchone()[0] == 1
 db.execute("""UPDATE brigades SET leader_name='Jefe sustituto autorizado',
@@ -385,4 +443,4 @@ db.execute("""UPDATE brigades SET leader_name='Jefe sustituto autorizado',
 assert db.execute("SELECT is_active FROM brigade_chief_accounts WHERE id='chief-old'").fetchone()[0] == 0
 assert db.execute("SELECT revoked_at FROM brigade_chief_sessions WHERE id='session-chief-old'").fetchone()[0] is not None
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-print("PASS migraciones 013-018: preservación histórica, identidad y brigada aislada, token hash y evidencias técnicas inmutables (SQLite ficticia).")
+print("PASS migraciones 013-019: preservación histórica, identidad y brigada aislada, token hash y evidencias técnicas inmutables (SQLite ficticia).")
