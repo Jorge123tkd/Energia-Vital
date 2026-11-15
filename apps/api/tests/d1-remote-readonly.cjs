@@ -15,7 +15,7 @@ const allowlist=[
  'brigade_work','request_activities','commercial_quote_versions',
  'request_financial_declarations','request_payment_reports','technical_work_reports',
  'service_followup_cases','service_case_notes','brigade_chief_accounts',
- 'brigade_chief_sessions','brigade_chief_reports','brigade_evidence_images','d1_migrations'
+ 'brigade_chief_sessions','brigade_chief_reports','brigade_evidence_images','chief_completion_reviews','d1_migrations'
 ];
 function wrangler(args){
  try{
@@ -50,7 +50,7 @@ async function main(){
  if(names.includes('d1_migrations')){
    const applied=select('SELECT name FROM d1_migrations ORDER BY id').map(x=>x.name);
    for(const [num,name] of [
-     ['013','013_brigades_foundation.sql'],['014','014_request_activities.sql'],['015','015_commercial_quote_versions.sql'],['016','016_request_financial_tracking.sql'],['017','017_technical_followup.sql'],['018','018_chief_access_evidence.sql']
+     ['013','013_brigades_foundation.sql'],['014','014_request_activities.sql'],['015','015_commercial_quote_versions.sql'],['016','016_request_financial_tracking.sql'],['017','017_technical_followup.sql'],['018','018_chief_access_evidence.sql'],['019','019_chief_completion_review_bridge.sql']
    ]){
      console.log('MIGRACION '+num+': '+(applied.includes(name)?'APLICADA':'NO_APLICADA'));
    }
