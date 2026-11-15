@@ -203,7 +203,7 @@ function webp(bytes:Uint8Array):Uint8Array{
   if(!hasPixels)invalid();
   if(seenOrientation!==null&&seenOrientation!==1){
     if(!vp8x)invalid(); // nonstandard simple WebP cannot preserve EXIF orientation safely
-    vp8x[8]|=0x08;
+    (vp8x as Uint8Array)[8]|=0x08;
     parts.push(makeWebpChunk('EXIF',orientationTiff(seenOrientation)));
   }
   const payload=concat(parts);
