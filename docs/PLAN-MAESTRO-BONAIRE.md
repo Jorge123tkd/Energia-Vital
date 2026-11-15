@@ -118,6 +118,22 @@ Se han preparado `apps/api/src/routes/dossiers.ts`, `apps/web/src/components/Dos
 
 No incluida en 3A. Necesita número comercial, condiciones vigentes, revisión jurídico-contable por cliente, verificación de moneda/reglas aplicables, stock y compromisos firmes, proceso de firma/expedición, y envío solo por personal autorizado tras confirmación explícita. No automatizar desde el asistente.
 
+## Entrega 4A — Seguimiento económico privado y validación administrativa MANUAL (GitHub, NO desplegada)
+
+**Objetivo:** separar dinero DECLARADO, dinero REPORTADO y revisión administrativa, sin presentar información declarada como fondos disponibles o pagos bancarios acreditados. No es contabilidad ni sustituto del banco.
+
+- Migración aditiva `apps/api/migrations/016_request_financial_tracking.sql`: añade dos tablas vinculadas a solicitudes reales, sin copiar ni alterar `request_intake`, clientes, cotizaciones, citas ni brigadas:
+  - `request_financial_declarations`: eventos inmutables de fondos declarados aprobados/disponibles, etapa de trámite informada, origen de la información, forma prevista de pago, propuesta de anticipo, plazo y fecha esperada, y comentario del gestor. **No son fondos confirmados ni autorización fiscal**.
+  - `request_payment_reports`: importes informados por cliente, con `reported` (pendiente), `verified_manual` (evidencia examinada manualmente por administrador) o `rejected`. Historial inmutable, índice de referencia único por solicitud y protección ante doble revisión. No guarda credenciales bancarias ni números de cuenta y no crea recibos, facturas o movimientos bancarios.
+- `apps/api/src/routes/finance.ts`: rutas privadas `/api/finance` para consultar/añadir declaraciones y reportes. `requireStaffAuth` deja a gestores registrar sin afirmar verificaciones. **Solo `requireAdminAuth`** permite revisar un pago reportado, con fuente de evidencia independiente, confirmación expresa y nota detallada; los triggers SQL comprueban también rol administrador activo. Una decisión no puede modificarse después. Cualquier corrección posterior requerirá un evento nuevo en una futura etapa, no reescribir el reportado.
+- Cálculos por categoría: suma de importes **reportados pendientes** y **revisados manualmente**, sin sumar los rechazados. Se evita etiquetarlos como saldo bancario, ingresos contables o deuda contractual.
+- `apps/web/src/components/FinanceTracker.svelte`: sección móvil/desktop dentro de `DossierPanel.svelte`. Registra forma de pago, cantidad declarada/aprobada, anticipo, plazos y detalles para clientes persona, mipymes o estatales; reporta supuestos pagos y permite ver resultados administrativos. No está disponible al cliente/bot y no hace transferencias.
+- Se ejecutó GitHub Actions run `43724056680` (**success**) en commit `b0c5f1c739c49804ee96e38117a1efe3632291be`: typecheck API/web, build, 001–016 en Worker+D1 temporal, pruebas JWT para cliente/operador/admin, protección contra referencias repetidas, revisión única y auditoría, y ensayo de preservación de nueve conjuntos históricos **ficticios** con triggers nuevos. No garantiza compatibilidad con la D1 REAL.
+- El gate de deploy de la rama de desarrollo ahora exige **7 tablas** nuevas de 013–016, incluyendo declaración y reporte; el auditor de D1 contempla migración 016 y se cambió a **activación manual**, para no acceder a producción automáticamente con cada edición del código.
+- **NO aplicado a D1 de producción.** Auditoría remota todavía sin secretos Cloudflare de GitHub, respaldo D1 real todavía no realizado, publicación Worker/Pages pendiente de autorización.
+
+**Siguientes etapas:** integración jurídica/contable y conciliación bancaria real a través de fuentes autorizadas, gestión de anticipos/contratos, correcciones económicas auditables y posventa técnica con evidencias. No afirmar pagos reales sin revisarlos en los sistemas de tesorería.
+
 ## Validaciones antes de activar la función
 
 - Test de 1/2/3+ brigadas; 2 asignaciones un día; rechazo, aprobación solo admin y auditoría.

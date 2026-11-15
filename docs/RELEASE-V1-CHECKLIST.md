@@ -11,6 +11,13 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Asegurar que `approved_internal` NO crea ni remite ninguna oferta, contrato, factura o verificación de pago.
 - [ ] Revisar política de emisión formal por separado y mantener la web sin botón de publicación de cotizaciones.
 
+## Nueva etapa 4A: seguimiento económico (sin publicación)
+- [ ] Confirmar que `016_request_financial_tracking.sql` funciona en copia privada de D1 real y que los nueve conjuntos históricos siguen intactos.
+- [ ] Confirmar que se distinguen los fondos declarados como aprobados/disponibles, condiciones negociadas, pagos reportados y revisión manual del administrador.
+- [ ] Verificar acceso: cliente y bot no pueden consultar finanzas internas; gestor registra pero jamás valida pagos; solo administrador activo registra una revisión con evidencia independiente.
+- [ ] Comprobar referencias duplicadas, rechazo, auditoría, integridad SQL y que la revisión manual NO se anuncie como conciliación bancaria automática.
+- [ ] Revisar procesos jurídico-contables reales, control de caja, aprobaciones fiscales y tratamiento de comprobantes sin almacenar credenciales o números de cuenta en notas.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
