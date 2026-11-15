@@ -43,6 +43,14 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Probar concurrencia y doble decisión, referencia de informe original, historia y preservación de fotos en R2 privado.
 - [ ] Exigir auditoría read-only y copia/restauración D1 y R2 antes de cualquier despliegue.
 
+## Fase 5B2d: privacidad de orientación de fotos (código y CI; producción pendiente)
+- [x] Prueba sintética de orientación EXIF 1–8 en JPEG y conservación de una etiqueta reconstruida sin GPS/fecha/serial.
+- [x] Prueba sintética de WebP extendido VP8X: eliminar XMP/EXIF original y reconstruir solamente orientación, con corrección de flags y tamaño RIFF.
+- [x] Rechazar PNG eXIf orientado y WebP no extendido con orientación sin soporte de normalización segura. Mantener rutas R2 privadas y hash/tamaño sobre bytes saneados.
+- [ ] **Probar con fotografías reales consentidas** de Android/iPhone y comprobar orientación visual de retrato, delante de administradores y jefes en sus vistas privadas.
+- [ ] Evaluar privacidad residual de perfiles de color y políticas de retención/consentimiento con responsables antes de subir evidencias reales.
+- [ ] No aplicar el código ni migraciones a Cloudflare real sin auditoría read-only, copias de D1/R2 verificadas y autorización expresa.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
