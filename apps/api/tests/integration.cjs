@@ -264,6 +264,107 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const created = await request('Customer A creates request', '/api/private/requests', 'POST', {
     type: 'installation', title: 'Instalación solar residencial', description: 'Deseo instalar paneles y baterías en mi vivienda.'
   }, at, 201);
+  // Cotizaciones fase 3A: snapshots inmutables, cifras USD y control humano.
+  await request('Anonymous cannot read private quote versions',
+    '/api/quotes/requests/'+created.id,'GET',null,null,401);
+  await request('Customer cannot read internal quote versions',
+    '/api/quotes/requests/'+created.id,'GET',null,at,401);
+  const emptyQuotes=await request('Gestor reads quote history for customer request',
+    '/api/quotes/requests/'+created.id,'GET',null,staffToken);
+  assert.equal(emptyQuotes.versions.length,0);
+  const quoteDraft=await request('Gestor creates first internal estimate',
+    '/api/quotes/requests/'+created.id+'/versions','POST',{
+      expected_latest_id:null,title:'Primera revisión de instalación',
+      items:[{description:'Panel solar de prueba',quantity:2.5,unit_price_usd_cents:1234}],
+      taxes_usd_cents:200,freight_usd_cents:450,discount_usd_cents:100
+    },staffToken,201);
+  assert.equal(quoteDraft.status,'draft');
+  const savedDraft=await request('Quotation totals are calculated on server',
+    '/api/quotes/requests/'+created.id,'GET',null,staffToken);
+  assert.equal(savedDraft.versions[0].subtotal_cents,3085);
+  assert.equal(savedDraft.versions[0].total_cents,3635);
+  assert.equal(savedDraft.versions[0].items[0].line_total_usd_cents,3085);
+  await request('Draft without review fields cannot be submitted',
+    '/api/quotes/'+quoteDraft.id+'/submit','PATCH',{},staffToken,400);
+  await request('Client cannot impersonate quote author',
+    '/api/quotes/requests/'+created.id+'/versions','POST',{
+      expected_latest_id:quoteDraft.id,title:'Suplantación de identidad',
+      items:[{description:'Equipo de prueba',quantity:1,unit_price_usd_cents:500}],
+      created_by:adminEmail
+    },staffToken,400);
+  await request('Quote rejects unapproved payment verification fields',
+    '/api/quotes/requests/'+created.id+'/versions','POST',{
+      expected_latest_id:quoteDraft.id,title:'Pago no autorizado',
+      items:[{description:'Equipo de prueba',quantity:1,unit_price_usd_cents:500}],
+      payment_verified:true
+    },staffToken,400);
+  const expires=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+  const quotationBody={
+    expected_latest_id:quoteDraft.id,title:'Cotización revisable con condiciones',
+    items:[{description:'Instalación y materiales solares',quantity:2,unit_price_usd_cents:12500},
+      {description:'Montaje y cableado técnico',quantity:1,unit_price_usd_cents:8000}],
+    taxes_usd_cents:2000,freight_usd_cents:1200,discount_usd_cents:0,
+    valid_until:expires,delivery_terms:'Entrega por coordinación de gestores.',
+    warranty_terms:'Garantía conforme a contrato, pendiente de revisión jurídica.',
+    payment_terms:'Transferencia sujeta a verificación de cuenta y anticipo.',
+    stock_notes:'Gestor debe confirmar existencias antes de emitir oferta.',
+    tax_notes:'Impuestos aplicables por confirmar mediante revisión contable.',
+    freight_notes:'Transporte confirmado solo después de revisión logística.'
+  };
+  const quoteV2=await request('Gestor creates a new snapshot instead of editing first quote',
+    '/api/quotes/requests/'+created.id+'/versions','POST',quotationBody,staffToken,201);
+  assert.equal(quoteV2.version_no,2);
+  const afterRevision=await request('Old quote snapshot is retained and superseded',
+    '/api/quotes/requests/'+created.id,'GET',null,adminToken);
+  assert.equal(afterRevision.versions.length,2);
+  assert.equal(afterRevision.versions[0].status,'draft');
+  assert.equal(afterRevision.versions[1].status,'superseded');
+  assert.equal(afterRevision.versions[1].total_cents,3635);
+  await request('Stale draft version cannot overwrite newer version',
+    '/api/quotes/requests/'+created.id+'/versions','POST',quotationBody,staffToken,409);
+  await request('Moderators cannot approve internal quotations',
+    '/api/quotes/'+quoteV2.id+'/review','PATCH',
+    {decision:'approve',reason:'Intento no autorizado'},staffToken,403);
+  const submittedQuote=await request('Gestor submits quote to human review',
+    '/api/quotes/'+quoteV2.id+'/submit','PATCH',{},staffToken);
+  assert.equal(submittedQuote.status,'in_review');
+  await request('Cannot create another draft during active review',
+    '/api/quotes/requests/'+created.id+'/versions','POST',
+    {...quotationBody,expected_latest_id:quoteV2.id},staffToken,409);
+  const reviewedQuote=await request('Admin authorizes quote internally without issuance',
+    '/api/quotes/'+quoteV2.id+'/review','PATCH',
+    {decision:'approve',reason:'Revisión interna de cifras y condiciones'},adminToken);
+  assert.equal(reviewedQuote.status,'approved_internal');
+  assert.match(reviewedQuote.message,/no se envi[oó]/i);
+  await request('Repeated approval cannot alter review history',
+    '/api/quotes/'+quoteV2.id+'/review','PATCH',
+    {decision:'approve',reason:'Intento duplicado'},adminToken,409);
+  const checkedQuote=await request('Quote approval keeps full version and reviewer',
+    '/api/quotes/requests/'+created.id,'GET',null,staffToken);
+  assert.equal(checkedQuote.versions[0].status,'approved_internal');
+  assert.equal(checkedQuote.versions[0].reviewed_by_email,adminEmail);
+  const newDraft=await request('Approved version can be revised in a NEW draft',
+    '/api/quotes/requests/'+created.id+'/versions','POST',
+    {...quotationBody,expected_latest_id:quoteV2.id,
+      title:'Cambio posterior a revisión interna'},staffToken,201);
+  assert.equal(newDraft.version_no,3);
+  await request('Third version enters human review',
+    '/api/quotes/'+newDraft.id+'/submit','PATCH',{},staffToken);
+  await request('Rejection requires documented reason',
+    '/api/quotes/'+newDraft.id+'/review','PATCH',{decision:'reject',reason:''},adminToken,400);
+  const rejectedQuote=await request('Administrator rejects version with reason',
+    '/api/quotes/'+newDraft.id+'/review','PATCH',
+    {decision:'reject',reason:'Revisar disponibilidad y plazos'},adminToken);
+  assert.equal(rejectedQuote.status,'rejected');
+  const preservedQuote=await request('Rejected quote retains all versions',
+    '/api/quotes/requests/'+created.id,'GET',null,staffToken);
+  assert.deepEqual(preservedQuote.versions.map(v=>v.status),
+    ['rejected','approved_internal','superseded']);
+  assert.equal(preservedQuote.versions[0].review_reason,'Revisar disponibilidad y plazos');
+  const dossierStillPending=await request('Internal review does not change commercial request state',
+    '/api/dossiers/requests/'+created.id,'GET',null,staffToken);
+  assert.equal(dossierStillPending.request.status,'pending');
+
   // Expediente 360°: permisos, datos vinculados y gestiones inmutables.
   await request('Anonymous cannot access customer dossier',
     '/api/dossiers/customers/'+ar.user.id,'GET',null,null,401);
