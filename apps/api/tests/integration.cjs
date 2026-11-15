@@ -666,6 +666,174 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
       work_date:workDate,estimated_minutes:60,busy_acknowledged:true},staffToken,201);
   assert.equal(secondB.work.status,'scheduled');
 
+  // Etapa 5B1 — credenciales AISLADAS del jefe y fotos privadas R2.
+  await request('Anonymous cannot list chief accounts',
+    '/api/chief/admin/accounts','GET',null,null,401);
+  await request('Operator cannot provision brigade chief accounts',
+    '/api/chief/admin/accounts','POST',{
+      brigade_id:bg1.id,email:'intruso-'+uid+'@invalid.example',
+      password:'ClaveDelJefeSoloPruebas123!'
+    },staffToken,403);
+  const chiefPassword='ClaveJefeCI2026-TotalmenteFicticia!';
+  const chiefEmail1='jefe-uno-'+uid+'@invalid.example';
+  const chiefEmail2='jefe-dos-'+uid+'@invalid.example';
+  const chiefOne=await request('Admin provisions chief login for first brigade',
+    '/api/chief/admin/accounts','POST',{
+      brigade_id:bg1.id,email:chiefEmail1,password:chiefPassword
+    },adminToken,201);
+  const chiefTwo=await request('Admin provisions separate chief for second brigade',
+    '/api/chief/admin/accounts','POST',{
+      brigade_id:bg2.id,email:chiefEmail2,password:chiefPassword
+    },adminToken,201);
+  assert.notEqual(chiefOne.id,chiefTwo.id);
+  const chiefs=await request('Admin lists accounts without hashes or tokens',
+    '/api/chief/admin/accounts','GET',null,adminToken);
+  assert.ok(chiefs.accounts.some(x=>x.id===chiefOne.id&&x.brigade_id===bg1.id));
+  assert.equal(JSON.stringify(chiefs).includes('password_hash'),false);
+  await request('Chief password cannot be reused for staff identity',
+    '/api/chief/admin/accounts','POST',{
+      brigade_id:bg1.id,email:staffEmail,password:chiefPassword
+    },adminToken,409);
+  await request('Chief login rejects wrong password',
+    '/api/chief/login','POST',{email:chiefEmail1,password:'no-es-la-contraseña'},null,401);
+  const login1=await request('Chief logs into independent 8-hour session',
+    '/api/chief/login','POST',{email:chiefEmail1,password:chiefPassword},null);
+  const login2=await request('Another chief logs into own brigade',
+    '/api/chief/login','POST',{email:chiefEmail2,password:chiefPassword},null);
+  const chiefToken1=login1.access_token,chiefToken2=login2.access_token;
+  assert.match(chiefToken1,/^[0-9a-f]{64}$/);
+  assert.equal(login1.account.brigade_id,bg1.id);
+  assert.equal(login2.account.brigade_id,bg2.id);
+  await request('Chief session cannot enter the admin panel API',
+    '/api/admin/users','GET',null,chiefToken1,401);
+  await request('Chief session cannot read internal dossiers',
+    '/api/dossiers/requests/'+r3.id,'GET',null,chiefToken2,401);
+  await request('Chief session cannot access internal finance',
+    '/api/finance/requests/'+r3.id,'GET',null,chiefToken2,401);
+  await request('Staff JWT cannot pose as a chief session',
+    '/api/chief/me','GET',null,staffToken,401);
+  await request('Customer JWT cannot pose as a chief session',
+    '/api/chief/me','GET',null,at,401);
+  const work1=await request('Chief one sees only assigned brigade work',
+    '/api/chief/works','GET',null,chiefToken1);
+  const work2=await request('Chief two sees only own brigade work',
+    '/api/chief/works','GET',null,chiefToken2);
+  assert.ok(work1.works.some(x=>x.id===firstWork.work.id));
+  assert.ok(!work1.works.some(x=>x.id===toB.work.id));
+  assert.ok(work2.works.some(x=>x.id===toB.work.id));
+  assert.ok(!work2.works.some(x=>x.id===firstWork.work.id));
+  assert.equal(JSON.stringify(work2).includes('customer_phone'),false);
+  await request('Chief cannot read report history for foreign brigade',
+    '/api/chief/works/'+toB.work.id+'/reports','GET',null,chiefToken1,404);
+  await request('Chief cannot create report for foreign brigade',
+    '/api/chief/works/'+firstWork.work.id+'/reports','POST',{
+      report_type:'progress',summary:'Informe desde cuenta de otra brigada.'
+    },chiefToken2,404);
+  await request('Chief cannot forge a signed admin completion',
+    '/api/chief/works/'+toB.work.id+'/reports','POST',{
+      report_type:'completion_proposed',summary:'Pretende inventar una firma válida.',
+      evidence_note:'Se detallan pruebas pendientes de supervisión.',
+      review_status:'accepted',approved_by:adminEmail
+    },chiefToken2,400);
+  const authenticChiefReport=await request('Assigned chief records progress using own identity',
+    '/api/chief/works/'+toB.work.id+'/reports','POST',{
+      report_type:'progress',
+      summary:'El jefe informa directamente avance de montaje y pruebas.'
+    },chiefToken2,201);
+  assert.ok(authenticChiefReport.id);
+  const chiefCloseProposal=await request('Chief can propose completion without authorizing work',
+    '/api/chief/works/'+toB.work.id+'/reports','POST',{
+      report_type:'completion_proposed',
+      summary:'El jefe declara finalizadas las labores y solicita revisión.',
+      evidence_note:'Se hicieron mediciones declaradas por el responsable técnico; revisar documentación.'
+    },chiefToken2,201);
+  assert.match(chiefCloseProposal.message,/requiere revisión/i);
+  const stillPlanned=await request('Chief self-report does not close brigade assignment',
+    '/api/chief/works','GET',null,chiefToken2);
+  assert.equal(stillPlanned.works.find(x=>x.id===toB.work.id).status,'scheduled');
+  const ownReports=await request('Only actual authenticated chief can read own report history',
+    '/api/chief/works/'+toB.work.id+'/reports','GET',null,chiefToken2);
+  assert.ok(ownReports.reports.some(x=>x.id===authenticChiefReport.id));
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLrOwAAAABJRU5ErkJggg==','base64');
+  const payload=new FormData();
+  payload.append('file',new Blob([png],{type:'image/png'}),'evidencia-prueba.png');
+  payload.append('stage','after');
+  payload.append('captured_note','Fotografía ficticia tomada para comprobar permisos en R2.');
+  payload.append('report_id',authenticChiefReport.id);
+  const photoResponse=await fetch(BASE+'/api/chief/works/'+toB.work.id+'/evidence',{
+    method:'POST',headers:{Authorization:'Bearer '+chiefToken2},body:payload
+  });
+  const photoData=await photoResponse.json().catch(()=>({}));
+  assert.equal(photoResponse.status,201,
+    'Chief photo upload: '+photoResponse.status+' '+JSON.stringify(photoData));
+  console.log('PASS Chief photo uploaded to private R2');
+  assert.match(photoData.sha256_hex,/^[a-f0-9]{64}$/);
+  const chiefPhotoList=await request('Chief lists only metadata of own evidence',
+    '/api/chief/works/'+toB.work.id+'/evidence','GET',null,chiefToken2);
+  assert.ok(chiefPhotoList.images.some(x=>x.id===photoData.id));
+  assert.equal(JSON.stringify(chiefPhotoList).includes('r2_key'),false);
+  const staffPhotoList=await request('Staff sees technical evidence without R2 key',
+    '/api/chief/staff/works/'+toB.work.id+'/evidence','GET',null,staffToken);
+  assert.ok(staffPhotoList.images.some(x=>x.id===photoData.id));
+  const imageOwn=await fetch(BASE+'/api/chief/works/'+toB.work.id+'/evidence/'+photoData.id,{
+    headers:{Authorization:'Bearer '+chiefToken2}
+  });
+  assert.equal(imageOwn.status,200);
+  assert.equal(imageOwn.headers.get('cache-control'),'private, no-store');
+  assert.equal((await imageOwn.arrayBuffer()).byteLength,png.length);
+  console.log('PASS Chief can load private evidence without public URLs');
+  const foreignImage=await fetch(BASE+'/api/chief/works/'+toB.work.id+'/evidence/'+photoData.id,{
+    headers:{Authorization:'Bearer '+chiefToken1}
+  });
+  assert.equal(foreignImage.status,404);
+  console.log('PASS Other chief cannot download foreign brigade R2 image');
+  const anonImage=await fetch(BASE+'/api/chief/staff/works/'+toB.work.id+'/evidence/'+photoData.id);
+  assert.equal(anonImage.status,401);
+  console.log('PASS Anonymous photo access blocked');
+  const copiedEvidence=new FormData();
+  copiedEvidence.append('file',new Blob([png],{type:'image/png'}),'mal-uso.png');
+  copiedEvidence.append('stage','after');
+  const foreignUpload=await fetch(BASE+'/api/chief/works/'+toB.work.id+'/evidence',{
+    method:'POST',headers:{Authorization:'Bearer '+chiefToken1},body:copiedEvidence
+  });
+  assert.equal(foreignUpload.status,404);
+  console.log('PASS Cross-brigade upload blocked');
+  const fakeEvidence=new FormData();
+  fakeEvidence.append('file',new Blob(['texto, no una imagen'],{type:'image/png'}),'falsa.png');
+  fakeEvidence.append('stage','after');
+  const invalidUpload=await fetch(BASE+'/api/chief/works/'+toB.work.id+'/evidence',{
+    method:'POST',headers:{Authorization:'Bearer '+chiefToken2},body:fakeEvidence
+  });
+  assert.equal(invalidUpload.status,400);
+  console.log('PASS Fake PNG signature rejected');
+  const currentChief=chiefs.accounts.find(x=>x.id===chiefTwo.id);
+  const rotated=await request('Admin rotates chief password and revokes all prior sessions',
+    '/api/chief/admin/accounts/'+chiefTwo.id,'PATCH',{
+      password:'NuevaClaveJefeTotalmenteFicticia2026!',
+      expected_updated_at:currentChief.updated_at
+    },adminToken);
+  assert.match(rotated.message,/revocadas/);
+  await request('Revoked chief token cannot read jobs',
+    '/api/chief/works','GET',null,chiefToken2,401);
+  const newChiefLogin=await request('Chief can log in with new password',
+    '/api/chief/login','POST',{
+      email:chiefEmail2,password:'NuevaClaveJefeTotalmenteFicticia2026!'
+    },null);
+  assert.ok(newChiefLogin.access_token!==chiefToken2);
+  const rotatedList=await request('Admin gets version for disabling chief account',
+    '/api/chief/admin/accounts','GET',null,adminToken);
+  const updatedAccount=rotatedList.accounts.find(x=>x.id===chiefTwo.id);
+  await request('Admin deactivates chief account and revokes sessions',
+    '/api/chief/admin/accounts/'+chiefTwo.id,'PATCH',{
+      is_active:false,expected_updated_at:updatedAccount.updated_at
+    },adminToken);
+  await request('Deactivated chief cannot access work records',
+    '/api/chief/works','GET',null,newChiefLogin.access_token,401);
+  await request('Chief can explicitly close own session',
+    '/api/chief/logout','POST',{},chiefToken1);
+  await request('Logged out chief cannot access session',
+    '/api/chief/works','GET',null,chiefToken1,401);
+
   // Etapa 5A: informes, propuesta y revisión de cierre; incidencias y garantías.
   await request('Anonymous cannot inspect technical work records',
     '/api/technical/requests/'+r3.id,'GET',null,null,401);
