@@ -12,12 +12,12 @@ export const technicalRoutes=new Hono<{Bindings:Env;Variables:{user?:any}}>();
 technicalRoutes.use('*',requireStaffAuth);
 const obj=(x:unknown):x is Record<string,unknown>=>!!x&&typeof x==='object'&&!Array.isArray(x);
 const allowed=(x:Record<string,unknown>,keys:string[])=>Object.keys(x).every(k=>keys.includes(k));
-const validId=(s:string|undefined):s is string=>typeof s==='string'&&s.length>0&&s.length<=128;
+const validId=(s:unknown):s is string=>typeof s==='string'&&s.length>0&&s.length<=128;
 const txt=(v:unknown,min:number,max:number):string|null=>
   typeof v==='string'&&v.length<=max+40&&v.trim().length>=min&&v.trim().length<=max?v.trim():null;
 const choose=(v:unknown,opts:readonly string[]):v is string=>
   typeof v==='string'&&opts.includes(v);
-const sqlConflict=(err:unknown)=>/constraint|historial|mismo|informe|revisión|revisar|cerrar|finaliz|exige|aceptado|UNIQUE/i.test(
+const sqlConflict=(err:unknown)=>/constraint|historial|mismo|misma|informe|revisión|revisar|cerrar|finaliz|exige|aceptado|UNIQUE/i.test(
   err instanceof Error?err.message:String(err));
 function log(db:Env['DB'],actor:string,action:string,requestId:string,id:string,details:Record<string,unknown>,
   condition:{table:'technical_work_reports'|'service_followup_cases';column:'created_at'|'reviewed_at'|'resolved_at';time:string}){
