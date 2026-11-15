@@ -2,7 +2,7 @@
 """Bonaire: ensayo REPRODUCIBLE con registros FICTICIOS de una D1 histórica.
 
 Ejecuta 001..012, inserta datos relacionados (sin datos de producción),
-aplica 013, 014, 015 y 016, compara cada fila histórica y comprueba referencias.
+aplica 013, 014, 015, 016 y 017, compara cada fila histórica y comprueba referencias.
 Usa SQLite de Python en memoria; la suite separada Worker+D1 verifica
 compatibilidad real con Cloudflare. NO accede a Cloudflare.
 """
@@ -71,12 +71,14 @@ migration(13)
 migration(14)
 migration(15)
 migration(16)
+migration(17)
 after = {name:snapshot(name) for name in tables}
 for name in tables:
     assert before[name] == after[name], f"La migración alteró datos existentes: {name}"
 
 for new_table in ("brigades","brigade_members","brigade_work","request_activities",
-                  "commercial_quote_versions","request_financial_declarations","request_payment_reports"):
+                  "commercial_quote_versions","request_financial_declarations","request_payment_reports",
+                  "technical_work_reports","service_followup_cases","service_case_notes"):
     assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
                       (new_table,)).fetchone()[0] == 1
 
@@ -194,4 +196,73 @@ except sqlite3.IntegrityError:
     pass
 assert db.execute("SELECT verification_status FROM request_payment_reports WHERE id='payment-old'").fetchone()[0] == "verified_manual"
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-print("PASS migraciones 013-016: preservados 9 conjuntos históricos, FKs, versiones, declaraciones y reportes inmutables con revisión admin (SQLite ficticia).")
+# Un reporte de ejecución requiere una asignación previa y revisión de dirección.
+try:
+    db.execute("UPDATE brigade_work SET status='completed' WHERE id='work-new'")
+    raise AssertionError("Se pudo cerrar trabajo sin informe técnico aceptado.")
+except sqlite3.IntegrityError:
+    pass
+db.execute("""INSERT INTO technical_work_reports
+  (id,work_id,actor_id,report_type,information_source,summary,evidence_note,review_status,created_at)
+  VALUES(?,?,?,?,?,?,?,?,?)""",
+ ("technical-old","work-new","staff-old","completion_proposed","chief_relayed",
+  "El jefe informa las pruebas ejecutadas y el trabajo presuntamente terminado.",
+  "Se documentaron mediciones y controles de instalación para revisión administrativa.",
+  "pending_review","2026-11-14T00:00:00Z"))
+try:
+    db.execute("""UPDATE technical_work_reports SET review_status='accepted',
+        reviewed_by='staff-old',reviewed_at='2026-11-14T03:00:00Z',
+        review_note='El gestor pretende validar un informe propio.'
+        WHERE id='technical-old'""")
+    raise AssertionError("Un gestor pudo aceptar el cierre técnico.")
+except sqlite3.IntegrityError:
+    pass
+db.execute("""UPDATE technical_work_reports SET review_status='accepted',
+        reviewed_by='admin-old',reviewed_at='2026-11-14T03:00:00Z',
+        review_note='Se examinó documentación técnica del trabajo.'
+        WHERE id='technical-old'""")
+db.execute("UPDATE brigade_work SET status='completed' WHERE id='work-new'")
+assert db.execute("SELECT status FROM brigade_work WHERE id='work-new'").fetchone()[0] == 'completed'
+try:
+    db.execute("UPDATE brigade_work SET status='scheduled' WHERE id='work-new'")
+    raise AssertionError("Se reabrió silenciosamente un trabajo completado.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("DELETE FROM technical_work_reports WHERE id='technical-old'")
+    raise AssertionError("Se eliminó el informe técnico ya aprobado.")
+except sqlite3.IntegrityError:
+    pass
+
+db.execute("""INSERT INTO service_followup_cases(
+    id,request_id,work_id,case_type,priority,title,description,warranty_claim_details,
+    status,opened_by,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+ ("warranty-old","request-old","work-new","warranty_claim","high",
+  "Reclamación de garantía","Cliente reclama fallo posterior a la visita.",
+  "Garantía mencionada pero sin aceptación de cobertura.",
+  "open","staff-old","2026-11-14T04:00:00Z","2026-11-14T04:00:00Z"))
+db.execute("""INSERT INTO service_case_notes(id,case_id,actor_id,note,created_at)
+  VALUES(?,?,?,?,?)""",
+ ("case-note-old","warranty-old","staff-old",
+  "Jefe declara que el equipo será revisado en próxima visita.",
+  "2026-11-14T04:10:00Z"))
+try:
+    db.execute("""UPDATE service_followup_cases SET status='resolved',
+      resolved_by='staff-old',resolved_at='2026-11-14T05:00:00Z',
+      resolution_note='El gestor no puede cerrar una reclamación.'
+      WHERE id='warranty-old'""")
+    raise AssertionError("Un gestor pudo resolver un caso de garantía.")
+except sqlite3.IntegrityError:
+    pass
+db.execute("""UPDATE service_followup_cases SET status='resolved',
+  resolved_by='admin-old',resolved_at='2026-11-14T05:00:00Z',
+  resolution_note='Se revisó el caso y se documentó el seguimiento.',
+  updated_at='2026-11-14T05:00:00Z' WHERE id='warranty-old'""")
+try:
+    db.execute("DELETE FROM service_case_notes WHERE id='case-note-old'")
+    raise AssertionError("Se borró una nota histórica de posventa.")
+except sqlite3.IntegrityError:
+    pass
+assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+print("PASS migraciones 013-017: preservados 9 conjuntos históricos, trabajo con cierre admin, garantía reclamada y notas inmutables (SQLite ficticia).")
