@@ -63,3 +63,9 @@ Solo después de las cuatro puertas:
 - Verificación con usuario real autorizado y regresión de web pública tras lanzamiento.
 
 **Situación actual: detenerse antes de la puerta 2 remota hasta decidir cómo auditar sin exponer datos ni credenciales.**
+
+## Auditoría remota de solo lectura — intento bloqueado (14-11-2026)
+
+Se añadió `apps/api/tests/d1-remote-readonly.cjs` y `.github/workflows/audit-d1-readonly.yml` para inventariar SOLO por lectura el estado de D1: nombres de tablas permitidas, estado de 013/014 y lista de migraciones pendientes; verifica conteos sin publicar cifras. La primera ejecución de GitHub Actions [43668986210](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43668986210) **no consultó Cloudflare**, porque GitHub no proporcionó al menos una de las variables secretas `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID` (log: `Faltan los secretos de GitHub para auditoría de Cloudflare`). No se sabe cuál falta; no se ha intentado acceso sin permisos ni se ha modificado producción.
+
+Antes de repetir, un responsable debe revisar en GitHub **Settings → Secrets and variables → Actions**, configurar `CLOUDFLARE_API_TOKEN` con alcance mínimo **D1 Read** y `CLOUDFLARE_ACCOUNT_ID` para la cuenta correcta. No enviar sus valores por chat ni almacenarlos en archivos del repositorio. Con secretos listos, volver a ejecutar únicamente el job fallido y validar salida. El respaldo D1 real requiere un proceso independiente más cuidadoso (un export no es una simple lectura y puede necesitar permiso D1 Write / bloquear temporalmente consultas); **no** se ha activado exportación ni despliegue. Referencia: https://developers.cloudflare.com/d1/observability/debug-d1/
