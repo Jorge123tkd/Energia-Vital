@@ -666,6 +666,158 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
       work_date:workDate,estimated_minutes:60,busy_acknowledged:true},staffToken,201);
   assert.equal(secondB.work.status,'scheduled');
 
+  // Etapa 5A: informes, propuesta y revisión de cierre; incidencias y garantías.
+  await request('Anonymous cannot inspect technical work records',
+    '/api/technical/requests/'+r3.id,'GET',null,null,401);
+  await request('Customer cannot inspect staff technical records',
+    '/api/technical/requests/'+r3.id,'GET',null,at,401);
+  const technicalBefore=await request('Staff sees assigned technical work',
+    '/api/technical/requests/'+r3.id,'GET',null,staffToken);
+  assert.ok(technicalBefore.works.some(x=>x.id===toB.work.id&&x.status==='scheduled'));
+  await request('Customer cannot post a signed chief report',
+    '/api/technical/works/'+toB.work.id+'/reports','POST',{
+      report_type:'progress',information_source:'chief_relayed',
+      summary:'Se revisaron las conexiones y se informa progreso.'
+    },at,401);
+  await request('Staff cannot forge a digitally signed report',
+    '/api/technical/works/'+toB.work.id+'/reports','POST',{
+      report_type:'progress',information_source:'chief_relayed',
+      summary:'Informe firmado falsamente.',chief_signature:'FIRMA-FALSA'
+    },staffToken,400);
+  const progressNote=await request('Operator relays chief observation without impersonation',
+    '/api/technical/works/'+toB.work.id+'/reports','POST',{
+      report_type:'progress',information_source:'chief_relayed',
+      summary:'El jefe informa avance de los paneles y revisión de conexiones.'
+    },staffToken,201);
+  assert.equal(progressNote.status,'note_only');
+  await request('Cannot propose completion without described evidence',
+    '/api/technical/works/'+toB.work.id+'/reports','POST',{
+      report_type:'completion_proposed',information_source:'staff_observed',
+      summary:'La instalación está terminada.'
+    },staffToken,400);
+  await request('Evidence picture from another or unknown request is rejected',
+    '/api/technical/works/'+toB.work.id+'/reports','POST',{
+      report_type:'completion_proposed',information_source:'staff_observed',
+      summary:'Trabajo terminado según pruebas.',
+      evidence_note:'Se midieron los terminales y la salida en los equipos de prueba.',
+      evidence_image_id:crypto.randomUUID()
+    },staffToken,409);
+  const proposed=await request('Operator submits completion PROPOSAL for admin',
+    '/api/technical/works/'+toB.work.id+'/reports','POST',{
+      report_type:'completion_proposed',information_source:'chief_relayed',
+      summary:'El jefe declara concluido el montaje según la inspección realizada.',
+      evidence_note:'Se informaron mediciones de salida y pruebas técnicas; revisión pendiente.'
+    },staffToken,201);
+  assert.equal(proposed.status,'pending_review');
+  const beforeClosure=await request('Work still scheduled until admin accepts technical report',
+    '/api/technical/requests/'+r3.id,'GET',null,staffToken);
+  assert.equal(beforeClosure.works.find(x=>x.id===toB.work.id).status,'scheduled');
+  await request('Duplicate pending completion proposal blocked',
+    '/api/technical/works/'+toB.work.id+'/reports','POST',{
+      report_type:'completion_proposed',information_source:'staff_observed',
+      summary:'Segunda declaración prematura.',
+      evidence_note:'Se pretendía cerrar el trabajo dos veces sin revisión de la dirección.'
+    },staffToken,409);
+  await request('Operator cannot approve technical completion',
+    '/api/technical/reports/'+proposed.id+'/review','PATCH',{
+      decision:'accept',review_note:'Revisión no autorizada por gestor.',
+      confirm_technical_evidence:true
+    },staffToken,403);
+  await request('Admin must confirm evidence before final technical closure',
+    '/api/technical/reports/'+proposed.id+'/review','PATCH',{
+      decision:'accept',review_note:'Se revisó documentación técnica aportada.',
+      confirm_technical_evidence:false
+    },adminToken,400);
+  const rejectedTechnical=await request('Admin rejects premature completion while keeping schedule',
+    '/api/technical/reports/'+proposed.id+'/review','PATCH',{
+      decision:'reject',review_note:'Faltan pruebas de carga.'
+    },adminToken);
+  assert.equal(rejectedTechnical.status,'rejected');
+  assert.equal(rejectedTechnical.work_status,'scheduled');
+  await request('Cannot rewrite rejected technical review',
+    '/api/technical/reports/'+proposed.id+'/review','PATCH',{
+      decision:'accept',review_note:'Intento duplicado de aprobación.',confirm_technical_evidence:true
+    },adminToken,409);
+  const secondProposal=await request('Operator submits corrected completion evidence',
+    '/api/technical/works/'+toB.work.id+'/reports','POST',{
+      report_type:'completion_proposed',information_source:'staff_observed',
+      summary:'Se completaron las mediciones y la comprobación de conexión.',
+      evidence_note:'Resultados de tensiones y comprobaciones documentadas para revisión interna.'
+    },staffToken,201);
+  const acceptedTechnical=await request('Admin accepts evidence and completes technical work',
+    '/api/technical/reports/'+secondProposal.id+'/review','PATCH',{
+      decision:'accept',review_note:'Revisé la documentación y acepto el cierre técnico.',
+      confirm_technical_evidence:true
+    },adminToken);
+  assert.equal(acceptedTechnical.status,'accepted');
+  assert.equal(acceptedTechnical.work_status,'completed');
+  const afterClosure=await request('Historical technical work appears completed without changing customer request',
+    '/api/technical/requests/'+r3.id,'GET',null,adminToken);
+  assert.equal(afterClosure.works.find(x=>x.id===toB.work.id).status,'completed');
+  assert.equal(afterClosure.reports.find(x=>x.id===secondProposal.id).reviewer_email,adminEmail);
+  assert.ok(afterClosure.reports.some(x=>x.id===progressNote.id));
+  await request('Cannot add fabricated progress to already completed work',
+    '/api/technical/works/'+toB.work.id+'/reports','POST',{
+      report_type:'progress',information_source:'staff_observed',
+      summary:'No se puede añadir avance tras cierre.'
+    },staffToken,409);
+  const customerStateUnchanged=await request('Technical closure does not close commercial request',
+    '/api/dossiers/requests/'+r3.id,'GET',null,adminToken);
+  assert.equal(customerStateUnchanged.request.status,'pending');
+  assert.ok(customerStateUnchanged.audit.some(x=>x.action==='technical_work_completed'));
+
+  await request('After-sales case must reference a work of the SAME request',
+    '/api/technical/requests/'+r3.id+'/cases','POST',{
+      work_id:firstWork.work.id,case_type:'incident',priority:'medium',
+      title:'Incidencia de cableado',description:'El equipo reporta un problema técnico.'
+    },staffToken,409);
+  const claim=await request('Operator opens warranty CLAIM without accepting coverage',
+    '/api/technical/requests/'+r3.id+'/cases','POST',{
+      work_id:toB.work.id,case_type:'warranty_claim',priority:'high',
+      title:'Reclamación de funcionamiento',description:'Cliente alega fallo después de instalar.',
+      warranty_claim_details:'Cliente menciona garantía; vigencia por revisar.'
+    },staffToken,201);
+  assert.equal(claim.status,'open');
+  assert.match(claim.message,/sin aceptación/i);
+  const followNote=await request('Operator adds immutable follow-up note with author',
+    '/api/technical/cases/'+claim.id+'/notes','POST',{
+      note:'La brigada propone revisar conexiones y mediciones nuevamente.'
+    },staffToken,201);
+  assert.ok(followNote.id);
+  await request('Operator cannot administratively resolve warranty complaint',
+    '/api/technical/cases/'+claim.id+'/resolve','PATCH',{
+      resolution_note:'Gestor intenta cerrar sin permiso.',confirm_review:true
+    },staffToken,403);
+  await request('Admin cannot resolve without documented review',
+    '/api/technical/cases/'+claim.id+'/resolve','PATCH',{
+      resolution_note:'Muy breve',confirm_review:false
+    },adminToken,400);
+  const resolved=await request('Admin closes after-sales case with responsible review',
+    '/api/technical/cases/'+claim.id+'/resolve','PATCH',{
+      resolution_note:'Se revisó la incidencia y se documentó el resultado sin reconocer cobertura automática.',
+      confirm_review:true
+    },adminToken);
+  assert.equal(resolved.status,'resolved');
+  await request('Already resolved warranty claim cannot be rewritten',
+    '/api/technical/cases/'+claim.id+'/resolve','PATCH',{
+      resolution_note:'Intento de revisión duplicada después de cierre.',
+      confirm_review:true
+    },adminToken,409);
+  await request('Resolved case does not accept new notes',
+    '/api/technical/cases/'+claim.id+'/notes','POST',{
+      note:'Intento de agregar información después del cierre.'
+    },staffToken,409);
+  const caseSummary=await request('Historic warranty claim and notes remain visible to staff',
+    '/api/technical/requests/'+r3.id,'GET',null,staffToken);
+  assert.ok(caseSummary.cases.some(x=>x.id===claim.id&&x.status==='resolved'&&
+    x.resolved_by_email===adminEmail));
+  assert.ok(caseSummary.notes.some(x=>x.id===followNote.id&&x.actor_email===staffEmail));
+  const aftersalesDossier=await request('Dossier audits technical and warranty decisions',
+    '/api/dossiers/requests/'+r3.id,'GET',null,staffToken);
+  assert.ok(aftersalesDossier.audit.some(x=>x.action==='service_case_resolved'));
+  await request('No API allows deleting technical reports',
+    '/api/technical/reports/'+secondProposal.id,'DELETE',null,adminToken,404);
+
   const bg3=await request('Admin adds third brigade','/api/brigades','POST',
     {name:'Brigada C '+uid,leader_name:'Jefe C'},adminToken,201);
   const three=await request('Three brigades enabled','/api/brigade-work/availability?date='+anotherDate,
