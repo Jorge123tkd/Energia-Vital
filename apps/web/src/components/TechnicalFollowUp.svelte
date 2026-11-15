@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '../lib/api';
+  import { api, authorizedImageBlob } from '../lib/api';
   type Work={id:string;title:string;work_date:string;status:string;brigade_name:string;
     brigade_chief_name:string;estimated_minutes:number};
   type Report={id:string;work_id:string;report_type:string;information_source:string;
@@ -13,12 +13,18 @@
     resolution_note:string|null};
   type Note={id:string;case_id:string;note:string;actor_email:string;created_at:string};
   type Image={id:string;created_at:string};
+  type ChiefReport={id:string;work_id:string;report_type:string;summary:string;
+    evidence_note:string|null;chief_email:string;created_at:string};
+  type ChiefImage={id:string;work_id:string;stage:string;captured_note:string|null;
+    content_type:string;size_bytes:number;chief_email:string;created_at:string};
   let {token,requestId,canReview=false}:{
     token:string;requestId:string;canReview?:boolean;
   }=$props();
 
   let works:Work[]=$state([]),reports:Report[]=$state([]),cases:Case[]=$state([]);
   let notes:Note[]=$state([]),images:Image[]=$state([]);
+  let chiefReports:ChiefReport[]=$state([]),chiefPhotos:ChiefImage[]=$state([]);
+  let openedPhotoId=$state(''),openedPhotoUrl=$state('');
   let error=$state(''),success=$state(''),loading=$state(false),busy=$state(false);
   let truncated=$state(false),showReport=$state(false),showCase=$state(false);
   let workId=$state(''),reportType=$state('progress'),informationSource=$state('staff_observed');
@@ -48,6 +54,8 @@
       works=response.works||[];reports=response.reports||[];
       cases=response.cases||[];notes=response.notes||[];
       images=response.evidence_images||[];
+      chiefReports=response.chief_reports||[];
+      chiefPhotos=response.chief_evidence||[];
       truncated=Object.values(response.truncated||{}).some(Boolean);
       if(!works.some(x=>x.id===workId&&x.status==='scheduled'))
         workId=works.find(x=>x.status==='scheduled')?.id||'';
@@ -128,7 +136,22 @@
     }catch(err){error=err instanceof Error?err.message:'No se pudo resolver el caso.';}
     finally{busy=false;}
   }
-  onMount(()=>{void load();});
+  function closePhoto(){
+    if(openedPhotoUrl){URL.revokeObjectURL(openedPhotoUrl);openedPhotoUrl='';}
+    openedPhotoId='';
+  }
+  async function viewPhoto(w:Work,pic:ChiefImage){
+    if(openedPhotoId===pic.id){closePhoto();return;}
+    closePhoto();busy=true;error='';
+    try{
+      const blob=await authorizedImageBlob(
+        '/api/chief/staff/works/'+encodeURIComponent(w.id)+'/evidence/'+encodeURIComponent(pic.id),token
+      );
+      openedPhotoUrl=URL.createObjectURL(blob);openedPhotoId=pic.id;
+    }catch(e){error=e instanceof Error?e.message:'No se pudo abrir la evidencia privada.';}
+    finally{busy=false;}
+  }
+  onMount(()=>{void load();return ()=>closePhoto();});
 </script>
 
 <section class="rounded-2xl border border-slate-200 bg-white p-4 space-y-4" aria-label="Seguimiento técnico y posventa privado">
@@ -225,6 +248,33 @@
           <span class="text-xs font-semibold">{statusLabels[w.status]||w.status}</span>
         </div>
         <p class="text-xs text-slate-600">Fecha: {w.work_date} · Jefe designado: {w.brigade_chief_name}</p>
+        {#each chiefReports.filter(r=>r.work_id===w.id) as cr (cr.id)}
+          <div class="rounded-lg border border-teal-200 bg-teal-50 p-3 space-y-1">
+            <p class="text-xs font-bold text-teal-950">
+              Informe ingresado por jefe AUTENTICADO · {typeLabels[cr.report_type]||cr.report_type}
+            </p>
+            <p class="text-xs text-teal-900">{cr.chief_email} · {when(cr.created_at)}</p>
+            <p class="text-sm whitespace-pre-wrap break-words">{cr.summary}</p>
+            {#if cr.evidence_note}
+              <p class="text-xs text-teal-900 whitespace-pre-wrap break-words">{cr.evidence_note}</p>
+            {/if}
+            <p class="text-xs text-teal-950">Autenticación de cuenta ≠ firma digital ni cierre técnico. La aceptación final permanece reservada a dirección.</p>
+          </div>
+        {/each}
+        {#each chiefPhotos.filter(photo=>photo.work_id===w.id) as photo (photo.id)}
+          <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <p class="text-xs font-bold">Foto privada de trabajo · {photo.stage==='before'?'Antes':photo.stage==='after'?'Después':'Durante'}</p>
+            <p class="text-xs text-slate-600">{photo.chief_email} · {when(photo.created_at)} · {photo.captured_note||'Sin observación'}</p>
+            <button type="button" onclick={()=>viewPhoto(w,photo)} disabled={busy}
+              class="text-xs rounded-lg border border-teal-300 text-teal-800 font-bold px-3 py-2">
+              {openedPhotoId===photo.id?'Cerrar fotografía':'Ver evidencia de R2 privado'}
+            </button>
+            {#if openedPhotoId===photo.id && openedPhotoUrl}
+              <img src={openedPhotoUrl} alt="Fotografía técnica privada de la brigada"
+                class="rounded-xl max-h-[60dvh] object-contain w-full bg-slate-100"/>
+            {/if}
+          </div>
+        {/each}
         {#each reports.filter(r=>r.work_id===w.id) as r (r.id)}
           <div class="rounded-lg bg-slate-50 border border-slate-100 p-3 space-y-1">
             <p class="text-xs font-bold">{typeLabels[r.report_type]||r.report_type}
