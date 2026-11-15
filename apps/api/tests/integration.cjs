@@ -264,6 +264,124 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const created = await request('Customer A creates request', '/api/private/requests', 'POST', {
     type: 'installation', title: 'Instalación solar residencial', description: 'Deseo instalar paneles y baterías en mi vivienda.'
   }, at, 201);
+  // Seguimiento económico 4A: no confundir declaración con fondos/pagos reales.
+  await request('Anonymous cannot read private financial history',
+    '/api/finance/requests/'+created.id,'GET',null,null,401);
+  await request('Customer cannot read internal financial history',
+    '/api/finance/requests/'+created.id,'GET',null,at,401);
+  const emptyFinance=await request('Staff reads empty financial ledger',
+    '/api/finance/requests/'+created.id,'GET',null,staffToken);
+  assert.equal(emptyFinance.declarations.length,0);
+  assert.equal(emptyFinance.reports.length,0);
+  assert.equal(emptyFinance.summary.unverified_cents,0);
+  await request('Customer cannot create declared funding',
+    '/api/finance/requests/'+created.id+'/declarations','POST',
+    {source:'customer_reported',funding_stage:'approval_reported',
+      payment_method:'transfer',notes:'Cliente declara que tiene dinero.'},at,401);
+  await request('Staff cannot record confirmed funds directly',
+    '/api/finance/requests/'+created.id+'/declarations','POST',
+    {source:'customer_reported',funding_stage:'approval_reported',
+      payment_method:'transfer',payment_verified:true,
+      notes:'Intento de reportar fondos verificados.'},staffToken,400);
+  const funds=await request('Gestor records funds approved and available as DECLARED only',
+    '/api/finance/requests/'+created.id+'/declarations','POST',{
+      source:'customer_reported',funding_stage:'approval_reported',
+      approved_funds_declared_cents:450000,available_funds_declared_cents:150000,
+      advance_proposed_cents:50000,payment_method:'transfer',
+      payment_deadline:'2027-03-01',expected_payment_date:'2027-02-15',
+      notes:'Empresa declara aprobación, sin documento de acreditación.'},staffToken,201);
+  assert.ok(funds.id);
+  const fundsHistory=await request('Funding remains explicitly declared, not verified',
+    '/api/finance/requests/'+created.id,'GET',null,adminToken);
+  assert.equal(fundsHistory.declarations[0].approved_funds_declared_cents,450000);
+  assert.equal(fundsHistory.declarations[0].available_funds_declared_cents,150000);
+  assert.equal(fundsHistory.declarations[0].advance_proposed_cents,50000);
+  assert.equal(fundsHistory.declarations[0].actor_email,staffEmail);
+  assert.equal(fundsHistory.summary.reviewed_manual_cents,0);
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Havana',year:'numeric',
+    month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const cubaPart=(name)=>parts.find(x=>x.type===name).value;
+  const financeDay=[cubaPart('year'),cubaPart('month'),cubaPart('day')].join('-');
+  const paymentReference='CI-PAGO-'+uid;
+  const reportedPayment=await request('Operator records transfer as reported, NEVER verified',
+    '/api/finance/requests/'+created.id+'/payment-reports','POST',{
+      amount_usd_cents:120000,payment_method:'transfer',reported_on:financeDay,
+      reference:paymentReference,report_note:'Cliente informa transferencia sin confirmación de recibo.'},
+    staffToken,201);
+  assert.equal(reportedPayment.status,'reported');
+  const beforeVerification=await request('Reported amount is kept UNVERIFIED',
+    '/api/finance/requests/'+created.id,'GET',null,staffToken);
+  assert.equal(beforeVerification.summary.unverified_cents,120000);
+  assert.equal(beforeVerification.summary.reviewed_manual_cents,0);
+  await request('Duplicate reference cannot be counted again',
+    '/api/finance/requests/'+created.id+'/payment-reports','POST',{
+      amount_usd_cents:120000,payment_method:'transfer',reported_on:financeDay,
+      reference:paymentReference,report_note:'Segunda copia del mismo reporte de pago.'},
+    staffToken,409);
+  await request('Operator cannot verify payment, only admin',
+    '/api/finance/payment-reports/'+reportedPayment.id+'/review','PATCH',{
+      decision:'manual_verify',verification_basis:'bank_statement',
+      review_note:'Comprobación no autorizada por el gestor.',
+      confirm_independent_check:true
+    },staffToken,403);
+  await request('Admin cannot verify without independent evidence confirmation',
+    '/api/finance/payment-reports/'+reportedPayment.id+'/review','PATCH',{
+      decision:'manual_verify',verification_basis:'bank_statement',
+      review_note:'No se verificó ninguna evidencia independiente.',
+      confirm_independent_check:false
+    },adminToken,400);
+  await request('Admin cannot use client statement alone as verification',
+    '/api/finance/payment-reports/'+reportedPayment.id+'/review','PATCH',{
+      decision:'manual_verify',verification_basis:'bank_statement',
+      review_note:'corto',confirm_independent_check:true
+    },adminToken,400);
+  const manuallyChecked=await request('Admin records manual payment verification with audit evidence',
+    '/api/finance/payment-reports/'+reportedPayment.id+'/review','PATCH',{
+      decision:'manual_verify',verification_basis:'bank_statement',
+      review_note:'Revisado extracto independiente de la empresa durante prueba.',
+      confirm_independent_check:true
+    },adminToken);
+  assert.equal(manuallyChecked.status,'verified_manual');
+  await request('Verified manual record cannot be silently changed',
+    '/api/finance/payment-reports/'+reportedPayment.id+'/review','PATCH',{
+      decision:'reject',review_note:'No debe permitir una segunda decisión.'
+    },adminToken,409);
+  const rejectedReport=await request('Operator registers separate cash payment report',
+    '/api/finance/requests/'+created.id+'/payment-reports','POST',{
+      amount_usd_cents:32000,payment_method:'cash',reported_on:financeDay,
+      reference:'CI-OTRO-'+uid,report_note:'El cliente informó efectivo, no fue contado.'},
+    staffToken,201);
+  await request('Admin cannot reject without giving reason',
+    '/api/finance/payment-reports/'+rejectedReport.id+'/review','PATCH',{
+      decision:'reject',review_note:''
+    },adminToken,400);
+  const rejected=await request('Admin rejects a payment report with reason',
+    '/api/finance/payment-reports/'+rejectedReport.id+'/review','PATCH',{
+      decision:'reject',review_note:'No hay comprobante para validar lo informado.'
+    },adminToken);
+  assert.equal(rejected.status,'rejected');
+  const remaining=await request('Second unverified payment is not counted as manually checked',
+    '/api/finance/requests/'+created.id+'/payment-reports','POST',{
+      amount_usd_cents:15000,payment_method:'cash',reported_on:financeDay,
+      report_note:'Cliente informa un anticipo adicional todavía sin comprobar.'
+    },staffToken,201);
+  assert.equal(remaining.status,'reported');
+  const afterReview=await request('Finance history preserves reported, reviewed and rejected separately',
+    '/api/finance/requests/'+created.id,'GET',null,adminToken);
+  assert.equal(afterReview.summary.unverified_cents,15000);
+  assert.equal(afterReview.summary.reviewed_manual_cents,120000);
+  assert.equal(afterReview.summary.report_count,3);
+  assert.ok(afterReview.reports.some(x=>x.id===rejectedReport.id&&x.verification_status==='rejected'));
+  assert.ok(afterReview.reports.some(x=>x.id===reportedPayment.id&&
+    x.verification_status==='verified_manual'&&x.reviewed_by_email===adminEmail));
+  const financeDossier=await request('Financial tracking does not change request state',
+    '/api/dossiers/requests/'+created.id,'GET',null,staffToken);
+  assert.equal(financeDossier.request.status,'pending');
+  assert.ok(financeDossier.audit.some(x=>x.action==='payment_review_verified_manual'));
+  assert.ok(financeDossier.audit.some(x=>x.action==='funds_declaration_recorded'));
+  await request('Financial reports have no edit or delete API',
+    '/api/finance/payment-reports/'+remaining.id,'DELETE',null,adminToken,404);
+
   // Cotizaciones fase 3A: snapshots inmutables, cifras USD y control humano.
   await request('Anonymous cannot read private quote versions',
     '/api/quotes/requests/'+created.id,'GET',null,null,401);
