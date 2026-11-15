@@ -871,6 +871,24 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   assert.equal(photoData.sha256_hex,require('node:crypto').createHash('sha256').update(png).digest('hex'));
   assert.equal(chiefPhotoList.images.find(x=>x.id===photoData.id).size_bytes,png.length);
   console.log('PASS Chief private evidence sanitizes metadata before R2, SHA and D1');
+  const verifyPath='/api/chief/staff/works/'+toB.work.id+'/evidence/'+photoData.id+'/verify';
+  const inspected=await request('Admin verifies R2 bytes against immutable D1 evidence hash',
+    verifyPath,'GET',null,adminToken,200);
+  assert.equal(inspected.image_id,photoData.id);
+  assert.equal(inspected.integrity_status,'verified');
+  assert.equal(JSON.stringify(inspected).includes('r2_key'),false);
+  assert.equal(JSON.stringify(inspected).includes('sha256_hex'),false);
+  await request('Operator cannot verify technical evidence integrity',
+    verifyPath,'GET',null,staffToken,403);
+  await request('Chief cannot call staff-only integrity verification',
+    verifyPath,'GET',null,chiefToken2,401);
+  await request('Anonymous cannot verify technical evidence',
+    verifyPath,'GET',null,null,401);
+  await request('Admin cannot verify evidence as a different work',
+    '/api/chief/staff/works/'+secondB.work.id+'/evidence/'+photoData.id+'/verify',
+    'GET',null,adminToken,404);
+  console.log('PASS Private R2 integrity audit requires admin, verifies bytes and guards work boundary');
+
   const foreignImage=await fetch(BASE+'/api/chief/works/'+toB.work.id+'/evidence/'+photoData.id,{
     headers:{Authorization:'Bearer '+chiefToken1}
   });
