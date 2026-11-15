@@ -1,12 +1,9 @@
 name: Bonaire D1 — auditoría remota SOLO LECTURA
 
+# Solo se ejecuta por decisión humana desde GitHub Actions.
+# No lanzar consultas a D1 remota automáticamente en cada cambio del script.
 on:
-  push:
-    branches:
-      - feat/cloudflare-customer-accounts-hardening
-    paths:
-      - .github/workflows/audit-d1-readonly.yml
-      - apps/api/tests/d1-remote-readonly.cjs
+  workflow_dispatch:
 
 permissions:
   contents: read
