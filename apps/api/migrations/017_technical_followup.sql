@@ -28,6 +28,17 @@ CREATE INDEX IF NOT EXISTS idx_technical_reports_review
 CREATE UNIQUE INDEX IF NOT EXISTS idx_technical_report_one_pending
   ON technical_work_reports(work_id) WHERE review_status='pending_review';
 
+-- Ninguna carga inicial puede traer una finalización ya aceptada o rechazada.
+-- Solo el UPDATE posterior de un admin activo y la revisión de evidencias
+-- pueden producir ese estado, incluso ante un bug futuro de un endpoint.
+CREATE TRIGGER IF NOT EXISTS trg_technical_report_status_insert
+BEFORE INSERT ON technical_work_reports
+WHEN (NEW.report_type='completion_proposed' AND NEW.review_status<>'pending_review')
+ OR (NEW.report_type IN ('progress','incident') AND NEW.review_status<>'note_only')
+ OR NEW.reviewed_by IS NOT NULL OR NEW.reviewed_at IS NOT NULL
+ OR NEW.review_note IS NOT NULL
+BEGIN SELECT RAISE(ABORT,'El reporte se inicia sin aprobar; requiere revisión humana'); END;
+
 CREATE TRIGGER IF NOT EXISTS trg_technical_report_guard_insert
 BEFORE INSERT ON technical_work_reports
 WHEN NOT EXISTS (
@@ -112,6 +123,12 @@ CREATE INDEX IF NOT EXISTS idx_service_case_request
 CREATE INDEX IF NOT EXISTS idx_service_case_open
   ON service_followup_cases(status,priority,created_at);
 
+CREATE TRIGGER IF NOT EXISTS trg_service_case_status_insert
+BEFORE INSERT ON service_followup_cases
+WHEN NEW.status<>'open' OR NEW.resolved_by IS NOT NULL
+ OR NEW.resolved_at IS NOT NULL OR NEW.resolution_note IS NOT NULL
+BEGIN SELECT RAISE(ABORT,'El caso empieza abierto y requiere resolución posterior'); END;
+
 CREATE TRIGGER IF NOT EXISTS trg_service_case_work_guard
 BEFORE INSERT ON service_followup_cases
 WHEN NEW.work_id IS NOT NULL AND NOT EXISTS(
@@ -145,6 +162,13 @@ CREATE TABLE IF NOT EXISTS service_case_notes (
 );
 CREATE INDEX IF NOT EXISTS idx_service_case_notes
   ON service_case_notes(case_id,created_at DESC);
+CREATE TRIGGER IF NOT EXISTS trg_service_case_note_open_guard
+BEFORE INSERT ON service_case_notes
+WHEN NOT EXISTS (
+  SELECT 1 FROM service_followup_cases sc WHERE sc.id=NEW.case_id AND sc.status='open'
+)
+BEGIN SELECT RAISE(ABORT,'Solo se agregan notas a casos abiertos'); END;
+
 CREATE TRIGGER IF NOT EXISTS trg_service_case_notes_no_update
 BEFORE UPDATE ON service_case_notes
 BEGIN SELECT RAISE(ABORT,'Las notas técnicas son inmutables'); END;
