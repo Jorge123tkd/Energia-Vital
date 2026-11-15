@@ -4,6 +4,13 @@
 
 Este documento define pruebas de aceptación, no constituye certificación de seguridad ni autorización para publicar. No modificar datos reales durante la auditoría.
 
+## Nueva etapa 3A: cotizaciones internas
+- [ ] Confirmar migración `015_commercial_quote_versions.sql` sobre copia privada de D1 real y preservación del historial.
+- [ ] Verificar roles: gestor redacta y solicita revisión; únicamente administrador aprueba/rechaza internamente.
+- [ ] Verificar vigencia, partidas, cantidades, impuestos, transporte, descuentos y cálculo monetario en USD.
+- [ ] Asegurar que `approved_internal` NO crea ni remite ninguna oferta, contrato, factura o verificación de pago.
+- [ ] Revisar política de emisión formal por separado y mantener la web sin botón de publicación de cotizaciones.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.

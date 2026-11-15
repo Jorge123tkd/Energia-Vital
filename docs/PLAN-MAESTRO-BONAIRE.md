@@ -102,6 +102,22 @@ Se han preparado `apps/api/src/routes/dossiers.ts`, `apps/web/src/components/Dos
 - Historias paginadas y política de conservación de datos.
 - Distinguir chat histórico privado y trazas comerciales sin exponer conversaciones a personal sin permiso correspondiente.
 
+## Entrega 3A — Cotizaciones comerciales internas con versiones y revisión (GitHub, NO desplegada)
+
+**Objetivo:** no confundir estimación del gestor con oferta oficial, contrato, factura ni fondos verificados. Se agregó la migración aditiva `015_commercial_quote_versions.sql`, sin reescribir clientes ni solicitudes.
+
+- `apps/api/src/routes/quotes.ts`: módulo PRIVADO `/api/quotes` para personal autenticado. Gestores y administradores pueden preparar un borrador por solicitud abierta, con partidas, cantidades de hasta tres decimales, precio unitario en centavos USD, impuestos, transporte, descuento, plazo, vigencia, garantía, existencias, condiciones de pago, base de impuestos y condiciones logísticas. El servidor calcula los totales en centavos; no confía en un total enviado por la interfaz. Los importes son internos, pendientes de revisión.
+- **Snapshots inmutables:** cada corrección crea una nueva versión numerada; la anterior permanece con su cálculo original y estado histórico. Triggers D1 bloquean editar contenido o borrar versiones, y prohíben saltarse transiciones. Un índice parcial evita dos versiones simultáneamente abiertas por solicitud.
+- **Flujo:** `draft → in_review → approved_internal/rejected`. Para solicitar revisión se exige total positivo, vigencia no vencida y condiciones de entrega, garantía, pago, existencias, impuestos y transporte. Solo el administrador activo revisa, aprueba internamente o rechaza con motivo. El sistema conserva autor, revisor y fecha.
+- **El estado `approved_internal` NO equivale a emisión comercial:** ningún endpoint envía el documento por correo, Telegram, WhatsApp, API pública, ni crea contrato, factura, pago o anticipo. Una etapa separada futura deberá autorizar la emisión formal y confirmar precios, stock, impuestos y régimen jurídico de cada operación.
+- `apps/web/src/components/QuoteManager.svelte`: incorporado dentro de `DossierPanel.svelte` cuando se abre una solicitud, con nueva versión, detalle de partidas, historial, envío a revisión y controles de aprobación exclusivos de administrador.
+- **GitHub Actions confirmado:** run `43671068881` para commit `784a7cba` resultó `success`. Pasaron TypeScript API, validación Svelte, build, migraciones 001–015 en D1 temporal, Worker+JWT+integración para cotizaciones (cálculo, versiones, permisos, revisión, rechazo, no emisión) y regresión general. `apps/api/tests/migration-preservation.py` pasó también con migración 015 sobre nueve conjuntos históricos ficticios y probó que no se puede editar/borrar una versión ni aprobarla saltando revisión.
+- **Publicación pendiente:** la auditoría real de Cloudflare sigue bloqueada por secretos GitHub no configurados; **no se aplicó migración 015 remota ni se publicó Worker/Pages**. El gate de despliegue de la rama de desarrollo ahora exige las cinco tablas de 013–015, incluyendo `commercial_quote_versions`. La rama `main` sigue siendo distinta, y el PR amplio debe revisarse antes de publicación.
+
+### Entrega 3B (posterior): ofertas comerciales autorizadas
+
+No incluida en 3A. Necesita número comercial, condiciones vigentes, revisión jurídico-contable por cliente, verificación de moneda/reglas aplicables, stock y compromisos firmes, proceso de firma/expedición, y envío solo por personal autorizado tras confirmación explícita. No automatizar desde el asistente.
+
 ## Validaciones antes de activar la función
 
 - Test de 1/2/3+ brigadas; 2 asignaciones un día; rechazo, aprobación solo admin y auditoría.
