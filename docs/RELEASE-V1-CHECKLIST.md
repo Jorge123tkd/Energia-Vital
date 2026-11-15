@@ -59,6 +59,15 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Revisar fotografías reales **autorizadas** de Android/iPhone, contrastando orientación, lectura de perfiles y permisos privados de R2 en entorno controlado.
 - [ ] Ejecutar auditoría D1 remota read-only solo con autorización específica y secretos adecuados; NO iniciar export, restauraciones, migraciones o despliegue sin respaldo D1/R2 verificado y decisión expresa.
 
+## Fase 5B2f: auditoría bajo demanda R2/D1 y tratamiento responsable de ICC
+- [x] Añadir verificación **read-only y solo para administrador principal** del SHA-256/tamaño de una fotografía privada frente a la referencia de D1, sin devolver claves R2 ni bytes.
+- [x] Incluir pruebas con R2 falso para foto ausente, hash distinto, tamaño diferente, objeto de más de 5 MB y prefijo de archivo inesperado.
+- [x] Probar ruta HTTP real en Worker/D1 aislados: admin autorizado, operador 403, jefe 401, anónimo 401 e ID de trabajo ajeno 404.
+- [x] Mostrar opción «Comprobar integridad R2/D1» únicamente al administrador en expediente, SIN cierre automático ni certificación de la prueba.
+- [ ] Examinar presencia de perfiles ICC APP2/iCCP/ICCP en fotografías **consentidas**, con análisis privado de etiquetas y pruebas comparativas de color en móviles.
+- [ ] Aprobar política de conservación, consentimiento y tratamiento de fotografías reales, así como procedimientos de recuperación y respaldo cifrado R2+D1.
+- [ ] Autorizar por separado auditoría D1 remota de solo lectura, realizar respaldo y prueba de restauración de R2/D1 y, posteriormente, aprobar cada publicación. Nada de esto forma parte de los tests en Actions.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
