@@ -828,8 +828,21 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
     '/api/chief/works/'+toB.work.id+'/reports','GET',null,chiefToken2);
   assert.ok(ownReports.reports.some(x=>x.id===authenticChiefReport.id));
   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLrOwAAAABJRU5ErkJggg==','base64');
+  // Una foto con un bloque tEXt privado debe guardarse SIN metadatos.
+  const chunkData=Buffer.from('GPSLocation\\0Coordenadas privadas de prueba');
+  const injected=Buffer.alloc(12+chunkData.length);
+  injected.writeUInt32BE(chunkData.length,0);
+  injected.write('tEXt',4,'ascii');
+  chunkData.copy(injected,8);
+  let crc=0xffffffff;
+  for(const x of injected.subarray(4,8+chunkData.length)){
+    crc^=x;
+    for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);
+  }
+  injected.writeUInt32BE((crc^0xffffffff)>>>0,8+chunkData.length);
+  const dirtyPng=Buffer.concat([png.subarray(0,33),injected,png.subarray(33)]);
   const payload=new FormData();
-  payload.append('file',new Blob([png],{type:'image/png'}),'evidencia-prueba.png');
+  payload.append('file',new Blob([dirtyPng],{type:'image/png'}),'evidencia-prueba.png');
   payload.append('stage','after');
   payload.append('captured_note','Fotografía ficticia tomada para comprobar permisos en R2.');
   payload.append('report_id',authenticChiefReport.id);
@@ -853,8 +866,11 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   });
   assert.equal(imageOwn.status,200);
   assert.equal(imageOwn.headers.get('cache-control'),'private, no-store');
-  assert.equal((await imageOwn.arrayBuffer()).byteLength,png.length);
-  console.log('PASS Chief can load private evidence without public URLs');
+  const cleanedBytes=Buffer.from(await imageOwn.arrayBuffer());
+  assert.deepEqual(cleanedBytes,png,'R2 should keep image pixels but remove private text chunks');
+  assert.equal(photoData.sha256_hex,require('node:crypto').createHash('sha256').update(png).digest('hex'));
+  assert.equal(chiefPhotoList.images.find(x=>x.id===photoData.id).size_bytes,png.length);
+  console.log('PASS Chief private evidence sanitizes metadata before R2, SHA and D1');
   const foreignImage=await fetch(BASE+'/api/chief/works/'+toB.work.id+'/evidence/'+photoData.id,{
     headers:{Authorization:'Bearer '+chiefToken1}
   });
