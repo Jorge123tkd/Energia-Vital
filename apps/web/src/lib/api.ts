@@ -180,6 +180,8 @@ export const api = {
     post('/api/technical/works/'+encodeURIComponent(workId)+'/reports',body,withAdmin(token)),
   reviewWorkReport: (token:string,reportId:string,body:unknown) =>
     patch('/api/technical/reports/'+encodeURIComponent(reportId)+'/review',body,withAdmin(token)),
+  reviewChiefCompletion: (token:string,chiefReportId:string,body:unknown) =>
+    patch('/api/technical/chief-reports/'+encodeURIComponent(chiefReportId)+'/review',body,withAdmin(token)),
   openServiceCase: (token:string,requestId:string,body:unknown) =>
     post('/api/technical/requests/'+encodeURIComponent(requestId)+'/cases',body,withAdmin(token)),
   addServiceCaseNote: (token:string,caseId:string,note:string) =>
