@@ -2,7 +2,7 @@
 """Bonaire: ensayo REPRODUCIBLE con registros FICTICIOS de una D1 histórica.
 
 Ejecuta 001..012, inserta datos relacionados (sin datos de producción),
-aplica 013, 014, 015, 016 y 017, compara cada fila histórica y comprueba referencias.
+aplica 013, 014, 015, 016, 017 y 018, compara cada fila histórica y comprueba referencias.
 Usa SQLite de Python en memoria; la suite separada Worker+D1 verifica
 compatibilidad real con Cloudflare. NO accede a Cloudflare.
 """
@@ -72,13 +72,16 @@ migration(14)
 migration(15)
 migration(16)
 migration(17)
+migration(18)
 after = {name:snapshot(name) for name in tables}
 for name in tables:
     assert before[name] == after[name], f"La migración alteró datos existentes: {name}"
 
 for new_table in ("brigades","brigade_members","brigade_work","request_activities",
                   "commercial_quote_versions","request_financial_declarations","request_payment_reports",
-                  "technical_work_reports","service_followup_cases","service_case_notes"):
+                  "technical_work_reports","service_followup_cases","service_case_notes",
+                  "brigade_chief_accounts","brigade_chief_sessions",
+                  "brigade_chief_reports","brigade_evidence_images"):
     assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
                       (new_table,)).fetchone()[0] == 1
 
@@ -295,4 +298,85 @@ try:
 except sqlite3.IntegrityError:
     pass
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-print("PASS migraciones 013-017: preservados 9 conjuntos históricos, trabajo con cierre admin, garantía reclamada y notas inmutables (SQLite ficticia).")
+# Acceso aislado de jefe con vínculo a su brigada y evidencia técnica privada.
+db.execute("""INSERT INTO brigade_chief_accounts
+ (id,brigade_id,email,password_hash,is_active,created_by,created_at,updated_at)
+ VALUES(?,?,?,?,1,?,?,?)""",
+ ("chief-old","brigade-old","chief@invalid.example","hash-para-pruebas","admin-old",
+  "2026-11-14T08:00:00Z","2026-11-14T08:00:00Z"))
+db.execute("""INSERT INTO brigade_chief_sessions
+ (id,chief_id,token_hash,created_at,expires_at) VALUES(?,?,?,?,?)""",
+ ("session-chief-old","chief-old","a"*64,"2026-11-14T09:00:00Z","2026-11-14T17:00:00Z"))
+try:
+    db.execute("""INSERT INTO brigade_chief_reports
+      (id,work_id,chief_id,report_type,summary,created_at)
+      VALUES(?,?,?,?,?,?)""",
+      ("closed-chief-report","work-new","chief-old","progress",
+       "No se pueden agregar nuevos informes a un trabajo cerrado.",
+       "2026-11-14T09:00:00Z"))
+    raise AssertionError("Se informó un trabajo ya finalizado.")
+except sqlite3.IntegrityError:
+    pass
+
+db.execute("""INSERT INTO brigade_work(id,brigade_id,request_id,title,work_date,
+ estimated_minutes,status,requested_by,created_at,updated_at)
+ VALUES(?,?,?,?,?,?,?,?,?,?)""",
+ ("work-chief-new","brigade-old","request-old","Instalación de prueba del jefe",
+  "2026-11-21",180,"scheduled","staff-old",
+  "2026-11-14T08:00:00Z","2026-11-14T08:00:00Z"))
+db.execute("""INSERT INTO brigade_chief_reports
+ (id,work_id,chief_id,report_type,summary,evidence_note,created_at)
+ VALUES(?,?,?,?,?,?,?)""",
+ ("report-chief-old","work-chief-new","chief-old","progress",
+  "El jefe autenticado reporta un avance real de prueba.",
+  "Se registraron las comprobaciones técnicas en la inspección.",
+  "2026-11-14T09:00:00Z"))
+db.execute("""INSERT INTO brigade_evidence_images
+ (id,work_id,chief_id,report_id,stage,r2_key,content_type,size_bytes,sha256_hex,created_at)
+ VALUES(?,?,?,?,?,?,?,?,?,?)""",
+ ("photo-chief-old","work-chief-new","chief-old","report-chief-old","after",
+  "technical-evidence/work-chief-new/photo-chief-old.png","image/png",72,"b"*64,
+  "2026-11-14T09:00:00Z"))
+try:
+    db.execute("""UPDATE brigade_evidence_images SET stage='before'
+                  WHERE id='photo-chief-old'""")
+    raise AssertionError("Se modificó una fotografía histórica.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("DELETE FROM brigade_evidence_images WHERE id='photo-chief-old'")
+    raise AssertionError("Se eliminó el registro de evidencia.")
+except sqlite3.IntegrityError:
+    pass
+
+db.execute("""INSERT INTO brigades (id,name,leader_name,created_by,created_at,updated_at)
+ VALUES(?,?,?,?,?,?)""",
+ ("brigade-other","Otra brigada ficticia","Otro jefe ficticio","admin-old",
+  "2026-11-14T10:00:00Z","2026-11-14T10:00:00Z"))
+db.execute("""INSERT INTO brigade_chief_accounts
+ (id,brigade_id,email,password_hash,is_active,created_by,created_at,updated_at)
+ VALUES(?,?,?,?,1,?,?,?)""",
+ ("chief-other","brigade-other","otherchief@invalid.example","hash-ficticio",
+  "admin-old","2026-11-14T10:00:00Z","2026-11-14T10:00:00Z"))
+try:
+    db.execute("""INSERT INTO brigade_chief_reports
+       (id,work_id,chief_id,report_type,summary,created_at)
+       VALUES(?,?,?,?,?,?)""",
+       ("foreign-report","work-chief-new","chief-other","incident",
+        "El jefe de otra brigada no puede firmar este informe.",
+        "2026-11-14T11:00:00Z"))
+    raise AssertionError("Un jefe accedió al trabajo de otra brigada.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("""INSERT INTO brigade_evidence_images
+       (id,work_id,chief_id,stage,r2_key,content_type,size_bytes,sha256_hex,created_at)
+       VALUES(?,?,?,?,?,?,?,?,?)""",
+       ("foreign-photo","work-chief-new","chief-other","after",
+        "technical-evidence/foreign-photo.png","image/png",72,"c"*64,
+        "2026-11-14T11:00:00Z"))
+    raise AssertionError("Un jefe pudo agregar foto a trabajo de otra brigada.")
+except sqlite3.IntegrityError:
+    pass
+assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+print("PASS migraciones 013-018: preservación histórica, identidad y brigada aislada, token hash y evidencias técnicas inmutables (SQLite ficticia).")
