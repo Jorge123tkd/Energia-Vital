@@ -29,7 +29,7 @@ const option=(v:unknown,allowed:readonly string[]):v is string =>
   typeof v==='string'&&allowed.includes(v);
 const validOptionalDay=(v:unknown):v is string|null|undefined =>
   v===undefined||v===null||v===''||(typeof v==='string'&&validCubanWorkDate(v));
-const day=(v:unknown)=>typeof v==='string'&&validCubanWorkDate(v);
+const day=(v:unknown):v is string=>typeof v==='string'&&validCubanWorkDate(v);
 const methods=['transfer','cash','card','mixed','other','undecided'];
 const paymentMethods=['transfer','cash','card','mixed','other'];
 const fundingStages=['not_confirmed','approval_pending','approval_reported','availability_reported'];
