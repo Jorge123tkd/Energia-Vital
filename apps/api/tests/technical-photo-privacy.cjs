@@ -101,6 +101,19 @@ eq(clean(metadataPng,'image/png'),png,'PNG must remove tEXt and trailing private
 assert.throws(()=>clean(Buffer.concat([png.subarray(0,33),pngChunk('ABCD',Buffer.from('unknown critical')),png.subarray(33)]),'image/png'));
 assert.throws(()=>clean(png.subarray(0,png.length-4),'image/png'));
 
+const wrongHeaderCrc=Buffer.from(png);
+wrongHeaderCrc[29]^=1; // IHDR CRC has been corrupted
+assert.throws(()=>clean(wrongHeaderCrc,'image/png'),'PNG IHDR CRC mismatch must reject upload');
+const wrongPixelsCrc=Buffer.from(png);
+wrongPixelsCrc[41]^=1; // one compressed IDAT byte changed, CRC no longer agrees
+assert.throws(()=>clean(wrongPixelsCrc,'image/png'),'PNG pixel chunk CRC mismatch must reject upload');
+const wrongDroppedChunk=pngChunk('tEXt',Buffer.from('Sensitive note to remove'));
+wrongDroppedChunk[wrongDroppedChunk.length-1]^=1;
+assert.throws(()=>clean(Buffer.concat([
+  png.subarray(0,33),wrongDroppedChunk,png.subarray(33)
+]),'image/png'),'Even stripped PNG metadata chunks must have a valid CRC');
+
+
 function riff(chunks){
   const body=Buffer.concat([Buffer.from('WEBP'),...chunks]);
   const head=Buffer.alloc(8);head.write('RIFF');head.writeUInt32LE(body.length,4);
@@ -143,4 +156,4 @@ assert.throws(()=>clean(rotatedPng,'image/png'),'Rotated PNG eXIf must be reject
 
 assert.throws(()=>clean(metadataWebp.subarray(0,metadataWebp.length-1),'image/webp'));
 assert.throws(()=>clean(png,'image/gif'));
-console.log('PASS JPEG/WebP orientation 1-8, GPS removal, PNG privacy and corrupted inputs');
+console.log('PASS JPEG/WebP orientation 1-8, GPS removal, PNG CRC-32 and corrupted inputs');
