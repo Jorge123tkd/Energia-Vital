@@ -624,7 +624,7 @@
 
 {#if token && (dossierCustomerId || dossierRequestId)}
   <DossierPanel {token} customerId={dossierCustomerId}
-    requestId={dossierRequestId} onClose={closeDossier}/>
+    requestId={dossierRequestId} canReviewQuotes={staffRole === 'admin'} onClose={closeDossier}/>
 {/if}
 
 {#if calendarOpen && token}

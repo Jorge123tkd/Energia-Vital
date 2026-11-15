@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import QuoteManager from './QuoteManager.svelte';
 
   type Customer={id:string;name:string;email?:string;phone?:string;address?:string;city?:string;
     province?:string;is_active?:number;created_at?:string};
@@ -17,8 +18,8 @@
   type Appointment={id:string;request_id?:string;title:string;starts_at:string;ends_at:string;status:string};
   type Audit={id:string;action:string;created_at:string;actor_email?:string|null};
 
-  let {token,customerId='',requestId='',onClose}:{
-    token:string;customerId?:string;requestId?:string;onClose:()=>void;
+  let {token,customerId='',requestId='',canReviewQuotes=false,onClose}:{
+    token:string;customerId?:string;requestId?:string;canReviewQuotes?:boolean;onClose:()=>void;
   }=$props();
   let currentRequestId=$state(requestId);
   let customerData:{customer:Customer;requests:Request[];appointments:Appointment[];
@@ -209,6 +210,9 @@
             {:else}<p class="text-sm text-slate-500">Sin trabajos de brigada vinculados.</p>{/each}
           </section>
         </div>
+        {#key currentRequestId}
+          <QuoteManager {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
+        {/key}
         <section class="space-y-3">
           <h4 class="font-extrabold text-lg">Historial de intervenciones de gestores</h4>
           <p class="text-sm text-slate-600">Con uno o dos gestores, cualquiera puede atender este expediente. Cada intervención queda atribuida al usuario que la registró.</p>

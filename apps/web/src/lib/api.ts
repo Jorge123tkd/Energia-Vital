@@ -148,6 +148,14 @@ export const api = {
 
   getCustomerDossier: (token:string,id:string) =>
     apiRequest('/api/dossiers/customers/'+encodeURIComponent(id),withAdmin(token)),
+  quoteVersions: (token:string,requestId:string) =>
+    apiRequest('/api/quotes/requests/'+encodeURIComponent(requestId),withAdmin(token)),
+  createQuoteVersion: (token:string,requestId:string,body:unknown) =>
+    post('/api/quotes/requests/'+encodeURIComponent(requestId)+'/versions',body,withAdmin(token)),
+  submitQuoteReview: (token:string,id:string) =>
+    patch('/api/quotes/'+encodeURIComponent(id)+'/submit',{},withAdmin(token)),
+  reviewQuote: (token:string,id:string,decision:'approve'|'reject',reason:string) =>
+    patch('/api/quotes/'+encodeURIComponent(id)+'/review',{decision,reason},withAdmin(token)),
   getRequestDossier: (token:string,id:string) =>
     apiRequest('/api/dossiers/requests/'+encodeURIComponent(id),withAdmin(token)),
   logRequestActivity: (token:string,id:string,body:{
