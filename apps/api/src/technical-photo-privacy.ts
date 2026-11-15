@@ -53,9 +53,9 @@ function jpeg(bytes:Uint8Array):Uint8Array{
     const isApp=marker>=0xe0&&marker<=0xef;
     const signature=bytes.subarray(start+4,offset);
     const prefix=(value:string)=>value.split('').every((ch,i)=>signature[i]===ch.charCodeAt(0));
-    const safeApp=marker===0xe0&&prefix('JFIF\\0')||
-      marker===0xe2&&prefix('ICC_PROFILE\\0')||
-      marker===0xee&&prefix('Adobe');
+    const safeApp=(marker===0xe0&&prefix('JFIF')&&signature[4]===0)||
+      (marker===0xe2&&prefix('ICC_PROFILE')&&signature[11]===0)||
+      (marker===0xee&&prefix('Adobe'));
     const strip=(isApp&&!safeApp)||marker===0xfe;
     if(!strip)parts.push(bytes.subarray(start,offset));
     if(marker===0xda){inScan=true;hasScan=true;}
