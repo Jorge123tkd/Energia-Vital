@@ -148,6 +148,18 @@ export const api = {
 
   getCustomerDossier: (token:string,id:string) =>
     apiRequest('/api/dossiers/customers/'+encodeURIComponent(id),withAdmin(token)),
+  getRequestTechnical: (token:string,id:string) =>
+    apiRequest('/api/technical/requests/'+encodeURIComponent(id),withAdmin(token)),
+  addWorkReport: (token:string,workId:string,body:unknown) =>
+    post('/api/technical/works/'+encodeURIComponent(workId)+'/reports',body,withAdmin(token)),
+  reviewWorkReport: (token:string,reportId:string,body:unknown) =>
+    patch('/api/technical/reports/'+encodeURIComponent(reportId)+'/review',body,withAdmin(token)),
+  openServiceCase: (token:string,requestId:string,body:unknown) =>
+    post('/api/technical/requests/'+encodeURIComponent(requestId)+'/cases',body,withAdmin(token)),
+  addServiceCaseNote: (token:string,caseId:string,note:string) =>
+    post('/api/technical/cases/'+encodeURIComponent(caseId)+'/notes',{note},withAdmin(token)),
+  resolveServiceCase: (token:string,caseId:string,body:unknown) =>
+    patch('/api/technical/cases/'+encodeURIComponent(caseId)+'/resolve',body,withAdmin(token)),
   getRequestFinance: (token:string,id:string) =>
     apiRequest('/api/finance/requests/'+encodeURIComponent(id),withAdmin(token)),
   logFinancialDeclaration: (token:string,id:string,body:unknown) =>
