@@ -378,5 +378,11 @@ try:
     raise AssertionError("Un jefe pudo agregar foto a trabajo de otra brigada.")
 except sqlite3.IntegrityError:
     pass
+# Cambio de jefe de brigada: cuenta anterior desactivada y sesión revocada.
+assert db.execute("SELECT is_active FROM brigade_chief_accounts WHERE id='chief-old'").fetchone()[0] == 1
+db.execute("""UPDATE brigades SET leader_name='Jefe sustituto autorizado',
+  updated_at='2026-11-14T12:00:00Z' WHERE id='brigade-old'""")
+assert db.execute("SELECT is_active FROM brigade_chief_accounts WHERE id='chief-old'").fetchone()[0] == 0
+assert db.execute("SELECT revoked_at FROM brigade_chief_sessions WHERE id='session-chief-old'").fetchone()[0] is not None
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
 print("PASS migraciones 013-018: preservación histórica, identidad y brigada aislada, token hash y evidencias técnicas inmutables (SQLite ficticia).")
