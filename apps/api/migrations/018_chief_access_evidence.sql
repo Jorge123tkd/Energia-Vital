@@ -14,6 +14,17 @@ CREATE TABLE IF NOT EXISTS brigade_chief_accounts (
 CREATE INDEX IF NOT EXISTS idx_chief_account_active
  ON brigade_chief_accounts(brigade_id,is_active);
 
+-- Cambiar el jefe nominal o desactivar la brigada BLOQUEA la credencial
+-- del jefe anterior. Reactivación exige revisión manual y nueva contraseña.
+CREATE TRIGGER IF NOT EXISTS trg_brigade_chief_disable_on_change
+AFTER UPDATE OF leader_name,is_active ON brigades
+WHEN OLD.leader_name<>NEW.leader_name
+  OR (OLD.is_active=1 AND NEW.is_active=0)
+BEGIN
+  UPDATE brigade_chief_accounts SET is_active=0,updated_at=NEW.updated_at
+    WHERE brigade_id=NEW.id AND is_active=1;
+END;
+
 -- Almacenar exclusivamente SHA-256 del token aleatorio, NO el token en D1.
 CREATE TABLE IF NOT EXISTS brigade_chief_sessions (
   id TEXT PRIMARY KEY,
@@ -25,6 +36,16 @@ CREATE TABLE IF NOT EXISTS brigade_chief_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_chief_sessions_active
  ON brigade_chief_sessions(token_hash,expires_at,revoked_at);
+
+CREATE TRIGGER IF NOT EXISTS trg_chief_account_revoke_sessions
+AFTER UPDATE OF password_hash,is_active ON brigade_chief_accounts
+WHEN OLD.password_hash<>NEW.password_hash
+  OR (OLD.is_active=1 AND NEW.is_active=0)
+BEGIN
+  UPDATE brigade_chief_sessions
+  SET revoked_at=NEW.updated_at
+  WHERE chief_id=NEW.id AND revoked_at IS NULL;
+END;
 
 -- Informe auténticamente ingresado con la cuenta del jefe; no firma electrónica
 -- ni certificado legal. No altera informe/decisión administrativa de 5A.
