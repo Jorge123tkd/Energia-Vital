@@ -82,18 +82,18 @@ jobs:
         run: |
           set -euo pipefail
           npx wrangler d1 execute energia-vital-db --remote --json \
-            --command "SELECT COUNT(*) AS present FROM sqlite_master WHERE type='table' AND name IN ('brigades','brigade_members','brigade_work','request_activities','commercial_quote_versions','request_financial_declarations','request_payment_reports')" \
+            --command "SELECT COUNT(*) AS present FROM sqlite_master WHERE type='table' AND name IN ('brigades','brigade_members','brigade_work','request_activities','commercial_quote_versions','request_financial_declarations','request_payment_reports','technical_work_reports','service_followup_cases','service_case_notes')" \
             > "$RUNNER_TEMP/bonaire-schema-count.json"
           node -e '
             const fs = require("fs");
             const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
             const result = Array.isArray(raw) ? raw[0] : raw;
             const count = Number(result?.results?.[0]?.present);
-            if (count !== 7) {
-              console.error("D1 remota NO tiene las 7 tablas requeridas. Detenido antes de deploy.");
+            if (count !== 10) {
+              console.error("D1 remota NO tiene las 10 tablas requeridas. Detenido antes de deploy.");
               process.exit(1);
             }
-            console.log("Verificación de estructura D1 remota correcta (7 tablas esperadas).");
+            console.log("Verificación de estructura D1 remota correcta (10 tablas esperadas).");
           ' "$RUNNER_TEMP/bonaire-schema-count.json"
       - name: Publicar Cloudflare Worker
         working-directory: apps/api
