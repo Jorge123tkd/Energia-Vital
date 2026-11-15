@@ -827,7 +827,7 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const ownReports=await request('Only actual authenticated chief can read own report history',
     '/api/chief/works/'+toB.work.id+'/reports','GET',null,chiefToken2);
   assert.ok(ownReports.reports.some(x=>x.id===authenticChiefReport.id));
-  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLrOwAAAABJRU5ErkJggg==','base64');
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP438DwHwAGgAJ/zxIJ8QAAAABJRU5ErkJggg==','base64');
   // Una foto con un bloque tEXt privado debe guardarse SIN metadatos.
   const chunkData=Buffer.from('GPSLocation\\0Coordenadas privadas de prueba');
   const injected=Buffer.alloc(12+chunkData.length);
