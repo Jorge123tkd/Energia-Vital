@@ -1,4 +1,4 @@
-# Bonaire — Protocolo propuesto de evidencias técnicas, cierre y garantía (5B2c–5B2e)
+# Bonaire — Protocolo propuesto de evidencias técnicas, cierre y garantía (5B2c–5B2f)
 
 **ESTADO: BORRADOR INTERNO. NO ES CERTIFICADO, CONTRATO NI POLÍTICA LEGAL APROBADA.**
 Rama de trabajo: `feat/cloudflare-customer-accounts-hardening`. Sin aprobación para Cloudflare de producción.
@@ -26,6 +26,15 @@ Rama de trabajo: `feat/cloudflare-customer-accounts-hardening`. Sin aprobación 
 - Antes de empezar a pedir fotografías reales: revisar texto de información al cliente, base de tratamiento y permisos del inmueble/equipo, y acordar mecanismos de consentimiento cuando corresponda. No subir documentos de identidad, números de cuentas ni imágenes de personas si no son necesarios.
 - Definir con asesoría jurídica y de negocio los **periodos de conservación**, restricciones legales de borrado y trazabilidad. No establecer días de retención ficticios ni activar borrado automático sin procedimiento aprobado.
 - Cualquier borrado futuro exige auditoría de alcance e impacto, comprobación de vínculos con D1 y copia segura de R2. El borrado de evidencias históricas no forma parte de esta fase.
+
+## 2A. Fase 5B2f — verificación de integridad R2/D1 y criterio ICC
+
+- El sistema almacena en D1 el SHA-256 y tamaño de la fotografía **saneada** al subirla a R2 privado. Un administrador puede pedir un **cotejo puntual de solo lectura** desde el expediente: obtiene el objeto R2, revisa que tamaño y SHA-256 coincidan con la fila D1 y recibe únicamente `verified`, `missing` o `mismatch` (respuesta 200 o 409), sin publicar clave R2, archivo, huella ni datos del cliente. Se bloquea a clientes, operadores y jefes.
+- **Qué significa `verified`:** los bytes privados actuales coinciden con la huella guardada en D1. NO confirma autoría, fecha efectiva de captura, validez de la foto, imagen libre de manipulación previa, cumplimiento técnico, firma electrónica, certificado ni garantía. Si los datos D1 hubieran sido alterados junto con R2, la comparación no ofrece prueba independiente. No aceptar ni cerrar trabajos automáticamente sobre esta base.
+- No se realiza inventario masivo, recuperación, modificación ni lectura de R2 de producción en esta fase. La verificación bajo demanda solo se ejecutará sobre datos reales después de publicación autorizada.
+- **Política temporal ICC:** conservar perfiles de color ICC sin modificarlos para evitar alterar la representación de mediciones, placas de equipos, cableado o indicadores cromáticos. Los perfiles pueden contener etiquetas descriptivas o información identificativa; conservarlos NO significa que la fotografía esté libre de metadatos. Tampoco es correcto eliminarlos a ciegas sin convertir y validar los colores.
+- Para decidir un tratamiento posterior, comparar con fotografías **consentidas** y muestras ficticias JPEG (APP2), PNG (iCCP) y WebP (ICCP), visualizando antes/después en iPhone, Android, navegadores escritorio y monitores sRGB/P3; inspeccionar el contenido de perfiles exclusivamente en un entorno privado y registrar si existen textos o datos personales. No escribir contenidos, rutas, nombres, hashes de perfiles, EXIF ni capturas reales en logs de CI o GitHub.
+- Hasta completar esa evaluación, no declarar neutralización total de metadatos o privacidad certificada. Las fotos técnicas son privadas por autorización, pero el acceso sigue sujeto a política de tratamiento, plazo de retención aprobado y control humano de contenido visible.
 
 ## 3. Flujo separado de reclamación de garantía
 
