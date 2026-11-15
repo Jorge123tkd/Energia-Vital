@@ -50,7 +50,7 @@ function orientationTiff(value:number):Uint8Array{
     0x4d,0x4d,0,0x2a,0,0,0,8,
     0,1, 1,0x12,0,3,0,0,0,1,0,0,0,0, 0,0,0,0,
   ]);
-  t[18]=value;
+  t[19]=value; // SHORT inline big-endian: high byte 0, low byte 1..8
   return t;
 }
 function orientationJpegApp(value:number):Uint8Array{
