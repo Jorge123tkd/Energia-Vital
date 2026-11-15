@@ -3,6 +3,7 @@
   import { api } from '../lib/api';
   import QuoteManager from './QuoteManager.svelte';
   import FinanceTracker from './FinanceTracker.svelte';
+  import TechnicalFollowUp from './TechnicalFollowUp.svelte';
 
   type Customer={id:string;name:string;email?:string;phone?:string;address?:string;city?:string;
     province?:string;is_active?:number;created_at?:string};
@@ -212,6 +213,7 @@
           </section>
         </div>
         {#key currentRequestId}
+          <TechnicalFollowUp {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
           <FinanceTracker {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
           <QuoteManager {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
         {/key}
