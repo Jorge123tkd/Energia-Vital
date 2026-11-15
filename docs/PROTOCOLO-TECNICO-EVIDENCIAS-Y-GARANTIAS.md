@@ -1,4 +1,4 @@
-# Bonaire — Protocolo propuesto de evidencias técnicas, cierre y garantía (5B2c)
+# Bonaire — Protocolo propuesto de evidencias técnicas, cierre y garantía (5B2c–5B2d)
 
 **ESTADO: BORRADOR INTERNO. NO ES CERTIFICADO, CONTRATO NI POLÍTICA LEGAL APROBADA.**
 Rama de trabajo: `feat/cloudflare-customer-accounts-hardening`. Sin aprobación para Cloudflare de producción.
@@ -16,7 +16,9 @@ Rama de trabajo: `feat/cloudflare-customer-accounts-hardening`. Sin aprobación 
 - R2 debe seguir privado. No mostrar claves internas, enlaces públicos permanentes ni URLs de terceros a los archivos técnicos.
 - Solo el jefe autenticado de la brigada y personal autorizado pueden consultar evidencias según permisos vigentes. Nunca asociar fotografías técnicas a la galería pública por defecto.
 - El backend intenta eliminar datos accesorios EXIF/GPS/XMP/IPTC de **nuevas subidas**, recalcula hash SHA-256 y tamaño de los bytes que guarda. Los archivos existentes NO se han limpiado retroactivamente.
-- Comprobar visualmente orientación de retratos JPEG y fotografías de teléfonos: su orientación puede depender de EXIF. Si se detecta rotación, definir normalización de píxeles segura antes de publicar.
+- **Fase 5B2d, protección de orientación:** JPEG y WebP con orientación EXIF 2–8 conservan solamente una etiqueta de orientación reconstruida (sin copiar el EXIF de cámara/GPS). EXIF con orientación normal 1 no se conserva. Las pruebas de código cubren las ocho orientaciones y metadatos sintéticos; esto NO es prueba visual en teléfonos reales.
+- En WebP, orientación no predeterminada sin cabecera extendida VP8X no se acepta, porque preservar ese dato no sería seguro sin convertir la imagen. PNG con etiqueta eXIf de orientación 2–8 se rechaza hasta disponer de una normalización de píxeles controlada.
+- **Pendiente de aceptación:** comprobar visualmente fotografías consentidas de teléfonos Android e iPhone en el navegador y en la vista privada del expediente; comprobar también si la cámara o el editor aplica orientación a los píxeles antes de subir. Si alguna gira, no publicar sin corrección verificada.
 - Antes de empezar a pedir fotografías reales: revisar texto de información al cliente, base de tratamiento y permisos del inmueble/equipo, y acordar mecanismos de consentimiento cuando corresponda. No subir documentos de identidad, números de cuentas ni imágenes de personas si no son necesarios.
 - Definir con asesoría jurídica y de negocio los **periodos de conservación**, restricciones legales de borrado y trazabilidad. No establecer días de retención ficticios ni activar borrado automático sin procedimiento aprobado.
 - Cualquier borrado futuro exige auditoría de alcance e impacto, comprobación de vínculos con D1 y copia segura de R2. El borrado de evidencias históricas no forma parte de esta fase.
