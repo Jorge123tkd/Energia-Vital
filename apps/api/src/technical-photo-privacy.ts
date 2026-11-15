@@ -132,6 +132,22 @@ function jpeg(bytes:Uint8Array):Uint8Array{
 function u32be(b:Uint8Array,p:number):number{
   return (b[p]*0x1000000+b[p+1]*0x10000+b[p+2]*0x100+b[p+3])>>>0;
 }
+// PNG requires CRC-32 for every chunk, including metadata chunks we discard.
+// Use a precomputed table to keep uploads inexpensive even near the 5 MB limit.
+const pngCrcTable=(()=>{
+  const table=new Uint32Array(256);
+  for(let i=0;i<256;i++){
+    let crc=i;
+    for(let j=0;j<8;j++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);
+    table[i]=crc>>>0;
+  }
+  return table;
+})();
+function pngChunkCrcValid(bytes:Uint8Array,start:number,end:number):boolean{
+  let crc=0xffffffff;
+  for(let i=start+4;i<end-4;i++)crc=pngCrcTable[(crc^bytes[i])&255]^(crc>>>8);
+  return ((crc^0xffffffff)>>>0)===u32be(bytes,end-4);
+}
 function png(bytes:Uint8Array):Uint8Array{
   if(bytes.length<33||![137,80,78,71,13,10,26,10].every((b,i)=>b===bytes[i]))invalid();
   const parts=[bytes.subarray(0,8)];
@@ -142,6 +158,7 @@ function png(bytes:Uint8Array):Uint8Array{
     const size=u32be(bytes,pos),name=text4(bytes,pos+4);
     const end=pos+12+size;
     if(size>bytes.length-pos-12||end>bytes.length)invalid();
+    if(!pngChunkCrcValid(bytes,pos,end))invalid();
     if(first&&(name!=='IHDR'||size!==13))invalid();
     first=false;
     if(!/^[A-Za-z]{4}$/.test(name))invalid();
