@@ -22,7 +22,7 @@ const jpeg=Buffer.from([
   'AAAABf/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/ALAAR5//2Q=='
 ].join(''),'base64');
 const webp=Buffer.from('UklGRjwAAABXRUJQVlA4IDAAAAAQAgCdASoCAAIAAUAmJaACdLoB+AH4AAPIAP7rt6/9rP85R/8t3/2lkvXs/0XAAAA=','base64');
-const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLrOwAAAABJRU5ErkJggg==','base64');
+const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP438DwHwAGgAJ/zxIJ8QAAAABJRU5ErkJggg==','base64');
 const eq=(actual,expected,msg)=>assert.deepEqual(Buffer.from(actual),Buffer.from(expected),msg);
 
 function segment(marker,payload){
