@@ -218,6 +218,9 @@
         <section class="rounded-2xl bg-white border border-slate-200 p-4 space-y-3">
           <h3 class="text-lg font-extrabold">Fotografías técnicas privadas ({evidence.length}/12)</h3>
           <p class="text-xs text-slate-600">Las imágenes se guardan en R2 privado y quedan asociadas al trabajo. No serán públicas ni se mezclan con fotos aportadas por clientes.</p>
+          <p class="text-xs text-amber-900 bg-amber-50 border border-amber-100 p-3 rounded-lg" role="note">
+            Antes de subir una foto, confirma que está autorizado fotografiar ese lugar o equipo. Evita rostros, matrículas, documentos, pantallas y datos personales innecesarios, también en la nota. El servidor elimina metadatos habituales EXIF/GPS/XMP, pero una foto puede conservar información visible o incluida en perfiles de color. Comprueba la orientación de la imagen antes de enviarla.
+          </p>
           {#if selected.status==='scheduled'}
             <form onsubmit={upload} class="space-y-3 p-3 bg-slate-50 rounded-xl">
               <label class="block text-xs font-bold">Fotografía JPG, PNG o WebP · máximo 5 MB
