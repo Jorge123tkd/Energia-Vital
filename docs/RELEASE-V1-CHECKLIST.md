@@ -51,6 +51,14 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Evaluar privacidad residual de perfiles de color y políticas de retención/consentimiento con responsables antes de subir evidencias reales.
 - [ ] No aplicar el código ni migraciones a Cloudflare real sin auditoría read-only, copias de D1/R2 verificadas y autorización expresa.
 
+## Fase 5B2e: integridad de PNG y privacidad residual (código GitHub, sin publicación)
+- [x] Validar CRC-32 de cada bloque PNG antes de almacenar y verificar rechazo de IHDR/IDAT/tEXt dañados con imágenes de prueba.
+- [x] Sustituir el PNG de prueba anterior con CRC erróneo por una imagen 1×1 válida y repetir integración con Worker + D1/R2 temporales.
+- [x] Advertir en el portal del jefe que EXIF/GPS eliminado NO protege datos visibles ni información incluida en notas o perfiles de color.
+- [ ] Auditar perfiles ICC conservados de JPEG/PNG/WebP y decidir conversión de color segura para evidencias, con pruebas visuales representativas.
+- [ ] Revisar fotografías reales **autorizadas** de Android/iPhone, contrastando orientación, lectura de perfiles y permisos privados de R2 en entorno controlado.
+- [ ] Ejecutar auditoría D1 remota read-only solo con autorización específica y secretos adecuados; NO iniciar export, restauraciones, migraciones o despliegue sin respaldo D1/R2 verificado y decisión expresa.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
