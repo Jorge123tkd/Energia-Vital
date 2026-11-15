@@ -14,6 +14,7 @@
   import GalleryPage from './GalleryPage.svelte';
   import ContactPage from './ContactPage.svelte';
   import AdminPage from './AdminPage.svelte';
+  import ChiefPortal from './ChiefPortal.svelte';
   import { api, customerToken, setCustomerToken, ADMIN_TOKEN_KEY } from './lib/api';
   import { isAssistantOpen, assistantSessionId, assistantMessages } from './lib/store';
 
@@ -112,7 +113,9 @@
   }
 </script>
 
-{#if currentRoute === '/admin'}
+{#if currentRoute === '/jefe-brigada'}
+  <ChiefPortal />
+{:else if currentRoute === '/admin'}
   <AdminPage />
 {:else if checking}
   <div class="min-h-screen flex justify-center items-center text-gray-600">Verificando tu sesión…</div>

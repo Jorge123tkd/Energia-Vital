@@ -148,6 +148,32 @@ export const api = {
 
   getCustomerDossier: (token:string,id:string) =>
     apiRequest('/api/dossiers/customers/'+encodeURIComponent(id),withAdmin(token)),
+  listChiefAccounts: (token:string) =>
+    apiRequest('/api/chief/admin/accounts',withAdmin(token)),
+  createChiefAccount: (token:string,body:{brigade_id:string;email:string;password:string}) =>
+    post('/api/chief/admin/accounts',body,withAdmin(token)),
+  updateChiefAccount: (token:string,id:string,body:{is_active?:boolean;password?:string;expected_updated_at:string}) =>
+    patch('/api/chief/admin/accounts/'+encodeURIComponent(id),body,withAdmin(token)),
+  chiefLogin: (email:string,password:string) =>
+    post('/api/chief/login',{email,password}),
+  chiefMe: (token:string) => apiRequest('/api/chief/me',withAdmin(token)),
+  chiefLogout: (token:string) => post('/api/chief/logout',{},withAdmin(token)),
+  chiefWorks: (token:string) => apiRequest('/api/chief/works',withAdmin(token)),
+  chiefWorkReports: (token:string,id:string) =>
+    apiRequest('/api/chief/works/'+encodeURIComponent(id)+'/reports',withAdmin(token)),
+  chiefAddReport: (token:string,id:string,body:unknown) =>
+    post('/api/chief/works/'+encodeURIComponent(id)+'/reports',body,withAdmin(token)),
+  chiefWorkEvidence: (token:string,id:string) =>
+    apiRequest('/api/chief/works/'+encodeURIComponent(id)+'/evidence',withAdmin(token)),
+  staffWorkEvidence: (token:string,id:string) =>
+    apiRequest('/api/chief/staff/works/'+encodeURIComponent(id)+'/evidence',withAdmin(token)),
+  chiefUploadEvidence: (token:string,id:string,file:File,stage:string,note:string,reportId?:string) => {
+    const body=new FormData();body.append('file',file);body.append('stage',stage);
+    if(note.trim())body.append('captured_note',note.trim());
+    if(reportId)body.append('report_id',reportId);
+    return apiRequest('/api/chief/works/'+encodeURIComponent(id)+'/evidence',
+      withAdmin(token,{method:'POST',body}));
+  },
   getRequestTechnical: (token:string,id:string) =>
     apiRequest('/api/technical/requests/'+encodeURIComponent(id),withAdmin(token)),
   addWorkReport: (token:string,workId:string,body:unknown) =>

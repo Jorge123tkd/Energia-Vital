@@ -15,6 +15,7 @@ import { dossierRoutes } from './routes/dossiers';
 import { quoteRoutes } from './routes/quotes';
 import { financeRoutes } from './routes/finance';
 import { technicalRoutes } from './routes/technical-followup';
+import { chiefRoutes } from './routes/brigade-chief';
 import { calendarRoutes } from './routes/calendar';
 import { telegramRoutes } from './routes/telegram';
 import { runTelegramMorningReminders } from './telegram-reminders';
@@ -72,6 +73,7 @@ export default {
     app.route('/api/quotes', quoteRoutes);
     app.route('/api/finance', financeRoutes);
     app.route('/api/technical', technicalRoutes);
+    app.route('/api/chief', chiefRoutes);
     app.route('/api/calendar', calendarRoutes);
     app.route('/api/telegram', telegramRoutes);
     app.route('/api/whatsapp', whatsappRoutes);
