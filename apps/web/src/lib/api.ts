@@ -167,6 +167,9 @@ export const api = {
     apiRequest('/api/chief/works/'+encodeURIComponent(id)+'/evidence',withAdmin(token)),
   staffWorkEvidence: (token:string,id:string) =>
     apiRequest('/api/chief/staff/works/'+encodeURIComponent(id)+'/evidence',withAdmin(token)),
+  verifyChiefEvidence: (token:string,workId:string,imageId:string) =>
+    apiRequest('/api/chief/staff/works/'+encodeURIComponent(workId)+
+      '/evidence/'+encodeURIComponent(imageId)+'/verify',withAdmin(token)),
   chiefUploadEvidence: (token:string,id:string,file:File,stage:string,note:string,reportId?:string) => {
     const body=new FormData();body.append('file',file);body.append('stage',stage);
     if(note.trim())body.append('captured_note',note.trim());
