@@ -70,9 +70,13 @@ technicalRoutes.get('/requests/:requestId',async c=>{
     ).bind(requestId).all(),
     c.env.DB.prepare(
       'SELECT cr.id,cr.work_id,cr.report_type,cr.summary,cr.evidence_note,'+
-      'cr.created_at,chief.email AS chief_email '+
+      'cr.created_at,chief.email AS chief_email, tr.review_status,tr.review_note,'+
+      'tr.reviewed_at,reviewer.email AS reviewed_by_email '+
       'FROM brigade_chief_reports cr JOIN brigade_work w ON w.id=cr.work_id '+
       'JOIN brigade_chief_accounts chief ON chief.id=cr.chief_id '+
+      'LEFT JOIN chief_completion_reviews link ON link.chief_report_id=cr.id '+
+      'LEFT JOIN technical_work_reports tr ON tr.id=link.technical_report_id '+
+      'LEFT JOIN admin_users reviewer ON reviewer.id=tr.reviewed_by '+
       'WHERE w.request_id=? ORDER BY cr.created_at DESC,cr.id DESC LIMIT 101'
     ).bind(requestId).all(),
     c.env.DB.prepare(
@@ -199,6 +203,89 @@ technicalRoutes.patch('/reports/:id/review',requireAdminAuth,async c=>{
     message:accepted
       ?'Cierre técnico aprobado por administración. La solicitud comercial y los pagos no se han modificado.'
       :'Propuesta de finalización rechazada; conserva la asignación y su historial.'});
+});
+
+// 5B2 — revisar DIRECTAMENTE informe de finalización del jefe autenticado.
+// Se crea un snapshot exacto en el control técnico 5A, se enlaza con el
+// informe original, y se revisa/cierra en UNA transacción D1. No es firma legal.
+technicalRoutes.patch('/chief-reports/:id/review',requireAdminAuth,async c=>{
+  const chiefReportId=c.req.param('id'),body=await c.req.json().catch(()=>null);
+  if(!validId(chiefReportId))return c.json({error:'Informe del jefe inválido.'},400);
+  if(!obj(body)||!allowed(body,['decision','review_note','confirm_technical_evidence'])||
+     !choose(body.decision,['accept','reject']))
+    return c.json({error:'Decisión o campos no admitidos.'},400);
+  const accept=body.decision==='accept';
+  const note=txt(body.review_note,accept?12:3,1000);
+  if(!note||(accept&&body.confirm_technical_evidence!==true))
+    return c.json({error:'Exige revisión motivada y confirmación expresa de evidencias para aceptar.'},400);
+  const chief=await c.env.DB.prepare(
+    'SELECT cr.id,cr.work_id,cr.summary,cr.evidence_note,w.request_id,w.status,'+
+    'link.id AS review_id FROM brigade_chief_reports cr '+
+    'JOIN brigade_work w ON w.id=cr.work_id '+
+    'LEFT JOIN chief_completion_reviews link ON link.chief_report_id=cr.id '+
+    "WHERE cr.id=? AND cr.report_type='completion_proposed'"
+  ).bind(chiefReportId).first<{id:string;work_id:string;summary:string;
+    evidence_note:string;request_id:string;status:string;review_id:string|null}>();
+  if(!chief)return c.json({error:'Propuesta de finalización inexistente.'},404);
+  if(chief.review_id)return c.json({error:'Esta propuesta ya tiene revisión administrativa.'},409);
+  if(chief.status!=='scheduled')return c.json({error:'El trabajo ya no está programado.'},409);
+  const actor=c.var.user!.user_id as string;
+  const now=new Date().toISOString(),reviewId=crypto.randomUUID();
+  const status=accept?'accepted':'rejected';
+  // El disparador de 019 comprueba coincidencia con el informe original,
+  // revisión activa y estado programado. D1.batch revierte toda la operación
+  // si hay propuesta pendiente, revisión repetida o cambio concurrente.
+  const statements=[
+    c.env.DB.prepare(
+      'INSERT INTO technical_work_reports '+
+      '(id,work_id,actor_id,report_type,information_source,summary,'+
+      'evidence_note,review_status,created_at) '+
+      "VALUES (?,?,?,'completion_proposed','chief_relayed',? ,?,'pending_review',?)"
+    ).bind(reviewId,chief.work_id,actor,chief.summary,chief.evidence_note,now),
+    c.env.DB.prepare(
+      'INSERT INTO chief_completion_reviews '+
+      '(id,chief_report_id,technical_report_id,reviewed_by,created_at) '+
+      'VALUES (?,?,?,?,?)'
+    ).bind(crypto.randomUUID(),chiefReportId,reviewId,actor,now),
+    c.env.DB.prepare(
+      "UPDATE technical_work_reports SET review_status=?,reviewed_by=?,"+
+      "reviewed_at=?,review_note=? WHERE id=? AND review_status='pending_review'"
+    ).bind(status,actor,now,note,reviewId),
+  ];
+  if(accept){
+    statements.push(c.env.DB.prepare(
+      "UPDATE brigade_work SET status='completed',updated_at=? "+
+      "WHERE id=? AND status='scheduled' AND EXISTS("+
+      "SELECT 1 FROM chief_completion_reviews link "+
+      "JOIN technical_work_reports tr ON tr.id=link.technical_report_id "+
+      "WHERE link.chief_report_id=? AND tr.work_id=brigade_work.id "+
+      "AND tr.review_status='accepted' AND tr.reviewed_by=? AND tr.reviewed_at=?)"
+    ).bind(now,chief.work_id,chiefReportId,actor,now));
+  }
+  statements.push(c.env.DB.prepare(
+    'INSERT INTO audit_logs (id,admin_user_id,action,entity_type,entity_id,details,created_at) '+
+    "SELECT ?,?,?,'request',?,?,? FROM chief_completion_reviews link "+
+    'JOIN technical_work_reports tr ON tr.id=link.technical_report_id '+
+    'WHERE link.chief_report_id=? AND tr.review_status=? AND tr.reviewed_at=?'
+  ).bind(crypto.randomUUID(),actor,
+    accept?'chief_completion_accepted':'chief_completion_rejected',chief.request_id,
+    JSON.stringify({chief_report_id:chiefReportId,technical_report_id:reviewId,work_id:chief.work_id}),
+    now,chiefReportId,status,now));
+  try{
+    const results=await c.env.DB.batch(statements);
+    // En caso de conflicto de versión, los triggers y los UNIQUE deben impedir
+    // la inserción parcial; el batch D1 es atómico.
+    if(!results[2]?.meta?.changes||(accept&&!results[3]?.meta?.changes))
+      return c.json({error:'El trabajo cambió durante la revisión. Actualiza el expediente.'},409);
+  }catch(e){
+    if(sqlConflict(e))return c.json({error:'Informe ya revisado, trabajo cambiado o propuesta pendiente. Actualiza el expediente.'},409);
+    throw e;
+  }
+  return c.json({status,work_status:accept?'completed':'scheduled',
+    chief_report_id:chiefReportId,technical_report_id:reviewId,
+    message:accept
+      ?'Revisión del informe autenticado por dirección y cierre técnico registrados; no se modificaron contratos ni cobros.'
+      :'Propuesta del jefe rechazada con motivo; el trabajo sigue programado.'});
 });
 
 technicalRoutes.post('/requests/:requestId/cases',async c=>{
