@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import BrigadePlanner from './BrigadePlanner.svelte';
+  import ChiefAccounts from './ChiefAccounts.svelte';
 
   type Brigade = {
     id:string;name:string;leader_name:string;specialty:string|null;
@@ -198,6 +199,7 @@
       </article>
     {/each}
   </div>
+  {#if canManage}<ChiefAccounts {token} {brigades}/>{/if}
   <BrigadePlanner {token} canApprove={canManage} {prefillRequestId}/>
 </section>
 
