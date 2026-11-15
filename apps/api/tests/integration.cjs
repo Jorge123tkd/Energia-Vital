@@ -834,6 +834,21 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   await request('Logged out chief cannot access session',
     '/api/chief/works','GET',null,chiefToken1,401);
 
+  const beforeChange=await request('Original chief logs in before administrative replacement',
+    '/api/chief/login','POST',{email:chiefEmail1,password:chiefPassword},null);
+  const brigadeBeforeChange=await request('Admin reads current brigade edit version',
+    '/api/brigades','GET',null,adminToken);
+  const originalBrigade=brigadeBeforeChange.brigades.find(x=>x.id===bg1.id);
+  await request('Replacing nominal chief revokes old technical credential automatically',
+    '/api/brigades/'+bg1.id,'PATCH',{
+      leader_name:'Nuevo Jefe A',
+      expected_updated_at:originalBrigade.updated_at
+    },adminToken);
+  await request('Previous chief session is invalidated by D1 trigger',
+    '/api/chief/works','GET',null,beforeChange.access_token,401);
+  await request('Former chief cannot sign in again after replacement',
+    '/api/chief/login','POST',{email:chiefEmail1,password:chiefPassword},null,401);
+
   // Etapa 5A: informes, propuesta y revisión de cierre; incidencias y garantías.
   await request('Anonymous cannot inspect technical work records',
     '/api/technical/requests/'+r3.id,'GET',null,null,401);
