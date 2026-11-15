@@ -9,6 +9,7 @@ import { requireAdminAuth, requireStaffAuth } from '../middleware';
 import { comparePassword, hashPassword } from '../auth';
 import { currentChief, createChiefSession, requireChief, tokenDigest, type ChiefIdentity } from '../chief-auth';
 import { rateLimited } from '../rate-limit';
+import { sanitizeTechnicalPhoto } from '../technical-photo-privacy';
 
 type ChiefVars={chief?:ChiefIdentity;user?:any};
 export const chiefRoutes=new Hono<{Bindings:Env;Variables:ChiefVars}>();
@@ -254,18 +255,23 @@ chiefRoutes.post('/works/:id/evidence',requireChief,async c=>{
   if((existing?.n||0)>=12)return c.json({error:'Máximo 12 fotografías por trabajo.'},409);
   const buffer=await file.arrayBuffer(),bytes=new Uint8Array(buffer);
   if(!imageCheck(file,bytes))return c.json({error:'La imagen no coincide con el tipo indicado.'},400);
-  const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer)))
+  // Borrar metadatos EXIF/GPS/XMP/IPTC y colas anexas antes de persistir.
+  // Hash, tamaño y R2 corresponden siempre a los bytes saneados.
+  let safeBytes:Uint8Array;
+  try{safeBytes=sanitizeTechnicalPhoto(bytes,file.type);}
+  catch{return c.json({error:'Estructura de imagen inválida o no compatible.'},400);}
+  const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',safeBytes)))
     .map(b=>b.toString(16).padStart(2,'0')).join('');
   const imageId=crypto.randomUUID();
   const key='technical-evidence/'+id+'/'+imageId+'.'+extensions[file.type];
   // Guardado privado: un fallo en D1 elimina el archivo recién subido.
-  await c.env.BUCKET.put(key,buffer,{httpMetadata:{contentType:file.type}});
+  await c.env.BUCKET.put(key,safeBytes,{httpMetadata:{contentType:file.type}});
   try{
     await c.env.DB.prepare(
       'INSERT INTO brigade_evidence_images '+
       '(id,work_id,chief_id,report_id,stage,r2_key,content_type,size_bytes,sha256_hex,captured_note,created_at) '+
       'VALUES (?,?,?,?,?,?,?,?,?,?,?)'
-    ).bind(imageId,id,chief.id,reportId,stage,key,file.type,file.size,sha256,note,new Date().toISOString()).run();
+    ).bind(imageId,id,chief.id,reportId,stage,key,file.type,safeBytes.byteLength,sha256,note,new Date().toISOString()).run();
   }catch(e){
     await c.env.BUCKET.delete(key).catch(()=>{});
     if(conflict(e))return c.json({error:'Trabajo, autor, informe o límite de fotos ya cambió.'},409);
