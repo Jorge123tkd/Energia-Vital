@@ -18,6 +18,14 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Comprobar referencias duplicadas, rechazo, auditoría, integridad SQL y que la revisión manual NO se anuncie como conciliación bancaria automática.
 - [ ] Revisar procesos jurídico-contables reales, control de caja, aprobaciones fiscales y tratamiento de comprobantes sin almacenar credenciales o números de cuenta en notas.
 
+## Nueva etapa 5A: seguimiento técnico y posventa (sin publicación)
+- [ ] Ensayar `017_technical_followup.sql` sobre una copia privada de D1 real sin alterar clientes, solicitudes, fotos ni trabajos anteriores.
+- [ ] Validar que el personal puede informar sin firmar como jefe de brigada; `chief_relayed` es retransmisión, NO autenticación del jefe.
+- [ ] Solo administrador principal puede aceptar el informe de finalización y cerrar técnicamente un trabajo; confirmar auditoría y ausencia de efecto sobre solicitud comercial/pagos.
+- [ ] Comprobar integridad de fotografías vinculadas (misma solicitud), sin presentar fotos previas como prueba de ejecución.
+- [ ] Comprobar casos de incidencia/reclamación de garantía, notas inmutables y cierre administrativo sin aceptar automáticamente cobertura de garantía.
+- [ ] No publicar rutas técnicas ni archivos en canales públicos. Definir autenticación de jefes, carga privada R2 y firma técnica en etapa aparte.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.

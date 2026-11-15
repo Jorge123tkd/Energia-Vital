@@ -134,6 +134,22 @@ No incluida en 3A. Necesita número comercial, condiciones vigentes, revisión j
 
 **Siguientes etapas:** integración jurídica/contable y conciliación bancaria real a través de fuentes autorizadas, gestión de anticipos/contratos, correcciones económicas auditables y posventa técnica con evidencias. No afirmar pagos reales sin revisarlos en los sistemas de tesorería.
 
+## Entrega 5A — Informes de brigadas y posventa con cierre técnico revisado (GitHub, NO desplegada)
+
+Se incorporaron `apps/api/migrations/017_technical_followup.sql`, `apps/api/src/routes/technical-followup.ts` y `apps/web/src/components/TechnicalFollowUp.svelte` dentro del expediente privado por solicitud. **El módulo no se ha desplegado**.
+
+- **Informes de trabajos programados:** gestor o administrador autenticado registra avance, incidencia o propuesta de finalización, siempre con identidad de cuenta del actor. Se distingue `staff_observed` de `chief_relayed`: transmitir información del jefe **NO equivale a firma ni acceso autenticado del jefe**. Fecha/brigada/solicitud permanecen vinculadas al trabajo original.
+- **Evidencias:** texto que describe mediciones, actas u observaciones (obligatorio y más extenso para proponer cierre), y **referencia opcional a una foto que ya pertenece a esa misma solicitud**. La D1 rechaza imágenes inexistentes o de otra solicitud. La foto puede ser anterior al trabajo y **no certifica ejecución**; esta fase **no agrega carga de imágenes nueva, ni proporciona un certificado técnico firmado**.
+- **Finalización:** el gestor puede proponer `completion_proposed`; la asignación se mantiene `scheduled` hasta que `admin` revise la información, indique motivos y confirme el cierre técnico. Al aceptar, un `D1.batch` registra decisión, cambia únicamente `brigade_work.status` a `completed` y audita. Triggers de D1 exigen informe aceptado por admin activo, bloquean la reapertura silenciosa y preservan el contenido previo. Si rechaza, sigue programado y puede presentarse otro informe corregido. No cambia el estado comercial de la solicitud, las citas ni los pagos.
+- **Posventa:** casos independientes `service_followup_cases` con `incident`, `warranty_claim` (reclamación de garantía, **no cobertura confirmada**) y `post_sale_followup`. Personal abre casos y agrega notas inmutables en `service_case_notes`; solo administrador principal puede registrar cierre con justificación. No se envían notificaciones ni se generan obligaciones contractuales.
+- **Permisos:** rutas `/api/technical` usan `requireStaffAuth`, con `requireAdminAuth` en revisión de informes de finalización y cierre de casos. Clientes, chatbot y canales públicos no tienen permisos. No existen credenciales individuales del jefe de brigada.
+- **Pruebas CI aprobadas:** GitHub Actions run `43725720209` (SHA `b9a39e8b`) y run `43725875406` (SHA `e4ac5839`) terminaron **success**: TypeScript API/Svelte, build web, migraciones 001–017 en D1 temporal, integración real JWT/Worker, protección de roles, informes/aceptación/rechazo, reclamación y casos de posventa, auditoría, rechazo de foto de otra solicitud y ensayo de nueve conjuntos históricos **ficticios** en SQLite. No equivale a ensayo sobre copia real.
+- **Bloqueo de despliegue:** la rama dev requiere ahora **10 tablas** de 013–017 en D1 real antes de publicar. Auditoría remota solo manual y aún bloqueada por credenciales GitHub no configuradas. **No se han aplicado migraciones remotas, no se ha creado respaldo real ni se han publicado Worker/Pages.**
+
+### Entrega 5B — Pendiente de diseño y autorización
+
+Flujo de autenticación del jefe de brigada, pruebas/firmas técnicas y relación de equipos instalados; subida privada de fotografías posteriores al trabajo a R2 con permisos, clasificación antes/después, integridad y políticas de privacidad/retención; garantías contractuales con vigencias y aceptación jurídica; futuras notificaciones consentidas, SLA y tareas de mantenimiento sin generar obligaciones automáticas.
+
 ## Validaciones antes de activar la función
 
 - Test de 1/2/3+ brigadas; 2 asignaciones un día; rechazo, aprobación solo admin y auditoría.
