@@ -14,7 +14,8 @@
   type Note={id:string;case_id:string;note:string;actor_email:string;created_at:string};
   type Image={id:string;created_at:string};
   type ChiefReport={id:string;work_id:string;report_type:string;summary:string;
-    evidence_note:string|null;chief_email:string;created_at:string};
+    evidence_note:string|null;chief_email:string;created_at:string;
+    review_status:string|null;review_note:string|null;reviewed_by_email:string|null};
   type ChiefImage={id:string;work_id:string;stage:string;captured_note:string|null;
     content_type:string;size_bytes:number;chief_email:string;created_at:string};
   let {token,requestId,canReview=false}:{
@@ -25,6 +26,8 @@
   let notes:Note[]=$state([]),images:Image[]=$state([]);
   let chiefReports:ChiefReport[]=$state([]),chiefPhotos:ChiefImage[]=$state([]);
   let openedPhotoId=$state(''),openedPhotoUrl=$state('');
+  let chiefReviewId=$state(''),chiefReviewDecision=$state('accept');
+  let chiefReviewNote=$state(''),chiefEvidenceChecked=$state(false);
   let error=$state(''),success=$state(''),loading=$state(false),busy=$state(false);
   let truncated=$state(false),showReport=$state(false),showCase=$state(false);
   let workId=$state(''),reportType=$state('progress'),informationSource=$state('staff_observed');
@@ -98,6 +101,29 @@
       });
       success=r.message;reviewId='';await load();
     }catch(err){error=err instanceof Error?err.message:'No se pudo revisar el trabajo.';}
+    finally{busy=false;}
+  }
+  function openChiefReview(id:string){
+    chiefReviewId=id;chiefReviewDecision='accept';
+    chiefReviewNote='';chiefEvidenceChecked=false;error='';success='';
+  }
+  async function decideChiefReview(e:SubmitEvent){
+    e.preventDefault();
+    if(busy||!canReview||!chiefReviewId)return;
+    if(chiefReviewDecision==='accept'&&!chiefEvidenceChecked){
+      error='Para aceptar, confirma la revisión de las evidencias.';return;
+    }
+    if(!window.confirm(chiefReviewDecision==='accept'
+      ?'¿Aceptar el informe del jefe y cerrar este trabajo? No genera firma legal ni altera cobros.'
+      :'¿Rechazar la propuesta del jefe, dejando el trabajo programado?'))return;
+    busy=true;error='';success='';
+    try{
+      const r=await api.reviewChiefCompletion(token,chiefReviewId,{
+        decision:chiefReviewDecision,review_note:chiefReviewNote.trim(),
+        confirm_technical_evidence:chiefEvidenceChecked
+      });
+      success=r.message;chiefReviewId='';await load();
+    }catch(err){error=err instanceof Error?err.message:'No se pudo revisar el informe del jefe.';}
     finally{busy=false;}
   }
   async function addCase(e:SubmitEvent){
@@ -259,6 +285,52 @@
               <p class="text-xs text-teal-900 whitespace-pre-wrap break-words">{cr.evidence_note}</p>
             {/if}
             <p class="text-xs text-teal-950">Autenticación de cuenta ≠ firma digital ni cierre técnico. La aceptación final permanece reservada a dirección.</p>
+            {#if cr.review_status}
+              <p class="text-xs font-bold">
+                Decisión de dirección: {cr.review_status==='accepted'?'Cierre aceptado':'Propuesta rechazada'}
+                {cr.reviewed_by_email?' · '+cr.reviewed_by_email:''}
+              </p>
+              {#if cr.review_note}
+                <p class="text-xs whitespace-pre-wrap break-words">Motivo: {cr.review_note}</p>
+              {/if}
+            {:else if canReview && cr.report_type==='completion_proposed' && w.status==='scheduled'}
+              <button type="button" disabled={busy} onclick={()=>openChiefReview(cr.id)}
+                class="rounded-lg bg-teal-700 text-white text-xs font-bold px-3 py-2">
+                Revisar directamente informe del jefe
+              </button>
+            {/if}
+            {#if canReview && chiefReviewId===cr.id && !cr.review_status}
+              <form onsubmit={decideChiefReview}
+                class="rounded-xl border border-teal-300 p-3 bg-white space-y-3">
+                <label class="block text-xs font-bold">Decisión administrativa
+                  <select bind:value={chiefReviewDecision} class="block w-full border rounded-lg p-2 mt-1">
+                    <option value="accept">Aceptar y cerrar trabajo técnicamente</option>
+                    <option value="reject">Rechazar y mantener trabajo programado</option>
+                  </select>
+                </label>
+                <label class="block text-xs font-bold">Justificación
+                  <textarea bind:value={chiefReviewNote} rows="3"
+                    minlength={chiefReviewDecision==='accept'?12:3} maxlength="1000"
+                    required class="block w-full border rounded-lg p-2 mt-1"></textarea>
+                </label>
+                {#if chiefReviewDecision==='accept'}
+                  <label class="flex items-start gap-2 text-xs text-teal-950">
+                    <input type="checkbox" required bind:checked={chiefEvidenceChecked} class="mt-0.5"/>
+                    Revisé personalmente la evidencia presentada y autorizo el cierre técnico.
+                  </label>
+                {/if}
+                <div class="flex flex-wrap gap-2">
+                  <button type="submit" disabled={busy}
+                    class="rounded-lg bg-teal-700 text-white px-3 py-2 text-xs font-bold">
+                    Guardar decisión auditada
+                  </button>
+                  <button type="button" disabled={busy} onclick={()=>chiefReviewId=''}
+                    class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold">
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            {/if}
           </div>
         {/each}
         {#each chiefPhotos.filter(photo=>photo.work_id===w.id) as photo (photo.id)}
