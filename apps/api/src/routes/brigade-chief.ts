@@ -238,7 +238,7 @@ chiefRoutes.post('/works/:id/evidence',requireChief,async c=>{
   const declared=Number(c.req.header('content-length')||0);
   if(declared>MAX_BYTES+256*1024)return c.json({error:'La imagen supera el límite de 5 MB.'},413);
   const form=await c.req.formData().catch(()=>null);
-  const file=form?.get('file');
+  const file:unknown=form?.get('file');
   const stage=form?.get('stage');
   const noteRaw=form?.get('captured_note');
   const reportRaw=form?.get('report_id');
