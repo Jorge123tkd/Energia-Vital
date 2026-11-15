@@ -2,7 +2,7 @@
 """Bonaire: ensayo REPRODUCIBLE con registros FICTICIOS de una D1 histórica.
 
 Ejecuta 001..012, inserta datos relacionados (sin datos de producción),
-aplica 013, 014 y 015, compara cada fila histórica y comprueba referencias.
+aplica 013, 014, 015 y 016, compara cada fila histórica y comprueba referencias.
 Usa SQLite de Python en memoria; la suite separada Worker+D1 verifica
 compatibilidad real con Cloudflare. NO accede a Cloudflare.
 """
@@ -70,12 +70,13 @@ assert db.execute("PRAGMA foreign_key_check").fetchall() == []
 migration(13)
 migration(14)
 migration(15)
+migration(16)
 after = {name:snapshot(name) for name in tables}
 for name in tables:
     assert before[name] == after[name], f"La migración alteró datos existentes: {name}"
 
 for new_table in ("brigades","brigade_members","brigade_work","request_activities",
-                  "commercial_quote_versions"):
+                  "commercial_quote_versions","request_financial_declarations","request_payment_reports"):
     assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
                       (new_table,)).fetchone()[0] == 1
 
@@ -135,4 +136,62 @@ except sqlite3.IntegrityError:
 assert db.execute("SELECT title,status FROM commercial_quote_versions WHERE id='quote-version-old'").fetchone() == (
     "Cotización ficticia interna","draft")
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-print("PASS migraciones 013+014+015: preservados 9 conjuntos históricos, FKs, versiones inmutables y controles de revisión (SQLite ficticia).")
+# Los fondos declarados no se convierten en pagos ni verificaciones.
+db.execute("""INSERT INTO request_financial_declarations
+ (id,request_id,actor_id,source,funding_stage,approved_funds_declared_cents,
+  available_funds_declared_cents,advance_proposed_cents,payment_method,notes,created_at)
+ VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+ ("declaration-old","request-old","staff-old","customer_reported","approval_reported",
+  450000,100000,50000,"transfer","Empresa afirma aprobación, sin confirmación.",
+  "2026-11-14T00:00:00Z"))
+db.execute("""INSERT INTO request_payment_reports(
+ id,request_id,reported_by,amount_usd_cents,payment_method,reported_on,
+ reference,report_note,verification_status,created_at,updated_at)
+ VALUES(?,?,?,?,?,?,?,?,'reported',?,?)""",
+ ("payment-old","request-old","staff-old",10000,"transfer","2026-11-14",
+  "CI-REF-1234","Cliente informa pago no comprobado.",
+  "2026-11-14T00:00:00Z","2026-11-14T00:00:00Z"))
+try:
+    db.execute("UPDATE request_financial_declarations SET notes='Modificado' WHERE id='declaration-old'")
+    raise AssertionError("Se alteró una declaración económica histórica.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("DELETE FROM request_payment_reports WHERE id='payment-old'")
+    raise AssertionError("Se eliminó un reporte de pago histórico.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("""UPDATE request_payment_reports
+                   SET verification_status='verified_manual',reviewed_by='staff-old',
+                   reviewed_at='2026-11-14T01:00:00Z',
+                   verification_basis='bank_statement',
+                   review_note='Examen detallado de la evidencia ficticia.'
+                 WHERE id='payment-old'""")
+    raise AssertionError("Un operador pudo verificar un pago.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("""UPDATE request_payment_reports
+                   SET verification_status='verified_manual',reviewed_by='admin-old',
+                   reviewed_at='2026-11-14T01:00:00Z',
+                   review_note='Examen detallado de la evidencia ficticia.'
+                 WHERE id='payment-old'""")
+    raise AssertionError("Un administrador pudo verificar sin fuente independiente.")
+except sqlite3.IntegrityError:
+    pass
+db.execute("""UPDATE request_payment_reports
+                SET verification_status='verified_manual',reviewed_by='admin-old',
+                    reviewed_at='2026-11-14T01:00:00Z',
+                    verification_basis='bank_statement',
+                    review_note='Comprobada evidencia independiente ficticia.',
+                    updated_at='2026-11-14T01:00:00Z'
+              WHERE id='payment-old'""")
+try:
+    db.execute("UPDATE request_payment_reports SET verification_status='rejected' WHERE id='payment-old'")
+    raise AssertionError("Una segunda revisión pudo sobrescribir la original.")
+except sqlite3.IntegrityError:
+    pass
+assert db.execute("SELECT verification_status FROM request_payment_reports WHERE id='payment-old'").fetchone()[0] == "verified_manual"
+assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+print("PASS migraciones 013-016: preservados 9 conjuntos históricos, FKs, versiones, declaraciones y reportes inmutables con revisión admin (SQLite ficticia).")
