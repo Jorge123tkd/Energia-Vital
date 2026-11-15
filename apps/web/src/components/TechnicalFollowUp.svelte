@@ -26,6 +26,7 @@
   let notes:Note[]=$state([]),images:Image[]=$state([]);
   let chiefReports:ChiefReport[]=$state([]),chiefPhotos:ChiefImage[]=$state([]);
   let openedPhotoId=$state(''),openedPhotoUrl=$state('');
+  let verifiedPhotoIds:Record<string,boolean>=$state({});
   let chiefReviewId=$state(''),chiefReviewDecision=$state('accept');
   let chiefReviewNote=$state(''),chiefEvidenceChecked=$state(false);
   let error=$state(''),success=$state(''),loading=$state(false),busy=$state(false);
@@ -59,6 +60,7 @@
       images=response.evidence_images||[];
       chiefReports=response.chief_reports||[];
       chiefPhotos=response.chief_evidence||[];
+      verifiedPhotoIds={}; // Cada comprobación exige nueva lectura de R2.
       truncated=Object.values(response.truncated||{}).some(Boolean);
       if(!works.some(x=>x.id===workId&&x.status==='scheduled'))
         workId=works.find(x=>x.status==='scheduled')?.id||'';
@@ -165,6 +167,18 @@
   function closePhoto(){
     if(openedPhotoUrl){URL.revokeObjectURL(openedPhotoUrl);openedPhotoUrl='';}
     openedPhotoId='';
+  }
+  async function verifyPhoto(w:Work,pic:ChiefImage){
+    if(!canReview||busy)return;
+    busy=true;error='';success='';verifiedPhotoIds={...verifiedPhotoIds,[pic.id]:false};
+    try{
+      const result=await api.verifyChiefEvidence(token,w.id,pic.id);
+      if(result.integrity_status!=='verified')throw new Error('Integridad no confirmada.');
+      verifiedPhotoIds={...verifiedPhotoIds,[pic.id]:true};
+      success='Coincidencia de tamaño y SHA-256 entre D1 y R2 confirmada. No certifica ejecución.';
+    }catch(err){
+      error=err instanceof Error?err.message:'No se pudo comprobar la integridad de la fotografía.';
+    }finally{busy=false;}
   }
   async function viewPhoto(w:Work,pic:ChiefImage){
     if(openedPhotoId===pic.id){closePhoto();return;}
@@ -341,6 +355,15 @@
               class="text-xs rounded-lg border border-teal-300 text-teal-800 font-bold px-3 py-2">
               {openedPhotoId===photo.id?'Cerrar fotografía':'Ver evidencia de R2 privado'}
             </button>
+            {#if canReview}
+              <button type="button" onclick={()=>verifyPhoto(w,photo)} disabled={busy}
+                class="text-xs rounded-lg border border-slate-300 text-slate-800 font-bold px-3 py-2">
+                Comprobar integridad R2/D1
+              </button>
+              {#if verifiedPhotoIds[photo.id]}
+                <p class="text-xs text-teal-800" role="status">SHA-256 y tamaño coinciden con D1. No certifica el trabajo.</p>
+              {/if}
+            {/if}
             {#if openedPhotoId===photo.id && openedPhotoUrl}
               <img src={openedPhotoUrl} alt="Fotografía técnica privada de la brigada"
                 class="rounded-xl max-h-[60dvh] object-contain w-full bg-slate-100"/>
