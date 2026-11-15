@@ -26,6 +26,15 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Comprobar casos de incidencia/reclamación de garantía, notas inmutables y cierre administrativo sin aceptar automáticamente cobertura de garantía.
 - [ ] No publicar rutas técnicas ni archivos en canales públicos. Definir autenticación de jefes, carga privada R2 y firma técnica en etapa aparte.
 
+## Nueva fase 5B1: portal del jefe y fotos R2 privado
+- [ ] Ensayar 018 sobre copia **real privada** de D1; comprobar diez tablas anteriores intactas y catorce tablas nuevas en total, con respaldos D1 y R2.
+- [ ] Confirmar que un jefe con contraseña propia NO accede a staff, expedientes, clientes, cotizaciones ni pagos; tampoco a trabajos/fotos de otras brigadas.
+- [ ] Probar límite 5 MB por foto, tipo de archivo real, permisos R2 privado, retención de SHA-256 y máximo 12 por trabajo; evaluar EXIF/GPS y consentimiento antes de subir fotos reales.
+- [ ] Verificar baja y revocación de sesiones de jefes al cambiar contraseña, desactivar brigada o sustituir al jefe nominal.
+- [ ] Validar diferencia entre informe autenticado, firma jurídica, certificado técnico y aprobación humana de la finalización. NO cerrar automáticamente trabajos por informe del jefe.
+- [ ] Revisar backups y política de conservación R2, protección WAF contra abuso de login y carga, permisos Cloudflare y CORS de Pages.
+- [ ] NO fusionar ni publicar sin aprobación explícita, auditoría remota read-only y ensayos sobre copia representativa.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
