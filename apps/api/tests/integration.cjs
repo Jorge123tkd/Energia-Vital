@@ -751,6 +751,79 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const stillPlanned=await request('Chief self-report does not close brigade assignment',
     '/api/chief/works','GET',null,chiefToken2);
   assert.equal(stillPlanned.works.find(x=>x.id===toB.work.id).status,'scheduled');
+  // 5B2 — propuesta realmente autenticada y revisión de dirección en UN paso.
+  const chiefProposalReject=await request('Chief proposes completion on another scheduled job',
+    '/api/chief/works/'+secondB.work.id+'/reports','POST',{
+      report_type:'completion_proposed',
+      summary:'El jefe indica haber concluido la segunda visita programada.',
+      evidence_note:'Documentó las conexiones, mediciones y revisión visual pendiente de administración.'
+    },chiefToken2,201);
+  await request('Anonymous cannot review chief completion',
+    '/api/technical/chief-reports/'+chiefProposalReject.id+'/review','PATCH',{
+      decision:'accept',review_note:'No autorizado por dirección.',
+      confirm_technical_evidence:true
+    },null,401);
+  await request('Operator cannot approve chief completion',
+    '/api/technical/chief-reports/'+chiefProposalReject.id+'/review','PATCH',{
+      decision:'accept',review_note:'El operador no puede aprobar.',
+      confirm_technical_evidence:true
+    },staffToken,403);
+  await request('Chief himself cannot approve his own closure',
+    '/api/technical/chief-reports/'+chiefProposalReject.id+'/review','PATCH',{
+      decision:'accept',review_note:'El jefe no debe ser revisor.',
+      confirm_technical_evidence:true
+    },chiefToken2,401);
+  await request('Admin must confirm technical evidence to accept chief completion',
+    '/api/technical/chief-reports/'+chiefProposalReject.id+'/review','PATCH',{
+      decision:'accept',review_note:'Revisé las pruebas según procedimiento.',
+      confirm_technical_evidence:false
+    },adminToken,400);
+  const rejectChief=await request('Admin rejects chief proposal with reason and full history',
+    '/api/technical/chief-reports/'+chiefProposalReject.id+'/review','PATCH',{
+      decision:'reject',review_note:'Aún faltan pruebas de carga.'
+    },adminToken);
+  assert.equal(rejectChief.status,'rejected');
+  assert.equal(rejectChief.work_status,'scheduled');
+  await request('Rejected chief proposal cannot be silently rereviewed',
+    '/api/technical/chief-reports/'+chiefProposalReject.id+'/review','PATCH',{
+      decision:'accept',review_note:'Intento indebido de sobrescritura.',
+      confirm_technical_evidence:true
+    },adminToken,409);
+  const newChiefProposal=await request('Chief submits corrected documented completion',
+    '/api/chief/works/'+secondB.work.id+'/reports','POST',{
+      report_type:'completion_proposed',
+      summary:'El responsable técnico terminó las nuevas pruebas del trabajo.',
+      evidence_note:'Se registraron las mediciones requeridas y pruebas de salida para la revisión.'
+    },chiefToken2,201);
+  const acceptChief=await request('Admin accepts authenticated chief report and closes job atomically',
+    '/api/technical/chief-reports/'+newChiefProposal.id+'/review','PATCH',{
+      decision:'accept',review_note:'Inspeccioné el informe y acepto el cierre técnico.',
+      confirm_technical_evidence:true
+    },adminToken);
+  assert.equal(acceptChief.status,'accepted');
+  assert.equal(acceptChief.work_status,'completed');
+  const chiefAudit=await request('Dossier preserves chief, reviewer and technical audit',
+    '/api/technical/requests/'+r4.id,'GET',null,staffToken);
+  assert.equal(chiefAudit.works.find(x=>x.id===secondB.work.id).status,'completed');
+  const savedChiefReport=chiefAudit.chief_reports.find(x=>x.id===newChiefProposal.id);
+  assert.equal(savedChiefReport.review_status,'accepted');
+  assert.equal(savedChiefReport.reviewed_by_email,adminEmail);
+  assert.ok(chiefAudit.reports.some(x=>x.id===acceptChief.technical_report_id&&
+    x.review_status==='accepted'));
+  const originalR4=await request('Chief closure preserves commercial request status',
+    '/api/dossiers/requests/'+r4.id,'GET',null,staffToken);
+  assert.equal(originalR4.request.status,'pending');
+  assert.ok(originalR4.audit.some(x=>x.action==='chief_completion_accepted'));
+  await request('Accepted chief proposal cannot be approved twice',
+    '/api/technical/chief-reports/'+newChiefProposal.id+'/review','PATCH',{
+      decision:'accept',review_note:'Intento de doble aprobación del cierre.',
+      confirm_technical_evidence:true
+    },adminToken,409);
+  await request('Completed job no longer accepts reports from chief',
+    '/api/chief/works/'+secondB.work.id+'/reports','POST',{
+      report_type:'progress',summary:'No se informa sobre trabajos terminados.'
+    },chiefToken2,404);
+
   const ownReports=await request('Only actual authenticated chief can read own report history',
     '/api/chief/works/'+toB.work.id+'/reports','GET',null,chiefToken2);
   assert.ok(ownReports.reports.some(x=>x.id===authenticChiefReport.id));
