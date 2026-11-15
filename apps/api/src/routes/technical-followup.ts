@@ -34,7 +34,7 @@ technicalRoutes.get('/requests/:requestId',async c=>{
   const request=await c.env.DB.prepare('SELECT id FROM requests WHERE id=?')
     .bind(requestId).first();
   if(!request)return c.json({error:'Solicitud inexistente.'},404);
-  const [jobs,reports,cases,notes,images]=await Promise.all([
+  const [jobs,reports,cases,notes,images,chiefReports,chiefPhotos]=await Promise.all([
     c.env.DB.prepare(
       'SELECT w.id,w.request_id,w.title,w.work_date,w.estimated_minutes,w.status,'+
       'b.name AS brigade_name,b.leader_name AS brigade_chief_name '+
@@ -67,15 +67,33 @@ technicalRoutes.get('/requests/:requestId',async c=>{
     c.env.DB.prepare(
       'SELECT id,created_at FROM request_images WHERE request_id=? '+
       'ORDER BY created_at DESC LIMIT 101'
+    ).bind(requestId).all(),
+    c.env.DB.prepare(
+      'SELECT cr.id,cr.work_id,cr.report_type,cr.summary,cr.evidence_note,'+
+      'cr.created_at,chief.email AS chief_email '+
+      'FROM brigade_chief_reports cr JOIN brigade_work w ON w.id=cr.work_id '+
+      'JOIN brigade_chief_accounts chief ON chief.id=cr.chief_id '+
+      'WHERE w.request_id=? ORDER BY cr.created_at DESC,cr.id DESC LIMIT 101'
+    ).bind(requestId).all(),
+    c.env.DB.prepare(
+      'SELECT im.id,im.work_id,im.report_id,im.stage,im.content_type,'+
+      'im.size_bytes,im.sha256_hex,im.captured_note,im.created_at,'+
+      'chief.email AS chief_email '+
+      'FROM brigade_evidence_images im JOIN brigade_work w ON w.id=im.work_id '+
+      'JOIN brigade_chief_accounts chief ON chief.id=im.chief_id '+
+      'WHERE w.request_id=? ORDER BY im.created_at DESC,im.id DESC LIMIT 101'
     ).bind(requestId).all()
   ]);
   const ws=jobs.results||[],rp=reports.results||[],cs=cases.results||[],
-    ns=notes.results||[],imgs=images.results||[];
+    ns=notes.results||[],imgs=images.results||[],
+    chief=chiefReports.results||[],photos=chiefPhotos.results||[];
   return c.json({request_id:requestId,works:ws.slice(0,100),reports:rp.slice(0,100),
     cases:cs.slice(0,100),notes:ns.slice(0,100),evidence_images:imgs.slice(0,100),
+    chief_reports:chief.slice(0,100),chief_evidence:photos.slice(0,100),
     truncated:{works:ws.length>100,reports:rp.length>100,cases:cs.length>100,
-      notes:ns.length>100,evidence_images:imgs.length>100},
-    notice:'Las fotos existentes pueden ser anteriores al trabajo. Una nota o foto no es comprobación de ejecución ni aceptación de garantía.'});
+      notes:ns.length>100,evidence_images:imgs.length>100,
+      chief_reports:chief.length>100,chief_evidence:photos.length>100},
+    notice:'Los informes autenticados de jefes no son firma legal ni sustituyen la aceptación administrativa. Fotografías privadas no certifican ejecución.'});
 });
 
 technicalRoutes.post('/works/:id/reports',async c=>{
