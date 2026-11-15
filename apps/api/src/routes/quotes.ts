@@ -92,11 +92,14 @@ function validate(body:unknown):{data?:QuoteInput;error?:string}{
     freight_cents:freight,discount_cents:discount,total_cents:total,
     valid_until:validUntil,...rest}};
 }
-const audit=(db:Env['DB'],actor:string,action:string,requestId:string,quoteId:string,extra:object,now:string)=>
+const audit=(db:Env['DB'],actor:string,action:string,requestId:string,quoteId:string,extra:object,now:string,
+  guard?:{status:string;updated_at:string})=>
   db.prepare("INSERT INTO audit_logs(id,admin_user_id,action,entity_type,entity_id,details,created_at) "+
-    "SELECT ?,?,?,'request',?,?,? FROM commercial_quote_versions WHERE id=?")
+    "SELECT ?,?,?,'request',?,?,? FROM commercial_quote_versions WHERE id=? "+
+    "AND (? IS NULL OR (status=? AND updated_at=?))")
     .bind(crypto.randomUUID(),actor,action,requestId,
-      JSON.stringify({quote_version_id:quoteId,...extra}),now,quoteId);
+      JSON.stringify({quote_version_id:quoteId,...extra}),now,quoteId,
+      guard?.status??null,guard?.status??null,guard?.updated_at??null);
 
 quoteRoutes.get('/requests/:requestId',async c=>{
   const id=c.req.param('requestId');
@@ -154,7 +157,7 @@ quoteRoutes.post('/requests/:requestId/versions',async c=>{
     '(id,request_id,version_no,title,currency,items_json,subtotal_cents,taxes_cents,'+
     'freight_cents,discount_cents,total_cents,valid_until,delivery_terms,warranty_terms,'+
     'payment_terms,stock_notes,tax_notes,freight_notes,internal_notes,status,created_by,created_at,updated_at) '+
-    "SELECT ?,?,?,?,'USD',?,?,?,?,?,?,?,?,?,?,?,?,?,'draft',?,?,? "+
+    "SELECT ?,?,?,?,'USD',?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft',?,?,? "+
     'WHERE EXISTS (SELECT 1 FROM requests WHERE id=? AND status NOT IN (\'cancelled\',\'completed\')) '+
     'AND (SELECT COALESCE(MAX(version_no),0) FROM commercial_quote_versions WHERE request_id=?)=? '+
     'AND NOT EXISTS (SELECT 1 FROM commercial_quote_versions WHERE request_id=? AND status=\'in_review\')';
@@ -202,7 +205,8 @@ quoteRoutes.patch('/:id/submit',async c=>{
     c.env.DB.prepare(
       "UPDATE commercial_quote_versions SET status='in_review',updated_at=? WHERE id=? AND status='draft'"
     ).bind(now,id),
-    audit(c.env.DB,actor,'quote_submitted_for_review',q.request_id,id,{},now)
+    audit(c.env.DB,actor,'quote_submitted_for_review',q.request_id,id,{},now,
+      {status:'in_review',updated_at:now})
   ]);
   if(!results[0]?.meta?.changes)return c.json({error:'El borrador cambió. Recarga el expediente.'},409);
   return c.json({status:'in_review',message:'Cotización enviada a revisión interna; no se ha emitido al cliente.'});
@@ -234,7 +238,8 @@ quoteRoutes.patch('/:id/review',requireAdminAuth,async c=>{
         "UPDATE commercial_quote_versions SET status=?,reviewed_by=?,reviewed_at=?,review_reason=?,updated_at=? "+
         "WHERE id=? AND status='in_review'"
       ).bind(status,actor,now,reason.trim()||null,now,id),
-      audit(c.env.DB,actor,'quote_'+status,q.request_id,id,{decision:body.decision},now)
+      audit(c.env.DB,actor,'quote_'+status,q.request_id,id,{decision:body.decision},now,
+        {status,updated_at:now})
     ]);
     if(!results[0]?.meta?.changes)return c.json({error:'La revisión ya fue resuelta.'},409);
   }catch(e){
