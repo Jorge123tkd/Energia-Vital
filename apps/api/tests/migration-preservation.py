@@ -2,7 +2,7 @@
 """Bonaire: ensayo REPRODUCIBLE con registros FICTICIOS de una D1 histórica.
 
 Ejecuta 001..012, inserta datos relacionados (sin datos de producción),
-aplica 013 y 014, compara cada fila histórica y comprueba referencias.
+aplica 013, 014 y 015, compara cada fila histórica y comprueba referencias.
 Usa SQLite de Python en memoria; la suite separada Worker+D1 verifica
 compatibilidad real con Cloudflare. NO accede a Cloudflare.
 """
@@ -69,11 +69,13 @@ assert db.execute("PRAGMA foreign_key_check").fetchall() == []
 
 migration(13)
 migration(14)
+migration(15)
 after = {name:snapshot(name) for name in tables}
 for name in tables:
     assert before[name] == after[name], f"La migración alteró datos existentes: {name}"
 
-for new_table in ("brigades","brigade_members","brigade_work","request_activities"):
+for new_table in ("brigades","brigade_members","brigade_work","request_activities",
+                  "commercial_quote_versions"):
     assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?",
                       (new_table,)).fetchone()[0] == 1
 
@@ -103,4 +105,34 @@ except sqlite3.IntegrityError:
     pass
 assert db.execute("SELECT COUNT(*) FROM requests WHERE id='request-old'").fetchone()[0] == 1
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-print("PASS migraciones 013+014: preservados 9 conjuntos históricos, FKs y enlaces nuevos (SQLite ficticia).")
+
+# Las propuestas son INTERNAS, por versiones; no se altera ninguna solicitud.
+db.execute("""INSERT INTO commercial_quote_versions(
+ id,request_id,version_no,title,currency,items_json,
+ subtotal_cents,taxes_cents,freight_cents,discount_cents,total_cents,status,
+ created_by,created_at,updated_at)
+ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(
+ "quote-version-old","request-old",1,"Cotización ficticia interna","USD",
+ '[{"description":"Panel ficticio","quantity":1,"unit_price_usd_cents":10000,"line_total_usd_cents":10000}]',
+ 10000,0,0,0,10000,"draft","staff-old",
+ "2026-11-13T00:00:00Z","2026-11-13T00:00:00Z"))
+try:
+    db.execute("UPDATE commercial_quote_versions SET title='Tachado' WHERE id='quote-version-old'")
+    raise AssertionError("Se pudo reescribir el contenido de la cotización.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("DELETE FROM commercial_quote_versions WHERE id='quote-version-old'")
+    raise AssertionError("Se pudo borrar la versión histórica.")
+except sqlite3.IntegrityError:
+    pass
+try:
+    db.execute("""UPDATE commercial_quote_versions SET status='approved_internal'
+              WHERE id='quote-version-old'""")
+    raise AssertionError("Se pudo aprobar directamente sin revisión humana.")
+except sqlite3.IntegrityError:
+    pass
+assert db.execute("SELECT title,status FROM commercial_quote_versions WHERE id='quote-version-old'").fetchone() == (
+    "Cotización ficticia interna","draft")
+assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+print("PASS migraciones 013+014+015: preservados 9 conjuntos históricos, FKs, versiones inmutables y controles de revisión (SQLite ficticia).")
