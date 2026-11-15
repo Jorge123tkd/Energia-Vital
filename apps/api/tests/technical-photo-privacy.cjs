@@ -31,6 +31,22 @@ function segment(marker,payload){
   head[0]=0xff;head[1]=marker;head.writeUInt16BE(data.length+2,2);
   return Buffer.concat([head,data]);
 }
+// EXIF test payloads: only IFD0 Orientation is allowed to survive sanitizing.
+function tiffOrientation(value,littleEndian=false){
+  return littleEndian?Buffer.from([
+    0x49,0x49,42,0,8,0,0,0,1,0, 0x12,1,3,0,1,0,0,0,
+    value,0,0,0, 0,0,0,0
+  ]):Buffer.from([
+    0x4d,0x4d,0,42,0,0,0,8,0,1, 1,0x12,0,3,0,0,0,1,
+    0,value,0,0, 0,0,0,0
+  ]);
+}
+function exifPayload(value,littleEndian=false){
+  return Buffer.concat([
+    Buffer.from([69,120,105,102,0,0]),tiffOrientation(value,littleEndian),
+    Buffer.from('GPS_PRIVATE_SOURCE_CAMERA_SERIAL_2026')
+  ]);
+}
 const metadataJpeg=Buffer.concat([
   jpeg.subarray(0,2),
   segment(0xe1,Buffer.from('Exif\0\0GPSPRIVATE:23.45,67.89')),
@@ -45,6 +61,28 @@ eq(clean(metadataJpeg,'image/jpeg'),jpeg,'JPEG must erase APP/COM/trailer but pr
 eq(clean(jpeg,'image/jpeg'),jpeg,'Unmodified camera JPEG must keep visual segments');
 assert.throws(()=>clean(jpeg.subarray(0,jpeg.length-3),'image/jpeg'));
 assert.throws(()=>clean(Buffer.from([0xff,0xd8,0xff,0xd9]),'image/jpeg'));
+for(const value of [2,3,4,5,6,7,8]){
+  const rotated=Buffer.concat([
+    jpeg.subarray(0,2),segment(0xe1,exifPayload(value,true)),jpeg.subarray(2)
+  ]);
+  const expected=Buffer.concat([
+    jpeg.subarray(0,2),
+    segment(0xe1,Buffer.concat([Buffer.from([69,120,105,102,0,0]),tiffOrientation(value)])),
+    jpeg.subarray(2)
+  ]);
+  const actual=Buffer.from(clean(rotated,'image/jpeg'));
+  eq(actual,expected,'JPEG orientation '+value+' must survive without camera/GPS metadata');
+  assert.equal(actual.includes(Buffer.from('GPS_PRIVATE')),false);
+}
+const noRotation=Buffer.concat([
+  jpeg.subarray(0,2),segment(0xe1,exifPayload(1,true)),jpeg.subarray(2)
+]);
+eq(clean(noRotation,'image/jpeg'),jpeg,'Default orientation must not keep EXIF at all');
+assert.throws(()=>clean(Buffer.concat([
+  jpeg.subarray(0,2),segment(0xe1,exifPayload(6,true)),
+  segment(0xe1,exifPayload(3,true)),jpeg.subarray(2)
+]),'image/jpeg'),'Conflicting JPEG orientation must fail closed');
+
 
 function pngChunk(name,data){
   const nameBytes=Buffer.from(name,'ascii');
@@ -84,6 +122,25 @@ const metadataWebp=riff([
 const expectedWebp=riff([webpChunk('VP8X',vp8xSafe),vp8]);
 eq(clean(metadataWebp,'image/webp'),expectedWebp,'WEBP must strip EXIF/XMP/JUNK and update RIFF/VP8X');
 eq(clean(webp,'image/webp'),webp,'Simple real WebP must retain image bytes');
+const rotatedWebp=riff([
+  webpChunk('VP8X',vp8x),vp8,
+  webpChunk('EXIF',exifPayload(6,true)),
+  webpChunk('XMP ',Buffer.from('PRIVATE GPS')),
+]);
+const safeWebp=riff([
+  webpChunk('VP8X',Buffer.from([0x08,0,0,0,1,0,0,1,0,0])),
+  vp8,webpChunk('EXIF',tiffOrientation(6))
+]);
+eq(clean(rotatedWebp,'image/webp'),safeWebp,
+  'WebP must retain ONLY minimal orientation with updated VP8X/RIFF lengths');
+assert.equal(Buffer.from(clean(rotatedWebp,'image/webp')).includes(Buffer.from('GPS_PRIVATE')),false);
+assert.throws(()=>clean(riff([vp8,webpChunk('EXIF',exifPayload(6,true))]),'image/webp'),
+  'WebP without VP8X cannot safely retain orientation');
+const rotatedPng=Buffer.concat([
+  png.subarray(0,33),pngChunk('eXIf',tiffOrientation(6)),png.subarray(33)
+]);
+assert.throws(()=>clean(rotatedPng,'image/png'),'Rotated PNG eXIf must be rejected until pixel normalization');
+
 assert.throws(()=>clean(metadataWebp.subarray(0,metadataWebp.length-1),'image/webp'));
 assert.throws(()=>clean(png,'image/gif'));
-console.log('PASS JPEG, PNG, WebP privacy sanitization and corrupted-input checks');
+console.log('PASS JPEG/WebP orientation 1-8, GPS removal, PNG privacy and corrupted inputs');
