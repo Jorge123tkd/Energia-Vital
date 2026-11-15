@@ -148,6 +148,14 @@ export const api = {
 
   getCustomerDossier: (token:string,id:string) =>
     apiRequest('/api/dossiers/customers/'+encodeURIComponent(id),withAdmin(token)),
+  getRequestFinance: (token:string,id:string) =>
+    apiRequest('/api/finance/requests/'+encodeURIComponent(id),withAdmin(token)),
+  logFinancialDeclaration: (token:string,id:string,body:unknown) =>
+    post('/api/finance/requests/'+encodeURIComponent(id)+'/declarations',body,withAdmin(token)),
+  logPaymentReport: (token:string,id:string,body:unknown) =>
+    post('/api/finance/requests/'+encodeURIComponent(id)+'/payment-reports',body,withAdmin(token)),
+  reviewPaymentReport: (token:string,id:string,body:unknown) =>
+    patch('/api/finance/payment-reports/'+encodeURIComponent(id)+'/review',body,withAdmin(token)),
   quoteVersions: (token:string,requestId:string) =>
     apiRequest('/api/quotes/requests/'+encodeURIComponent(requestId),withAdmin(token)),
   createQuoteVersion: (token:string,requestId:string,body:unknown) =>

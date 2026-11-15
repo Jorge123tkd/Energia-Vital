@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
   import QuoteManager from './QuoteManager.svelte';
+  import FinanceTracker from './FinanceTracker.svelte';
 
   type Customer={id:string;name:string;email?:string;phone?:string;address?:string;city?:string;
     province?:string;is_active?:number;created_at?:string};
@@ -211,6 +212,7 @@
           </section>
         </div>
         {#key currentRequestId}
+          <FinanceTracker {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
           <QuoteManager {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
         {/key}
         <section class="space-y-3">
