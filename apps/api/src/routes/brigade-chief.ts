@@ -10,6 +10,7 @@ import { comparePassword, hashPassword } from '../auth';
 import { currentChief, createChiefSession, requireChief, tokenDigest, type ChiefIdentity } from '../chief-auth';
 import { rateLimited } from '../rate-limit';
 import { sanitizeTechnicalPhoto } from '../technical-photo-privacy';
+import { verifyTechnicalEvidence } from '../technical-evidence-integrity';
 
 type ChiefVars={chief?:ChiefIdentity;user?:any};
 export const chiefRoutes=new Hono<{Bindings:Env;Variables:ChiefVars}>();
@@ -311,6 +312,25 @@ chiefRoutes.get('/staff/works/:id/evidence',requireStaffAuth,async c=>{
   if(!exists)return c.json({error:'Trabajo inexistente.'},404);
   return c.json(await workEvidence(c.env.DB,id));
 });
+// Verificación manual por dirección, sin escrituras ni descarga pública.
+// El 409 advierte discrepancias; no equivale a firma ni certificación legal.
+chiefRoutes.get('/staff/works/:workId/evidence/:imageId/verify',requireAdminAuth,async c=>{
+  const workId=c.req.param('workId'),imageId=c.req.param('imageId');
+  if(!idValid(workId)||!idValid(imageId))return c.notFound();
+  const pic=await c.env.DB.prepare(
+    'SELECT r2_key,size_bytes,sha256_hex FROM brigade_evidence_images WHERE id=? AND work_id=?'
+  ).bind(imageId,workId).first<{r2_key:string;size_bytes:number;sha256_hex:string}>();
+  if(!pic)return c.notFound();
+  const result=await verifyTechnicalEvidence(c.env.BUCKET,pic.r2_key,pic.size_bytes,pic.sha256_hex);
+  return c.json({
+    image_id:imageId,
+    integrity_status:result,
+    notice:result==='verified'
+      ?'Los bytes R2 coinciden con el tamaño y SHA-256 anotados en D1. No certifica la ejecución.'
+      :'La evidencia requiere revisión privada; no utilizarla como verificada.'
+  },result==='verified'?200:409);
+});
+
 chiefRoutes.get('/staff/works/:workId/evidence/:imageId',requireStaffAuth,async c=>{
   const workId=c.req.param('workId'),imageId=c.req.param('imageId');
   if(!idValid(workId)||!idValid(imageId))return c.notFound();
