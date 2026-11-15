@@ -36,7 +36,7 @@ const textField=(v:unknown,max:number,nullable=true):string|null|undefined=>{
 };
 const cents=(v:unknown):v is number=>
   typeof v==='number'&&Number.isSafeInteger(v)&&v>=0&&v<=maxCents;
-const validId=(id:string|undefined)=>typeof id==='string'&&id.length>0&&id.length<=128;
+const validId=(id:string|undefined):id is string=>typeof id==='string'&&id.length>0&&id.length<=128;
 
 function validate(body:unknown):{data?:QuoteInput;error?:string}{
   const keys=['title','items','taxes_usd_cents','freight_usd_cents','discount_usd_cents',
