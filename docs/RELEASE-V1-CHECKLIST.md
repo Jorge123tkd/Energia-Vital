@@ -88,6 +88,15 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Validar manualmente todos los módulos protegidos y documentar incidencias restantes según [VALIDACION-SEGURIDAD-ACCESOS.md](./VALIDACION-SEGURIDAD-ACCESOS.md).
 - [ ] Mantener la cuenta de las **7 etapas pendientes** hasta completar también privacidad de fotos, QA manual y puertas de producción.
 
+## Etapa 2/7 — límites de intentos y dependencia npm (avances de seguridad)
+- [x] Sustituir contador de acceso D1 de doble operación (`INSERT` + `SELECT`) por una escritura atómica con `RETURNING hits`, sin crear migración ni cambiar políticas de cuotas.
+- [x] Probar en GitHub Actions 12 logins erróneos concurrentes y 429 al superar el límite, incluyendo bloqueo de credenciales válidas una vez excedido el presupuesto de IP.
+- [x] Añadir auditoría npm automática de solo lectura al flujo de validación de rama; se registran totales y paquetes públicos afectados, sin publicar tokens ni registros completos del gestor npm.
+- [ ] Evaluar **alertas npm**: primer reporte informativo encontró producción 0 críticas/altas y 1 moderada; conjunto completo (incluye desarrollo) 2 altas, 7 moderadas y 1 baja. Revisar la cadena de dependencias y actualizar solo con verificación; no ejecutar `npm audit fix --force` a ciegas.
+- [ ] Revisar el tratamiento de buckets expirados de `rate_buckets` y limpieza segura en entorno aislado; hoy no existe purga automática de filas antiguas. No ejecutar DELETE remoto como parte de esta etapa.
+- [ ] Confirmar Cloudflare WAF/Turnstile y limitaciones frente a IP compartida, encabezados ausentes y ataques distribuidos. La protección D1 por IP es una defensa complementaria, no un WAF.
+- [ ] Mantener pendientes QA manual, 401 admin real y pruebas de fotos/consentimiento. El total permanece en 7 hitos hasta cerrar puertas enteras.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
