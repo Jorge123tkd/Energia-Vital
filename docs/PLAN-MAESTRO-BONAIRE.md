@@ -5,6 +5,12 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 **No aplicar migraciones a D1 remoto ni desplegar API/Pages sin pruebas, copia de seguridad y autorización del propietario.**
 
 
+## Protección de configuración inicial de administrador — 16/11/2026
+
+- `POST /api/auth/setup` emplea `INSERT ... WHERE NOT EXISTS` dentro de la misma operación D1: evita crear múltiples primeros administradores por solicitudes simultáneas con correos distintos.
+- La integración Worker/D1 ficticia verificó una creación exitosa y rechazo 409 de las restantes, sin perder control de contraseñas ni modificar cuentas existentes. [CI 43953733232](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43953733232) y otras dos validaciones SUCCESS; despliegues omitidos.
+- La configuración inicial no sirve para restablecer el antiguo login admin 401. Sigue sin consultarse la D1 de producción; el PR #4 continúa abierto en borrador. Se mantienen **siete etapas completas pendientes** de salida con la segunda en progreso.
+
 ## Revisión de acceso de clientes — 16/11/2026 (etapa 2/7)
 
 - Se corrigió el manejo de cuerpos JSON en creación de citas y solicitudes: errores 400 ante datos malformados, tipos inesperados o fechas no textuales. Se conservan permisos JWT de cliente y las reglas existentes contra reservas solapadas.
