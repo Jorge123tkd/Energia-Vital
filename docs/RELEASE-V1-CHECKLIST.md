@@ -7,6 +7,13 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 **Estado de avance y número de etapas restantes:** consultar [PLAN-7-ETAPAS-PUBLICACION.md](./PLAN-7-ETAPAS-PUBLICACION.md). Son **7 hitos** para la publicación segura del alcance Brigadas/Expedientes, no 7 commits ni un plazo de entrega.
 
 
+## Etapa 2/7 — setup atómico de primer administrador (16/11/2026)
+- [x] Eliminar carrera `SELECT` seguido de `INSERT` en `/api/auth/setup`: una sola sentencia SQL permite crear como máximo el primer administrador, sin depender del correo único.
+- [x] Añadir pruebas con dos correos concurrentes y clave de setup ficticia: exactamente un 201, un 409, un administrador inicial; posteriores intentos rechazados.
+- [x] Ejecutar CI API/web/Worker+D1 aislados: [43953733232](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43953733232), [43953733227](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43953733227), [43953722008](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43953722008): **SUCCESS**. `deploy-api` / `deploy-web` omitidos.
+- [ ] Diagnosticar el antiguo 401 del administrador real mediante acceso autorizado; nunca usar setup como recuperación ni leer/alterar hashes de la D1 real sin respaldo y aprobación.
+- [ ] Mantener etapa 2 abierta y **7 etapas principales pendientes** hasta QA manual/WAF/fotos consentidas y puertas de publicación.
+
 ## Etapa 2/7 — entradas de citas y solicitudes de clientes (16/11/2026)
 - [x] Rechazar JSON inválido, `null`, arreglos y fechas no textuales en creación de citas con HTTP 400, sin fugas de error de servidor.
 - [x] Rechazar arreglos como cuerpo en solicitudes de clientes.
