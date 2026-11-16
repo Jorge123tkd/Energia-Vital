@@ -7,6 +7,12 @@
 **Avance de QA de accesos (16/11/2026):** se endurecieron las entradas JSON de citas y solicitudes de clientes y se añadieron pruebas de permisos cliente/admin/anónimo. [GitHub Actions 43949536145](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43949536145) aprobó la suite aislada; despliegues omitidos. Esto avanza el **hito 2/7** pero no lo cierra: siguen pendientes pruebas reales de usuarios/móviles, WAF, error 401 del admin, aprobación de privacidad de fotografías y revisión del PR #4. En total **siguen siete etapas** para publicación segura.
 
 
+## Etapa 2: permisos del personal protegidos en CI (16/11/2026)
+
+Se añadió la migración 020 con triggers que impiden eliminar, degradar o desactivar al último administrador activo. También se verificó la revocación de las sesiones al cambiar roles y bloquear cuentas; GitHub Actions `43951639834`, `43951639831` y `43951626221` finalizaron correctamente usando Worker+D1 aislados. Nada fue aplicado a D1 real y PR #4 de dependencias continúa como borrador.
+
+**Siguen pendientes 7 etapas:** privacidad/consentimiento de fotos (1), QA de seguridad y acceso real (2, en curso), inventario Cloudflare autorizado (3), respaldos privados D1/R2 (4), ensayo de restauración y migraciones hasta 020 (5), revisión PR/rollback (6) y autorización explícita de despliegue con monitorización (7).
+
 ## Estado actualizado — 16/11/2026
 
 El [PR #4](https://github.com/Jorge123tkd/Energia-Vital/pull/4) ya incorpora un lockfile npm probado que reúne Hono, Vite, Undici y Svelte 5.57.3 sin duplicados antiguos. El [run 43946090393](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43946090393) pasó TypeScript, compilación, integración Worker/D1 aislados y auditoría total con **0 críticas, 0 altas, 0 moderadas y 3 bajas**; en producción, 0 en todas las severidades. Los avisos bajos del plugin Svelte/inspector/`deepmerge` requieren evaluación.
