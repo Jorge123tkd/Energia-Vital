@@ -18,6 +18,22 @@ Rama: `feat/cloudflare-customer-accounts-hardening`. Pruebas sobre Worker, D1 y 
 - **NO son cero riesgos:** el comando devuelve advertencias informativas, no bloquea las pruebas ni despliegues. Las dos alertas altas del conjunto completo y la moderada de producción necesitan triage por paquete, ruta de dependencia y versión de solución. No ejecutar `npm audit fix --force` ni cambiar versiones principales a ciegas.
 - **Estado:** etapa 2/7 sigue abierta: faltan revisión efectiva de WAF/Turnstile, QA real en dispositivos, prueba autorizada del 401 del admin de producción y resolución/aprobación de incidencias de dependencias.
 
+## Triage npm con nombres verificados en CI (15-11-2026)
+
+El run aislado `43782068148` muestra los paquetes del reporte de seguridad sin imprimir credenciales ni salida bruta de npm:
+
+| Prioridad | Paquete | Alcance | `npm audit` indica |
+| --- | --- | --- | --- |
+| Moderada | `hono` | Dependencia **directa de producción** (API) | Corrección automática compatible disponible, pendiente de ensayo/actualización de lockfile |
+| Alta | `undici` | Dependencia **transitiva de desarrollo** | Corrección disponible, revisar cadena `wrangler`/`miniflare` antes de actualizar |
+| Alta | `vite` | Dependencia **directa de desarrollo** (frontend) | Sin corrección automática reportada por npm; requiere evaluar versiones y compatibilidad |
+| Moderadas | `@sveltejs/vite-plugin-svelte`, `@sveltejs/vite-plugin-svelte-inspector`, `esbuild` | Herramientas frontend | Sin corrección automática reportada |
+| Moderadas | `miniflare`, `svelte`, `wrangler` | Desarrollo y entorno de compilación | Corrección disponible según npm |
+
+**Acción recomendada antes de release:** comenzar por `hono` (alerta de producción) y, en una rama/PR aislado, regenerar lockfile mediante `npm install` controlado, pasar todas las pruebas de API y web; después tratar `undici`/`wrangler` y cadena `vite`/Svelte de forma coordinada. No editar versiones de lockfile sin regenerar integridad ni usar `npm audit fix --force` en una rama de producción.
+
+La auditoría es una instantánea de GitHub Actions; las alertas y soluciones pueden cambiar con el tiempo. **No se han corregido todavía estos paquetes en el repositorio.**
+
 ## Matriz de aceptación
 
 | Área | Prueba automática en CI | Pendiente de aceptación manual |
