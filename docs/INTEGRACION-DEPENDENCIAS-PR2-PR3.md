@@ -1,6 +1,13 @@
 # Integración controlada de parches npm — PR #2 y PR #3
 
 
+## Última revisión — 16/11/2026: deduplicación Svelte validada en PR #4
+
+- La auditoría residual de solo lectura [43945487649](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43945487649) detectó `svelte` moderado, más tres avisos bajos de `@sveltejs/vite-plugin-svelte`, su inspector y `deepmerge`. La copia obsoleta `node_modules/svelte` era 4.2.20, mientras la app tenía Svelte 5.57.2.
+- Se ejecutó `npm dedupe` sin editar manualmente lockfile, tarball ni integridades, en una rama de CI aislada. [GitHub Actions 43946090393](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43946090393) **SUCCESS**: árbol npm reproducible, Svelte solo **5.57.3**, typecheck API/Svelte, compilación y pruebas Worker+D1. Auditoría completa **0 críticas, 0 altas, 0 moderadas, 3 bajas**; auditoría solo producción **0 alertas**.
+- El lockfile generado íntegramente por npm se aplicó al [PR #4](https://github.com/Jorge123tkd/Energia-Vital/pull/4) en commit `ce8d32c0`, conservando exactamente **4 archivos de dependencias** como alcance. Se retiraron el workflow y el activador temporales. El PR sigue abierto como borrador y **no fusionado**.
+- Las tres alertas bajas están ligadas al plugin Svelte/inspector y `deepmerge`; npm no indicó un arreglo automático. Se mantienen bajo revisión, sin forzar cambios de versión principal ni eliminar controles de compilación. **Este apartado reemplaza los conteos antiguos de la fase previa, que quedan como historial**.
+
 ## Actualización confirmada — 16 de noviembre de 2026: integración lograda en PR #4
 
 **ESTADO ACTUAL: candidato conjunto validado en CI y PR borrador [#4](https://github.com/Jorge123tkd/Energia-Vital/pull/4); NO fusionado ni desplegado.** El texto posterior sobre bloqueos anteriores queda como histórico, no como estado vigente.
