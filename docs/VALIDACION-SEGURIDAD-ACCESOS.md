@@ -3,6 +3,16 @@
 **Fecha:** 15 de noviembre de 2026. **Estado: EN PROCESO.** No constituye autorización para producción.
 Rama: `feat/cloudflare-customer-accounts-hardening`. Pruebas sobre Worker, D1 y R2 de CI **aislados**.
 
+
+## 16/11/2026 — Protección de entradas y permisos en citas privadas
+
+- `apps/api/src/routes/private.ts` (commit `024787841`) ahora rechaza cuerpos JSON malformados, `null`, arreglos y fechas no textuales en `POST /api/private/appointments` con **400 controlado**, en vez de generar un error interno 500. Se limita además a 64 caracteres el texto de cada fecha antes de parsearlo. El motor mantiene su regla de solapamiento de citas y máximo 4 horas.
+- El mismo cambio impide aceptar arreglos JSON como solicitudes en `POST /api/private/requests`, devolviendo 400 sin crear registros.
+- `apps/api/tests/integration.cjs` (commit `d0fce7db`) incorpora pruebas HTTP de entradas inválidas y acceso: token de administrador en cita exclusiva de cliente **401**, anónimo consultando citas **401**, y rechazo de JSON malformado, `null`, arreglos, fechas numéricas y datos incompletos.
+- GitHub Actions [43949536145](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43949536145) **SUCCESS**: pruebas aisladas API/web/Worker+D1; `deploy-api` y `deploy-web` **skipped**. La validación de rama se comprueba por separado. No hubo consultas a datos reales.
+- Esta mejora NO resuelve el 401 histórico del administrador de producción, no constituye una auditoría WAF ni cierra la etapa 2/7. Permanecen las siete etapas de salida hasta cumplir todos los controles humanos y remotos autorizados.
+
+
 ## Estado actual de dependencias del PR #4 — 16/11/2026
 
 - La auditoría residual [43945487649](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43945487649) confirmó **0 alertas de producción** en `npm audit --omit=dev` y cuatro avisos de desarrollo (Svelte moderado y tres bajos por cadena plugin Svelte/inspector/`deepmerge`).
