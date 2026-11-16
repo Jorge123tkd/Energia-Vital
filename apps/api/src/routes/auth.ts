@@ -9,6 +9,13 @@ const validEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validPhone = (phone: string) => /^\+?[0-9 ()-]{8,20}$/.test(phone) && (phone.match(/\d/g) || []).length >= 8;
 const validPassword = (s: string) => typeof s === 'string' && s.length >= 10 && s.length <= 128;
 const clean = (v: unknown, limit: number) => typeof v === 'string' ? v.trim().slice(0, limit) : '';
+/** Un JSON malformado, nulo, lista o primitivo nunca debe causar un 500 en auth. */
+async function readBodyObject(c: { req: { json: () => Promise<unknown> } }): Promise<Record<string, unknown> | null> {
+  const body = await c.req.json().catch(() => null);
+  return body !== null && typeof body === 'object' && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : null;
+}
 
 function safeCustomer(row: any) {
   return { id: row.id, name: row.name, email: row.email, phone: row.phone, address: row.address,
@@ -35,7 +42,8 @@ authRoutes.post('/setup', async c => {
   if (!setup || setup.length < 32 || c.req.header('x-setup-key') !== setup) return c.json({ error: 'Configuración inicial no autorizada' }, 403);
   const existing = await c.env.DB.prepare('SELECT id FROM admin_users LIMIT 1').first();
   if (existing) return c.json({ error: 'El administrador ya fue configurado' }, 409);
-  const b = await c.req.json<any>();
+  const b = await readBodyObject(c);
+  if (!b) return c.json({ error: 'Datos de configuración inválidos' }, 400);
   const email = clean(b.email, 254).toLowerCase();
   if (!validEmail(email) || !validPassword(b.password)) return c.json({ error: 'Email o contraseña inválidos (mínimo 10 caracteres)' }, 400);
   await c.env.DB.prepare('INSERT INTO admin_users (id, email, password_hash, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)')
@@ -45,10 +53,14 @@ authRoutes.post('/setup', async c => {
 
 authRoutes.post('/login', async c => {
   if (await rateLimited(c.env, c.req.raw, 'admin_login', 10, 900)) return c.json({ error: 'Demasiados intentos' }, 429);
-  const b = await c.req.json<any>();
+  const b = await readBodyObject(c);
+  const email = clean(b?.email, 254).toLowerCase();
+  const password = b?.password;
+  if (!validEmail(email) || typeof password !== 'string' || !password || password.length > 128)
+    return c.json({ error: 'Credenciales inválidas' }, 401);
   const admin = await c.env.DB.prepare('SELECT * FROM admin_users WHERE LOWER(email) = ? AND is_active = 1')
-    .bind(clean(b.email, 254).toLowerCase()).first<any>();
-  if (!admin || !await comparePassword(b.password || '', admin.password_hash)) return c.json({ error: 'Credenciales inválidas' }, 401);
+    .bind(email).first<any>();
+  if (!admin || !await comparePassword(password, admin.password_hash)) return c.json({ error: 'Credenciales inválidas' }, 401);
   const tokens = await issue(c.env, admin.id, 'admin', admin.role);
   return c.json({ user: { id: admin.id, email: admin.email, role: admin.role }, token: tokens.access_token, ...tokens });
 });
@@ -58,7 +70,7 @@ authRoutes.post('/login', async c => {
 authRoutes.post('/sign-in', async c => {
   if (await rateLimited(c.env, c.req.raw, 'site_login', 10, 900))
     return c.json({ error: 'Demasiados intentos. Inténtalo más tarde.' }, 429);
-  const b = await c.req.json<any>().catch(() => null);
+  const b = await readBodyObject(c);
   const email = clean(b?.email, 254).toLowerCase();
   const password = typeof b?.password === 'string' ? b.password : '';
   if (!validEmail(email) || !password || password.length > 128)
@@ -172,19 +184,21 @@ authRoutes.post('/register', async c => {
 
 authRoutes.post('/customer/login', async c => {
   if (await rateLimited(c.env, c.req.raw, 'customer_login', 12, 900)) return c.json({ error: 'Demasiados intentos' }, 429);
-  const b = await c.req.json<any>();
-  const email = clean(b.email, 254).toLowerCase();
-  if (!validEmail(email) || typeof b.password !== 'string') return c.json({ error: 'Credenciales inválidas' }, 401);
+  const b = await readBodyObject(c);
+  const email = clean(b?.email, 254).toLowerCase();
+  const password = b?.password;
+  if (!validEmail(email) || typeof password !== 'string' || !password || password.length > 128)
+    return c.json({ error: 'Credenciales inválidas' }, 401);
   const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE LOWER(email) = ? AND password_hash IS NOT NULL AND is_active = 1')
     .bind(email).first<any>();
-  if (!customer || !await comparePassword(b.password, customer.password_hash)) return c.json({ error: 'Credenciales inválidas' }, 401);
+  if (!customer || !await comparePassword(password, customer.password_hash)) return c.json({ error: 'Credenciales inválidas' }, 401);
   const tokens = await issue(c.env, customer.id, 'customer', 'customer');
   return c.json({ user: safeCustomer(customer), ...tokens });
 });
 
 authRoutes.post('/refresh', async c => {
-  const b = await c.req.json<any>();
-  const token = typeof b.refresh_token === 'string' ? await verifyToken(b.refresh_token, c.env.JWT_SECRET || '') : null;
+  const b = await readBodyObject(c);
+  const token = typeof b?.refresh_token === 'string' ? await verifyToken(b.refresh_token, c.env.JWT_SECRET || '') : null;
   if (!token || token.kind !== 'refresh' || !await activeSession(c.env, token)) return c.json({ error: 'Sesión expirada' }, 401);
   const table = token.type === 'admin' ? 'admin_users' : 'customers';
   const current = await c.env.DB.prepare(`SELECT id FROM ${table} WHERE id = ? AND is_active = 1`).bind(token.user_id).first();
@@ -213,7 +227,8 @@ authRoutes.put('/me', async c => {
   if (!user) return c.json({ error: 'No autorizado' }, 401);
   const active = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ? AND is_active = 1').bind(user.user_id).first();
   if (!active) return c.json({ error: 'Cuenta bloqueada' }, 403);
-  const b = await c.req.json<any>();
+  const b = await readBodyObject(c);
+  if (!b) return c.json({ error: 'Datos del perfil inválidos' }, 400);
   const name = clean(b.name, 120), phone = clean(b.phone, 25), address = clean(b.address, 250);
   const city = clean(b.city, 100), province = clean(b.province, 100);
   if (name.length < 3 || !validPhone(phone) || address.length < 6 || city.length < 2 || province.length < 2)
@@ -229,7 +244,8 @@ authRoutes.put('/password', async c => {
   if (!user) return c.json({ error: 'No autorizado' }, 401);
   const active = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ? AND is_active = 1').bind(user.user_id).first();
   if (!active) return c.json({ error: 'Cuenta bloqueada' }, 403);
-  const b = await c.req.json<any>();
+  const b = await readBodyObject(c);
+  if (!b) return c.json({ error: 'Datos de contraseña inválidos' }, 400);
   if (!validPassword(b.new_password)) return c.json({ error: 'La contraseña nueva debe tener entre 10 y 128 caracteres' }, 400);
   const current = await c.env.DB.prepare('SELECT password_hash FROM customers WHERE id = ?').bind(user.user_id).first<any>();
   if (!current || !await comparePassword(b.current_password || '', current.password_hash)) return c.json({ error: 'Contraseña actual incorrecta' }, 403);
