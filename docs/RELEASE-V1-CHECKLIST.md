@@ -7,6 +7,14 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 **Estado de avance y número de etapas restantes:** consultar [PLAN-7-ETAPAS-PUBLICACION.md](./PLAN-7-ETAPAS-PUBLICACION.md). Son **7 hitos** para la publicación segura del alcance Brigadas/Expedientes, no 7 commits ni un plazo de entrega.
 
 ## Nueva etapa 3A: cotizaciones internas
+## Seguridad npm — refinamiento posterior del PR #4 (16-11-2026)
+- [x] Identificar que la alerta moderada restante era un Svelte 4.2.20 obsoleto instalado en la raíz, junto a Svelte 5.57.2 de la web.
+- [x] Deduplicar con npm a Svelte 5.57.3 único, verificar `npm ci`, typecheck, build y Worker/D1 ficticios [CI 43946090393](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43946090393).
+- [x] Repetir `npm audit`: **producción 0 avisos en cualquier gravedad; total 0 críticas, 0 altas, 0 moderadas y 3 bajas**. Candidato combinado actualizado en [PR #4](https://github.com/Jorge123tkd/Energia-Vital/pull/4) commit `ce8d32c0`, sin merge.
+- [x] Borrar workflow y activador de deduplicación tras ensayo; mantener los PR como borradores para revisión.
+- [ ] Registrar tratamiento/aprobación de avisos bajos de plugin Svelte/inspector/`deepmerge`, sin actualizaciones no compatibles.
+- [ ] Completar QA real, WAF, 401 administrativo histórico, fotografías/ICC/consentimientos y respaldos antes de cerrar la etapa 2 y autorizar producción.
+
 ## PR combinado #4 — dependencias seguras (16-11-2026)
 - [x] Hono 4.13.18 + Vite 6.4.6 + plugin Svelte 5.1.1 + Undici 7.30.2 resueltos e instalados juntos con `npm ci`, integridad npm y suite Worker/D1 temporal.
 - [x] `npm audit` conjunto: **0 critical, 0 high, 1 moderate, 3 low**. Sin alertas de Hono, Vite ni Undici. [CI aprobada](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43943927309).
