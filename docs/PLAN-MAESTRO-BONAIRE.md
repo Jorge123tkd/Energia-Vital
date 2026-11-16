@@ -4,6 +4,14 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 **Estado:** plan aprobado para iniciar por entregas. No es garantía de funciones activas.
 **No aplicar migraciones a D1 remoto ni desplegar API/Pages sin pruebas, copia de seguridad y autorización del propietario.**
 
+
+## Revisión de acceso de clientes — 16/11/2026 (etapa 2/7)
+
+- Se corrigió el manejo de cuerpos JSON en creación de citas y solicitudes: errores 400 ante datos malformados, tipos inesperados o fechas no textuales. Se conservan permisos JWT de cliente y las reglas existentes contra reservas solapadas.
+- Nuevas pruebas con identidades ficticias confirman bloqueo de administrador/anónimo en rutas de citas privadas y errores controlados, sin exponer datos. [GitHub Actions 43949536145](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43949536145): SUCCESS; `deploy-api` y `deploy-web` omitidos.
+- El PR #4 de dependencias sigue **borrador sin fusionar**, con las alertas npm residuales bajas bajo revisión. Continúan pendientes el 401 del administrador real, WAF/Turnstile, QA móvil, fotos consentidas/ICC y el respaldo D1/R2. **Siete etapas de publicación pendientes; la segunda en curso.**
+
+
 ## Estado verificado 15-11-2026 — 5B2g y pasos pendientes
 ## Último estado de dependencias — 16/11/2026
 
