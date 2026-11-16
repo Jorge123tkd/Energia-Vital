@@ -34,6 +34,14 @@ El run aislado `43782068148` muestra los paquetes del reporte de seguridad sin i
 
 La auditoría es una instantánea de GitHub Actions; las alertas y soluciones pueden cambiar con el tiempo. **No se han corregido todavía estos paquetes en el repositorio.**
 
+## Parche Hono preparado en PR separado — 16-11-2026
+
+- **Hallazgo de producción:** `hono` 4.13.13 estaba sujeto a una alerta moderada. La versión de parche `4.13.18` está disponible.
+- **PR borrador de seguridad:** [#2 — Hono 4.13.18](https://github.com/Jorge123tkd/Energia-Vital/pull/2), rama `security/hono-4-13-18`, destino `feat/cloudflare-customer-accounts-hardening`. Se modifican **solo** `apps/api/package.json` y `package-lock.json`; el lockfile fue regenerado con npm en GitHub, nunca se alteraron manualmente tarballs ni campos `integrity`.
+- **Validación de ensayo:** [GitHub Actions 43813010675](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43813010675) SUCCESS: `npm ci`, typecheck API y Svelte, build web, ensayo de preservación, Worker y D1 aislados con integración completa. La condición de auditoría `npm audit --omit=dev` exigió 0 alertas críticas, altas y moderadas antes de registrar el commit.
+- Un primer ensayo se detuvo por asumir una ubicación fija de Hono en el árbol npm; se corrigió para aceptar hoisting y el segundo run pasó. El workflow temporal con permisos `contents: write` y su archivo activador fueron eliminados del PR tras la ejecución.
+- **No fusionado**, no publicado ni probado contra las cuentas/DB reales. `vite` y `undici` siguen con alertas altas en herramientas de desarrollo, sujetas a tratamiento separado; la compatibilidad Windows/móviles debe considerarse antes del lanzamiento. No declarar etapa 2 completada.
+
 ## Matriz de aceptación
 
 | Área | Prueba automática en CI | Pendiente de aceptación manual |
