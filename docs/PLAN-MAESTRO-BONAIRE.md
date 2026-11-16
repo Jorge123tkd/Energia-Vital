@@ -5,6 +5,12 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 **No aplicar migraciones a D1 remoto ni desplegar API/Pages sin pruebas, copia de seguridad y autorización del propietario.**
 
 ## Estado verificado 15-11-2026 — 5B2g y pasos pendientes
+## Último estado de dependencias — 16/11/2026
+
+- [PR #4 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/4) tiene ahora Hono 4.13.18, Vite 6.4.6, plugin Svelte 5.1.1, Undici 7.30.2 y Svelte 5.57.3 único en lockfile. Tras `npm dedupe` auténtico y [CI aislada 43946090393](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43946090393), el reporte npm completo es **0 críticas, 0 altas, 0 moderadas, 3 bajas**; reporte solo producción: **0 alertas**.
+- Las tres bajas corresponden a la cadena del plugin Svelte/inspector y `deepmerge`, sin arreglo automático recomendado por npm. Se revisarán según riesgo y compatibilidad sin forzar el stack.
+- El cambio quedó en lockfile del mismo PR #4, commit `ce8d32c0` y cuatro archivos de dependencias en total; se retiraron workflows temporales. **Ningún PR fusionado ni Cloudflare real modificado**. Continúan 7 hitos de publicación, etapa 2 abierta (WAF, admin 401 real, QA y políticas de privacidad).
+
 ## Actualización 16-11-2026 — integración de seguridad de dependencias
 
 - [PR #4 borrador](https://github.com/Jorge123tkd/Energia-Vital/pull/4) reúne Hono 4.13.18, Vite 6.4.6, plugin Svelte 5.1.1 y Undici 7.30.2 en un lockfile generado por npm con integridad. [Actions 43943927309](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43943927309) **SUCCESS**: instalación reproducible, auditoría npm (0 críticas, 0 altas, 1 moderada, 3 bajas), compilación y pruebas integrales con Worker/D1 de CI.
