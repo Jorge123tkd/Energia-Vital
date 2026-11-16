@@ -41,21 +41,42 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
   await request('Anonymous cannot submit a customer request', '/api/private/requests', 'POST', { title: 'Prueba' }, null, 401);
   await request('Admin login rejects unknown credentials', '/api/auth/login', 'POST', { email: 'nobody@example.invalid', password: 'bad' }, null, 401);
   // A real successful admin login was missing from the tests. This catches PBKDF2/JWT regressions.
-  const adminEmail = 'admin-test-' + uid + '@example.invalid';
+  let adminEmail = 'admin-test-' + uid + '@example.invalid';
   const adminPassword = 'AdminSolar!Prueba2026';
+  const setupKey = process.env.TEST_ADMIN_SETUP_KEY || 'ClaveSetupCIExclusivaParaPruebasDe36Caracteres123';
   await invalidJson('Setup rejects malformed JSON without creating an admin',
-    '/api/auth/setup','POST','{',400,null,
-    process.env.TEST_ADMIN_SETUP_KEY || 'ClaveSetupCIExclusivaParaPruebasDe36Caracteres123');
-  const setup = await fetch(BASE + '/api/auth/setup', {
+    '/api/auth/setup','POST','{',400,null,setupKey);
+  // Dos creaciones de primer admin con correos DIFERENTES deben compartir una
+  // sola decisión atómica de D1: nunca terminar ambas en 201.
+  const competingEmails = [adminEmail, 'admin-concurrent-' + uid + '@example.invalid'];
+  const setupResults = await Promise.all(competingEmails.map(email =>
+    fetch(BASE + '/api/auth/setup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json',
+        'x-setup-key': setupKey },
+      body: JSON.stringify({ email, password: adminPassword })
+    })
+  ));
+  const setupStatuses = setupResults.map(res => res.status);
+  assert.deepEqual([...setupStatuses].sort((a,b)=>a-b),[201,409],
+    'Concurrent admin setup must create exactly one first administrator');
+  adminEmail = competingEmails[setupStatuses.indexOf(201)];
+  console.log('PASS Concurrent setup creates exactly one administrator with distinct emails');
+  const repeatSetup = await fetch(BASE + '/api/auth/setup', {
     method: 'POST', headers: { 'Content-Type': 'application/json',
-      'x-setup-key': process.env.TEST_ADMIN_SETUP_KEY || 'ClaveSetupCIExclusivaParaPruebasDe36Caracteres123' },
-    body: JSON.stringify({ email: adminEmail, password: adminPassword })
+      'x-setup-key': setupKey },
+    body: JSON.stringify({ email: 'third-' + uid + '@example.invalid', password: adminPassword })
   });
-  assert.equal(setup.status, 201, 'Admin setup must succeed in local isolated D1');
+  assert.equal(repeatSetup.status,409,'Later setup must be rejected even with valid setup key');
+  console.log('PASS Setup cannot be reused after initial creation');
   const adminSession = await request('Admin login accepts valid credentials', '/api/auth/login', 'POST',
     { email: adminEmail, password: adminPassword });
   assert.ok(adminSession.access_token, 'admin returns a signed access token');
   const adminToken = adminSession.access_token;
+  const onlyInitialAdmins = await request('First setup created one admin only',
+    '/api/admin/users','GET',null,adminToken);
+  assert.equal(onlyInitialAdmins.users.length,1,
+    'Competing setup requests with distinct emails cannot create two admins');
+
   await invalidJson('Admin login rejects malformed JSON without an internal error',
     '/api/auth/login','POST','{',401);
   await invalidJson('Admin login rejects JSON array without an internal error',
