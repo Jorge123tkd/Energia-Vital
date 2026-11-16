@@ -16,6 +16,14 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Mantener **7 etapas pendientes**; etapa 2 permanece abierta.
 
 
+## Etapa 2/7 — último administrador y sesiones del personal (16-11-2026)
+
+- [x] Migración `020_last_admin_guard.sql`: protege en SQLite/D1 al último administrador activo frente a degradación, desactivación y eliminación, incluso entre peticiones concurrentes.
+- [x] Actualización de permisos, revocación de sesiones y auditoría en lote transaccional; respuesta controlada 409 en caso de conflicto.
+- [x] Ensayo ficticio de migraciones 013-020 y pruebas HTTP de ascenso/degradación de gestor, cierre de access/refresh y desactivación. CI `43951639834`, `43951639831`, `43951626221` SUCCESS; deployments SKIPPED.
+- [ ] Validar en copia autorizada la secuencia 013-020 tras inventario y respaldos. La migración 020 **no está aplicada en producción**.
+- [ ] Completar QA móvil, 401 del administrador real, WAF/Turnstile y aprobación de tratamiento de fotografías. **Quedan 7 hitos de publicación pendientes.**
+
 ## Nueva etapa 3A: cotizaciones internas
 ## Seguridad npm — refinamiento posterior del PR #4 (16-11-2026)
 - [x] Identificar que la alerta moderada restante era un Svelte 4.2.20 obsoleto instalado en la raíz, junto a Svelte 5.57.2 de la web.
