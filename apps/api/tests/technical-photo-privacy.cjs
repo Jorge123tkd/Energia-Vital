@@ -59,6 +59,30 @@ const metadataJpeg=Buffer.concat([
 ]);
 eq(clean(metadataJpeg,'image/jpeg'),jpeg,'JPEG must erase APP/COM/trailer but preserve JFIF and image');
 eq(clean(jpeg,'image/jpeg'),jpeg,'Unmodified camera JPEG must keep visual segments');
+
+// ICC 5B2g: protect color by preserving bounded, structurally valid ICC only.
+const icc=Buffer.alloc(132);
+icc.writeUInt32BE(132,0);
+icc.write('acsp',36,'ascii');
+icc.writeUInt32BE(0,128);
+const iccApp=(index,total,data)=>segment(0xe2,Buffer.concat([
+  Buffer.from('ICC_PROFILE\0','binary'),Buffer.from([index,total]),data
+]));
+const jpegIcc=Buffer.concat([
+  jpeg.subarray(0,2),iccApp(1,2,icc.subarray(0,65)),
+  iccApp(2,2,icc.subarray(65)),jpeg.subarray(2)
+]);
+eq(clean(jpegIcc,'image/jpeg'),jpegIcc,'Valid split ICC should remain unmodified');
+assert.throws(()=>clean(Buffer.concat([
+  jpeg.subarray(0,2),iccApp(1,2,icc.subarray(0,65)),jpeg.subarray(2)
+]),'image/jpeg'),'Incomplete ICC fragment sequence must be rejected');
+assert.throws(()=>clean(Buffer.concat([
+  jpeg.subarray(0,2),iccApp(1,1,Buffer.from('fake')),jpeg.subarray(2)
+]),'image/jpeg'),'A structurally fake ICC profile must not be accepted');
+assert.throws(()=>clean(Buffer.concat([
+  jpeg.subarray(0,2),iccApp(1,1,icc),iccApp(1,1,icc),jpeg.subarray(2)
+]),'image/jpeg'),'Repeated ICC fragments must be rejected');
+
 assert.throws(()=>clean(jpeg.subarray(0,jpeg.length-3),'image/jpeg'));
 assert.throws(()=>clean(Buffer.from([0xff,0xd8,0xff,0xd9]),'image/jpeg'));
 for(const value of [2,3,4,5,6,7,8]){
@@ -98,6 +122,26 @@ const metadataPng=Buffer.concat([
   png.subarray(33),Buffer.from('tail GPS info')
 ]);
 eq(clean(metadataPng,'image/png'),png,'PNG must remove tEXt and trailing private data');
+
+const zlib=require('node:zlib');
+const iccp=pngChunk('iCCP',Buffer.concat([
+  Buffer.from('Test RGB\0','ascii'),Buffer.from([0]),zlib.deflateSync(icc)
+]));
+const pngIcc=Buffer.concat([png.subarray(0,33),iccp,png.subarray(33)]);
+eq(clean(pngIcc,'image/png'),pngIcc,'PNG iCCP remains for faithful color');
+assert.throws(()=>clean(Buffer.concat([
+  png.subarray(0,33),iccp,iccp,png.subarray(33)
+]),'image/png'),'Repeated PNG color profiles are ambiguous');
+assert.throws(()=>clean(Buffer.concat([
+  png.subarray(0,33),pngChunk('iCCP',Buffer.from('no null separator')),
+  png.subarray(33)
+]),'image/png'),'Malformed PNG ICC profile name must fail');
+assert.throws(()=>clean(Buffer.concat([
+  png.subarray(0,33),
+  pngChunk('iCCP',Buffer.concat([Buffer.from('Test\0','ascii'),Buffer.from([1]),zlib.deflateSync(icc)])),
+  png.subarray(33)
+]),'image/png'),'Unsupported PNG iCCP compression method must fail');
+
 assert.throws(()=>clean(Buffer.concat([png.subarray(0,33),pngChunk('ABCD',Buffer.from('unknown critical')),png.subarray(33)]),'image/png'));
 assert.throws(()=>clean(png.subarray(0,png.length-4),'image/png'));
 
@@ -135,6 +179,25 @@ const metadataWebp=riff([
 const expectedWebp=riff([webpChunk('VP8X',vp8xSafe),vp8]);
 eq(clean(metadataWebp,'image/webp'),expectedWebp,'WEBP must strip EXIF/XMP/JUNK and update RIFF/VP8X');
 eq(clean(webp,'image/webp'),webp,'Simple real WebP must retain image bytes');
+
+const webpIcc=riff([
+  webpChunk('VP8X',Buffer.from([0x20,0,0,0,1,0,0,1,0,0])),
+  webpChunk('ICCP',icc),vp8
+]);
+eq(clean(webpIcc,'image/webp'),webpIcc,'WEBP color profile remains intact with ICC flag');
+assert.throws(()=>clean(riff([
+  webpChunk('VP8X',Buffer.from([0x20,0,0,0,1,0,0,1,0,0])),
+  webpChunk('ICCP',icc),webpChunk('ICCP',icc),vp8
+]),'image/webp'),'Duplicate WebP ICCP must fail');
+assert.throws(()=>clean(riff([
+  webpChunk('VP8X',Buffer.from([0x20,0,0,0,1,0,0,1,0,0])),
+  vp8,webpChunk('ICCP',icc)
+]),'image/webp'),'WebP ICCP after image data must fail');
+assert.throws(()=>clean(riff([
+  webpChunk('VP8X',Buffer.from([0x20,0,0,0,1,0,0,1,0,0])),
+  webpChunk('ICCP',Buffer.alloc(1024*1024+1)),vp8
+]),'image/webp'),'Oversized WebP ICCP must be rejected');
+
 const rotatedWebp=riff([
   webpChunk('VP8X',vp8x),vp8,
   webpChunk('EXIF',exifPayload(6,true)),
@@ -156,4 +219,4 @@ assert.throws(()=>clean(rotatedPng,'image/png'),'Rotated PNG eXIf must be reject
 
 assert.throws(()=>clean(metadataWebp.subarray(0,metadataWebp.length-1),'image/webp'));
 assert.throws(()=>clean(png,'image/gif'));
-console.log('PASS JPEG/WebP orientation 1-8, GPS removal, PNG CRC-32 and corrupted inputs');
+console.log('PASS privacy, orientations, ICC bounds/structure, PNG CRC and corrupt inputs');
