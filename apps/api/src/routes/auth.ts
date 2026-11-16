@@ -7,7 +7,7 @@ import { rateLimited } from '../rate-limit';
 export const authRoutes = new Hono<{ Bindings: Env }>();
 const validEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validPhone = (phone: string) => /^\+?[0-9 ()-]{8,20}$/.test(phone) && (phone.match(/\d/g) || []).length >= 8;
-const validPassword = (s: string) => typeof s === 'string' && s.length >= 10 && s.length <= 128;
+const validPassword = (s: unknown): s is string => typeof s === 'string' && s.length >= 10 && s.length <= 128;
 const clean = (v: unknown, limit: number) => typeof v === 'string' ? v.trim().slice(0, limit) : '';
 /** Un JSON malformado, nulo, lista o primitivo nunca debe causar un 500 en auth. */
 async function readBodyObject(c: { req: { json: () => Promise<unknown> } }): Promise<Record<string, unknown> | null> {
@@ -248,7 +248,7 @@ authRoutes.put('/password', async c => {
   if (!b) return c.json({ error: 'Datos de contraseña inválidos' }, 400);
   if (!validPassword(b.new_password)) return c.json({ error: 'La contraseña nueva debe tener entre 10 y 128 caracteres' }, 400);
   const current = await c.env.DB.prepare('SELECT password_hash FROM customers WHERE id = ?').bind(user.user_id).first<any>();
-  if (!current || !await comparePassword(b.current_password || '', current.password_hash)) return c.json({ error: 'Contraseña actual incorrecta' }, 403);
+  if (!current || !await comparePassword(typeof b.current_password === 'string' ? b.current_password : '', current.password_hash)) return c.json({ error: 'Contraseña actual incorrecta' }, 403);
   await c.env.DB.prepare('UPDATE customers SET password_hash = ?, updated_at = ? WHERE id = ?')
     .bind(await hashPassword(b.new_password), new Date().toISOString(), user.user_id).run();
   await c.env.DB.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND user_type = ? AND id != ?')
