@@ -61,6 +61,12 @@ Dos PR de dependencias **borrador y sin fusionar** quedaron validados de forma a
 
 Es imprescindible reconciliar el lockfile y repetir pruebas al combinar los PR. No se ha verificado ningún acceso de producción, foto real, política WAF ni respaldo. **Etapa 1 pendiente, etapa 2 en progreso y etapas 3–7 no iniciadas; 7 siguen pendientes**.
 
+## Nota de integración de dependencias — 16-11-2026
+
+Aunque [PR #2](https://github.com/Jorge123tkd/Energia-Vital/pull/2) y [PR #3](https://github.com/Jorge123tkd/Energia-Vital/pull/3) pasaron sus pruebas individuales, el intento de combinación **no ha sido validado**: npm retuvo una dependencia Hono 4.13.13 al regenerar el lockfile parcialmente. Se bloquearon los ensayos y retiraron los workflows temporales. [Diagnóstico completo](./INTEGRACION-DEPENDENCIAS-PR2-PR3.md).
+
+La **etapa 2 sigue en progreso**. La etapa 1 sigue pendiente y no se ha iniciado ninguna etapa 3–7. Quedan **7 etapas completas** hasta publicar, no se debe descontar una por ensayos incompletos.
+
 ## Interpretación del número
 **7 etapas pendientes** para una publicación controlada de estas funciones; no son 7 mensajes ni 7 commits. Si la auditoría remota o los dispositivos revelan problemas, algunas etapas requerirán iteraciones. Para terminar **toda** la plataforma Bonaire —incluidas iniciativas futuras— no existe aún un número cerrado de pasos.
 
