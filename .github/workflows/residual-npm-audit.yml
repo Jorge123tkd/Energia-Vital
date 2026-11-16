@@ -1,0 +1,61 @@
+name: Auditoría residual npm (solo lectura)
+on:
+  push:
+    branches: [security/triage-residual-audit-20261116]
+    paths: [docs/TRIGGER-RESIDUAL-NPM-AUDIT.md]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar paquete resuelto en PR combinado
+        run: npm ci --ignore-scripts --no-fund --no-audit
+      - name: Identificar SOLO avisos de seguridad y origen en dependencias
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --json > "$RUNNER_TEMP/residual.json" || true
+          npm audit --omit=dev --json > "$RUNNER_TEMP/runtime.json" || true
+          node - "$RUNNER_TEMP/residual.json" "$RUNNER_TEMP/runtime.json" <<'NODE'
+          const fs=require('node:fs');
+          for(let i=2;i<=3;i++){
+            const name=i===2?'TODAS':'SOLO_PRODUCCION';
+            const a=JSON.parse(fs.readFileSync(process.argv[i],'utf8'));
+            if(!a?.metadata?.vulnerabilities||typeof a?.vulnerabilities!=='object')
+              throw new Error('Auditoría npm no verificable en '+name);
+            console.log('=== '+name+' === '+JSON.stringify(a.metadata.vulnerabilities));
+            const rows=Object.entries(a.vulnerabilities).map(([pkg,v])=>({
+              paquete:pkg,severidad:v.severity,directa:!!v.isDirect,rango:v.range,
+              remedio:typeof v.fixAvailable==='object'?v.fixAvailable:
+                v.fixAvailable===true?'semver automático':'sin solución automática',
+              avisos:(v.via||[]).filter(x=>x&&typeof x==='object').map(x=>({
+                id:x.source,titulo:String(x.title||'').slice(0,90),
+                rango:x.range,gravedad:x.severity
+              }))
+            }));
+            rows.sort((x,y)=>['critical','high','moderate','low'].indexOf(x.severidad)-
+              ['critical','high','moderate','low'].indexOf(y.severidad));
+            for(const row of rows)console.log('VULNERABILIDAD '+JSON.stringify(row));
+          }
+          NODE
+      - name: Mostrar dependencias públicas relacionadas y versiones fijadas
+        run: |
+          npm ls --all --json > "$RUNNER_TEMP/npm-tree.json" || true
+          node - <<'NODE'
+          const lock=require('./package-lock.json');
+          const targets=['wrangler','miniflare','hono','vite','undici','svelte','esbuild','@sveltejs/vite-plugin-svelte'];
+          for(const name of targets){
+            const found=Object.entries(lock.packages||{}).filter(([path])=>
+              path==='node_modules/'+name||path.endsWith('/node_modules/'+name));
+            console.log(name+': '+found.map(([path,v])=>path+'='+v.version).join('; '));
+          }
+          NODE
