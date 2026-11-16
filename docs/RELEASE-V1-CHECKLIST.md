@@ -4,6 +4,8 @@
 
 Este documento define pruebas de aceptación, no constituye certificación de seguridad ni autorización para publicar. No modificar datos reales durante la auditoría.
 
+**Estado de avance y número de etapas restantes:** consultar [PLAN-7-ETAPAS-PUBLICACION.md](./PLAN-7-ETAPAS-PUBLICACION.md). Son **7 hitos** para la publicación segura del alcance Brigadas/Expedientes, no 7 commits ni un plazo de entrega.
+
 ## Nueva etapa 3A: cotizaciones internas
 - [ ] Confirmar migración `015_commercial_quote_versions.sql` sobre copia privada de D1 real y preservación del historial.
 - [ ] Verificar roles: gestor redacta y solicita revisión; únicamente administrador aprueba/rechaza internamente.
@@ -67,6 +69,15 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Examinar presencia de perfiles ICC APP2/iCCP/ICCP en fotografías **consentidas**, con análisis privado de etiquetas y pruebas comparativas de color en móviles.
 - [ ] Aprobar política de conservación, consentimiento y tratamiento de fotografías reales, así como procedimientos de recuperación y respaldo cifrado R2+D1.
 - [ ] Autorizar por separado auditoría D1 remota de solo lectura, realizar respaldo y prueba de restauración de R2/D1 y, posteriormente, aprobar cada publicación. Nada de esto forma parte de los tests en Actions.
+
+## Fase 5B2g: perfiles ICC limitados y estructuralmente comprobados en GitHub
+- [x] JPEG: validar APP2 `ICC_PROFILE` como fragmentos numerados completos, con un único perfil de estructura ICC plausible; rechazar faltantes/duplicados, longitudes inconsistentes y perfiles mayores de 1 MiB.
+- [x] PNG: comprobar nombre, separador, método y cabecera zlib del chunk iCCP, con tamaño comprimido máximo 1 MiB; verificar CRC con la fase 5B2e. **No** se descomprime ni audita internamente el perfil en el Worker.
+- [x] WebP: conservar un ICCP válido estructuralmente antes de los datos de imagen, rechazar duplicados/excesos y corregir el flag ICC de VP8X.
+- [x] Añadir pruebas sintéticas ICC válidas e inválidas en `technical-photo-privacy.cjs`; verificar GitHub Actions con Worker y D1 aislados. Sin alterar el color ni tocar las fotos históricas.
+- [ ] Revisar el efecto del límite de perfil con imágenes reales **autorizadas** (sRGB, Display P3 y perfiles especiales) y documentar rechazos legítimos; si afectan operaciones, ajustar tras pruebas, sin relajar silenciosamente controles.
+- [ ] Evaluar privacidad de etiquetas ICC y posible expansión de iCCP comprimido en entorno privado; el guard actual NO garantiza que un perfil admitido carezca de datos personales ni que se haya decodificado íntegramente.
+- [ ] Revisar el plan de 7 etapas y obtener aprobación, respaldos y pruebas manuales antes de cualquier publicación.
 
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
