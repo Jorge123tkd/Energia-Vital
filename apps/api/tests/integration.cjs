@@ -241,6 +241,28 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
 
   const br = await request('Register customer B', '/api/auth/register', 'POST', b, null, 201);
   const at = ar.access_token, bt = br.access_token;
+  await invalidJson('Customer request rejects malformed JSON',
+    '/api/private/requests','POST','{',400,at);
+  await invalidJson('Customer request rejects JSON arrays',
+    '/api/private/requests','POST','[]',400,at);
+  await invalidJson('Customer appointment rejects malformed JSON',
+    '/api/private/appointments','POST','{',400,at);
+  await invalidJson('Customer appointment rejects JSON null',
+    '/api/private/appointments','POST','null',400,at);
+  await invalidJson('Customer appointment rejects JSON arrays',
+    '/api/private/appointments','POST','[]',400,at);
+  await invalidJson('Customer appointment rejects numeric dates',
+    '/api/private/appointments','POST',
+    '{"title":"Visita solar válida","starts_at":12345,"ends_at":67890}',400,at);
+  await request('Customer appointment rejects missing date',
+    '/api/private/appointments','POST',{title:'Visita solar sin fecha'},at,400);
+  await request('Admin JWT cannot submit customer appointments',
+    '/api/private/appointments','POST',
+    {title:'Visita de administrador',starts_at:'2027-01-01T14:00:00.000Z',
+      ends_at:'2027-01-01T15:00:00.000Z'},adminToken,401);
+  await request('Anonymous appointment list blocked',
+    '/api/private/appointments','GET',null,null,401);
+
   await invalidJson('Customer login rejects malformed JSON',
     '/api/auth/customer/login','POST','{',401);
   await invalidJson('Customer login rejects JSON number',
