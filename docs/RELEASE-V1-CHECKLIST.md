@@ -7,6 +7,15 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 **Estado de avance y número de etapas restantes:** consultar [PLAN-7-ETAPAS-PUBLICACION.md](./PLAN-7-ETAPAS-PUBLICACION.md). Son **7 hitos** para la publicación segura del alcance Brigadas/Expedientes, no 7 commits ni un plazo de entrega.
 
 ## Nueva etapa 3A: cotizaciones internas
+## PR combinado #4 — dependencias seguras (16-11-2026)
+- [x] Hono 4.13.18 + Vite 6.4.6 + plugin Svelte 5.1.1 + Undici 7.30.2 resueltos e instalados juntos con `npm ci`, integridad npm y suite Worker/D1 temporal.
+- [x] `npm audit` conjunto: **0 critical, 0 high, 1 moderate, 3 low**. Sin alertas de Hono, Vite ni Undici. [CI aprobada](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43943927309).
+- [x] El [PR #4](https://github.com/Jorge123tkd/Energia-Vital/pull/4) quedó **borrador, sin merge**, con solo cuatro archivos de dependencias y sin los workflows temporales.
+- [ ] Revisar y aprobar las cuatro diferencias del PR, tratar vulnerabilidades moderada y bajas restantes y repetir QA final en móviles/navegadores.
+- [ ] Confirmar WAF/Turnstile, 401 del administrador real, privacidad/consentimiento de fotografías y respaldos D1/R2 antes de cualquier despliegue.
+- [ ] Mantener el conteo de **7 etapas completas pendientes** de publicación; etapa 2 sigue abierta.
+
+
 - [ ] Confirmar migración `015_commercial_quote_versions.sql` sobre copia privada de D1 real y preservación del historial.
 - [ ] Verificar roles: gestor redacta y solicita revisión; únicamente administrador aprueba/rechaza internamente.
 - [ ] Verificar vigencia, partidas, cantidades, impuestos, transporte, descuentos y cálculo monetario en USD.
