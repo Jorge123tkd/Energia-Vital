@@ -47,6 +47,12 @@ Aprobar por separado migraciones y publicación. Ejecutar únicamente cambios re
 
 **Hecho cuando:** publicación comprobada y monitoreo sin incidencias bloqueantes.
 
+## Avance del hito 2/7 (16 de noviembre de 2026)
+
+- Se preparó el parche de runtime Hono 4.13.18 en [PR #2 borrador](https://github.com/Jorge123tkd/Energia-Vital/pull/2) con `npm ci`, API/Svelte/build, integración aislada y auditoría npm de producción sin alertas graves/moderadas en el runner. **Aún no se ha fusionado**.
+- El hito 2 sigue abierto por QA manual, WAF, el 401 real del administrador y el tratamiento de las alertas altas de herramientas de desarrollo (Vite/Undici).
+- El hito 1 también sigue abierto por falta de fotos consentidas y consentimiento/retención aprobados. En consecuencia **quedan siete hitos completos de publicación**, aunque el desarrollo continúe avanzando.
+
 ## Interpretación del número
 **7 etapas pendientes** para una publicación controlada de estas funciones; no son 7 mensajes ni 7 commits. Si la auditoría remota o los dispositivos revelan problemas, algunas etapas requerirán iteraciones. Para terminar **toda** la plataforma Bonaire —incluidas iniciativas futuras— no existe aún un número cerrado de pasos.
 
