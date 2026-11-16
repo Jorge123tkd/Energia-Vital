@@ -1391,5 +1391,27 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
     'DELETE', null, adminToken);
   await request('Logout customer A', '/api/auth/logout', 'POST', {}, at);
   await request('Revoked token rejected', '/api/private/requests', 'GET', null, at, 401);
+
+  // Al final: no interferir con los logins legítimos previos. Doce intentos
+  // concurrentes prueban que el contador de D1 es atómico, sin lectura SELECT
+  // separada, y que después de superar el límite incluso un login válido da 429.
+  const attempts = await Promise.all(Array.from({length:12},(_,i)=>
+    fetch(BASE+'/api/auth/login',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:'brute-force-'+uid+'-'+i+'@example.invalid',password:'incorrecto'})
+    })
+  ));
+  const statuses=attempts.map(x=>x.status);
+  assert.ok(statuses.every(x=>x===401||x===429),
+    'Concurrent wrong passwords must return only 401/429; got '+statuses.join(','));
+  assert.ok(statuses.includes(429),'Repeated failed logins must eventually be rate-limited');
+  assert.ok(statuses.filter(x=>x===401).length<=10,
+    'An atomic D1 counter cannot allow over 10 requests in the same IP window');
+  const gatedValid=await fetch(BASE+'/api/auth/login',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email:adminEmail,password:adminPassword})
+  });
+  assert.equal(gatedValid.status,429,'Valid credentials must not bypass an exhausted IP budget');
+  console.log('PASS Atomic D1 login rate limit blocks concurrent abuse and bypass attempts');
   console.log('SUCCESS: Worker + D1 local integration');
 })().catch(error => { console.error(error); process.exitCode = 1; });
