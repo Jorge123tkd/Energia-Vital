@@ -4,6 +4,13 @@
 Rama: `feat/cloudflare-customer-accounts-hardening`. Pruebas sobre Worker, D1 y R2 de CI **aislados**.
 
 ## Resultado de la revisión de código
+## Integración de actualizaciones de dependencias — 16-11-2026
+
+El [PR #4 borrador](https://github.com/Jorge123tkd/Energia-Vital/pull/4) **ya reúne** Hono 4.13.18 + Vite 6.4.6 + plugin Svelte 5.1.1 + Undici 7.30.2, con lockfile npm reproducible y pruebas completas en [Actions 43943927309](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43943927309), SUCCESS. `npm audit` del candidato: **0 críticas, 0 altas, 1 moderada y 3 bajas**. Los workflows temporales con escritura han sido retirados; el PR contiene exclusivamente cuatro archivos de dependencias. **No está fusionado ni desplegado.**
+
+Los registros anteriores de fallos de integración corresponden a ensayos previos y no describen el estado actual. Se requiere revisar el PR final, realizar QA en móviles, atender alertas residuales, WAF, acceso administrativo real y demás criterios de seguridad antes de cerrar etapa 2. [Procedimiento e historia](./INTEGRACION-DEPENDENCIAS-PR2-PR3.md).
+
+
 - Las rutas de autenticación de administrador, cliente y acceso unificado deben validar que el cuerpo JSON es un **objeto**. JSON vacío, inválido, nulo, arreglo o primitivo no puede causar una respuesta HTTP 500 por acceder a propiedades de un valor no válido.
 - `/api/auth/login`, `/api/auth/sign-in` y `/api/auth/customer/login` devuelven **401 genérico** ante credenciales o estructura inválida; no revelan si existe un correo.
 - `/api/auth/refresh` devuelve **401** con token inválido; `/api/auth/me` (PUT), `/api/auth/password` y `/api/auth/setup` devuelven **400** por cuerpos inválidos cuando se supera la barrera de autorización.
