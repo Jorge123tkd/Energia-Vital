@@ -6,6 +6,16 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 
 **Estado de avance y número de etapas restantes:** consultar [PLAN-7-ETAPAS-PUBLICACION.md](./PLAN-7-ETAPAS-PUBLICACION.md). Son **7 hitos** para la publicación segura del alcance Brigadas/Expedientes, no 7 commits ni un plazo de entrega.
 
+
+## Etapa 2/7 — entradas de citas y solicitudes de clientes (16/11/2026)
+- [x] Rechazar JSON inválido, `null`, arreglos y fechas no textuales en creación de citas con HTTP 400, sin fugas de error de servidor.
+- [x] Rechazar arreglos como cuerpo en solicitudes de clientes.
+- [x] Ejecutar pruebas Worker/D1 aisladas de validación de inputs y de límites de identidad: administrador en cita privada 401, anónimo en listado 401. [CI funcional](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43949536145) aprobada; trabajos de despliegue omitidos.
+- [ ] Comprobar los formularios en navegadores y teléfonos con usuarios de prueba, incluidos mensajes de error y estados de citas.
+- [ ] Resolver/verificar el 401 de administración real con autorización, WAF/Turnstile, privacidad de fotos consentidas/ICC y revisar PR #4 sin fusionar anticipadamente.
+- [ ] Mantener **7 etapas pendientes**; etapa 2 permanece abierta.
+
+
 ## Nueva etapa 3A: cotizaciones internas
 ## Seguridad npm — refinamiento posterior del PR #4 (16-11-2026)
 - [x] Identificar que la alerta moderada restante era un Svelte 4.2.20 obsoleto instalado en la raíz, junto a Svelte 5.57.2 de la web.
