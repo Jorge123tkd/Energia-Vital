@@ -1,8 +1,14 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
-Actualizado: 13 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-customer-accounts-hardening`.
+Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-customer-accounts-hardening`.
 **Estado:** plan aprobado para iniciar por entregas. No es garantía de funciones activas.
 **No aplicar migraciones a D1 remoto ni desplegar API/Pages sin pruebas, copia de seguridad y autorización del propietario.**
+
+## Estado verificado 15-11-2026 — 5B2g y pasos pendientes
+
+- Se avanzó en GitHub con tratamiento de evidencias JPEG, PNG y WebP, controles de orientación EXIF, CRC-32 PNG, verificación puntual R2/D1 (solo administrador) y validación estructural limitada de ICC en nuevos archivos (perfil completo JPEG, envoltura PNG iCCP y WebP ICCP, tope 1 MiB). Se preserva perfil de color; **no se garantiza eliminación de metadatos internos ICC** ni autenticidad del contenido fotográfico.
+- La preparación no ha accedido a Cloudflare D1/R2 reales ni ha publicado API/Pages o fusionado main. El siguiente hito requiere ensayos de orientación/color en fotos consentidas, política de datos aprobada y revisión de permisos.
+- **Plan operativo para publicación controlada de Brigadas y Expediente 360°:** [7 etapas pendientes](./PLAN-7-ETAPAS-PUBLICACION.md), incluidos ensayo visual/legal, QA integral, inventario remoto read-only autorizado, respaldo cifrado D1/R2, restauración aislada, revisión de versión y publicación/monitoreo con aprobación expresa. No son pasos para dar por finalizada toda la plataforma Bonaire.
 
 ## Norte del proyecto
 
