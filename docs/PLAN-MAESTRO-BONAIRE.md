@@ -24,6 +24,13 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 - Pendiente verificar políticas Cloudflare WAF/Turnstile, casos de IP compartida y retención de filas históricas de límites de peticiones. No hay borrado ni limpieza automática en este cambio.
 - La etapa 2/7 continúa abierta: requiere revisión manual, 401 del admin real, seguridad de dependencias y pruebas con clientes ficticios. La etapa 1 sigue pendiente de consentimiento y fotos reales. Se mantienen **7 etapas de salida**, sin publicar ni migrar D1 remota.
 
+## Dependencias de producción — PR seguro preparado, 16-11-2026
+
+- Hono `4.13.13` se identificó como dependencia de producción con alerta moderada. La actualización correctiva a `4.13.18` está preparada **exclusivamente en PR borrador [#2](https://github.com/Jorge123tkd/Energia-Vital/pull/2)**, dirigida a la rama de trabajo, no a `main`.
+- `npm install` regeneró el lockfile en un runner de GitHub con `npm ci`, TypeScript API, Svelte, compilación web, prueba de integridad de migraciones ficticias y pruebas completas Worker+D1 en ensayo; [run 43813010675](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43813010675) SUCCESS. La auditoría de paquetes de producción del ensayo no arrojó alertas críticas/altas/moderadas.
+- El PR solamente propone dos cambios de dependencias, no está fusionado. El workflow temporal de mantenimiento fue retirado. Vite y Undici siguen pendientes de revisión de vulnerabilidades de desarrollo.
+- No se modifica producción, usuarios reales, D1/R2, Worker/Pages ni `main`. **7 etapas de publicación siguen pendientes**, con la segunda en progreso.
+
 ## Norte del proyecto
 
 Bonaire es una plataforma comercial y de gestión para Cuba: energía renovable, servicios técnicos, propuestas empresariales, posibles colaboraciones comerciales y futuras líneas autorizadas. No confundir cotización con contrato, fondos declarados con fondos recibidos, ni orientación del asistente con decisión oficial.
