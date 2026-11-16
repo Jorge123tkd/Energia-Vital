@@ -10,6 +10,14 @@ Rama: `feat/cloudflare-customer-accounts-hardening`. Pruebas sobre Worker, D1 y 
 - `/api/auth/setup` requiere secreto configurado y solo funciona sin cuentas de administrador previas: no es herramienta de restablecimiento de contraseñas existentes.
 - Las pruebas automáticas crean **solo identidades ficticias** en la D1 temporal y ejercitan PBKDF2, JWT/sesiones, permisos y revocaciones. No afirman que las contraseñas existentes en producción sean correctas.
 
+## Seguimiento 15-11-2026: límites concurrentes y dependencias npm
+
+- **Límite de intentos:** `apps/api/src/rate-limit.ts` ahora usa `INSERT ... ON CONFLICT ... RETURNING hits` sobre D1, que incrementa y lee el mismo contador de modo atómico, en lugar de un `INSERT` y `SELECT` separados. Se ensayaron solicitudes de login concurrentes en CI: el presupuesto de diez solicitudes de `admin_login` termina en 429; un intento con contraseña correcta tampoco elude el bloqueo de IP. GitHub Actions de commit `960d9803`: validaciones SUCCESS. No probado frente a Cloudflare real ni WAF configurado.
+- **Límite actual:** los presupuestos de `admin_login`, `site_login` y `customer_login` son independientes por ruta. Es necesario evaluar WAF/Turnstile/limitación perimetral contra ataques distribuidos y evitar que un único encabezado ausente agrupe usuarios legítimos como `unknown`. El contador `rate_buckets` conserva filas históricas sin purga automatizada; preparar política de vencimiento y ensayo aislado antes de cambiar retención en D1 real.
+- **Auditoría npm automatizada, informativa:** se ejecutan `npm audit --omit=dev --json` y `npm audit --json` en GitHub Actions sin registrar respuestas completas ni secretos. Resultado del primer análisis, SHA `56f06393` (registro GitHub): dependencias de ejecución **0 críticas, 0 altas, 1 moderada, 0 bajas**; todas las dependencias (incluye desarrollo) **0 críticas, 2 altas, 7 moderadas, 1 baja**. Se añadió una vista de paquetes públicos afectados para priorizar revisiones sin mostrar tokens ni configuraciones.
+- **NO son cero riesgos:** el comando devuelve advertencias informativas, no bloquea las pruebas ni despliegues. Las dos alertas altas del conjunto completo y la moderada de producción necesitan triage por paquete, ruta de dependencia y versión de solución. No ejecutar `npm audit fix --force` ni cambiar versiones principales a ciegas.
+- **Estado:** etapa 2/7 sigue abierta: faltan revisión efectiva de WAF/Turnstile, QA real en dispositivos, prueba autorizada del 401 del admin de producción y resolución/aprobación de incidencias de dependencias.
+
 ## Matriz de aceptación
 
 | Área | Prueba automática en CI | Pendiente de aceptación manual |
