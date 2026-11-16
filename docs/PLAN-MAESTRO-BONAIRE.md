@@ -12,6 +12,12 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 - El PR #4 de dependencias sigue **borrador sin fusionar**, con las alertas npm residuales bajas bajo revisión. Continúan pendientes el 401 del administrador real, WAF/Turnstile, QA móvil, fotos consentidas/ICC y el respaldo D1/R2. **Siete etapas de publicación pendientes; la segunda en curso.**
 
 
+## Avance 16-11-2026 — cuentas administrativas y control de sesiones
+
+- Migración `020_last_admin_guard.sql`: dos triggers D1 conservan al menos un administrador activo aun con cambios concurrentes. La API devuelve 409 ante el conflicto y conserva auditoría y revocación de sesiones dentro de transacciones.
+- Pruebas de integración con identidades de prueba: promoción, degradación y desactivación de gestor; bloqueo de tokens de acceso y refresh anteriores, mantenimiento del historial. [CI 43951639831](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43951639831) aprobada junto a `43951639834` y `43951626221`. Migraciones 013-020 preservan registros ficticios.
+- La migración 020 todavía no se ha ejecutado en D1 de producción. Faltan auditoría y respaldo autorizados antes de publicarla, WAF, 401 admin real, pruebas manuales de la web y privacidad de fotografías. PR #4 no se fusionó. **7 etapas restantes**, etapa 2 abierta.
+
 ## Estado verificado 15-11-2026 — 5B2g y pasos pendientes
 ## Último estado de dependencias — 16/11/2026
 
