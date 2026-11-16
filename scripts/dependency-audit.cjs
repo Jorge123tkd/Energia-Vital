@@ -1,7 +1,7 @@
 /**
  * Auditoría informativa del lockfile npm en GitHub Actions.
- * No registra nombres de paquetes, respuestas completas del registro, credenciales
- * ni artefactos. Muestra solo los conteos agregados por severidad.
+ * Nunca registra respuestas completas del registro, credenciales ni artefactos.
+ * Muestra conteos y nombres públicos de paquetes afectados para su revisión.
  *
  * IMPORTANTE: terminar sin error NO significa ausencia de vulnerabilidades.
  * Las alertas altas/críticas deben revisarse ANTES de autorizar un despliegue.
@@ -31,6 +31,21 @@ for(const {label,args} of [
   }
   const details=severity.map(s=>s+'='+counts[s]).join(', ');
   console.log(label+': '+details);
+  // Solo nombres de paquetes públicos y posibles correcciones, nunca el JSON
+  // completo de npm, archivos de configuración, variables ni tokens de npm.
+  const findings=Object.entries(report.vulnerabilities||{})
+    .filter(([,item])=>['critical','high','moderate'].includes(item.severity))
+    .sort((a,b)=>severity.indexOf(a[1].severity)-severity.indexOf(b[1].severity))
+    .slice(0,25);
+  for(const [name,item] of findings){
+    const remedy=item.fixAvailable===false?'sin fix automático':
+      item.fixAvailable===true?'fix disponible':
+      item.fixAvailable?.isSemVerMajor?'requiere versión principal':
+      item.fixAvailable?.version?'fix en versión '+String(item.fixAvailable.version).slice(0,24):
+      'revisar';
+    console.log(label+' - '+item.severity+' en '+name+
+      ' ('+(item.isDirect?'directa':'transitiva')+', '+remedy+')');
+  }
   if(counts.high+counts.critical>0){
     blockers=true;
     console.log('::warning title=Riesgos de dependencias por revisar::'+label+
