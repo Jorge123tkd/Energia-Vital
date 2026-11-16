@@ -10,3 +10,5 @@ Cuarto ensayo: reparado workflow YAML y verificación de manifiestos permitidos.
 Quinto ensayo: aceptar sintaxis semver npm con ~ o ^ y exigir lockfile exacto.
 
 Sexto ensayo: diagnóstico mínimo de versiones declaradas por npm.
+
+Séptimo ensayo: el plugin se declara con semver válido '5' y resuelve 5.1.1.
