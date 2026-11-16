@@ -104,6 +104,15 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Revisar `overrides.undici`, compatibilidad Windows/Linux y comprobar la UI en teléfonos reales con Vite 6/Svelte.
 - [ ] Resolver o aprobar riesgos npm residuales; terminar WAF, 401 admin real, privacidad/fotos y QA manual antes de marcar la etapa 2 como cerrada. Continúan **7 hitos completos pendientes**.
 
+## Reconciliación PR #2 + #3 (16-11-2026) — NO aprobada
+- [x] Comprobar los dos PR separados y reproducir integración con npm en ramas temporales.
+- [x] Detectar Hono 4.13.13 anidado y sin integridad en el candidato combinado; impedir aceptación incorrecta.
+- [x] Retirar los workflows de escritura temporales de los dos ensayos fallidos.
+- [ ] Obtener un único `package-lock.json` **regenerado por npm** que incorpore Hono 4.13.18, Vite 6.4.6, plugin Svelte 5.x y Undici 7.30.1+.
+- [ ] Confirmar `npm ci`, auditoría cero alertas altas/críticas y Worker/D1/Svelte de ensayo en el mismo SHA.
+- [ ] Revisar PR combinado, compatibilidad móvil/desktop y autorizar por separado cualquier fusión; **no** publicar producción.
+- [ ] Mantener los siete hitos pendientes, especialmente WAF, 401 real del admin, ICC/fotos consentidas, copia y ensayo D1/R2.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
