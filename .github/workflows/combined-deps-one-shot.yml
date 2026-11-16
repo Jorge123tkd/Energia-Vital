@@ -1,4 +1,4 @@
-name: Validación combinada Hono Vite Undici sin deploy
+name: Parches combinados Hono Vite Undici - CI aislada
 on:
   push:
     branches: [security/combined-deps-20261116]
@@ -33,113 +33,33 @@ jobs:
           npm install vite@6.4.6 @sveltejs/vite-plugin-svelte@5 --workspace=apps/web --save-dev --package-lock-only --ignore-scripts --no-audit --no-fund
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
 
-      - name: Verificar alcance y versiones instaladas en lockfile
+      - name: Comprobar alcance, versiones e integridades de npm
         shell: bash
         run: |
           set -euo pipefail
           git diff --name-only > "$RUNNER_TEMP/changed.txt"
-          if grep -Ev '^(package-lock\.json|package\.json|apps/api/package\.json|apps/web/package\.json)
-        run: npm ci
-
-      - name: Auditar dependencias npm (solo resumen; no publica)
-        run: node scripts/dependency-audit.cjs
-
-      - name: Auditar candidato integrado y exigir cero riesgos graves
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm audit --json > "$RUNNER_TEMP/audit.json" || true
-          node - "$RUNNER_TEMP/audit.json" <<'NODE'
-          const fs=require('node:fs'),a=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-          const v=a.metadata?.vulnerabilities;
-          if(!v||!Number.isInteger(v.high)||!Number.isInteger(v.critical)||!Number.isInteger(v.moderate))
-            throw Error('npm audit no verificable');
-          console.log('Resumen auditoría integrada:',JSON.stringify(v));
-          for(const n of ['hono','vite','undici'])if(a.vulnerabilities?.[n])
-            throw Error('Aviso no remediado: '+n);
-          if(v.high>0||v.critical>0)throw Error('Riesgos graves sin resolver');
-          NODE
-
-      - name: Validar TypeScript API
-        run: npm run typecheck --workspace=apps/api
-
-      - name: Validar Svelte y TypeScript
-        run: npm run typecheck --workspace=apps/web
-
-      - name: Construir frontend (sin publicar)
-        run: npm run build --workspace=apps/web
-
-      - name: Ensayo de preservación de datos históricos ficticios (sin Cloudflare real)
-        run: python3 apps/api/tests/migration-preservation.py
-
-      - name: Pruebas integrales en Worker y D1 temporales del runner
-        shell: bash
-        env:
-          BASE_URL: http://127.0.0.1:8787
-          TEST_ADMIN_SETUP_KEY: ClaveSetupCIExclusivaParaPruebasDe36Caracteres123
-        run: |
-          set -euo pipefail
-          SANDBOX="$(mktemp -d)"
-          WORKER_PID=""
-          cleanup() {
-            if [[ -n "$WORKER_PID" ]]; then
-              kill "$WORKER_PID" 2>/dev/null || true
-              wait "$WORKER_PID" 2>/dev/null || true
-            fi
-            rm -rf "$SANDBOX"
-          }
-          trap cleanup EXIT
-
-          cd apps/api
-          npx wrangler d1 migrations apply energia-vital-db --local --persist-to "$SANDBOX"
-
-          npx wrangler dev --local --port 8787 --persist-to "$SANDBOX" \
-            --var "JWT_SECRET:ClaveCIExclusivaParaPruebasDe36Caracteres123" \
-            --var "ADMIN_SETUP_KEY:$TEST_ADMIN_SETUP_KEY" \
-            >"$RUNNER_TEMP/bonaire-worker-ci.log" 2>&1 &
-          WORKER_PID=$!
-
-          HEALTH_OK=0
-          for attempt in $(seq 1 90); do
-            if curl --silent --fail --max-time 2 "$BASE_URL/health" >/dev/null; then
-              HEALTH_OK=1
-              break
-            fi
-            if ! kill -0 "$WORKER_PID" 2>/dev/null; then break; fi
-            sleep 1
-          done
-
-          if [[ "$HEALTH_OK" != 1 ]]; then
-            echo "No arrancó el Worker aislado de GitHub Actions."
-            cat "$RUNNER_TEMP/bonaire-worker-ci.log"
-            exit 1
-          fi
-
-          cd ../..
-          npm test --workspace=apps/api
-
-      - name: Confirmar que no hubo despliegue
-        if: always()
-        run: echo "Este flujo solo valida; no ejecuta wrangler deploy, Pages deploy ni migraciones remotas."
- "$RUNNER_TEMP/changed.txt"; then
-            echo "Cambios fuera de dependencias"; exit 1
+          if grep -Ev '^(package-lock\.json|package\.json|apps/api/package\.json|apps/web/package\.json)$' "$RUNNER_TEMP/changed.txt"; then
+            echo "Cambio fuera de los cuatro archivos de dependencias"; exit 1
           fi
           node - <<'NODE'
-          const lock=require('./package-lock.json'), root=require('./package.json');
-          const api=require('./apps/api/package.json'), web=require('./apps/web/package.json');
-          const find=n=>Object.entries(lock.packages||{}).filter(([k])=>
-            k==='node_modules/'+n||k.endsWith('/node_modules/'+n)).map(([,v])=>v);
-          const check=(name,test)=>{const a=find(name);
-            if(!a.length||a.some(x=>!x.integrity||!test(x.version)))
-              throw Error('Versión no válida: '+name);
-            console.log(name+': '+a.map(x=>x.version).join(','));
+          const lock=require('./package-lock.json'),root=require('./package.json');
+          const api=require('./apps/api/package.json'),web=require('./apps/web/package.json');
+          const matching=name=>Object.entries(lock.packages||{}).filter(([k])=>
+            k==='node_modules/'+name||k.endsWith('/node_modules/'+name)).map(([,v])=>v);
+          const check=(name,test)=>{
+            const v=matching(name);
+            if(!v.length||v.some(x=>!x.integrity||!test(x.version)))
+              throw Error('Error de versión o integridad de '+name);
+            console.log(name+': '+v.map(x=>x.version).join(','));
           };
           check('hono',v=>v==='4.13.18');
           check('vite',v=>v==='6.4.6');
           check('@sveltejs/vite-plugin-svelte',v=>v.startsWith('5.'));
-          check('undici',v=>{const [a,b,c]=v.split('.').map(Number);return a===7&&(b>30||b===30&&c>=1)});
-          if(root.overrides?.undici!=='^7.30.1'||!api.dependencies.hono.includes('4.13.18')||
-             !web.devDependencies.vite.includes('6.4.6'))throw Error('Manifiesto inesperado');
+          check('undici',v=>{const [major,minor,patch]=v.split('.').map(Number);
+            return major===7&&(minor>30||(minor===30&&patch>=1));});
+          if(root.overrides?.undici!=='^7.30.1'||
+             !api.dependencies.hono.includes('4.13.18')||
+             !web.devDependencies.vite.includes('6.4.6'))throw Error('Declaraciones npm inválidas');
           NODE
 
       - name: Instalar dependencias
@@ -148,6 +68,23 @@ jobs:
       - name: Auditar dependencias npm (solo resumen; no publica)
         run: node scripts/dependency-audit.cjs
 
+      - name: Auditoría completa del candidato integrado
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --json > "$RUNNER_TEMP/combined-audit.json" || true
+          node - "$RUNNER_TEMP/combined-audit.json" <<'NODE'
+          const fs=require('node:fs');
+          const r=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          const c=r.metadata?.vulnerabilities;
+          if(!c||!Number.isInteger(c.high)||!Number.isInteger(c.critical)||!Number.isInteger(c.moderate))
+            throw Error('Auditoría npm inválida');
+          console.log('Conteos npm audit:',JSON.stringify(c));
+          for(const name of ['hono','vite','undici'])if(r.vulnerabilities?.[name])
+            throw Error('Aviso pendiente en '+name);
+          if(c.high||c.critical)throw Error('Candidato con vulnerabilidades altas o críticas');
+          NODE
+
       - name: Validar TypeScript API
         run: npm run typecheck --workspace=apps/api
 
@@ -210,7 +147,7 @@ jobs:
         if: always()
         run: echo "Este flujo solo valida; no ejecuta wrangler deploy, Pages deploy ni migraciones remotas."
 
-      - name: Guardar solo dependencias tras validar TODO en CI aislada
+      - name: Registrar parches si todas las pruebas anteriores pasaron
         shell: bash
         run: |
           set -euo pipefail
@@ -220,6 +157,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Sin cambios"
           else
-            git commit -m "fix(deps): integrar parches Hono 4.13.18 Vite 6 Undici 7"
+            git commit -m "fix(deps): integrar Hono 4.13.18 Vite 6 Undici 7 con CI"
             git push origin HEAD:security/combined-deps-20261116
           fi
