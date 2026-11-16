@@ -57,7 +57,7 @@ jobs:
             throw new Error('No modificar Hono: actualización separada en PR #2');
           console.log('Declaraciones web:',JSON.stringify({vite:pkg.devDependencies.vite,sveltePlugin:pkg.devDependencies['@sveltejs/vite-plugin-svelte']}));
           if(!/^[~^]?6\./.test(pkg.devDependencies.vite)||
-            !/^[~^]?5\./.test(pkg.devDependencies['@sveltejs/vite-plugin-svelte']))
+            !/^[~^]?5(?:\.|$)/.test(pkg.devDependencies['@sveltejs/vite-plugin-svelte']))
             throw new Error('Manifiesto web inesperado');
           console.log('Vite:',vite.map(x=>x.version).join(', '));
           console.log('Svelte plugin:',plugin.map(x=>x.version).join(', '));
