@@ -22,7 +22,7 @@ privateRoutes.get('/requests', async c => {
 privateRoutes.post('/requests', async c => {
   const user = getUser(c)!;
   const b = await c.req.json<any>().catch(() => null);
-  if (!b || typeof b !== 'object') return c.json({ error: 'Solicitud inválida.' },400);
+  if (!b || typeof b !== 'object' || Array.isArray(b)) return c.json({ error: 'Solicitud inválida.' },400);
   const intake = parseRequestIntake(b);
   if (intake.error) return c.json({error:intake.error},400);
   const selectedId = typeof b.service_id === 'string' ? b.service_id.trim() : '';
@@ -80,7 +80,13 @@ privateRoutes.get('/appointments', async c => {
 
 privateRoutes.post('/appointments', async c => {
   const user = getUser(c)!;
-  const b = await c.req.json<any>();
+  const b = await c.req.json<Record<string, unknown>>().catch(() => null);
+  // Nunca provocar un 500 por JSON vacío, array o fechas no textuales.
+  if (!b || typeof b !== 'object' || Array.isArray(b) ||
+      typeof b.starts_at !== 'string' || typeof b.ends_at !== 'string' ||
+      b.starts_at.length > 64 || b.ends_at.length > 64) {
+    return c.json({ error: 'Datos de cita inválidos' }, 400);
+  }
   const title = typeof b.title === 'string' ? b.title.trim().slice(0, 180) : '';
   const starts = new Date(b.starts_at), ends = new Date(b.ends_at);
   if (title.length < 3 || !Number.isFinite(starts.getTime()) || !Number.isFinite(ends.getTime()) || ends <= starts || ends.getTime() - starts.getTime() > 4 * 3600000 || starts.getTime() < Date.now())
