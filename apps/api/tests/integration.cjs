@@ -13,6 +13,19 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   console.log('PASS', name);
   return data;
 }
+async function invalidJson(name, route, method, rawBody, expected, token, setupKey) {
+  const res=await fetch(BASE+route,{method,
+    headers:{'Content-Type':'application/json',
+      ...(token?{Authorization:'Bearer '+token}:{}),
+      ...(setupKey?{'x-setup-key':setupKey}:{})},
+    body:rawBody,
+  });
+  const result=await res.json().catch(()=>({}));
+  assert.equal(res.status,expected,name+': '+JSON.stringify(result));
+  assert.equal(typeof result.error,'string',name+' must provide a controlled error');
+  console.log('PASS',name);
+}
+
 (async () => {
   const uid = crypto.randomUUID().slice(0, 10);
   const make = name => ({ name: `Cliente ${name}`, email: `${name}-${uid}@example.invalid`, phone: '5355555555',
@@ -30,6 +43,9 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   // A real successful admin login was missing from the tests. This catches PBKDF2/JWT regressions.
   const adminEmail = 'admin-test-' + uid + '@example.invalid';
   const adminPassword = 'AdminSolar!Prueba2026';
+  await invalidJson('Setup rejects malformed JSON without creating an admin',
+    '/api/auth/setup','POST','{',400,null,
+    process.env.TEST_ADMIN_SETUP_KEY || 'ClaveSetupCIExclusivaParaPruebasDe36Caracteres123');
   const setup = await fetch(BASE + '/api/auth/setup', {
     method: 'POST', headers: { 'Content-Type': 'application/json',
       'x-setup-key': process.env.TEST_ADMIN_SETUP_KEY || 'ClaveSetupCIExclusivaParaPruebasDe36Caracteres123' },
@@ -40,6 +56,15 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
     { email: adminEmail, password: adminPassword });
   assert.ok(adminSession.access_token, 'admin returns a signed access token');
   const adminToken = adminSession.access_token;
+  await invalidJson('Admin login rejects malformed JSON without an internal error',
+    '/api/auth/login','POST','{',401);
+  await invalidJson('Admin login rejects JSON array without an internal error',
+    '/api/auth/login','POST','[]',401);
+  await invalidJson('Admin login rejects JSON null without an internal error',
+    '/api/auth/login','POST','null',401);
+  await invalidJson('Refresh rejects malformed JSON without an internal error',
+    '/api/auth/refresh','POST','{',401);
+
   const initialWelcome = await request('Admin reads default welcome automation',
     '/api/notifications/admin/automation','GET',null,adminToken);
   assert.equal(initialWelcome.enabled,true);
@@ -67,6 +92,9 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
   const unifiedAdmin = await request('Unified sign-in recognizes an administrator', '/api/auth/sign-in',
     'POST', { email: adminEmail, password: adminPassword });
   assert.equal(unifiedAdmin.user.role, 'admin');
+  await invalidJson('Unified login rejects malformed JSON with generic 401',
+    '/api/auth/sign-in','POST','{',401);
+
   await request('Admin JWT cannot access customer-only API', '/api/private/requests',
     'GET', null, unifiedAdmin.access_token, 401);
 
@@ -213,6 +241,17 @@ async function request(name, route, method = 'GET', body, token, expected = 200)
 
   const br = await request('Register customer B', '/api/auth/register', 'POST', b, null, 201);
   const at = ar.access_token, bt = br.access_token;
+  await invalidJson('Customer login rejects malformed JSON',
+    '/api/auth/customer/login','POST','{',401);
+  await invalidJson('Customer login rejects JSON number',
+    '/api/auth/customer/login','POST','123',401);
+  await invalidJson('Customer profile rejects malformed JSON',
+    '/api/auth/me','PUT','{',400,at);
+  await invalidJson('Customer password update rejects JSON array',
+    '/api/auth/password','PUT','[]',400,at);
+  await invalidJson('Customer password update rejects non-text values',
+    '/api/auth/password','PUT','{"new_password":12345}',400,at);
+
   const welcomeCustomer = await request('Customer receives configured welcome notification',
     '/api/notifications','GET',null,at);
   assert.ok(welcomeCustomer.notifications.some(n=>n.title==='Bienvenido a Bonaire de prueba'));
