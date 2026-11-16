@@ -10,6 +10,13 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 - La preparación no ha accedido a Cloudflare D1/R2 reales ni ha publicado API/Pages o fusionado main. El siguiente hito requiere ensayos de orientación/color en fotos consentidas, política de datos aprobada y revisión de permisos.
 - **Plan operativo para publicación controlada de Brigadas y Expediente 360°:** [7 etapas pendientes](./PLAN-7-ETAPAS-PUBLICACION.md), incluidos ensayo visual/legal, QA integral, inventario remoto read-only autorizado, respaldo cifrado D1/R2, restauración aislada, revisión de versión y publicación/monitoreo con aprobación expresa. No son pasos para dar por finalizada toda la plataforma Bonaire.
 
+## Avance de seguridad de accesos — 15-11-2026 (etapa 2/7 en curso)
+
+- Revisadas rutas de autenticación de administrador y clientes. El backend ahora responde con errores controlados frente a JSON no válido en login, setup, refresh, perfil y contraseña, sin cambiar reglas PBKDF2/JWT ni tocar usuarios existentes.
+- Pruebas automáticas añadidas en `apps/api/tests/integration.cjs` con Worker y D1 aislados; [matriz de acceso y plan de diagnóstico 401](./VALIDACION-SEGURIDAD-ACCESOS.md).
+- El antiguo inicio de sesión administrativo falló con 401 en el entorno real y **NO se ha comprobado ni resuelto en producción**. No inventar un restablecimiento sin aprobación. Pendiente QA móvil, WAF, revisión de dependencias y políticas de fotos/ICC.
+- [Plan de siete etapas](./PLAN-7-ETAPAS-PUBLICACION.md): la etapa 1 (fotos/privacidad) continúa pendiente por falta de fotos reales consentidas y política aprobada; la etapa 2 (seguridad/QA) está en progreso. Se mantienen 7 etapas de publicación sin cerrar.
+
 ## Norte del proyecto
 
 Bonaire es una plataforma comercial y de gestión para Cuba: energía renovable, servicios técnicos, propuestas empresariales, posibles colaboraciones comerciales y futuras líneas autorizadas. No confundir cotización con contrato, fondos declarados con fondos recibidos, ni orientación del asistente con decisión oficial.
