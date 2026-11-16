@@ -55,8 +55,8 @@ jobs:
           }))throw new Error('Undici no llegó a 7.30.1+ dentro de major 7');
           if(!hono.length||hono.some(x=>x.version!=='4.13.13'))
             throw new Error('No modificar Hono: actualización separada en PR #2');
-          if(!pkg.devDependencies.vite.startsWith('^6.')||
-            !pkg.devDependencies['@sveltejs/vite-plugin-svelte'].startsWith('^5.'))
+          if(!/^[~^]?6\./.test(pkg.devDependencies.vite)||
+            !/^[~^]?5\./.test(pkg.devDependencies['@sveltejs/vite-plugin-svelte']))
             throw new Error('Manifiesto web inesperado');
           console.log('Vite:',vite.map(x=>x.version).join(', '));
           console.log('Svelte plugin:',plugin.map(x=>x.version).join(', '));
