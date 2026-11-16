@@ -5,6 +5,13 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 **No aplicar migraciones a D1 remoto ni desplegar API/Pages sin pruebas, copia de seguridad y autorización del propietario.**
 
 ## Estado verificado 15-11-2026 — 5B2g y pasos pendientes
+## Actualización 16-11-2026 — integración de seguridad de dependencias
+
+- [PR #4 borrador](https://github.com/Jorge123tkd/Energia-Vital/pull/4) reúne Hono 4.13.18, Vite 6.4.6, plugin Svelte 5.1.1 y Undici 7.30.2 en un lockfile generado por npm con integridad. [Actions 43943927309](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43943927309) **SUCCESS**: instalación reproducible, auditoría npm (0 críticas, 0 altas, 1 moderada, 3 bajas), compilación y pruebas integrales con Worker/D1 de CI.
+- Los workflows temporales de escritura se retiraron; el PR modifica solo cuatro archivos de dependencias. **Sin fusión a la rama de trabajo o main y sin despliegue**. PR #2 y #3 permanecen como antecedentes separados.
+- Requiere revisión humana del PR, QA móvil, WAF y error de inicio de sesión del administrador real; fotos consentidas/ICC y condiciones de respaldos D1/R2 siguen sin verificar. **7 hitos de publicación pendientes**, etapa 2 en progreso.
+
+
 
 - Se avanzó en GitHub con tratamiento de evidencias JPEG, PNG y WebP, controles de orientación EXIF, CRC-32 PNG, verificación puntual R2/D1 (solo administrador) y validación estructural limitada de ICC en nuevos archivos (perfil completo JPEG, envoltura PNG iCCP y WebP ICCP, tope 1 MiB). Se preserva perfil de color; **no se garantiza eliminación de metadatos internos ICC** ni autenticidad del contenido fotográfico.
 - La preparación no ha accedido a Cloudflare D1/R2 reales ni ha publicado API/Pages o fusionado main. El siguiente hito requiere ensayos de orientación/color en fotos consentidas, política de datos aprobada y revisión de permisos.
