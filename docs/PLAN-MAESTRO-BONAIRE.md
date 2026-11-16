@@ -37,6 +37,13 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 - [PR #2 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/2) mantiene separado el parche de Hono 4.13.18. No fusionar sin reconciliar los cambios del lockfile; comprobar ambos cambios juntos antes de aprobar publicación.
 - **Producción sigue sin tocarse.** El 401 de administrador real, QA móvil, WAF, fotografías/ICC, D1/R2 respaldos y restauración siguen pendientes. Para publicar Brigadas/Expediente 360° continúan siete etapas completas de control.
 
+## Control de integración de seguridad — 16-11-2026
+
+- Los PR [#2 Hono](https://github.com/Jorge123tkd/Energia-Vital/pull/2) y [#3 Vite/Undici](https://github.com/Jorge123tkd/Energia-Vital/pull/3) siguen abiertos como borrador y validados individualmente.
+- Los ensayos de combinación revelaron que npm mantiene Hono 4.13.13 en una ruta anidada al usar instalación solo-lockfile: **no existe aún un candidato integrado que haya superado validación**. Los workflows temporales con permisos de escritura se retiraron; no se ha fusionado ninguno.
+- El próximo cambio debe basarse en [criterios de integración reproducible](./INTEGRACION-DEPENDENCIAS-PR2-PR3.md) y comprobar instalación real, `npm ci`, auditoría y pruebas de CI antes de aprobar. No se ha tocado Cloudflare producción.
+- La etapa 2 de seguridad sigue abierta. **7 hitos pendientes** para la publicación limitada de Brigadas/Expediente 360°.
+
 ## Norte del proyecto
 
 Bonaire es una plataforma comercial y de gestión para Cuba: energía renovable, servicios técnicos, propuestas empresariales, posibles colaboraciones comerciales y futuras líneas autorizadas. No confundir cotización con contrato, fondos declarados con fondos recibidos, ni orientación del asistente con decisión oficial.
