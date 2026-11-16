@@ -52,6 +52,9 @@ jobs:
               throw Error('Error de versión o integridad de '+name);
             console.log(name+': '+v.map(x=>x.version).join(','));
           };
+          console.log('Versiones lockfile antes de aplicar controles:',
+            JSON.stringify(Object.fromEntries(['hono','vite','@sveltejs/vite-plugin-svelte','undici']
+              .map(n=>[n,matching(n).map(v=>({version:v.version,hasIntegrity:!!v.integrity}))]))));
           check('hono',v=>v==='4.13.18');
           check('vite',v=>v==='6.4.6');
           check('@sveltejs/vite-plugin-svelte',v=>v.startsWith('5.'));
