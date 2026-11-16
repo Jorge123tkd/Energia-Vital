@@ -35,10 +35,12 @@ jobs:
           fi
           node - <<'NODE'
           const p=require('./package-lock.json');
-          if(p.packages['apps/api/node_modules/hono']?.version!=='4.13.18'){
-            throw new Error('El lockfile no contiene Hono 4.13.18 en la ruta esperada');
+          const matches=Object.entries(p.packages||{}).filter(([k])=>
+            k==='node_modules/hono'||k.endsWith('/node_modules/hono'));
+          if(!matches.length||matches.some(([,v])=>v.version!=='4.13.18'||!v.integrity)){
+            throw new Error('Hono no está íntegro y actualizado a 4.13.18 en todos los nodos del lockfile');
           }
-          console.log('Hono 4.13.18 bloqueado por npm con tarball e integridad originales');
+          console.log('Hono 4.13.18 en '+matches.length+' rutas de npm; integridad npm presente');
           NODE
       - name: Instalación reproducible
         run: npm ci
