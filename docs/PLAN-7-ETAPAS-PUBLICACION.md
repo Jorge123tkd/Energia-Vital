@@ -15,8 +15,10 @@
 
 **Hecho cuando:** resultados visuales satisfactorios, datos sensibles gestionados y política escrita aprobada.
 
-### 2. Revisión integral de seguridad y experiencia real — PENDIENTE
+### 2. Revisión integral de seguridad y experiencia real — EN PROGRESO (NO CERRADA)
 Probar manualmente desde dispositivos reales y cuentas de ensayo: inicio de sesión admin (incluido 401 histórico), registro clientes, acceso público, asistente/Telegram, expedientes, brigadas, calendario, finanzas/cotizaciones, aislamientos y errores. Revisar `npm audit` y permisos; corregir los defectos encontrados. Ejecutar Actions en el mismo SHA candidato.
+
+**Avance 15-11-2026:** se revisaron rutas de autenticación; se añadió lectura controlada de JSON en setup/login unificado/login admin/login cliente/refresh y edición de perfil/contraseña. Nuevas pruebas rechazan cuerpos inválidos y comprueban códigos 400/401 en Worker+D1 aislados. [Matriz de accesos, pruebas y diagnóstico 401](./VALIDACION-SEGURIDAD-ACCESOS.md). No se probó el usuario admin de producción ni se resolvió el 401 histórico; QA manual, auditoría de dependencias y WAF siguen pendientes.
 
 **Hecho cuando:** incidencias bloqueantes resueltas o excepciones firmadas; los flujos críticos funcionan con usuarios de prueba.
 
