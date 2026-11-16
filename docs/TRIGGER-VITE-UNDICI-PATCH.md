@@ -6,3 +6,5 @@ Segundo ensayo: cota raíz segura para Undici 7 con lockfile regenerado por npm.
 Tercer ensayo: aceptar package.json raíz por override Undici con protección de versión mayor.
 
 Cuarto ensayo: reparado workflow YAML y verificación de manifiestos permitidos.
+
+Quinto ensayo: aceptar sintaxis semver npm con ~ o ^ y exigir lockfile exacto.
