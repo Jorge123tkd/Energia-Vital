@@ -17,6 +17,13 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 - El antiguo inicio de sesión administrativo falló con 401 en el entorno real y **NO se ha comprobado ni resuelto en producción**. No inventar un restablecimiento sin aprobación. Pendiente QA móvil, WAF, revisión de dependencias y políticas de fotos/ICC.
 - [Plan de siete etapas](./PLAN-7-ETAPAS-PUBLICACION.md): la etapa 1 (fotos/privacidad) continúa pendiente por falta de fotos reales consentidas y política aprobada; la etapa 2 (seguridad/QA) está en progreso. Se mantienen 7 etapas de publicación sin cerrar.
 
+## Segunda revisión de seguridad — 15-11-2026 (etapa 2/7)
+
+- El límite D1 por IP y ventana ahora incrementa y obtiene el mismo contador en operación atómica. Pruebas concurrentes de acceso han pasado en GitHub Actions, sin tocar usuarios reales.
+- El flujo de CI de la rama incluye auditoría informativa npm de ejecución y total. Primer resultado: en producción 1 alerta moderada y ninguna alta/crítica; en el conjunto completo de dependencias (incluye desarrollo), 2 altas, 7 moderadas y 1 baja. **Este dato no declara seguridad ni autoriza despliegue.** Las alertas deben clasificarse y remediarse de forma verificada.
+- Pendiente verificar políticas Cloudflare WAF/Turnstile, casos de IP compartida y retención de filas históricas de límites de peticiones. No hay borrado ni limpieza automática en este cambio.
+- La etapa 2/7 continúa abierta: requiere revisión manual, 401 del admin real, seguridad de dependencias y pruebas con clientes ficticios. La etapa 1 sigue pendiente de consentimiento y fotos reales. Se mantienen **7 etapas de salida**, sin publicar ni migrar D1 remota.
+
 ## Norte del proyecto
 
 Bonaire es una plataforma comercial y de gestión para Cuba: energía renovable, servicios técnicos, propuestas empresariales, posibles colaboraciones comerciales y futuras líneas autorizadas. No confundir cotización con contrato, fondos declarados con fondos recibidos, ni orientación del asistente con decisión oficial.
