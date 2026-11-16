@@ -13,6 +13,14 @@ Rama: `feat/cloudflare-customer-accounts-hardening`. Pruebas sobre Worker, D1 y 
 - Esta mejora NO resuelve el 401 histórico del administrador de producción, no constituye una auditoría WAF ni cierra la etapa 2/7. Permanecen las siete etapas de salida hasta cumplir todos los controles humanos y remotos autorizados.
 
 
+## 16-11-2026: último administrador protegido en D1 (CI, sin producción)
+
+La nueva migración `020_last_admin_guard.sql` incorpora triggers para impedir atómicamente que el último administrador activo sea degradado, desactivado o eliminado. Los cambios de rol, revocación de sesiones y auditoría de personal ahora comparten un lote transaccional D1. La API devuelve 409 ante la protección SQL y rechaza arrays en edición de roles.
+
+Pruebas con datos ficticios: migraciones 013-020, promoción y degradación de gestor, revocación inmediata de access/refresh y bloqueo de cuentas desactivadas. GitHub Actions `43951639834`, `43951639831` y `43951626221`: SUCCESS sobre commit `4c0f6ec0`; despliegues omitidos.
+
+**Pendiente:** aplicación remota de 020 solo tras auditoría de esquema, respaldo, ensayo de restauración y autorización específica. El 401 real del administrador, WAF, QA móvil y fotos consentidas siguen sin verificarse.
+
 ## Estado actual de dependencias del PR #4 — 16/11/2026
 
 - La auditoría residual [43945487649](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43945487649) confirmó **0 alertas de producción** en `npm audit --omit=dev` y cuatro avisos de desarrollo (Svelte moderado y tres bajos por cadena plugin Svelte/inspector/`deepmerge`).
