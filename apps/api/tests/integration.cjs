@@ -1411,6 +1411,47 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
     'POST', make('disposable'), null, 201);
   await request('Remove disposable customer', '/api/admin-customers/customers/' + disposable.user.id,
     'DELETE', null, adminToken);
+  // Seguridad del personal: una modificación de rol cierra las sesiones antiguas,
+  // y la desactivación nunca deja acceso a información de terceros.
+  await request('Sole admin cannot demote own account',
+    '/api/admin/users/'+adminSession.user.id,'PATCH',{role:'operator'},adminToken,403);
+  await request('Sole admin cannot deactivate own account',
+    '/api/admin/users/'+adminSession.user.id,'DELETE',null,adminToken,403);
+  await invalidJson('Staff role patch rejects arrays',
+    '/api/admin/users/'+createdStaff.id,'PATCH','[]',400,adminToken);
+  await request('Admin promotes moderator to administrator',
+    '/api/admin/users/'+createdStaff.id,'PATCH',{role:'admin'},adminToken);
+  await request('Original moderator token is immediately revoked on promotion',
+    '/api/notifications/inbox','GET',null,staffToken,401);
+  await request('Original moderator refresh token is revoked on promotion',
+    '/api/auth/refresh','POST',{refresh_token:staffLogin.refresh_token},null,401);
+  const promoted = await request('Promoted staff signs in as administrator',
+    '/api/auth/sign-in','POST',{email:staffEmail,password:'Operador!Seguro2026'});
+  assert.equal(promoted.user.role,'admin');
+  await request('Promoted administrator can access admin-only users',
+    '/api/admin/users','GET',null,promoted.access_token);
+  await request('Admin demotes second administrator to moderator',
+    '/api/admin/users/'+createdStaff.id,'PATCH',{role:'operator'},adminToken);
+  await request('Old promoted-admin token rejected after demotion',
+    '/api/admin/users','GET',null,promoted.access_token,401);
+  await request('Old promoted-admin refresh token rejected after demotion',
+    '/api/auth/refresh','POST',{refresh_token:promoted.refresh_token},null,401);
+  const demoted = await request('Demoted staff signs in with current role',
+    '/api/auth/sign-in','POST',{email:staffEmail,password:'Operador!Seguro2026'});
+  assert.equal(demoted.user.role,'operator');
+  await request('Demoted moderator cannot read admin users',
+    '/api/admin/users','GET',null,demoted.access_token,403);
+  await request('Demoted moderator can access staff-only notifications',
+    '/api/notifications/inbox','GET',null,demoted.access_token);
+  await request('Admin deactivates moderator without deleting history',
+    '/api/admin/users/'+createdStaff.id,'DELETE',null,adminToken);
+  await request('Deactivated moderator token revoked',
+    '/api/notifications/inbox','GET',null,demoted.access_token,401);
+  await request('Deactivated moderator cannot sign in',
+    '/api/auth/sign-in','POST',{email:staffEmail,password:'Operador!Seguro2026'},null,401);
+  await request('Sole administrator remains active after other account deactivation',
+    '/api/admin/users','GET',null,adminToken);
+
   await request('Logout customer A', '/api/auth/logout', 'POST', {}, at);
   await request('Revoked token rejected', '/api/private/requests', 'GET', null, at, 401);
 
