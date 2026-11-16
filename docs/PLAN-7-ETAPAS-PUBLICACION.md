@@ -53,6 +53,14 @@ Aprobar por separado migraciones y publicación. Ejecutar únicamente cambios re
 - El hito 2 sigue abierto por QA manual, WAF, el 401 real del administrador y el tratamiento de las alertas altas de herramientas de desarrollo (Vite/Undici).
 - El hito 1 también sigue abierto por falta de fotos consentidas y consentimiento/retención aprobados. En consecuencia **quedan siete hitos completos de publicación**, aunque el desarrollo continúe avanzando.
 
+## Nueva progresión del hito 2 — 16-11-2026
+
+Dos PR de dependencias **borrador y sin fusionar** quedaron validados de forma aislada:
+- [#2 Hono 4.13.18](https://github.com/Jorge123tkd/Energia-Vital/pull/2): arreglo de alerta moderada de producción.
+- [#3 Vite 6.4.6 / plugin Svelte 5.1.1 / Undici 7.30.2](https://github.com/Jorge123tkd/Energia-Vital/pull/3): desaparecen las dos alertas altas en la auditoría del candidato, con 1 moderada y 3 bajas restantes. `package-lock.json` se generó con npm y pasó integración Worker/D1 aislados.
+
+Es imprescindible reconciliar el lockfile y repetir pruebas al combinar los PR. No se ha verificado ningún acceso de producción, foto real, política WAF ni respaldo. **Etapa 1 pendiente, etapa 2 en progreso y etapas 3–7 no iniciadas; 7 siguen pendientes**.
+
 ## Interpretación del número
 **7 etapas pendientes** para una publicación controlada de estas funciones; no son 7 mensajes ni 7 commits. Si la auditoría remota o los dispositivos revelan problemas, algunas etapas requerirán iteraciones. Para terminar **toda** la plataforma Bonaire —incluidas iniciativas futuras— no existe aún un número cerrado de pasos.
 
