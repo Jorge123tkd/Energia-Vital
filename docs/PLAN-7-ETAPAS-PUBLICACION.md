@@ -4,6 +4,13 @@
 **Alcance:** primera publicación controlada de las funciones actuales de la rama `feat/cloudflare-customer-accounts-hardening`; no equivale a que todo el negocio/plataforma esté terminado. El orden puede ajustarse por hallazgos.
 
 ## Situación de partida
+## Avance confirmado el 16-11-2026
+
+Los parches de seguridad antes separados en PR #2 y PR #3 **ya se integraron de manera reproducible en el [PR #4 borrador](https://github.com/Jorge123tkd/Energia-Vital/pull/4)**. [GitHub Actions 43943927309](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43943927309) terminó SUCCESS con `npm ci`, `npm audit`, TypeScript, build e integración Worker/D1 aislada. Auditoría de dependencias juntas: **0 críticas, 0 altas, 1 moderada, 3 bajas**. No hay merge ni publicación y todavía deben revisarse dependencias residuales/QA.
+
+**Conteo actualizado: siguen 7 etapas principales pendientes.** El hito 1 necesita pruebas de fotos reales y política aprobada; el hito 2 está avanzado en código pero no cerrado por WAF, 401 real, QA móvil y revisión del PR; hitos 3–7 requieren autorización y respaldos.
+
+
 - Fase de desarrollo 5B2g: validaciones sintéticas de perfiles ICC en imágenes JPEG, PNG y WebP; máximo de 1 MiB para perfil/dato comprimido, perfil JPEG por segmentos ordenados, rechazo de duplicados/malformaciones. **No** se convierten colores ni se limpian etiquetas internas ICC.
 - Las pruebas CI reproducen Worker/D1 aislados en GitHub. No muestran la estructura real de D1 ni los archivos de R2 de producción.
 - No se ha conectado a Cloudflare de producción, creado backup real ni publicado nuevo Worker/Pages como parte de estas fases.
