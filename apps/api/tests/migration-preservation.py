@@ -2,7 +2,7 @@
 """Bonaire: ensayo REPRODUCIBLE con registros FICTICIOS de una D1 histórica.
 
 Ejecuta 001..012, inserta datos relacionados (sin datos de producción),
-aplica 013, 014, 015, 016, 017, 018 y 019, compara cada fila histórica y comprueba referencias.
+aplica 013-020, compara cada fila histórica y comprueba referencias.
 Usa SQLite de Python en memoria; la suite separada Worker+D1 verifica
 compatibilidad real con Cloudflare. NO accede a Cloudflare.
 """
@@ -74,9 +74,31 @@ migration(16)
 migration(17)
 migration(18)
 migration(19)
+migration(20)
 after = {name:snapshot(name) for name in tables}
 for name in tables:
     assert before[name] == after[name], f"La migración alteró datos existentes: {name}"
+
+# 020: no perder jamás el último administrador mediante UPDATE o DELETE,
+# incluso si otra ruta omitiera la comprobación HTTP previa (SQLite/D1).
+def rejected_last_admin(sql):
+    try:
+        db.execute(sql)
+        raise AssertionError("La D1 permitió quitar el último administrador activo.")
+    except sqlite3.IntegrityError as exc:
+        assert "last_active_admin" in str(exc), f"Motivo inesperado del rechazo: {exc}"
+
+rejected_last_admin("UPDATE admin_users SET role='operator' WHERE id='admin-old'")
+rejected_last_admin("UPDATE admin_users SET is_active=0 WHERE id='admin-old'")
+rejected_last_admin("DELETE FROM admin_users WHERE id='admin-old'")
+assert db.execute("SELECT role,is_active FROM admin_users WHERE id='admin-old'").fetchone() == ("admin",1)
+db.execute("INSERT INTO admin_users(id,email,password_hash,role,is_active) VALUES(?,?,?,?,1)",
+           ("admin-second","admin-second@invalid.example","hash-simulado","admin"))
+# Con dos administradores es legítimo retirar uno, conservando el otro.
+db.execute("UPDATE admin_users SET role='operator' WHERE id='admin-second'")
+assert db.execute("SELECT COUNT(*) FROM admin_users WHERE role='admin' AND is_active=1").fetchone()[0] == 1
+rejected_last_admin("UPDATE admin_users SET is_active=0 WHERE id='admin-old'")
+assert db.execute("SELECT role,is_active FROM admin_users WHERE id='admin-old'").fetchone() == ("admin",1)
 
 for new_table in ("brigades","brigade_members","brigade_work","request_activities",
                   "commercial_quote_versions","request_financial_declarations","request_payment_reports",
@@ -443,4 +465,4 @@ db.execute("""UPDATE brigades SET leader_name='Jefe sustituto autorizado',
 assert db.execute("SELECT is_active FROM brigade_chief_accounts WHERE id='chief-old'").fetchone()[0] == 0
 assert db.execute("SELECT revoked_at FROM brigade_chief_sessions WHERE id='session-chief-old'").fetchone()[0] is not None
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-print("PASS migraciones 013-019: preservación histórica, identidad y brigada aislada, token hash y evidencias técnicas inmutables (SQLite ficticia).")
+print("PASS migraciones 013-020: preservación histórica, último administrador protegido y brigada aislada, token hash y evidencias técnicas inmutables (SQLite ficticia).")
