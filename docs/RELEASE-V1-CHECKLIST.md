@@ -79,6 +79,15 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Evaluar privacidad de etiquetas ICC y posible expansión de iCCP comprimido en entorno privado; el guard actual NO garantiza que un perfil admitido carezca de datos personales ni que se haya decodificado íntegramente.
 - [ ] Revisar el plan de 7 etapas y obtener aprobación, respaldos y pruebas manuales antes de cualquier publicación.
 
+## Etapa 2/7 — autenticación y seguridad de accesos (parcial, no cerrar etapa)
+- [x] Inicio de sesión admin y cliente con PBKDF2/JWT ficticios y comprobación de límites de roles en Worker + D1 aislados.
+- [x] Manejo seguro de JSON malformado, nulo, arreglos o tipos incorrectos en autenticación, refresh, perfil y cambio de contraseña. HTTP 400/401 controlados, sin 500 por lectura de propiedades.
+- [x] Tests de integración para entradas inválidas en `/api/auth/setup`, `/api/auth/login`, `/api/auth/sign-in`, `/api/auth/customer/login`, `/api/auth/refresh`, `/api/auth/me` y `/api/auth/password`.
+- [ ] Resolver o diagnosticar con autorización el **401 histórico del administrador real**; los tests con cuenta ficticia no lo descartan. Nunca publicar hashes o contraseñas en GitHub ni chats.
+- [ ] Confirmar WAF/Turnstile, límites de IP, CORS y dependencias, así como los flujos reales de registro/login/permisos en Android/iPhone y escritorio.
+- [ ] Validar manualmente todos los módulos protegidos y documentar incidencias restantes según [VALIDACION-SEGURIDAD-ACCESOS.md](./VALIDACION-SEGURIDAD-ACCESOS.md).
+- [ ] Mantener la cuenta de las **7 etapas pendientes** hasta completar también privacidad de fotos, QA manual y puertas de producción.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
