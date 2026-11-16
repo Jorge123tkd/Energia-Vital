@@ -97,6 +97,13 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 - [ ] Confirmar Cloudflare WAF/Turnstile y limitaciones frente a IP compartida, encabezados ausentes y ataques distribuidos. La protección D1 por IP es una defensa complementaria, no un WAF.
 - [ ] Mantener pendientes QA manual, 401 admin real y pruebas de fotos/consentimiento. El total permanece en 7 hitos hasta cerrar puertas enteras.
 
+## Etapa 2/7 — parches npm en PR sin fusionar (16-11-2026)
+- [x] [PR #2](https://github.com/Jorge123tkd/Energia-Vital/pull/2): Hono 4.13.18, lockfile npm, pruebas CI y auditoría de producción sin alertas críticas/altas/moderadas. **DRAFT, no fusionado.**
+- [x] [PR #3](https://github.com/Jorge123tkd/Energia-Vital/pull/3): Vite 6.4.6, plugin Svelte 5.1.1, Undici 7.30.2 con override raíz, lockfile npm y pruebas aisladas. Auditoría del candidato: 0 críticas, 0 altas, 1 moderada y 3 bajas. **DRAFT, no fusionado.**
+- [ ] Revisar diff de ambos PR y `package-lock.json` tras combinarlos; regenerar con npm, ejecutar CI y auditoría completa sobre el mismo SHA congelado.
+- [ ] Revisar `overrides.undici`, compatibilidad Windows/Linux y comprobar la UI en teléfonos reales con Vite 6/Svelte.
+- [ ] Resolver o aprobar riesgos npm residuales; terminar WAF, 401 admin real, privacidad/fotos y QA manual antes de marcar la etapa 2 como cerrada. Continúan **7 hitos completos pendientes**.
+
 ## Preparación
 - [ ] Congelar cambios funcionales, documentar versión SHA, mantener PR revisado y fusionar en main solo después de aprobación.
 - [ ] Exportar y verificar respaldo reciente de D1; documentar versión del Worker y último despliegue Pages.
