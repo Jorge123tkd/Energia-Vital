@@ -40,14 +40,22 @@ authRoutes.post('/setup', async c => {
   if (await rateLimited(c.env, c.req.raw, 'admin_setup', 5, 3600)) return c.json({ error: 'Demasiados intentos' }, 429);
   const setup = (c.env as Env & { ADMIN_SETUP_KEY?: string }).ADMIN_SETUP_KEY;
   if (!setup || setup.length < 32 || c.req.header('x-setup-key') !== setup) return c.json({ error: 'Configuración inicial no autorizada' }, 403);
-  const existing = await c.env.DB.prepare('SELECT id FROM admin_users LIMIT 1').first();
-  if (existing) return c.json({ error: 'El administrador ya fue configurado' }, 409);
   const b = await readBodyObject(c);
   if (!b) return c.json({ error: 'Datos de configuración inválidos' }, 400);
   const email = clean(b.email, 254).toLowerCase();
   if (!validEmail(email) || !validPassword(b.password)) return c.json({ error: 'Email o contraseña inválidos (mínimo 10 caracteres)' }, 400);
-  await c.env.DB.prepare('INSERT INTO admin_users (id, email, password_hash, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)')
-    .bind(crypto.randomUUID(), email, await hashPassword(b.password), 'admin', new Date().toISOString(), new Date().toISOString()).run();
+  const now = new Date().toISOString();
+  // La condición de primer administrador se comprueba en el MISMO INSERT de
+  // SQLite/D1: dos solicitudes simultáneas con correos distintos nunca deben
+  // crear dos administradores por una carrera SELECT -> INSERT.
+  const result = await c.env.DB.prepare(`INSERT INTO admin_users
+    (id, email, password_hash, role, is_active, created_at, updated_at)
+    SELECT ?, ?, ?, 'admin', 1, ?, ?
+    WHERE NOT EXISTS (SELECT 1 FROM admin_users)`)
+    .bind(crypto.randomUUID(), email, await hashPassword(b.password), now, now).run();
+  if (result.meta.changes !== 1) {
+    return c.json({ error: 'El administrador ya fue configurado' }, 409);
+  }
   return c.json({ message: 'Administrador inicial creado' }, 201);
 });
 
