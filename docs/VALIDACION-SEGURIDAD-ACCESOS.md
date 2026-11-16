@@ -51,6 +51,12 @@ La auditoría es una instantánea de GitHub Actions; las alertas y soluciones pu
 - **Hono sigue en 4.13.13 en el PR #3** porque el parche Hono a 4.13.18 se encuentra en [PR #2 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/2). Antes de combinar ambos PR revisar/reconciliar `package-lock.json` con npm, CI y auditoría nuevamente; no hacer merges automáticos.
 - La actualización de Vite 5 a Vite 6 y plugin 4 a 5 necesita revisión manual en móviles y navegadores. La restricción `overrides.undici` también requiere revisión con Wrangler/Miniflare antes de una publicación definitiva. Ningún PR habilita producción.
 
+## 16-11-2026 — integración de PR #2 y #3 bloqueada por lockfile
+
+El proyecto mantiene [PR #2](https://github.com/Jorge123tkd/Energia-Vital/pull/2) Hono 4.13.18 y [PR #3](https://github.com/Jorge123tkd/Energia-Vital/pull/3) Vite 6 / plugin Svelte 5 / Undici 7.30.2, **probados por separado, no fusionados**. Los ensayos combinados [43817083927](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43817083927) y [43817336355](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43817336355) detectaron que npm conservaba **Hono 4.13.13** anidado en `apps/api/node_modules/hono` al regenerar parcialmente `package-lock.json`. Por seguridad, los controles rechazaron el candidato y no se generó ningún PR combinado. Los workflows temporales se retiraron.
+
+Ver [integración y criterios de aceptación](./INTEGRACION-DEPENDENCIAS-PR2-PR3.md). **No afirmar que Hono/Vite/Undici están remediados simultáneamente** hasta que `npm ci`, auditoría y pruebas integrales pasen sobre un único lockfile válido en GitHub Actions.
+
 ## Matriz de aceptación
 
 | Área | Prueba automática en CI | Pendiente de aceptación manual |
