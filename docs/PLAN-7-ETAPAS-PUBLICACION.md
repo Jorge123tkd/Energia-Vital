@@ -7,6 +7,10 @@
 **Avance de QA de accesos (16/11/2026):** se endurecieron las entradas JSON de citas y solicitudes de clientes y se añadieron pruebas de permisos cliente/admin/anónimo. [GitHub Actions 43949536145](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43949536145) aprobó la suite aislada; despliegues omitidos. Esto avanza el **hito 2/7** pero no lo cierra: siguen pendientes pruebas reales de usuarios/móviles, WAF, error 401 del admin, aprobación de privacidad de fotografías y revisión del PR #4. En total **siguen siete etapas** para publicación segura.
 
 
+## Actualización de acceso inicial, 16-11-2026
+
+`/api/auth/setup` ahora admite crear **solo un administrador inicial, incluso con dos solicitudes concurrentes y correos diferentes**, mediante una única operación atómica D1. Validado con la suite Worker/D1 aislada y los tres runs GitHub Actions de SHA `732e043c` (SUCCESS). No se ha probado ni modificado el administrador real ni resuelto su error 401, y este flujo no restablece credenciales. **Siete etapas pendientes**, la segunda todavía abierta por QA manual, WAF y revisión de accesos reales.
+
 ## Etapa 2: permisos del personal protegidos en CI (16/11/2026)
 
 Se añadió la migración 020 con triggers que impiden eliminar, degradar o desactivar al último administrador activo. También se verificó la revocación de las sesiones al cambiar roles y bloquear cuentas; GitHub Actions `43951639834`, `43951639831` y `43951626221` finalizaron correctamente usando Worker+D1 aislados. Nada fue aplicado a D1 real y PR #4 de dependencias continúa como borrador.
