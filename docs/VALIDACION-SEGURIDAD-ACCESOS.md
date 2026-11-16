@@ -4,6 +4,14 @@
 Rama: `feat/cloudflare-customer-accounts-hardening`. Pruebas sobre Worker, D1 y R2 de CI **aislados**.
 
 
+## 16/11/2026 — Configuración inicial de administrador atómica
+
+- Se detectó que `POST /api/auth/setup` hacía `SELECT id FROM admin_users LIMIT 1` antes de insertar: dos solicitudes simultáneas con la clave de configuración y correos distintos podían superar la lectura por separado.
+- `apps/api/src/routes/auth.ts` ahora crea el primer administrador con un único `INSERT ... SELECT ... WHERE NOT EXISTS (SELECT 1 FROM admin_users)`; si no se insertó una fila, devuelve HTTP 409 controlado. Se conservan validaciones de clave de setup, correo, contraseña y límite de intentos. **No modifica cuentas existentes**.
+- `apps/api/tests/integration.cjs` lanza **dos setups concurrentes con correos distintos** en Worker/D1 ficticios; exige una única respuesta 201, una respuesta 409, exactamente una cuenta inicial y un nuevo setup posterior rechazado incluso con clave válida.
+- **Validado:** [run 43953733232](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43953733232), [43953733227](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43953733227) y [43953722008](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43953722008) SUCCESS sobre commit `732e043c`. Despliegues omitidos.
+- El setup **no** permite recuperar contraseñas de administradores existentes y **no resuelve** el 401 histórico de producción. Sigue pendiente revisar acceso real bajo autorización y WAF/Turnstile, sin divulgar la clave de configuración.
+
 ## 16/11/2026 — Protección de entradas y permisos en citas privadas
 
 - `apps/api/src/routes/private.ts` (commit `024787841`) ahora rechaza cuerpos JSON malformados, `null`, arreglos y fechas no textuales en `POST /api/private/appointments` con **400 controlado**, en vez de generar un error interno 500. Se limita además a 64 caracteres el texto de cada fecha antes de parsearlo. El motor mantiene su regla de solapamiento de citas y máximo 4 horas.
