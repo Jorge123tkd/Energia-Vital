@@ -74,6 +74,8 @@ function jpeg(bytes:Uint8Array):Uint8Array{
   const parts=[bytes.subarray(0,2)];
   let offset=2,inScan=false,hasScan=false,ended=false;
   let seenOrientation:number|null=null;
+  const iccParts:Uint8Array[]=[];
+  let iccTotal=0,iccBytes=0;
   while(offset<bytes.length){
     if(inScan){
       const start=offset;
@@ -122,16 +124,66 @@ function jpeg(bytes:Uint8Array):Uint8Array{
         seenOrientation=orientation;
       }
     }
+    // APP2 fragments carry one ICC profile, split by segment number.
+    if(marker===0xe2&&prefix('ICC_PROFILE')&&signature[11]===0){
+      if(signature.length<15)invalid();
+      const seq=signature[12],total=signature[13],fragment=signature.subarray(14);
+      if(total<1||seq<1||seq>total||iccTotal!==0&&total!==iccTotal||
+        iccParts[seq-1]!==undefined||fragment.length<1)invalid();
+      iccTotal=total;iccParts[seq-1]=fragment;iccBytes+=fragment.length;
+      if(iccBytes>MAX_ICC_BYTES)invalid();
+    }
     const strip=(isApp&&!safeApp)||marker===0xfe;
     if(!strip)parts.push(bytes.subarray(start,offset));
     if(marker===0xda){inScan=true;hasScan=true;}
   }
   if(!ended)invalid();
+  if(iccTotal>0){
+    if(iccParts.filter(Boolean).length!==iccTotal||
+      !validIccProfile(concat(iccParts)))invalid();
+  }
   return concat(parts);
 }
 function u32be(b:Uint8Array,p:number):number{
   return (b[p]*0x1000000+b[p+1]*0x10000+b[p+2]*0x100+b[p+3])>>>0;
 }
+
+/**
+ * ICC guard: structural checks only. Preserves the complete color profile,
+ * including any residual descriptions; never claims metadata anonymization.
+ * Bound its size to avoid unbounded/ambiguous ancillary payloads.
+ */
+const MAX_ICC_BYTES=1024*1024;
+function validIccProfile(data:Uint8Array):boolean{
+  if(data.length<132||data.length>MAX_ICC_BYTES||u32be(data,0)!==data.length||
+    text4(data,36)!=='acsp')return false;
+  const count=u32be(data,128);
+  if(count>256||count>(data.length-132)/12)return false;
+  for(let i=0;i<count;i++){
+    const p=132+i*12,off=u32be(data,p+4),len=u32be(data,p+8);
+    if(off<132+count*12||len<8||off>data.length||len>data.length-off)return false;
+  }
+  return true;
+}
+function validPngIccp(bytes:Uint8Array,start:number,size:number):boolean{
+  if(size<6||size>MAX_ICC_BYTES)return false;
+  // PNG iCCP stores a 1..79 byte Latin-1 name, NUL, method 0 and zlib bytes.
+  let nul=-1;
+  for(let i=0;i<Math.min(size,80);i++){
+    const c=bytes[start+i];
+    if(c===0){nul=i;break;}
+    if(c<32||c>126&&c<161)return false;
+    if((i===0||i===size-1)&&c===32)return false;
+    if(i>0&&c===32&&bytes[start+i-1]===32)return false;
+  }
+  if(nul<1||nul>79||bytes[start+nul-1]===32||
+    size<nul+5||bytes[start+nul+1]!==0)return false;
+  const z=start+nul+2,cmf=bytes[z],flg=bytes[z+1];
+  // Zlib header integrity; actual decompression/profile ICC still needs
+  // an approved decoder and visual inspection before production.
+  return (cmf&15)===8&&(cmf>>>4)<=7&&((cmf*256+flg)%31)===0&&(flg&32)===0;
+}
+
 // PNG requires CRC-32 for every chunk, including metadata chunks we discard.
 // Use a precomputed table to keep uploads inexpensive even near the 5 MB limit.
 const pngCrcTable=(()=>{
@@ -153,7 +205,7 @@ function png(bytes:Uint8Array):Uint8Array{
   const parts=[bytes.subarray(0,8)];
   const visual=new Set(['IHDR','PLTE','IDAT','IEND','tRNS','sRGB','iCCP',
     'gAMA','cHRM','bKGD','sBIT','pHYs','hIST','acTL','fcTL','fdAT']);
-  let pos=8,first=true,hasPixels=false,ended=false;
+  let pos=8,first=true,hasPixels=false,ended=false,seenIcc=false;
   while(pos+12<=bytes.length){
     const size=u32be(bytes,pos),name=text4(bytes,pos+4);
     const end=pos+12+size;
@@ -162,6 +214,10 @@ function png(bytes:Uint8Array):Uint8Array{
     if(first&&(name!=='IHDR'||size!==13))invalid();
     first=false;
     if(!/^[A-Za-z]{4}$/.test(name))invalid();
+    if(name==='iCCP'){
+      if(seenIcc||!validPngIccp(bytes,pos+8,size))invalid();
+      seenIcc=true;
+    }
     // PNG with non-default EXIF orientation needs pixel normalization, not silent rotation.
     // Until a trusted image pipeline exists, reject rather than store visually rotated proof.
     if(name==='eXIf'){
@@ -191,7 +247,7 @@ function webp(bytes:Uint8Array):Uint8Array{
     u32le(bytes,4)!==bytes.length-8)invalid();
   const parts:Uint8Array[]=[];
   const visual=new Set(['VP8 ','VP8L','VP8X','ALPH','ANIM','ANMF','ICCP']);
-  let pos=12,hasPixels=false,seenOrientation:number|null=null;
+  let pos=12,hasPixels=false,seenOrientation:number|null=null,seenIcc=false;
   let vp8x:Uint8Array|null=null;
   while(pos<bytes.length){
     if(pos+8>bytes.length)invalid();
@@ -199,6 +255,10 @@ function webp(bytes:Uint8Array):Uint8Array{
     const padded=size+(size%2);
     if(padded>bytes.length-pos-8)invalid();
     const end=pos+8+padded;
+    if(type==='ICCP'){
+      if(seenIcc||hasPixels||!validIccProfile(bytes.subarray(pos+8,pos+8+size)))invalid();
+      seenIcc=true;
+    }
     if(type==='VP8 '||type==='VP8L'||type==='ANMF')hasPixels=true;
     if(type==='EXIF'){
       const orientation=orientationFromExif(bytes.subarray(pos+8,pos+8+size));
@@ -217,7 +277,12 @@ function webp(bytes:Uint8Array):Uint8Array{
     }
     pos=end;
   }
-  if(!hasPixels)invalid();
+  if(!hasPixels||seenIcc&&!vp8x)invalid();
+  // Correct the ICC flag based on the actual presence of one valid profile.
+  if(vp8x){
+    vp8x[8]&=~0x20;
+    if(seenIcc)vp8x[8]|=0x20;
+  }
   if(seenOrientation!==null&&seenOrientation!==1){
     if(!vp8x)invalid(); // nonstandard simple WebP cannot preserve EXIF orientation safely
     (vp8x as Uint8Array)[8]|=0x08;
