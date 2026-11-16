@@ -52,11 +52,7 @@ adminRoutes.post('/site-media', async c => {
 // --- PERSONAL Y PERMISOS ---
 const emailValid = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validStaffRole = (role: unknown): role is 'admin' | 'operator' => role === 'admin' || role === 'operator';
-async function auditStaff(c: any, action: string, target: string, details: Record<string, unknown> = {}) {
-  await c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, entity_id, details, created_at)
-    VALUES (?, ?, ?, 'admin_users', ?, ?, ?)`).bind(
-    crypto.randomUUID(), c.var.user?.user_id || null, action, target, JSON.stringify(details), new Date().toISOString()).run();
-}
+const isLastAdminConflict = (e: unknown) => /last_active_admin/i.test(String(e));
 adminRoutes.get('/users', async c => {
   const { results } = await c.env.DB.prepare(
     'SELECT id, email, role, is_active, created_at FROM admin_users ORDER BY created_at DESC'
@@ -93,7 +89,7 @@ adminRoutes.post('/users', async c => {
 adminRoutes.patch('/users/:id', async c => {
   const id = c.req.param('id');
   const body = await c.req.json<any>().catch(() => null);
-  if (!body || typeof body !== 'object' ||
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
       Object.keys(body).some(k => !['role','is_active'].includes(k)) ||
       !Object.keys(body).length ||
       (body.role !== undefined && !validStaffRole(body.role)) ||
@@ -112,15 +108,22 @@ adminRoutes.patch('/users/:id', async c => {
     if ((total?.total || 0) <= 1) return c.json({ error: 'Se debe conservar al menos un administrador activo.' }, 409);
   }
   const now = new Date().toISOString();
-  await c.env.DB.batch([
-    c.env.DB.prepare('UPDATE admin_users SET role = ?, is_active = ?, updated_at = ? WHERE id = ?')
-      .bind(nextRole, nextActive ? 1 : 0, now, id),
-    c.env.DB.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND user_type = 'admin' AND revoked_at IS NULL").bind(now, id),
-    c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, entity_id, details, created_at)
-      VALUES (?, ?, 'staff_permissions_changed', 'admin_users', ?, ?, ?)`)
-      .bind(crypto.randomUUID(), c.var.user?.user_id || null, id,
-        JSON.stringify({ from_role: current.role, to_role: nextRole, from_active: Boolean(current.is_active), to_active: nextActive }), now),
-  ]);
+  try {
+    // D1.batch es transaccional: si el trigger impide quedarse sin administrador,
+    // se revierten también la revocación de sesiones y la entrada de auditoría.
+    await c.env.DB.batch([
+      c.env.DB.prepare('UPDATE admin_users SET role = ?, is_active = ?, updated_at = ? WHERE id = ?')
+        .bind(nextRole, nextActive ? 1 : 0, now, id),
+      c.env.DB.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND user_type = 'admin' AND revoked_at IS NULL").bind(now, id),
+      c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, entity_id, details, created_at)
+        VALUES (?, ?, 'staff_permissions_changed', 'admin_users', ?, ?, ?)`)
+        .bind(crypto.randomUUID(), c.var.user?.user_id || null, id,
+          JSON.stringify({ from_role: current.role, to_role: nextRole, from_active: Boolean(current.is_active), to_active: nextActive }), now),
+    ]);
+  } catch (e) {
+    if (isLastAdminConflict(e)) return c.json({ error: 'Se debe conservar al menos un administrador activo.' }, 409);
+    throw e;
+  }
   return c.json({ message: 'Permisos actualizados. Las sesiones anteriores fueron cerradas.' });
 });
 // Conservar historial de auditoría: una cuenta se desactiva en vez de eliminarla.
@@ -134,11 +137,18 @@ adminRoutes.delete('/users/:id', async c => {
     if ((total?.total || 0) <= 1) return c.json({ error: 'No puedes eliminar el último administrador.' }, 409);
   }
   const now = new Date().toISOString();
-  await c.env.DB.batch([
-    c.env.DB.prepare('UPDATE admin_users SET is_active = 0, updated_at = ? WHERE id = ?').bind(now, id),
-    c.env.DB.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND user_type = 'admin' AND revoked_at IS NULL").bind(now, id),
-  ]);
-  await auditStaff(c, 'staff_deactivated', id);
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare('UPDATE admin_users SET is_active = 0, updated_at = ? WHERE id = ?').bind(now, id),
+      c.env.DB.prepare("UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND user_type = 'admin' AND revoked_at IS NULL").bind(now, id),
+      c.env.DB.prepare(`INSERT INTO audit_logs (id, admin_user_id, action, entity_type, entity_id, details, created_at)
+        VALUES (?, ?, 'staff_deactivated', 'admin_users', ?, ?, ?)`)
+        .bind(crypto.randomUUID(), c.var.user?.user_id || null, id, '{}', now),
+    ]);
+  } catch (e) {
+    if (isLastAdminConflict(e)) return c.json({ error: 'No puedes desactivar el último administrador activo.' }, 409);
+    throw e;
+  }
   return c.json({ message: 'Cuenta desactivada sin borrar el historial.' });
 });
 
