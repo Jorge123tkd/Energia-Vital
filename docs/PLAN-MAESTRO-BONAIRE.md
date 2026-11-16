@@ -31,6 +31,12 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 - El PR solamente propone dos cambios de dependencias, no está fusionado. El workflow temporal de mantenimiento fue retirado. Vite y Undici siguen pendientes de revisión de vulnerabilidades de desarrollo.
 - No se modifica producción, usuarios reales, D1/R2, Worker/Pages ni `main`. **7 etapas de publicación siguen pendientes**, con la segunda en progreso.
 
+## Progreso de seguridad: Vite y Undici — 16-11-2026
+
+- [PR #3 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/3) plantea Vite 6.4.6, plugin Svelte 5.1.1 y Undici 7.30.2, con `package-lock.json` regenerado por npm y override controlado de Undici 7. El ensayo [GitHub Actions 43815249208](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43815249208) superó instalación, compilación y pruebas Worker/D1 de CI; el informe npm del candidato arrojó **0 críticas, 0 altas, 1 moderada, 3 bajas**.
+- [PR #2 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/2) mantiene separado el parche de Hono 4.13.18. No fusionar sin reconciliar los cambios del lockfile; comprobar ambos cambios juntos antes de aprobar publicación.
+- **Producción sigue sin tocarse.** El 401 de administrador real, QA móvil, WAF, fotografías/ICC, D1/R2 respaldos y restauración siguen pendientes. Para publicar Brigadas/Expediente 360° continúan siete etapas completas de control.
+
 ## Norte del proyecto
 
 Bonaire es una plataforma comercial y de gestión para Cuba: energía renovable, servicios técnicos, propuestas empresariales, posibles colaboraciones comerciales y futuras líneas autorizadas. No confundir cotización con contrato, fondos declarados con fondos recibidos, ni orientación del asistente con decisión oficial.
