@@ -3,6 +3,13 @@
 **Fecha:** 15 de noviembre de 2026. **Estado: EN PROCESO.** No constituye autorización para producción.
 Rama: `feat/cloudflare-customer-accounts-hardening`. Pruebas sobre Worker, D1 y R2 de CI **aislados**.
 
+## Estado actual de dependencias del PR #4 — 16/11/2026
+
+- La auditoría residual [43945487649](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43945487649) confirmó **0 alertas de producción** en `npm audit --omit=dev` y cuatro avisos de desarrollo (Svelte moderado y tres bajos por cadena plugin Svelte/inspector/`deepmerge`).
+- El ensayo `npm dedupe` [43946090393](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43946090393) terminó **SUCCESS** con Svelte **5.57.3 único**, sin Svelte 4 y sin alertas altas/críticas/moderadas en la auditoría total. Permanecen **tres bajas**, sin arreglo automático de npm. Pasaron `npm ci`, typecheck API/Svelte, build, migraciones de prueba y Worker+D1 de integración.
+- El lockfile validado se aplicó directamente al mismo [PR #4 borrador](https://github.com/Jorge123tkd/Energia-Vital/pull/4), commit `ce8d32c0`; **no hay merge ni despliegue**. La validación no demuestra seguridad completa ni resuelve WAF, 401 de admin real, fotos consentidas/ICC o privacidad de clientes.
+- Para próximos cambios, evaluar las alertas bajas según su ruta de ejecución efectiva y esperar una actualización compatible; no usar `npm audit fix --force` ni alterar manualmente campos `integrity`. Los conteos anteriores de 1 moderada+3 bajas corresponden a la versión de PR #4 *anterior* a deduplicar Svelte.
+
 ## Resultado de la revisión de código
 ## Integración de actualizaciones de dependencias — 16-11-2026
 
