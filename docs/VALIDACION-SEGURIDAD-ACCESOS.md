@@ -42,6 +42,15 @@ La auditoría es una instantánea de GitHub Actions; las alertas y soluciones pu
 - Un primer ensayo se detuvo por asumir una ubicación fija de Hono en el árbol npm; se corrigió para aceptar hoisting y el segundo run pasó. El workflow temporal con permisos `contents: write` y su archivo activador fueron eliminados del PR tras la ejecución.
 - **No fusionado**, no publicado ni probado contra las cuentas/DB reales. `vite` y `undici` siguen con alertas altas en herramientas de desarrollo, sujetas a tratamiento separado; la compatibilidad Windows/móviles debe considerarse antes del lanzamiento. No declarar etapa 2 completada.
 
+## Parche Vite/Undici preparado en PR borrador #3 — 16-11-2026
+
+- **Causa confirmada desde npm audit en CI:** Vite 5.4.21 presentaba alertas altas que afectan hasta Vite 6.4.3; Undici 7.29.1 tiene alertas altas y se corrige desde 7.30.1.
+- Se creó la rama aislada `security/vite-undici-20261116` y se verificaron versiones actuales con npm. La propuesta [PR #3 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/3) modifica únicamente `apps/web/package.json`, `package.json` y `package-lock.json`: Vite **6.4.6**, plugin `@sveltejs/vite-plugin-svelte` **5.1.1** y Undici transitivo **7.30.2** mediante override raíz `"undici": "^7.30.1"`. El lockfile fue generado por npm, con integridades auténticas.
+- **CI aislada confirmada:** [GitHub Actions 43815249208](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43815249208) SUCCESS tras `npm ci`, TypeScript API y Svelte, build de web, preservación de migraciones ficticias, pruebas Worker+D1 y auditoría npm completa. **Resultado del candidato: 0 críticas, 0 altas, 1 moderada y 3 bajas.** Las alertas de Vite y Undici ya no aparecen.
+- Los intentos fallidos previos fueron de preparación del workflow y comprobaciones de rango npm/versión, no de fallos funcionales del producto; no se registró parche hasta pasar CI. Se retiraron todos los workflows temporales de escritura y archivos activadores.
+- **Hono sigue en 4.13.13 en el PR #3** porque el parche Hono a 4.13.18 se encuentra en [PR #2 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/2). Antes de combinar ambos PR revisar/reconciliar `package-lock.json` con npm, CI y auditoría nuevamente; no hacer merges automáticos.
+- La actualización de Vite 5 a Vite 6 y plugin 4 a 5 necesita revisión manual en móviles y navegadores. La restricción `overrides.undici` también requiere revisión con Wrangler/Miniflare antes de una publicación definitiva. Ningún PR habilita producción.
+
 ## Matriz de aceptación
 
 | Área | Prueba automática en CI | Pendiente de aceptación manual |
