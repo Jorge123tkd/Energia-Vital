@@ -1,5 +1,17 @@
 # Integración controlada de parches npm — PR #2 y PR #3
 
+
+## Actualización confirmada — 16 de noviembre de 2026: integración lograda en PR #4
+
+**ESTADO ACTUAL: candidato conjunto validado en CI y PR borrador [#4](https://github.com/Jorge123tkd/Energia-Vital/pull/4); NO fusionado ni desplegado.** El texto posterior sobre bloqueos anteriores queda como histórico, no como estado vigente.
+
+- Se creó `security/combine-pr2-pr3-20261116` **desde el parche Hono 4.13.18 del PR #2**, para conservar su lockfile coherente. Después npm instaló Vite y el plugin Svelte compatibles y un override seguro `undici: ^7.30.1`; se utilizó instalación npm completa, no solo `--package-lock-only`.
+- El [run 43943927309](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43943927309) terminó **SUCCESS**: `npm ci`, comprobación estricta de versiones/integridad, auditoría, TypeScript API/Svelte, build web, preservación de migraciones ficticias e integración Worker/D1 de CI.
+- **Versiones verificadas:** Hono 4.13.18, Vite 6.4.6, plugin Svelte 5.1.1 y Undici 7.30.2. `npm audit`: **0 críticas, 0 altas, 1 moderada, 3 bajas**. El lockfile de los cuatro paquetes conserva campos `resolved` e `integrity` generados por npm.
+- El bot guardó dependencias en commit `a1ea3f9a`; se retiraron el workflow temporal con escritura y su disparador. El PR #4, basado en la rama feature, contiene **solo cuatro archivos**: `apps/api/package.json`, `apps/web/package.json`, `package.json` y `package-lock.json`. GitHub muestra el PR como **DRAFT, OPEN y no fusionado**.
+- **Pendientes:** revisión humana del PR combinado y alertas npm moderada/bajas; pruebas manuales de la web en móviles/navegadores, WAF, 401 de administración real y políticas de fotos/ICC; además, todos los requisitos de respaldo/migración para publicación. No interpretar CI verde como autorización de fusionar o publicar.
+
+
 **Fecha:** 16 de noviembre de 2026. **Estado:** PENDIENTE; no hay parche combinado aprobado. **Ámbito:** rama de trabajo `feat/cloudflare-customer-accounts-hardening`; nunca afecta a `main` ni a Cloudflare real.
 
 ## Parches independientes validados
