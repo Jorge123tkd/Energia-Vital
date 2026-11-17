@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## Seguridad de salida de sesiones caducadas — 16/11/2026
+
+El PR #5 aislado incorpora revocación de sesiones mediante refresh JWT firmado en el cuerpo de `POST /api/auth/logout`, para que el servidor pueda revocar una sesión aunque el access haya caducado. Los flujos de cliente y administrador borran los tokens locales antes de esperar la red, usan refresh solo en memoria y fallback de access para sesiones anteriores. Incluye tests HTTP Worker/D1 ficticios y simulaciones de cliente sobre logout cliente/admin/legacy. CI [44013630792](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013630792) en ejecución al documentar. Un logout durante desconexión **no garantiza revocación remota**, solo limpieza local: esta limitación requiere tratamiento antes de publicación. No hay despliegues, merge ni cambios de D1/R2 reales. Las 7 etapas siguen abiertas.
+
+
 ## Puerta de esquema para despliegue de rotación JWT (16/11/2026)
 
 En el PR #5 de desarrollo aislado, el workflow de publicación ahora exige una comprobación de solo lectura de `auth_sessions.refresh_hash` (migración 021) en D1 remota **antes** de permitir `wrangler deploy`. El comando no ejecuta la migración, ni consulta datos de usuarios, ni modifica producción. Falta autorización específica, inventario remoto, copia cifrada D1/R2, ensayo de restauración y verificación de migraciones reales 013–021. El PR permanece DRAFT, sin publicar. La CI de este control es [44013144408](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013144408) (pendiente de resultado al redactar). Las siete etapas de publicación siguen sin cerrarse.
