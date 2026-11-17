@@ -5,6 +5,12 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 **No aplicar migraciones a D1 remoto ni desplegar API/Pages sin pruebas, copia de seguridad y autorización del propietario.**
 
 
+## Renovación de sesión con permisos actuales — 16/11/2026
+
+- Para renovar JWT de personal, se consulta `admin_users` en D1 y se exige `admin`/`operator` activo; para cliente, se valida cuenta activa y rol `customer`. Evita transmitir permisos antiguos al nuevo token.
+- Pruebas HTTP aisladas de renovación por rol, rechazo de access como refresh y de refresh como acceso, aislamiento de operadores/clientes y revocación tras logout. Tres GitHub Actions de commit `8959a8a1` SUCCESS: [44008224028](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44008224028), `44008223971`, `44008216502`. No se han tocado clientes reales ni producción.
+- Persisten la revisión sobre posible rotación de refresh tokens, WAF/Turnstile, 401 histórico real de admin, QA móvil y consentimiento/ICC. PR #4 sigue abierto sin fusionar. **Siete hitos de publicación pendientes; etapa 2 en progreso.**
+
 ## Protección de recuperación de acceso y sesiones de clientes — 16/11/2026
 
 - El cliente puede cambiar su contraseña sin dejar otras sesiones válidas por un fallo entre operaciones: cambio de hash y revocación de sesiones ajenas ahora son un lote D1 transaccional. Se comprueba el hash anterior para evitar una actualización concurrente silenciosa.
