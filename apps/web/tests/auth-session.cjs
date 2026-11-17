@@ -110,6 +110,71 @@ const refreshCalls = entries => entries.filter(item=>item.url.endsWith('/api/aut
     console.log('PASS admin identity restore and stale concurrent request');
   }
   {
+    const otherExpired = accessToken(Math.floor(Date.now()/1000)-60,'other-customer');
+    const otherValid = accessToken(Math.floor(Date.now()/1000)+3600,'other-customer-new');
+    let completeOld;
+    const oldGate = new Promise(resolve => { completeOld = resolve; });
+    const {api,requests} = harness(entry => {
+      if (entry.url.endsWith('/api/auth/refresh')) {
+        const {refresh_token} = JSON.parse(entry.body);
+        return refresh_token === 'customer-refresh-A'
+          ? oldGate : response(200,{access_token:otherValid,refresh_token:'customer-refresh-B-new'});
+      }
+      if (entry.authorization === 'Bearer '+expired ||
+          entry.authorization === 'Bearer '+otherExpired)
+        return response(401,{error:'Expired'});
+      if (entry.authorization === 'Bearer '+otherValid) return response(200,{ok:true});
+      return response(500,{error:'Unexpected request'});
+    });
+    api.setCustomerToken(expired);api.setCustomerRefreshToken('customer-refresh-A');
+    const oldRequest = api.apiRequest('/api/private/requests').catch(e=>e);
+    for(let i=0;i<80 && refreshCalls(requests).length<1;i++) await Promise.resolve();
+    assert.equal(refreshCalls(requests).length,1);
+    api.setCustomerToken(null);
+    api.setCustomerToken(otherExpired);api.setCustomerRefreshToken('customer-refresh-B');
+    const nextRequest = await api.apiRequest('/api/private/appointments');
+    assert.ok(nextRequest.ok,'New login must not await stale refresh');
+    assert.equal(refreshCalls(requests).length,2,'New login issues its own refresh');
+    completeOld(response(200,{access_token:valid,refresh_token:'customer-refresh-A-new'}));
+    await oldRequest;
+    assert.equal(api.customerToken(),otherValid,'Old completed refresh must not overwrite new user');
+    console.log('PASS customer account switch isolates in-flight refresh');
+  }
+  {
+    const otherExpired = accessToken(Math.floor(Date.now()/1000)-60,'other-admin');
+    const otherValid = accessToken(Math.floor(Date.now()/1000)+3600,'other-admin-new');
+    let completeOld;
+    const oldGate = new Promise(resolve => { completeOld = resolve; });
+    const {api,storage,requests} = harness(entry => {
+      if (entry.url.endsWith('/api/auth/refresh')) {
+        const {refresh_token} = JSON.parse(entry.body);
+        return refresh_token === 'admin-refresh-A'
+          ? oldGate : response(200,{access_token:otherValid,refresh_token:'admin-refresh-B-new'});
+      }
+      if (entry.authorization === 'Bearer '+adminOld ||
+          entry.authorization === 'Bearer '+otherExpired)
+        return response(401,{error:'Expired'});
+      if (entry.authorization === 'Bearer '+otherValid) return response(200,{ok:true});
+      return response(500,{error:'Unexpected request'});
+    });
+    storage.set(api.ADMIN_TOKEN_KEY,adminOld);
+    api.setAdminRefreshToken('admin-refresh-A');
+    const oldRequest = api.apiRequest('/api/admin/users',{headers:{Authorization:'Bearer '+adminOld}})
+      .catch(e=>e);
+    for(let i=0;i<80 && refreshCalls(requests).length<1;i++) await Promise.resolve();
+    assert.equal(refreshCalls(requests).length,1);
+    api.clearAdminSession();
+    storage.set(api.ADMIN_TOKEN_KEY,otherExpired);
+    api.setAdminRefreshToken('admin-refresh-B');
+    const nextRequest = await api.apiRequest('/api/admin/users',{headers:{Authorization:'Bearer '+otherExpired}});
+    assert.ok(nextRequest.ok,'New admin must not await prior refresh');
+    assert.equal(refreshCalls(requests).length,2);
+    completeOld(response(200,{access_token:adminNew,refresh_token:'admin-refresh-A-new'}));
+    await oldRequest;
+    assert.equal(storage.get(api.ADMIN_TOKEN_KEY),otherValid);
+    console.log('PASS admin account switch isolates in-flight refresh');
+  }
+  {
     const {api,requests} = harness(entry => response(403,{error:'Sin permisos'}));
     api.setCustomerToken(expired); api.setCustomerRefreshToken('not-to-use');
     await assert.rejects(()=>api.apiRequest('/api/private/requests'),error=>error.status===403);
