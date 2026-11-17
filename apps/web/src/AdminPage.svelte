@@ -249,7 +249,11 @@
     const saved = sessionStorage.getItem(ADMIN_TOKEN_KEY);
     if (saved) {
       try { const info = await api.adminMe(saved); staffRole = info.user.role; ownId = info.user.id; token = saved; await reload(saved); }
-      catch { sessionStorage.removeItem(ADMIN_TOKEN_KEY); }
+      catch (e) {
+        const status = (e as Error & { status?: number })?.status;
+        if (status === 401 || status === 403) clearAdminSession();
+        else error = 'No se pudo comprobar la sesión por un problema de conexión. Vuelve a intentarlo.';
+      }
     }
     checking = false;
   }
