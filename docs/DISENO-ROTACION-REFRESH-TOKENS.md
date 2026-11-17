@@ -39,3 +39,19 @@ Rama base: `feat/cloudflare-customer-accounts-hardening`.
 
 ## Puerta de implementación
 No crear la migración 021 ni modificar los endpoints de autenticación hasta revisar integralmente el frontend que almacena access/refresh, el contrato de `auth_sessions` en todas las rutas y las reglas para sesiones antiguas. No ejecutar en D1/R2 reales ni Cloudflare producción. Tras implementación, verificar el mismo SHA con typecheck API, Svelte, build, migraciones 001–021, integración/concurrencia y preservación ficticia. La etapa 2/7 seguirá abierta por WAF/Turnstile, error 401 de admin real, móviles, privacidad fotográfica y revisión del PR #4.
+
+## Resultado de auditoría frontend — 2026-11-16
+
+Inspección directa adicional de `apps/web/src/App.svelte`, `apps/web/src/components/CustomerAccess.svelte`, `apps/web/src/AdminPage.svelte` y `apps/web/src/lib/api.ts`:
+
+- CustomerAccess recibe `result.access_token` y solo entrega ese token a `onSuccess(user, token)`; no pasa `refresh_token` al estado de aplicación.
+- App conserva un único access token en `sessionStorage` para cliente o staff; `restoreSession()` llama a `/me` y elimina la sesión local si falla, pero no intenta una renovación ni distingue fallo de red de token expirado.
+- AdminPage también conserva solo `access_token` en `sessionStorage`, y al fallar `adminMe` elimina el token local. Las rutas de administración reciben explícitamente el access token.
+- `api.ts` ofrece `api.refreshToken(body)`, pero `apiRequest` no hace renovación coordinada ni reintento. El token de renovación no se guarda en ese cliente.
+- Por tanto, **la UI actual no disfruta de los 30 días de refresh que permite la API**; tras vencer el access de 1 h, una petición o recarga puede llevar a nueva autenticación. Esto es un hallazgo de código, **no una prueba manual del navegador**.
+
+### Decisión técnica propuesta para implementar
+
+Primero separar claramente un **diseño de persistencia y renovación frontend** del cambio backend de rotación: el cliente y admin necesitan un flujo unificado que preserve `access` actualizado y coordine refresh concurrentes. Revisar almacenamiento y modelo de amenazas antes de guardar refresh tokens en JavaScript: `sessionStorage` no protege frente a XSS y un cookie HttpOnly/Secure/SameSite requiere estudiar origen Pages/Worker, CORS/CSRF, configuración de dominio y compatibilidad real. **No introducir almacenamiento duradero de refresh tokens por defecto** sin resolver eso. Tampoco borrar tokens locales por fallo de red transitorio, ni renovar ante errores 403 por permisos.
+
+Para el lanzamiento, exigir pruebas de pestañas, reconexión, dos dispositivos, login de staff/cliente, expiración simulada, logout y cambio de contraseña con cuentas ficticias; revisiones en móvil reales pendientes. Mantener la rotación del servidor como fase siguiente a la decisión de transporte. Nada de esto se ha implementado ni probado todavía.
