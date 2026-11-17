@@ -5,13 +5,13 @@
 - [PR #7 DRAFT — combinado](https://github.com/Jorge123tkd/Energia-Vital/pull/7): seguridad de sesiones de PR #6 + dependencias actualizadas de PR #4. No fusionado.
 - [PR #6 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/6): migración 021, refresh de un solo uso, cliente/admin y auditoría D1 preparada; CI [44105736214](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44105736214) aprobada por separado.
 - [PR #4 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/4): lockfile npm deduplicado; CI [43946090393](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/43946090393) aprobada por separado. **No extrapolar estos resultados a PR #7.**
-- **PR #7 (primer ensayo)** [44107829315](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44107829315) SUCCESS. CI de la puerta npm audit reforzada [44108052050](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44108052050): verificar resultado final antes de aprobar. El lockfile no se editó a mano.
+- **PR #7 (candidato combinado)** [44107829315](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44107829315) **SUCCESS**. La segunda CI con puerta estricta `npm audit` total + producción [44108052050](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44108052050) **SUCCESS**. El lockfile no se editó a mano; los avisos bajos requieren evaluación. Ninguna de estas pruebas autoriza un despliegue.
 
 ## Matriz GO / NO-GO
 | Bloque | Evidencia necesaria para GO | Estado |
 |---|---|---|
 | Fotografía/privacidad (etapa 1) | Muestras con consentimiento y comprobación visual Android/iPhone; aprobación retención y manejo ICC/EXIF | BLOQUEADO: QA/aprobación humana |
-| Seguridad y accesos (etapa 2) | PR #7 CI final; revisión diff, roles y flujos reales; resolver 401 admin, WAF/Turnstile | PARCIAL: CI anterior aprobada; QA real pendiente |
+| Seguridad y accesos (etapa 2) | PR #7 CI final aprobado; aún falta revisión diff, roles y flujos reales; resolver 401 admin, WAF/Turnstile | PARCIAL: CI combinada aprobada; QA real pendiente |
 | Inventario Cloudflare (etapa 3) | Registro firmado de D1/Worker/Pages/R2 y migraciones, todo solo lectura | BLOQUEADO: autorización + ejecución remota |
 | Respaldo cifrado (etapa 4) | Copias D1 y R2 protegidas fuera de GitHub; integridad comprobada | BLOQUEADO: requiere acceso autorizado |
 | Restauración/ensayo (etapa 5) | Restaurar copia en recursos aislados, ejecutar solo migraciones faltantes, comparar integridad | BLOQUEADO: depende de 3 y 4 |
@@ -36,4 +36,4 @@
 - El estado NO-GO solo cambia cuando cada etapa tiene evidencia concreta y las autorizaciones correspondientes.
 
 ## Próxima acción inmediata
-Revisar [CI 44108052050](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44108052050), corregir si falla y preparar el plan de QA real. Seguimiento vivo en `CONTINUIDAD.md` y `PLAN-MAESTRO-BONAIRE.md`.
+CI 44108052050 completada con éxito. Próxima acción: coordinar revisión del PR #7 y QA real; no confundir CI verde con lanzamiento autorizado. Seguimiento vivo en `CONTINUIDAD.md` y `PLAN-MAESTRO-BONAIRE.md`.
