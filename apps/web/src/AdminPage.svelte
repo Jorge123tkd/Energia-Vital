@@ -248,7 +248,9 @@
   async function restore() {
     const saved = sessionStorage.getItem(ADMIN_TOKEN_KEY);
     if (saved) {
-      try { const info = await api.adminMe(saved); staffRole = info.user.role; ownId = info.user.id; token = saved; await reload(saved); }
+      try { const info = await api.adminMe(saved); staffRole = info.user.role; ownId = info.user.id;
+        token = sessionStorage.getItem(ADMIN_TOKEN_KEY) || saved;
+        await reload(token); }
       catch (e) {
         const status = (e as Error & { status?: number })?.status;
         if (status === 401 || status === 403) clearAdminSession();
