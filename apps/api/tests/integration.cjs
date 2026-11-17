@@ -326,6 +326,26 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
     '/api/private/requests','GET',null,ar.refresh_token,401);
   await request('Customer access token cannot be used to refresh',
     '/api/auth/refresh','POST',{refresh_token:at},null,401);
+  // Un token consumido en A no afecta una sesión independiente B.
+  const secondaryCustomerA = await request('Customer A opens an independent device',
+    '/api/auth/customer/login','POST',{email:a.email,password:a.password});
+  const independentRenewal = await request('Independent device renews normally',
+    '/api/auth/refresh','POST',{refresh_token:secondaryCustomerA.refresh_token});
+  const secondaryClaims = readJwtClaims(independentRenewal.refresh_token);
+  const originalClaims = readJwtClaims(customerRenewed.refresh_token);
+  assert.notEqual(secondaryClaims.sid, originalClaims.sid,
+    'Each login must create an independent device session');
+  await request('Original customer session still renews independently',
+    '/api/auth/refresh','POST',{refresh_token:customerRenewed.refresh_token});
+  await request('Consumed independent device token is rejected',
+    '/api/auth/refresh','POST',{refresh_token:secondaryCustomerA.refresh_token},null,401);
+  await request('Independent device logs out using access token',
+    '/api/auth/logout','POST',{},secondaryCustomerA.access_token);
+  await request('Logged-out device cannot use its new refresh',
+    '/api/auth/refresh','POST',{refresh_token:independentRenewal.refresh_token},null,401);
+  await request('Original device remains active after independent logout',
+    '/api/auth/me','GET',null,at);
+
 
   await invalidJson('Customer request rejects malformed JSON',
     '/api/private/requests','POST','{',400,at);
