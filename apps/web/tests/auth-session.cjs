@@ -134,6 +134,56 @@ const refreshCalls = entries => entries.filter(item=>item.url.endsWith('/api/aut
     console.log('PASS late refresh cannot resurrect customer logout');
   }
   {
+    let releaseRefresh;
+    const gate = new Promise(resolve => { releaseRefresh = resolve; });
+    const {api,storage,requests} = harness(entry => {
+      if (entry.url.endsWith('/api/auth/refresh')) return gate;
+      if (entry.authorization === 'Bearer '+adminOld) return response(401,{error:'Expired'});
+      if (entry.authorization === 'Bearer '+adminNew) return response(200,{ok:true});
+      return response(500,{error:'Unexpected request'});
+    });
+    storage.set(api.ADMIN_TOKEN_KEY,adminOld);
+    api.setAdminRefreshToken('admin-refresh-old');
+    const pending = api.apiRequest('/api/admin/users',{headers:{Authorization:'Bearer '+adminOld}})
+      .catch(error => error);
+    for(let tick=0;tick<50 && !refreshCalls(requests).length;tick++) await Promise.resolve();
+    assert.equal(refreshCalls(requests).length,1,'A pending refresh must start before logout');
+    api.clearAdminSession();
+    releaseRefresh(response(200,{access_token:adminNew,refresh_token:'admin-refresh-new'}));
+    await pending;
+    assert.equal(storage.has(api.ADMIN_TOKEN_KEY),false,'Logout must win over late admin refresh');
+    console.log('PASS admin logout cannot be resurrected by late refresh');
+  }
+  {
+    const {api,storage,requests} = harness(entry => {
+      if (entry.url.endsWith('/api/auth/refresh')) throw new Error('offline');
+      if (entry.authorization === 'Bearer '+expired) return response(401,{error:'Expired'});
+      return response(500,{error:'Unexpected request'});
+    });
+    api.setCustomerToken(expired);
+    api.setCustomerRefreshToken('customer-refresh-old');
+    await assert.rejects(()=>api.apiRequest('/api/auth/me'),e=>e.status===401);
+    assert.equal(api.customerToken(),expired,'Transient refresh network errors must not delete access');
+    assert.equal(storage.get(api.CUSTOMER_TOKEN_KEY),expired);
+    assert.equal(refreshCalls(requests).length,1);
+    console.log('PASS temporary connection failure preserves local session');
+  }
+  {
+    const {api,storage,requests} = harness(entry => {
+      if (entry.url.endsWith('/api/auth/refresh'))
+        return response(200,{access_token:adminNew,refresh_token:'admin-refresh-new'});
+      return response(403,{error:'Sin permisos'});
+    });
+    storage.set(api.ADMIN_TOKEN_KEY,adminOld);
+    api.setAdminRefreshToken('admin-refresh-old');
+    await assert.rejects(
+      ()=>api.apiRequest('/api/admin/users',{headers:{Authorization:'Bearer '+adminOld}}),
+      e=>e.status===403);
+    assert.equal(refreshCalls(requests).length,0,'Admin 403 must never refresh');
+    assert.equal(storage.get(api.ADMIN_TOKEN_KEY),adminOld);
+    console.log('PASS admin forbidden status does not attempt refresh');
+  }
+  {
     const {api,requests} = harness(entry => response(401,{error:'Expired'}));
     api.setCustomerToken(expired);api.setCustomerRefreshToken('customer-refresh-old');
     await assert.rejects(()=>api.apiRequest('/api/auth/logout',{method:'POST'}),e=>e.status===401);
