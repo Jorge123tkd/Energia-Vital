@@ -5,6 +5,12 @@ Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-custo
 **No aplicar migraciones a D1 remoto ni desplegar API/Pages sin pruebas, copia de seguridad y autorización del propietario.**
 
 
+## Protección de recuperación de acceso y sesiones de clientes — 16/11/2026
+
+- El cliente puede cambiar su contraseña sin dejar otras sesiones válidas por un fallo entre operaciones: cambio de hash y revocación de sesiones ajenas ahora son un lote D1 transaccional. Se comprueba el hash anterior para evitar una actualización concurrente silenciosa.
+- Pruebas de acceso y refresh en dos sesiones ficticias, cambio con clave actual inválida y nueva contraseña: [GitHub Actions 44006778238](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44006778238), `44006778251` y `44006769880` SUCCESS. No se modificaron clientes reales ni se ejecutaron despliegues.
+- Se mantiene la sesión del dispositivo que solicita el cambio, como estaba previsto; decisión de UX/seguridad pendiente para posibles políticas más restrictivas. [PR #4](https://github.com/Jorge123tkd/Energia-Vital/pull/4) sigue en revisión, sin merge. **7 etapas de publicación pendientes; la segunda sigue en progreso**.
+
 ## Protección de configuración inicial de administrador — 16/11/2026
 
 - `POST /api/auth/setup` emplea `INSERT ... WHERE NOT EXISTS` dentro de la misma operación D1: evita crear múltiples primeros administradores por solicitudes simultáneas con correos distintos.
