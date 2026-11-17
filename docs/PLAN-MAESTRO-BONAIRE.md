@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## Freeze de funciones / candidato de lanzamiento unificado — 17/11/2026
+
+Se congela temporalmente el desarrollo funcional nuevo. Seguridad de sesiones (PR #6) y dependencias seguras (PR #4) se combinaron en [PR #7 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/7), sin fusionar ni desplegar. Los dos ensayos completos [44107829315](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44107829315) y [44108052050](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44108052050) **SUCCESS**; el segundo incluye un gate real de `npm audit` total + producción, que bloquea críticas/altas/moderadas. Las vulnerabilidades bajas requieren revisión humana. Se centralizó GO/NO-GO en `docs/CIERRE-PRODUCCION-2026-11-17.md`. Siete etapas pendientes: fotos, QA real/401 admin/WAF, inventario Cloudflare, backup D1/R2, restauración/migraciones, revisión/rollback y despliegue autorizado. No datos reales consultados ni producción modificada.
+
+
 ## Candidato consolidado validado — 17/11/2026
 
 El PR #6 de rotación de sesiones y preparación de auditoría D1 pasó CI [44105736214](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44105736214) **SUCCESS**, sin despliegue. El PR #5 original fue cerrado **sin fusionar** para evitar duplicar revisiones; todos sus archivos funcionales están en PR #6. No hay migración 021 remota ni cambios de producción. La etapa 2 está avanzada en código y la 3 tiene herramienta de solo lectura preparada, pero siguen faltando QA real, auditoría autorizada de Cloudflare, respaldo y restauración, privacidad fotográfica y aprobación de publicación. Las 7 puertas principales continúan abiertas.
