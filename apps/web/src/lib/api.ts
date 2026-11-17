@@ -11,6 +11,7 @@ export function customerToken(): string | null {
 let customerRefresh: string | null = null;
 let refreshing: Promise<string | null> | null = null;
 let refreshingFor: string | null = null;
+let priorCustomerAccess: string | null = null;
 // Sesión de personal: también solo en memoria, separada de la del cliente.
 let adminRefresh: string | null = null;
 let adminRefreshing: Promise<string | null> | null = null;
@@ -52,7 +53,9 @@ export function clearAdminSession() {
 }
 async function renewAdminAccess(failedToken: string): Promise<string | null> {
   const existing = sessionStorage.getItem(ADMIN_TOKEN_KEY);
-  if (existing && existing !== failedToken) return existing;
+  // No reintentar una petición de la cuenta A con el token de la cuenta B.
+  if (existing && existing !== failedToken)
+    return priorAdminAccess === failedToken && adminRefresh ? existing : null;
   if (!adminRefresh) return null;
   const previous = adminRefresh;
   // Una renovación pendiente de otra cuenta/sesión no puede bloquear ésta.
@@ -87,12 +90,14 @@ async function renewAdminAccess(failedToken: string): Promise<string | null> {
 }
 export function setCustomerRefreshToken(token: string | null) {
   customerRefresh = token;
+  priorCustomerAccess = null;
 }
 export function setCustomerToken(token: string | null) {
   if (token) sessionStorage.setItem(CUSTOMER_TOKEN_KEY, token);
   else {
     sessionStorage.removeItem(CUSTOMER_TOKEN_KEY);
     customerRefresh = null;
+    priorCustomerAccess = null;
   }
 }
 function isRefreshableRoute(path: string): boolean {
@@ -111,7 +116,8 @@ function accessExpired(token: string): boolean {
 async function renewCustomerAccess(failedToken: string): Promise<string | null> {
   // Si otra petición renovó esta misma sesión, reutiliza el access nuevo.
   const newer = customerToken();
-  if (newer && newer !== failedToken) return newer;
+  if (newer && newer !== failedToken)
+    return priorCustomerAccess === failedToken && customerRefresh ? newer : null;
   if (!customerRefresh) return null;
   const previousRefresh = customerRefresh;
   // No compartir la renovación de la cuenta anterior después de logout/login.
@@ -133,6 +139,7 @@ async function renewCustomerAccess(failedToken: string): Promise<string | null> 
       if (customerRefresh !== previousRefresh || customerToken() !== failedToken) return null;
       setCustomerToken(tokens.access_token);
       customerRefresh = tokens.refresh_token;
+      priorCustomerAccess = failedToken;
       return tokens.access_token;
     })();
     const flight = job.finally(() => {
