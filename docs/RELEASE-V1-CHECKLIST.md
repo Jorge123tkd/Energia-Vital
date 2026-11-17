@@ -7,6 +7,14 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 **Estado de avance y número de etapas restantes:** consultar [PLAN-7-ETAPAS-PUBLICACION.md](./PLAN-7-ETAPAS-PUBLICACION.md). Son **7 hitos** para la publicación segura del alcance Brigadas/Expedientes, no 7 commits ni un plazo de entrega.
 
 
+## Etapa 2/7 — renovación de JWT y permisos vigentes (16/11/2026)
+
+- [x] Generar nuevos JWT de administración usando el rol actual de `admin_users` leído de D1; exigir `admin` u `operator` activo. Para clientes validar activo y fijar rol `customer` sin reutilizar el claim obsoleto del refresh.
+- [x] Probar en CI que tokens refresh no autorizan rutas protegidas, tokens access no renuevan sesiones y el logout invalida access y refresh, incluso tokens recién renovados. Verificar también permisos de operadores y clientes.
+- [x] Tres GitHub Actions verdes en `8959a8a1`: [44008224028](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44008224028), [44008223971](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44008223971) y [44008216502](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44008216502). No se desplegó API ni web.
+- [ ] Evaluar rotación anti-reutilización de refresh tokens con diseño que tenga en cuenta múltiples pestañas y dispositivos; la renovación actual sigue siendo válida mientras la sesión esté activa, sin rotación de un solo uso.
+- [ ] Mantener WAF, QA móvil, 401 de administrador real, privacidad de fotos y revisión del PR #4 como controles bloqueantes. **Siete etapas de publicación pendientes.**
+
 ## Etapa 2/7 — cambio de contraseña y sesiones de cliente (16/11/2026)
 
 - [x] Unificar cambio de hash de contraseña y revocación de otras sesiones en `D1.batch` transaccional; impedir sobrescribir una contraseña actualizada concurrentemente mediante condición sobre el hash anterior.
