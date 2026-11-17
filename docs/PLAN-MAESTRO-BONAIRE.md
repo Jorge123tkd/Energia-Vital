@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## Puerta de esquema para despliegue de rotación JWT (16/11/2026)
+
+En el PR #5 de desarrollo aislado, el workflow de publicación ahora exige una comprobación de solo lectura de `auth_sessions.refresh_hash` (migración 021) en D1 remota **antes** de permitir `wrangler deploy`. El comando no ejecuta la migración, ni consulta datos de usuarios, ni modifica producción. Falta autorización específica, inventario remoto, copia cifrada D1/R2, ensayo de restauración y verificación de migraciones reales 013–021. El PR permanece DRAFT, sin publicar. La CI de este control es [44013144408](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013144408) (pendiente de resultado al redactar). Las siete etapas de publicación siguen sin cerrarse.
+
+
 ## QA adicional de sesiones — 16/11/2026
 El PR #5 (borrador aislado) ahora incluye pruebas del cliente web de autenticación sin servicios reales: restauración de sesiones caducadas, single-flight, personal con token desactualizado, 403 sin renovación y cierre de sesión concurrente. Se añadió un paso obligatorio a GitHub Actions y se corrigieron dos regresiones del flujo de restauración. [Run 44012930520](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44012930520): paso de navegador simulado PASS, resultado total aún no confirmado al redactar. **No implica QA manual en dispositivos reales, aprobación de fotos, validación del administrador real ni autorización de desplegar.** No hay migración 021 en D1 remoto ni merge.
 
