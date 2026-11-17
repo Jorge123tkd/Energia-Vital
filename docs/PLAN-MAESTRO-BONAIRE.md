@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## Candidato consolidado validado — 17/11/2026
+
+El PR #6 de rotación de sesiones y preparación de auditoría D1 pasó CI [44105736214](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44105736214) **SUCCESS**, sin despliegue. El PR #5 original fue cerrado **sin fusionar** para evitar duplicar revisiones; todos sus archivos funcionales están en PR #6. No hay migración 021 remota ni cambios de producción. La etapa 2 está avanzada en código y la 3 tiene herramienta de solo lectura preparada, pero siguen faltando QA real, auditoría autorizada de Cloudflare, respaldo y restauración, privacidad fotográfica y aprobación de publicación. Las 7 puertas principales continúan abiertas.
+
+
 ## Consolidación del candidato de seguridad — 17/11/2026
 
 Se eliminó el problema de divergencia de PR #5 sin mezclar en producción: se recreó sobre la última rama de desarrollo un candidato de **14 archivos** en [PR #6 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/6), con 14 commits ahead / 0 behind. Incorpora seguridad JWT, migración 021, renovación de clientes y personal, tests de concurrencia y cambios de usuario, auditoría D1 de solo lectura preparada y protección de futuros despliegues. [CI 44105736214](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44105736214) aún en curso al documentar. PR #5 sigue como historial, PR #6 es candidato de revisión aislado. Ninguna etapa de producción ha sido autorizada, las siete puertas siguen abiertas.
