@@ -1,7 +1,7 @@
 name: Validar y desplegar Energía Vital
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/cloudflare-customer-accounts-hardening]
   push:
     branches: [main]
   workflow_dispatch:
@@ -38,8 +38,12 @@ jobs:
         run: npm run typecheck --workspace=apps/web
       - name: Construir frontend
         run: npm run build --workspace=apps/web
+      - name: Probar renovación y cierre de sesiones en navegador simulado
+        run: node apps/web/tests/auth-session.cjs
       - name: Ensayo de preservación de datos históricos ficticios (sin Cloudflare real)
         run: python3 apps/api/tests/migration-preservation.py
+      - name: Verificar inventario D1 de solo esquema (fixtures ficticios)
+        run: node apps/api/tests/remote-inventory-schema.test.cjs
 
       - name: Crear D1 de pruebas local (no production)
         working-directory: apps/api
@@ -95,6 +99,27 @@ jobs:
             }
             console.log("Verificación de estructura D1 remota correcta (15 tablas esperadas).");
           ' "$RUNNER_TEMP/bonaire-schema-count.json"
+      - name: Bloquear publicación si falta la columna de rotación en D1 remota (solo SELECT)
+        working-directory: apps/api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute energia-vital-db --remote --json \
+            --command "SELECT COUNT(*) AS present FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'" \
+            > "$RUNNER_TEMP/bonaire-refresh-column.json"
+          node -e '
+            const fs = require("fs");
+            const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const result = Array.isArray(raw) ? raw[0] : raw;
+            if (Number(result?.results?.[0]?.present) !== 1) {
+              console.error("Bloqueado: falta auth_sessions.refresh_hash de migración 021 en D1 remota.");
+              process.exit(1);
+            }
+            console.log("Esquema D1 remota compatible con refresh rotation 021.");
+          ' "$RUNNER_TEMP/bonaire-refresh-column.json"
       - name: Publicar Cloudflare Worker
         working-directory: apps/api
         run: npx wrangler deploy
