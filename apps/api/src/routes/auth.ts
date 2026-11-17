@@ -251,9 +251,16 @@ authRoutes.post('/refresh', async c => {
 
 authRoutes.post('/logout', async c => {
   const bearer = await extractToken(c.req.header('authorization'), c.env);
-  if (!bearer) return c.json({ error: 'No autorizado' }, 401);
-  await c.env.DB.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE id = ? AND user_id = ?')
-    .bind(new Date().toISOString(), bearer.sid, bearer.user_id).run();
+  // El access puede haber vencido. Se permite cerrar LA MISMA sesión
+  // presentando el refresh firmado en el cuerpo, sin entregarlo en URL/cookie.
+  const body = bearer ? null : await readBodyObject(c);
+  const refresh = !bearer && typeof body?.refresh_token === 'string'
+    ? await verifyToken(body.refresh_token, c.env.JWT_SECRET || '') : null;
+  const session = bearer || (refresh?.kind === 'refresh' ? refresh : null);
+  if (!session) return c.json({ error: 'No autorizado' }, 401);
+  await c.env.DB.prepare(`UPDATE auth_sessions SET revoked_at = ?
+    WHERE id = ? AND user_id = ? AND user_type = ? AND revoked_at IS NULL`)
+    .bind(new Date().toISOString(), session.sid, session.user_id, session.type).run();
   return c.json({ message: 'Sesión cerrada' });
 });
 
