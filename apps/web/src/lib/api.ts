@@ -10,9 +10,11 @@ export function customerToken(): string | null {
 // localStorage ni logs. Al recargar se pierde y puede requerirse nuevo login.
 let customerRefresh: string | null = null;
 let refreshing: Promise<string | null> | null = null;
+let refreshingFor: string | null = null;
 // Sesión de personal: también solo en memoria, separada de la del cliente.
 let adminRefresh: string | null = null;
 let adminRefreshing: Promise<string | null> | null = null;
+let adminRefreshingFor: string | null = null;
 // Permitir reintentar requests iniciadas justo antes de una renovación válida.
 let priorAdminAccess: string | null = null;
 const adminListeners = new Set<(token: string) => void>();
@@ -52,9 +54,11 @@ async function renewAdminAccess(failedToken: string): Promise<string | null> {
   const existing = sessionStorage.getItem(ADMIN_TOKEN_KEY);
   if (existing && existing !== failedToken) return existing;
   if (!adminRefresh) return null;
-  if (!adminRefreshing) {
-    const previous = adminRefresh;
-    adminRefreshing = (async () => {
+  const previous = adminRefresh;
+  // Una renovación pendiente de otra cuenta/sesión no puede bloquear ésta.
+  if (!adminRefreshing || adminRefreshingFor !== previous) {
+    adminRefreshingFor = previous;
+    const job = (async () => {
       const response = await fetch(`${API_BASE}/api/auth/refresh`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: previous }), cache: 'no-store',
@@ -70,7 +74,14 @@ async function renewAdminAccess(failedToken: string): Promise<string | null> {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, pair.access_token);
       for (const listener of adminListeners) listener(pair.access_token);
       return pair.access_token;
-    })().finally(() => { adminRefreshing = null; });
+    })();
+    const flight = job.finally(() => {
+      if (adminRefreshing === flight) {
+        adminRefreshing = null;
+        adminRefreshingFor = null;
+      }
+    });
+    adminRefreshing = flight;
   }
   return adminRefreshing;
 }
@@ -102,9 +113,11 @@ async function renewCustomerAccess(failedToken: string): Promise<string | null> 
   const newer = customerToken();
   if (newer && newer !== failedToken) return newer;
   if (!customerRefresh) return null;
-  if (!refreshing) {
-    const previousRefresh = customerRefresh;
-    refreshing = (async () => {
+  const previousRefresh = customerRefresh;
+  // No compartir la renovación de la cuenta anterior después de logout/login.
+  if (!refreshing || refreshingFor !== previousRefresh) {
+    refreshingFor = previousRefresh;
+    const job = (async () => {
       const response = await fetch(`${API_BASE}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,7 +134,14 @@ async function renewCustomerAccess(failedToken: string): Promise<string | null> 
       setCustomerToken(tokens.access_token);
       customerRefresh = tokens.refresh_token;
       return tokens.access_token;
-    })().finally(() => { refreshing = null; });
+    })();
+    const flight = job.finally(() => {
+      if (refreshing === flight) {
+        refreshing = null;
+        refreshingFor = null;
+      }
+    });
+    refreshing = flight;
   }
   return refreshing;
 }
