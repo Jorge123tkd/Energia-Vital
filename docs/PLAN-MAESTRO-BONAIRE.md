@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## Corrección de mezcla de sesiones en navegador — 17/11/2026
+
+Candidato PR #5: pruebas automatizadas de cambio de identidad cliente/administrador A→B durante refresh JWT y respuesta 401 tardía; el cliente web impide que la llamada vieja adopte las credenciales de B y no comparte entre cuentas un refresh en vuelo. Commits `d75acb0a`, `62f65cc7`, `00d30c09`, `dff2a34f`. CI [44087816609](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44087816609) pendiente de validar. Sin despliegue y sin pruebas manuales reales. Permanecen las 7 puertas de publicación.
+
+
 ## Defensa adicional de endpoint refresh (16/11/2026)
 
 El candidato [PR #5 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/5) incluye límite de tasa en D1 de 180 solicitudes por IP en 60 segundos para renovación de JWT y rechazo de tokens de más de 4096 caracteres, además de rotación de un solo uso y cierre remoto por refresh firmado. Ensayos sintéticos añadidos; [CI 44013833729](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013833729) pendiente al redactar. El WAF/Turnstile de Cloudflare continúa como requisito independiente y debe revisarse con tráfico real/autorizado, considerando IP compartidas en Cuba. No se han cambiado Workers/D1 de producción ni fusionado el PR.
