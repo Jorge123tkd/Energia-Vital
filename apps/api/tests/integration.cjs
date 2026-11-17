@@ -89,6 +89,23 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
   assert.notEqual(firstRefreshClaims.jti, secondRefreshClaims.jti, 'Consecutive renewals must not reuse jti');
   assert.equal(secondRefreshClaims.sid, firstRefreshClaims.sid);
   console.log('PASS Refresh tokens have distinct jti within one device session');
+  await request('Consumed admin refresh cannot be reused',
+    '/api/auth/refresh','POST',{refresh_token:adminSession.refresh_token},null,401);
+  await request('Intermediate refresh is also consumed',
+    '/api/auth/refresh','POST',{refresh_token:adminRenewed.refresh_token},null,401);
+  const concurrentAdmin = await request('New admin session for simultaneous refresh',
+    '/api/auth/login','POST',{email:adminEmail,password:adminPassword});
+  const race = await Promise.all([1,2].map(()=>fetch(BASE+'/api/auth/refresh',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:concurrentAdmin.refresh_token})
+  })));
+  assert.deepEqual(race.map(x=>x.status).sort((a,b)=>a-b),[200,401],
+    'Two simultaneous renewals must have exactly one winner');
+  const winner = race.find(x=>x.status===200);
+  const winnerTokens = await winner.json();
+  await request('Concurrent winning refresh is valid for one next renewal',
+    '/api/auth/refresh','POST',{refresh_token:winnerTokens.refresh_token});
+  console.log('PASS Concurrent refresh compare-and-swap permits exactly one winner');
   const adminRenewedClaims = JSON.parse(Buffer.from(adminRenewed.access_token.split('.')[1], 'base64url').toString('utf8'));
   assert.equal(adminRenewedClaims.role,'admin');
   assert.equal(adminRenewedClaims.type,'admin');
