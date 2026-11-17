@@ -1,4 +1,8 @@
 # Continuidad de Bonaire
+
+## Aislamiento de cuentas durante renovación — 17/11/2026
+Revisión de seguridad detectó que `apiRequest` podía permitir que peticiones originadas con un login anterior obtuvieran, al responder 401 tarde, el token vigente de otra cuenta en el mismo navegador. En [PR #5 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/5), `apps/web/src/lib/api.ts` ahora asocia cada petición de renovación en vuelo al refresh JWT de su sesión y solo permite reutilizar access renovado cuando corresponde al access previo de **la misma sesión**. Cierre/login nuevo no toma prestados accesos de otra cuenta. Commits `d75acb0a`, `62f65cc7`. Nuevos tests en `apps/web/tests/auth-session.cjs`: cambio rápido cliente/admin A→B mientras el refresh A sigue pendiente y respuesta HTTP 401 retrasada de A, que jamás debe reintentarse con token B. Commits `00d30c09`, `dff2a34f`. CI del último SHA [44087816609](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44087816609) **pendiente de resultado al redactar**. No merge ni despliegue; siguen 7 etapas principales de publicación abiertas.
+
 Actualizado: 16 de noviembre de 2026 (America/Havana).
 
 ## Leer primero al retomar
