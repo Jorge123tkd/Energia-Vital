@@ -24,6 +24,24 @@ export function setAdminRefreshToken(token: string | null) {
   adminRefresh = token;
   priorAdminAccess = null;
 }
+/** Cierra la sesión en el navegador ANTES de esperar la red. El refresh
+ * firmado puede revocar la sesión en D1 aun cuando el access haya caducado.
+ * Nunca conserva el refresh ni lo manda en URL, logs o almacenamiento local. */
+export async function logoutCurrentSession(kind: 'customer' | 'admin'): Promise<void> {
+  const access = kind === 'admin' ? sessionStorage.getItem(ADMIN_TOKEN_KEY) : customerToken();
+  const refresh = kind === 'admin' ? adminRefresh : customerRefresh;
+  if (kind === 'admin') clearAdminSession();
+  else setCustomerToken(null);
+  if (!access && !refresh) return;
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  if (!refresh && access) headers.set('Authorization', `Bearer ${access}`);
+  try {
+    await fetch(`${API_BASE}/api/auth/logout`, {
+      method: 'POST', headers, cache: 'no-store',
+      body: JSON.stringify(refresh ? { refresh_token: refresh } : {}),
+    });
+  } catch { /* El navegador ya cerró. Una desconexión no asegura revocación remota. */ }
+}
 export function clearAdminSession() {
   // Invalidar la memoria antes de cualquier petición de logout.
   adminRefresh = null;
