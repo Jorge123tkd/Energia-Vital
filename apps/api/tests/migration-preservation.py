@@ -81,6 +81,17 @@ db.execute("INSERT INTO auth_sessions(id,user_id,user_type,created_at,expires_at
            ("legacy-refresh","customer-old","customer","2026-11-15T00:00:00Z","2026-12-15T00:00:00Z"))
 migration(21)
 assert db.execute("SELECT refresh_hash FROM auth_sessions WHERE id='legacy-refresh'").fetchone() == (None,)
+# El primer canje de una sesión legacy reclama la generación una sola vez.
+first = db.execute("""UPDATE auth_sessions SET refresh_hash=?
+ WHERE id='legacy-refresh' AND refresh_hash IS NULL AND revoked_at IS NULL""",
+ ("sha256-primera-generacion-sintetica",))
+assert first.rowcount == 1
+second = db.execute("""UPDATE auth_sessions SET refresh_hash=?
+ WHERE id='legacy-refresh' AND refresh_hash IS NULL AND revoked_at IS NULL""",
+ ("sha256-no-debe-entrar",))
+assert second.rowcount == 0
+assert db.execute("SELECT refresh_hash FROM auth_sessions WHERE id='legacy-refresh'").fetchone() == ("sha256-primera-generacion-sintetica",)
+
 after = {name:snapshot(name) for name in tables}
 for name in tables:
     assert before[name] == after[name], f"La migración alteró datos existentes: {name}"
