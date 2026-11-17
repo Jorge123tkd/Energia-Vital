@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## Avance de seguridad de sesiones (16/11/2026, ensayo aislado)
+
+El [PR #5 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/5) contiene la migración 021 de huella de refresh JWT, rotación de un solo uso con compare-and-swap en D1, compatibilidad de primer canje para sesiones históricas, y renovación automática **en RAM** para clientes y personal. Se agregaron controles de logout ante renovaciones en curso, reintento de peticiones concurrentes del admin y protección ante fallos de red al restablecer la sesión. GitHub Actions [44012238458](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44012238458) aprobó el bloque anterior; últimos ajustes en CI [44012524232](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44012524232) pendientes de resultado. No almacenar refresh en sessionStorage/localStorage: al recargar puede requerirse autenticación otra vez. PR #5 sin fusionar, no aplicado a producción; QA real móvil, WAF, 401 admin real y consentimiento de fotografías siguen pendientes. No cerrar la etapa 2 ni ninguna de las 7 puertas de publicación por CI sintética.
+
+
 Actualizado: 15 de noviembre de 2026. Rama de desarrollo: `feat/cloudflare-customer-accounts-hardening`.
 **Estado:** plan aprobado para iniciar por entregas. No es garantía de funciones activas.
 **No aplicar migraciones a D1 remoto ni desplegar API/Pages sin pruebas, copia de seguridad y autorización del propietario.**
