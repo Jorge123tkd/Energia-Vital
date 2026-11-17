@@ -6,16 +6,72 @@ export const ADMIN_TOKEN_KEY = 'energia_vital_admin_session';
 export function customerToken(): string | null {
   return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(CUSTOMER_TOKEN_KEY) : null;
 }
+// El refresh se guarda SOLO en memoria de la pestaña; nunca en sessionStorage,
+// localStorage ni logs. Al recargar se pierde y puede requerirse nuevo login.
+let customerRefresh: string | null = null;
+let refreshing: Promise<string | null> | null = null;
+export function setCustomerRefreshToken(token: string | null) {
+  customerRefresh = token;
+}
 export function setCustomerToken(token: string | null) {
   if (token) sessionStorage.setItem(CUSTOMER_TOKEN_KEY, token);
-  else sessionStorage.removeItem(CUSTOMER_TOKEN_KEY);
+  else {
+    sessionStorage.removeItem(CUSTOMER_TOKEN_KEY);
+    customerRefresh = null;
+  }
+}
+function accessExpired(token: string): boolean {
+  try {
+    const raw = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(raw.padEnd(Math.ceil(raw.length / 4) * 4, '=')));
+    return typeof claims.exp === 'number' && claims.exp <= Math.floor(Date.now() / 1000);
+  } catch { return false; }
+}
+async function renewCustomerAccess(failedToken: string): Promise<string | null> {
+  // Si otra petición renovó esta misma sesión, reutiliza el access nuevo.
+  const newer = customerToken();
+  if (newer && newer !== failedToken) return newer;
+  if (!customerRefresh) return null;
+  if (!refreshing) {
+    const previousRefresh = customerRefresh;
+    refreshing = (async () => {
+      const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: previousRefresh }),
+        cache: 'no-store',
+      });
+      if (!response.ok) return null;
+      const pair: unknown = await response.json().catch(() => null);
+      if (!pair || typeof pair !== 'object') return null;
+      const tokens = pair as { access_token?: unknown; refresh_token?: unknown };
+      if (typeof tokens.access_token !== 'string' || typeof tokens.refresh_token !== 'string') return null;
+      // Un cierre de sesión durante la petición no debe reactivar su token.
+      if (customerRefresh !== previousRefresh || customerToken() !== failedToken) return null;
+      setCustomerToken(tokens.access_token);
+      customerRefresh = tokens.refresh_token;
+      return tokens.access_token;
+    })().finally(() => { refreshing = null; });
+  }
+  return refreshing;
 }
 export async function apiRequest(path: string, options: RequestInit = {}): Promise<any> {
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-  const token = customerToken();
-  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const suppliedAuth = headers.has('Authorization');
+  const token = suppliedAuth ? null : customerToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  let response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  // Nunca renovar por errores de permisos ni en rutas de login/logout.
+  // Únicamente reintentar una vez si el access JWT del cliente ha expirado.
+  if (response.status === 401 && token && !suppliedAuth && !path.startsWith('/api/auth/') && accessExpired(token)) {
+    const renewed = await renewCustomerAccess(token).catch(() => null);
+    if (renewed) {
+      const retryHeaders = new Headers(headers);
+      retryHeaders.set('Authorization', `Bearer ${renewed}`);
+      response = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders });
+    }
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || data.message || `Error HTTP ${response.status}`);
   return data;
