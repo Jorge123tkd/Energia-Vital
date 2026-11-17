@@ -208,10 +208,22 @@ authRoutes.post('/refresh', async c => {
   const b = await readBodyObject(c);
   const token = typeof b?.refresh_token === 'string' ? await verifyToken(b.refresh_token, c.env.JWT_SECRET || '') : null;
   if (!token || token.kind !== 'refresh' || !await activeSession(c.env, token)) return c.json({ error: 'Sesión expirada' }, 401);
-  const table = token.type === 'admin' ? 'admin_users' : 'customers';
-  const current = await c.env.DB.prepare(`SELECT id FROM ${table} WHERE id = ? AND is_active = 1`).bind(token.user_id).first();
-  if (!current) return c.json({ error: 'Cuenta bloqueada o no disponible' }, 403);
-  const tokens = await generateTokenPair(c.env, token.user_id, token.type, token.role || token.type, token.sid);
+  // El rol del refresh JWT puede estar obsoleto. Solo los permisos vigentes
+  // en D1 pueden determinar el rol de los nuevos tokens.
+  let role: string;
+  if (token.type === 'admin') {
+    const current = await c.env.DB.prepare(`SELECT role FROM admin_users
+      WHERE id = ? AND is_active = 1 AND role IN ('admin','operator')`)
+      .bind(token.user_id).first<{ role: string }>();
+    if (!current) return c.json({ error: 'Cuenta bloqueada o sin permisos' }, 403);
+    role = current.role;
+  } else {
+    const current = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ? AND is_active = 1')
+      .bind(token.user_id).first();
+    if (!current) return c.json({ error: 'Cuenta bloqueada o no disponible' }, 403);
+    role = 'customer';
+  }
+  const tokens = await generateTokenPair(c.env, token.user_id, token.type, role, token.sid);
   return c.json(tokens);
 });
 
