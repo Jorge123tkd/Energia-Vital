@@ -15,7 +15,7 @@
   import ContactPage from './ContactPage.svelte';
   import AdminPage from './AdminPage.svelte';
   import ChiefPortal from './ChiefPortal.svelte';
-  import { api, customerToken, setCustomerToken, ADMIN_TOKEN_KEY } from './lib/api';
+  import { api, customerToken, setCustomerToken, setCustomerRefreshToken, ADMIN_TOKEN_KEY } from './lib/api';
   import { isAssistantOpen, assistantSessionId, assistantMessages } from './lib/store';
 
   const publicRoutes = new Set(['/', '/catalogo', '/servicios', '/galeria', '/asesor-solar']);
@@ -74,12 +74,13 @@
     navigate('/asistente');
   }
 
-  function onAuthenticated(customer: any, token: string) {
+  function onAuthenticated(customer: any, token: string, refreshToken?: string) {
     if ((customer.account_type === 'admin' || customer.role === 'admin' || customer.role === 'operator')) {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
       setCustomerToken(null);
     } else {
       setCustomerToken(token);
+      setCustomerRefreshToken(refreshToken || null);
       sessionStorage.removeItem(ADMIN_TOKEN_KEY);
     }
     user = customer;
