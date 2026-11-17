@@ -10,6 +10,9 @@ Actualizado: 16 de noviembre de 2026 (America/Havana).
 - Petición permanente del usuario: actualizar esta documentación en GitHub después de cada paso con qué se hizo, resultado, último paso y siguiente paso. No depender solo del historial del chat.
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
+## Validación final del bloque de QA + preflight — 2026-11-16
+[GitHub Actions 44013144408](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013144408) **SUCCESS** en SHA `bc31f593a4759a5c2219fb2ce97a294220863b17`: npm ci, typecheck API/Svelte, build, test navegador simulado Node, preservación de migraciones 001–021 con datos sintéticos, Worker+D1 local e integración. `deploy-api` y `deploy-web` SKIPPED. Esta suite **no ejecutó** la nueva precondición sobre D1 remota, porque solo se evalúa durante un despliegue manual autorizado; por tanto, el SELECT remoto no ha sido probado en producción. PR #5 continúa DRAFT sin merge ni migración remota. Pendientes pruebas reales y siete gates de publicación.
+
 ## Protección adicional del futuro deploy — 2026-11-16
 En PR #5 DRAFT, commit `bc31f593a4759a5c2219fb2ce97a294220863b17`, se añadió una verificación SQL de solo lectura en `.github/workflows/deploy.yml` que impide publicar el Worker si falta `auth_sessions.refresh_hash` de la migración **021** en D1 remota. El job solo se habilita cuando hay un `workflow_dispatch` autorizado, respaldo y migraciones confirmadas; esta modificación NO inicia la consulta ni aplica 021 a producción. CI de este cambio [44013144408](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013144408) aún en proceso al documentar. [44012930520](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44012930520) SUCCESS para último bloque de código y suite navegador simulado; API/web deploy SKIPPED. PR sin merge, siete etapas de publicación pendientes.
 
