@@ -125,6 +125,10 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
     '/api/auth/refresh','POST',{refresh_token:expiringAdmin.refresh_token},null,401);
   await request('Logout rejects arbitrary refresh input',
     '/api/auth/logout','POST',{refresh_token:'not-a-jwt'},null,401);
+  await request('Reject oversized refresh without parsing JWT signature',
+    '/api/auth/refresh','POST',{refresh_token:'x'.repeat(4097)},null,401);
+  await request('Reject oversized refresh on logout',
+    '/api/auth/logout','POST',{refresh_token:'x'.repeat(4097)},null,401);
   console.log('PASS Refresh-only logout revokes entire session without valid access');
 
   const adminRenewedClaims = JSON.parse(Buffer.from(adminRenewed.access_token.split('.')[1], 'base64url').toString('utf8'));
