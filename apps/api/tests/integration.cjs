@@ -72,6 +72,18 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
     { email: adminEmail, password: adminPassword });
   assert.ok(adminSession.access_token, 'admin returns a signed access token');
   const adminToken = adminSession.access_token;
+  const adminRenewed = await request('Admin refresh uses current database permissions',
+    '/api/auth/refresh','POST',{refresh_token:adminSession.refresh_token});
+  const adminRenewedClaims = JSON.parse(Buffer.from(adminRenewed.access_token.split('.')[1], 'base64url').toString('utf8'));
+  assert.equal(adminRenewedClaims.role,'admin');
+  assert.equal(adminRenewedClaims.type,'admin');
+  await request('Renewed admin can access protected users',
+    '/api/admin/users','GET',null,adminRenewed.access_token);
+  await request('Access token cannot be used to renew session',
+    '/api/auth/refresh','POST',{refresh_token:adminToken},null,401);
+  await request('Refresh token cannot act as bearer admin access',
+    '/api/admin/users','GET',null,adminSession.refresh_token,401);
+
   const onlyInitialAdmins = await request('First setup created one admin only',
     '/api/admin/users','GET',null,adminToken);
   assert.equal(onlyInitialAdmins.users.length,1,
@@ -104,6 +116,15 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
     { email: staffEmail, password: 'Operador!Seguro2026' });
   assert.equal(staffLogin.user.role, 'operator');
   const staffToken = staffLogin.access_token;
+  const staffRenewed = await request('Operator refresh preserves current operator role',
+    '/api/auth/refresh','POST',{refresh_token:staffLogin.refresh_token});
+  const staffRenewedClaims = JSON.parse(Buffer.from(staffRenewed.access_token.split('.')[1], 'base64url').toString('utf8'));
+  assert.equal(staffRenewedClaims.role,'operator');
+  await request('Renewed operator cannot access main admin operations',
+    '/api/admin/users','GET',null,staffRenewed.access_token,403);
+  await request('Renewed operator can access staff inbox',
+    '/api/notifications/inbox','GET',null,staffRenewed.access_token);
+
   await request('Moderator cannot change site content', '/api/admin/site-settings', 'PUT',
     { home_title: 'Attempted overwrite' }, staffToken, 403);
   await request('Moderator cannot change staff roles', '/api/admin/users/' + createdStaff.id, 'PATCH',
@@ -262,6 +283,18 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
 
   const br = await request('Register customer B', '/api/auth/register', 'POST', b, null, 201);
   const at = ar.access_token, bt = br.access_token;
+  const customerRenewed = await request('Customer refresh uses customer role from D1',
+    '/api/auth/refresh','POST',{refresh_token:ar.refresh_token});
+  const customerRenewedClaims = JSON.parse(Buffer.from(customerRenewed.access_token.split('.')[1], 'base64url').toString('utf8'));
+  assert.equal(customerRenewedClaims.role,'customer');
+  assert.equal(customerRenewedClaims.type,'customer');
+  await request('Refreshed customer cannot read admin accounts',
+    '/api/admin/users','GET',null,customerRenewed.access_token,401);
+  await request('Refresh token cannot act as customer access',
+    '/api/private/requests','GET',null,ar.refresh_token,401);
+  await request('Customer access token cannot be used to refresh',
+    '/api/auth/refresh','POST',{refresh_token:at},null,401);
+
   await invalidJson('Customer request rejects malformed JSON',
     '/api/private/requests','POST','{',400,at);
   await invalidJson('Customer request rejects JSON arrays',
@@ -1491,6 +1524,13 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
 
   await request('Logout customer A', '/api/auth/logout', 'POST', {}, at);
   await request('Revoked token rejected', '/api/private/requests', 'GET', null, at, 401);
+  await request('Logout also invalidates customer refresh token',
+    '/api/auth/refresh','POST',{refresh_token:ar.refresh_token},null,401);
+  await request('Logout invalidates access token minted by prior refresh',
+    '/api/private/requests','GET',null,customerRenewed.access_token,401);
+  await request('Logout invalidates refresh token minted by prior refresh',
+    '/api/auth/refresh','POST',{refresh_token:customerRenewed.refresh_token},null,401);
+
 
   // Al final: no interferir con los logins legítimos previos. Doce intentos
   // concurrentes prueban que el contador de D1 es atómico, sin lectura SELECT
