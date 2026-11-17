@@ -10,6 +10,9 @@ Actualizado: 16 de noviembre de 2026 (America/Havana).
 - Petición permanente del usuario: actualizar esta documentación en GitHub después de cada paso con qué se hizo, resultado, último paso y siguiente paso. No depender solo del historial del chat.
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
+## Cierre CI de QA web — 2026-11-16
+GitHub Actions [44012930520](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44012930520) terminó **SUCCESS** en SHA `cc4b6108d36903f818b349bd920d5ad8fc41395c`: npm ci, typecheck API/Svelte, build frontend, **suite simulada de sesión web**, preservación de migraciones y Worker+D1 sintéticos PASS; despliegues API y web SKIPPED. El PR #5 sigue DRAFT sin merge. Se mantienen pendientes QA navegador real y puertas de publicación (7 etapas).
+
 ## QA automatizada del cliente web y restauración — 2026-11-16
 En [PR #5 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/5) se corrigió restauración de identidad con access caducado en `/api/auth/me` y `/api/auth/admin/me` (antes excluidas erróneamente del refresh) y el panel admin dejó de sobrescribir el token rotado durante `restore()`. Commits `1fc73892`, `87cd2b45`. Nueva suite `apps/web/tests/auth-session.cjs` (commit `0dc04db5`) simula frontend con Node y TypeScript, pruebas de cliente/admin, single-flight, access expirado, permisos 403 sin refresh, logout en vuelo y rutas auth que no se renuevan. Se añadió a CI en `deploy.yml` (commit `cc4b6108`). El paso de navegador simulado **PASS** en [44012930520](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44012930520), integración Worker+D1 aún en proceso al momento de documentar. No es prueba visual real: falta QA Chrome/Firefox/Android/iOS, multitab y recarga. Sin merge, producción ni migración D1 remota. Etapa 2/7 sigue abierta y las siete etapas de publicación continúan pendientes.
 
