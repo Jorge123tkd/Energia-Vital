@@ -40,11 +40,18 @@
         user = { ...result.user, name: result.user.role === 'operator' ? 'Moderador' : 'Administrador', account_type: 'admin' };
         checking = false;
         return;
-      } catch { sessionStorage.removeItem(ADMIN_TOKEN_KEY); }
+      } catch (e) {
+        // Una desconexión no invalida credenciales; solo 401/403 confirmados.
+        const status = (e as Error & { status?: number })?.status;
+        if (status === 401 || status === 403) clearAdminSession();
+      }
     }
     if (customerToken()) {
       try { const result = await api.me(); user = result.user; }
-      catch { setCustomerToken(null); }
+      catch (e) {
+        const status = (e as Error & { status?: number })?.status;
+        if (status === 401 || status === 403) setCustomerToken(null);
+      }
     }
     checking = false;
   }
