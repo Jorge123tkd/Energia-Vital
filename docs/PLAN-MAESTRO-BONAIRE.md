@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## Defensa adicional de endpoint refresh (16/11/2026)
+
+El candidato [PR #5 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/5) incluye límite de tasa en D1 de 180 solicitudes por IP en 60 segundos para renovación de JWT y rechazo de tokens de más de 4096 caracteres, además de rotación de un solo uso y cierre remoto por refresh firmado. Ensayos sintéticos añadidos; [CI 44013833729](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013833729) pendiente al redactar. El WAF/Turnstile de Cloudflare continúa como requisito independiente y debe revisarse con tráfico real/autorizado, considerando IP compartidas en Cuba. No se han cambiado Workers/D1 de producción ni fusionado el PR.
+
+
 ## Seguridad de salida de sesiones caducadas — 16/11/2026
 
 El PR #5 aislado incorpora revocación de sesiones mediante refresh JWT firmado en el cuerpo de `POST /api/auth/logout`, para que el servidor pueda revocar una sesión aunque el access haya caducado. Los flujos de cliente y administrador borran los tokens locales antes de esperar la red, usan refresh solo en memoria y fallback de access para sesiones anteriores. Incluye tests HTTP Worker/D1 ficticios y simulaciones de cliente sobre logout cliente/admin/legacy. CI [44013630792](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013630792) en ejecución al documentar. Un logout durante desconexión **no garantiza revocación remota**, solo limpieza local: esta limitación requiere tratamiento antes de publicación. No hay despliegues, merge ni cambios de D1/R2 reales. Las 7 etapas siguen abiertas.
