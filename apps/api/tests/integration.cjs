@@ -1418,7 +1418,23 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
   await request('Duplicate time slot blocked', '/api/private/appointments', 'POST', appointment, bt, 409);
   const bAppointments = await request('B sees only own appointments', '/api/private/appointments', 'GET', null, bt);
   assert.equal(bAppointments.appointments.length, 0);
-  await request('Customer B changes password', '/api/auth/password', 'PUT', { current_password: b.password, new_password: 'OtraClave!MasSegura2026' }, bt);
+  const otherDeviceB = await request('Customer B signs in from second device',
+    '/api/auth/customer/login','POST',{email:b.email,password:b.password});
+  await request('Second device works before password change',
+    '/api/auth/me','GET',null,otherDeviceB.access_token);
+  await request('Wrong current password does not update account',
+    '/api/auth/password','PUT',
+    {current_password:'ClaveIncorrecta2026',new_password:'ClaveNoDebeGuardarse2026'},bt,403);
+  await request('Second device remains active after rejected password change',
+    '/api/auth/me','GET',null,otherDeviceB.access_token);
+  await request('Customer B changes password', '/api/auth/password', 'PUT',
+    { current_password: b.password, new_password: 'OtraClave!MasSegura2026' }, bt);
+  await request('Current device remains active after password change',
+    '/api/auth/me','GET',null,bt);
+  await request('Second device access is revoked atomically',
+    '/api/auth/me','GET',null,otherDeviceB.access_token,401);
+  await request('Second device refresh is revoked atomically',
+    '/api/auth/refresh','POST',{refresh_token:otherDeviceB.refresh_token},null,401);
   await request('Old password rejected', '/api/auth/customer/login', 'POST', { email: b.email, password: b.password }, null, 401);
   await request('New password accepted', '/api/auth/customer/login', 'POST', { email: b.email, password: 'OtraClave!MasSegura2026' });
   await request('Block customer', '/api/admin-customers/customers/' + br.user.id + '/status',
