@@ -175,6 +175,49 @@ const refreshCalls = entries => entries.filter(item=>item.url.endsWith('/api/aut
     console.log('PASS admin account switch isolates in-flight refresh');
   }
   {
+    let releaseOld;
+    const delayed = new Promise(resolve => { releaseOld = resolve; });
+    const newSession = accessToken(Math.floor(Date.now()/1000)+3600,'new-customer-B');
+    const {api,requests} = harness(entry => {
+      if (entry.authorization === 'Bearer '+expired) return delayed;
+      if (entry.url.endsWith('/api/auth/refresh')) throw Error('Old customer request tried cross-account refresh');
+      return response(500,{error:'Unexpected request'});
+    });
+    api.setCustomerToken(expired);api.setCustomerRefreshToken('refresh-A');
+    const pending = api.apiRequest('/api/private/requests').catch(error=>error);
+    for(let i=0;i<30 && requests.length===0;i++) await Promise.resolve();
+    api.setCustomerToken(null);
+    api.setCustomerToken(newSession);api.setCustomerRefreshToken('refresh-B');
+    releaseOld(response(401,{error:'Expired A'}));
+    const result=await pending;
+    assert.equal(result.status,401);
+    assert.equal(api.customerToken(),newSession);
+    assert.equal(requests.length,1,'Old customer request cannot be replayed under B');
+    console.log('PASS stale customer request does not borrow new account credentials');
+  }
+  {
+    let releaseOld;
+    const delayed = new Promise(resolve => { releaseOld = resolve; });
+    const newSession = accessToken(Math.floor(Date.now()/1000)+3600,'new-admin-B');
+    const {api,storage,requests} = harness(entry => {
+      if (entry.authorization === 'Bearer '+adminOld) return delayed;
+      if (entry.url.endsWith('/api/auth/refresh')) throw Error('Old admin request tried cross-account refresh');
+      return response(500,{error:'Unexpected request'});
+    });
+    storage.set(api.ADMIN_TOKEN_KEY,adminOld);
+    api.setAdminRefreshToken('refresh-A');
+    const pending = api.apiRequest('/api/admin/users',{headers:{Authorization:'Bearer '+adminOld}}).catch(error=>error);
+    for(let i=0;i<30 && requests.length===0;i++) await Promise.resolve();
+    api.clearAdminSession();
+    storage.set(api.ADMIN_TOKEN_KEY,newSession);api.setAdminRefreshToken('refresh-B');
+    releaseOld(response(401,{error:'Expired A'}));
+    const result=await pending;
+    assert.equal(result.status,401);
+    assert.equal(storage.get(api.ADMIN_TOKEN_KEY),newSession);
+    assert.equal(requests.length,1,'Old admin request cannot be replayed under B');
+    console.log('PASS stale admin request does not borrow new account credentials');
+  }
+  {
     const {api,requests} = harness(entry => response(403,{error:'Sin permisos'}));
     api.setCustomerToken(expired); api.setCustomerRefreshToken('not-to-use');
     await assert.rejects(()=>api.apiRequest('/api/private/requests'),error=>error.status===403);
