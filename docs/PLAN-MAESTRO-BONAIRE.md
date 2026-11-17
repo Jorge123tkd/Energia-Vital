@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## Auditoría de esquema D1 segura preparada (17/11/2026)
+
+PR #5: se creó un workflow manual **no ejecutado** para consultar exclusivamente metadatos de esquema D1 (nombres de tablas y presencia de columna de renovación de tokens), con confirmación textual, acceso solo mediante secretos de Actions y sin leer registros privados. Se añadió validador estricto y test ficticio incorporado a CI; [run 44092428971](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44092428971) SUCCESS. Esta preparación **no equivale al inventario remoto autorizado de la etapa 3**. Continúan las necesidades de verificación Workers/Pages/R2 y migraciones, backup y restauración privados, QA móvil, WAF, 401 admin, privacidad fotográfica y revisión de PR #4. PR #5 requiere reconciliar 27 commits de diferencia con la rama base antes de fusionar; no desplegar por esta actualización.
+
+
 ## Corrección de mezcla de sesiones en navegador — 17/11/2026
 
 Candidato PR #5: pruebas automatizadas de cambio de identidad cliente/administrador A→B durante refresh JWT y respuesta 401 tardía; el cliente web impide que la llamada vieja adopte las credenciales de B y no comparte entre cuentas un refresh en vuelo. Commits `d75acb0a`, `62f65cc7`, `00d30c09`, `dff2a34f`. CI [44087816609](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44087816609) pendiente de validar. Sin despliegue y sin pruebas manuales reales. Permanecen las 7 puertas de publicación.
