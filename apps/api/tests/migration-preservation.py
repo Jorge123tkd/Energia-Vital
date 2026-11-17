@@ -79,7 +79,11 @@ migration(20)
 # hasta su primer canje autenticado; no se guardan JWT completos en D1.
 db.execute("INSERT INTO auth_sessions(id,user_id,user_type,created_at,expires_at) VALUES(?,?,?,?,?)",
            ("legacy-refresh","customer-old","customer","2026-11-15T00:00:00Z","2026-12-15T00:00:00Z"))
+# El preflight del despliegue debe fallar con esquema anterior a 021.
+assert db.execute("SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'").fetchone()[0] == 0
 migration(21)
+# El mismo SELECT de solo lectura permite distinguir esquema actualizado.
+assert db.execute("SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'").fetchone()[0] == 1
 assert db.execute("SELECT refresh_hash FROM auth_sessions WHERE id='legacy-refresh'").fetchone() == (None,)
 # El primer canje de una sesión legacy reclama la generación una sola vez.
 first = db.execute("""UPDATE auth_sessions SET refresh_hash=?
