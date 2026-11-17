@@ -184,6 +184,57 @@ const refreshCalls = entries => entries.filter(item=>item.url.endsWith('/api/aut
     console.log('PASS admin forbidden status does not attempt refresh');
   }
   {
+    let sawCleared = false;
+    let api;
+    const instance = harness(entry => {
+      if (entry.url.endsWith('/api/auth/logout')) {
+        sawCleared = api.customerToken() === null;
+        assert.equal(entry.authorization,null,'Refresh logout should not rely on expired bearer');
+        assert.deepEqual(JSON.parse(entry.body),{refresh_token:'customer-refresh-old'});
+        return response(200,{message:'Sesión cerrada'});
+      }
+      return response(500,{error:'Unexpected request'});
+    });
+    api = instance.api;
+    api.setCustomerToken(expired);
+    api.setCustomerRefreshToken('customer-refresh-old');
+    await api.logoutCurrentSession('customer');
+    assert.ok(sawCleared,'Clear customer credentials before contacting logout endpoint');
+    assert.equal(api.customerToken(),null);
+    assert.equal(instance.requests.length,1);
+    console.log('PASS expired customer logout uses refresh and clears memory first');
+  }
+  {
+    let sawCleared = false;
+    let api;
+    let storage;
+    const instance = harness(entry => {
+      if (entry.url.endsWith('/api/auth/logout')) {
+        sawCleared = !storage.has(api.ADMIN_TOKEN_KEY);
+        assert.equal(entry.authorization,null);
+        assert.deepEqual(JSON.parse(entry.body),{refresh_token:'admin-refresh-old'});
+        return response(200,{message:'Sesión cerrada'});
+      }
+      return response(500,{error:'Unexpected request'});
+    });
+    api = instance.api; storage = instance.storage;
+    storage.set(api.ADMIN_TOKEN_KEY,adminOld);
+    api.setAdminRefreshToken('admin-refresh-old');
+    await api.logoutCurrentSession('admin');
+    assert.ok(sawCleared,'Clear admin session before HTTP logout');
+    assert.equal(storage.has(api.ADMIN_TOKEN_KEY),false);
+    console.log('PASS expired admin logout uses refresh and clears memory first');
+  }
+  {
+    const {api,storage,requests} = harness(entry => response(200,{message:'Sesión cerrada'}));
+    storage.set(api.ADMIN_TOKEN_KEY,adminOld);
+    await api.logoutCurrentSession('admin');
+    assert.equal(requests[0].authorization,'Bearer '+adminOld,
+      'Legacy access-only browser sessions must still logout');
+    assert.deepEqual(JSON.parse(requests[0].body),{});
+    console.log('PASS access-only legacy browser session still logs out');
+  }
+  {
     const {api,requests} = harness(entry => response(401,{error:'Expired'}));
     api.setCustomerToken(expired);api.setCustomerRefreshToken('customer-refresh-old');
     await assert.rejects(()=>api.apiRequest('/api/auth/logout',{method:'POST'}),e=>e.status===401);
