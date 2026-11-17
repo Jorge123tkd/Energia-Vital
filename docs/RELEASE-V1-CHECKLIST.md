@@ -7,6 +7,18 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 **Estado de avance y número de etapas restantes:** consultar [PLAN-7-ETAPAS-PUBLICACION.md](./PLAN-7-ETAPAS-PUBLICACION.md). Son **7 hitos** para la publicación segura del alcance Brigadas/Expedientes, no 7 commits ni un plazo de entrega.
 
 
+## Etapa 2/7 — candidato de rotación JWT, navegador simulado y protección de deploy (16/11/2026)
+
+- [x] [PR #5 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/5) **en rama aislada**: migración aditiva `021_refresh_rotation.sql` con SHA-256 del refresh vigente; `jti` aleatorio, canje atómico y rechazo de reutilización, sesiones legacy y aislamiento por dispositivo. No está fusionado ni aplicado a D1 real.
+- [x] CI [44013144408](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013144408) SUCCESS: pruebas simuladas de navegador de cliente/personal, migraciones 001–021 sobre datos ficticios, pruebas HTTP Worker/D1 local, TypeScript y build; deploy SKIPPED.
+- [x] Preflight de **solo lectura** previo a eventual deploy Worker: aborta si falta columna `auth_sessions.refresh_hash`; el SELECT remoto se comprobará solo con autorización de release. Probar su resultado `0` antes de 021 y `1` después sobre SQLite ficticia.
+- [ ] Ejecutar nueva CI del PR tras pruebas adicionales de logout admin durante refresh, 403 admin y fallo de red (commits nuevos en rama de ensayo); no dar PASS sin la ejecución correspondiente.
+- [ ] **QA manual real:** Chrome/Firefox, iOS/Android, recarga y distintas pestañas, horas de caducidad, red intermitente, cambio de contraseña, dos dispositivos y salida completa. Refresh vive solo en RAM: tras recarga puede requerirse iniciar sesión de nuevo.
+- [ ] **Seguridad de despliegue:** auditar esquema remoto y migraciones pendientes sin escribir en D1, respaldar D1/R2, restaurar copia en ensayo, aplicar 021 solo con autorización explícita y activar política de recuperación/rollback.
+- [ ] Revisar PR #4 de dependencias, WAF/Turnstile, el 401 real del administrador, fotos/ICC/consentimientos y otras puertas de publicación. **Siguen siete etapas de publicación abiertas.**
+
+*Nota de continuidad histórica:* la sección siguiente describe el estado **antes del PR #5**, cuando todavía no existía rotación de un solo uso; no se debe interpretar como estado actual del candidato aislado. La rama principal de desarrollo sigue sin esos cambios hasta aprobar el merge.
+
 ## Etapa 2/7 — renovación de JWT y permisos vigentes (16/11/2026)
 
 - [x] Generar nuevos JWT de administración usando el rol actual de `admin_users` leído de D1; exigir `admin` u `operator` activo. Para clientes validar activo y fijar rol `customer` sin reutilizar el claim obsoleto del refresh.
