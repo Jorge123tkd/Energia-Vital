@@ -1,5 +1,24 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## 17/11/2026 — Inventario completo de ramas antes de publicar
+Se inventariaron las **12 ramas** de GitHub (incluida paginación final vacía), y se compararon todas con `release/combined-security-deps-20261117` ([PR #7](https://github.com/Jorge123tkd/Energia-Vital/pull/7)). Verificación directa por SHA de contenido: 13 de 14 archivos del PR de sesiones coinciden íntegramente; el archivo restante `.github/workflows/deploy.yml` conserva el contenido original más el gate npm audit añadido. Los cuatro archivos de dependencias del PR #4 coinciden exactamente con commit fuente `ce8d32c0`. Rama candidata de sesiones de PR #6 está íntegramente contenida en PR #7. Las ramas antiguas adicionales contienen variantes de dependencias y workflows temporales, no se deben fusionar a ciegas. La rama `main` está **710 commits detrás** del candidato al revisar y debe tratarse como NO LISTA para desplegar. Documento detallado: `docs/AUDITORIA-RAMAS-PREPUBLICACION-2026-11-17.md` (commit `7920c17a`). **No se detectó pérdida de cambios funcionales del PR #4 o #6; no sustituye revisión de QA/Cloudflare real ni autorización para publicar.**
+
+
+## Freeze de funciones / candidato de lanzamiento unificado — 17/11/2026
+
+Se congela temporalmente el desarrollo funcional nuevo. Seguridad de sesiones (PR #6) y dependencias seguras (PR #4) se combinaron en [PR #7 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/7), sin fusionar ni desplegar. Los dos ensayos completos [44107829315](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44107829315) y [44108052050](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44108052050) **SUCCESS**; el segundo incluye un gate real de `npm audit` total + producción, que bloquea críticas/altas/moderadas. Las vulnerabilidades bajas requieren revisión humana. Se centralizó GO/NO-GO en `docs/CIERRE-PRODUCCION-2026-11-17.md`. Siete etapas pendientes: fotos, QA real/401 admin/WAF, inventario Cloudflare, backup D1/R2, restauración/migraciones, revisión/rollback y despliegue autorizado. No datos reales consultados ni producción modificada.
+
+
+## Candidato consolidado validado — 17/11/2026
+
+El PR #6 de rotación de sesiones y preparación de auditoría D1 pasó CI [44105736214](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44105736214) **SUCCESS**, sin despliegue. El PR #5 original fue cerrado **sin fusionar** para evitar duplicar revisiones; todos sus archivos funcionales están en PR #6. No hay migración 021 remota ni cambios de producción. La etapa 2 está avanzada en código y la 3 tiene herramienta de solo lectura preparada, pero siguen faltando QA real, auditoría autorizada de Cloudflare, respaldo y restauración, privacidad fotográfica y aprobación de publicación. Las 7 puertas principales continúan abiertas.
+
+
+## Consolidación del candidato de seguridad — 17/11/2026
+
+Se eliminó el problema de divergencia de PR #5 sin mezclar en producción: se recreó sobre la última rama de desarrollo un candidato de **14 archivos** en [PR #6 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/6), con 14 commits ahead / 0 behind. Incorpora seguridad JWT, migración 021, renovación de clientes y personal, tests de concurrencia y cambios de usuario, auditoría D1 de solo lectura preparada y protección de futuros despliegues. [CI 44105736214](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44105736214) aún en curso al documentar. PR #5 sigue como historial, PR #6 es candidato de revisión aislado. Ninguna etapa de producción ha sido autorizada, las siete puertas siguen abiertas.
+
+
 ## Auditoría de esquema D1 segura preparada (17/11/2026)
 
 PR #5: se creó un workflow manual **no ejecutado** para consultar exclusivamente metadatos de esquema D1 (nombres de tablas y presencia de columna de renovación de tokens), con confirmación textual, acceso solo mediante secretos de Actions y sin leer registros privados. Se añadió validador estricto y test ficticio incorporado a CI; [run 44092428971](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44092428971) SUCCESS. Esta preparación **no equivale al inventario remoto autorizado de la etapa 3**. Continúan las necesidades de verificación Workers/Pages/R2 y migraciones, backup y restauración privados, QA móvil, WAF, 401 admin, privacidad fotográfica y revisión de PR #4. PR #5 requiere reconciliar 27 commits de diferencia con la rama base antes de fusionar; no desplegar por esta actualización.
