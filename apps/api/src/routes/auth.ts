@@ -257,10 +257,24 @@ authRoutes.put('/password', async c => {
   if (!validPassword(b.new_password)) return c.json({ error: 'La contraseña nueva debe tener entre 10 y 128 caracteres' }, 400);
   const current = await c.env.DB.prepare('SELECT password_hash FROM customers WHERE id = ?').bind(user.user_id).first<any>();
   if (!current || !await comparePassword(typeof b.current_password === 'string' ? b.current_password : '', current.password_hash)) return c.json({ error: 'Contraseña actual incorrecta' }, 403);
-  await c.env.DB.prepare('UPDATE customers SET password_hash = ?, updated_at = ? WHERE id = ?')
-    .bind(await hashPassword(b.new_password), new Date().toISOString(), user.user_id).run();
-  await c.env.DB.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE user_id = ? AND user_type = ? AND id != ?')
-    .bind(new Date().toISOString(), user.user_id, 'customer', user.sid).run();
+  const now = new Date().toISOString();
+  const nextHash = await hashPassword(b.new_password);
+  // D1.batch aplica el cambio de contraseña y la revocación de otras sesiones
+  // en la misma transacción. Si hay dos cambios concurrentes, la condición
+  // del hash anterior evita sobrescribir una contraseña recién actualizada.
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE customers SET password_hash = ?, updated_at = ?
+      WHERE id = ? AND is_active = 1 AND password_hash = ?`)
+      .bind(nextHash, now, user.user_id, current.password_hash),
+    c.env.DB.prepare(`UPDATE auth_sessions SET revoked_at = ?
+      WHERE user_id = ? AND user_type = 'customer' AND id != ?
+        AND revoked_at IS NULL
+        AND EXISTS (SELECT 1 FROM customers WHERE id = ? AND password_hash = ?)`)
+      .bind(now, user.user_id, user.sid, user.user_id, nextHash),
+  ]);
+  if (results[0].meta?.changes !== 1) {
+    return c.json({ error: 'La contraseña cambió durante la operación. Vuelve a iniciar sesión.' }, 409);
+  }
   return c.json({ message: 'Contraseña actualizada; otras sesiones cerradas' });
 });
 
