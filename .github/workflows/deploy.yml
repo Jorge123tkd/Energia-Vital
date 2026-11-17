@@ -38,6 +38,8 @@ jobs:
         run: npm run typecheck --workspace=apps/web
       - name: Construir frontend
         run: npm run build --workspace=apps/web
+      - name: Probar renovación y cierre de sesiones en navegador simulado
+        run: node apps/web/tests/auth-session.cjs
       - name: Ensayo de preservación de datos históricos ficticios (sin Cloudflare real)
         run: python3 apps/api/tests/migration-preservation.py
 
