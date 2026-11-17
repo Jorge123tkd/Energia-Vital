@@ -15,7 +15,7 @@
   import ContactPage from './ContactPage.svelte';
   import AdminPage from './AdminPage.svelte';
   import ChiefPortal from './ChiefPortal.svelte';
-  import { api, customerToken, setCustomerToken, setCustomerRefreshToken, setAdminRefreshToken, clearAdminSession, ADMIN_TOKEN_KEY } from './lib/api';
+  import { api, apiRequest, customerToken, setCustomerToken, setCustomerRefreshToken, setAdminRefreshToken, clearAdminSession, ADMIN_TOKEN_KEY } from './lib/api';
   import { isAssistantOpen, assistantSessionId, assistantMessages } from './lib/store';
 
   const publicRoutes = new Set(['/', '/catalogo', '/servicios', '/galeria', '/asesor-solar']);
@@ -101,14 +101,17 @@
 
   async function signOut() {
     const admin = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+    const customer = customerToken();
+    // Retirar tokens ANTES de esperar la red impide reactivar sesiones
+    // mediante respuestas de refresh que todavía estén en vuelo.
     clearAdminSession();
     setCustomerToken(null);
     try {
       if (admin) await api.logoutAdmin(admin);
-      else await api.logout();
+      else if (customer) await apiRequest('/api/auth/logout', {
+        method: 'POST', headers: { Authorization: `Bearer ${customer}` }, body: '{}'
+      });
     } catch { /* Una sesión caducada también se cierra localmente. */ }
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    setCustomerToken(null);
     user = null;
     assistantSessionId.set(null);
     assistantMessages.set([]);
