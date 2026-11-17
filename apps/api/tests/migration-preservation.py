@@ -2,7 +2,7 @@
 """Bonaire: ensayo REPRODUCIBLE con registros FICTICIOS de una D1 histórica.
 
 Ejecuta 001..012, inserta datos relacionados (sin datos de producción),
-aplica 013-020, compara cada fila histórica y comprueba referencias.
+aplica 013-021, compara cada fila histórica y comprueba referencias.
 Usa SQLite de Python en memoria; la suite separada Worker+D1 verifica
 compatibilidad real con Cloudflare. NO accede a Cloudflare.
 """
@@ -75,6 +75,27 @@ migration(17)
 migration(18)
 migration(19)
 migration(20)
+# 021 preserva filas existentes. Las sesiones legadas quedan con digest NULL
+# hasta su primer canje autenticado; no se guardan JWT completos en D1.
+db.execute("INSERT INTO auth_sessions(id,user_id,user_type,created_at,expires_at) VALUES(?,?,?,?,?)",
+           ("legacy-refresh","customer-old","customer","2026-11-15T00:00:00Z","2026-12-15T00:00:00Z"))
+# El preflight del despliegue debe fallar con esquema anterior a 021.
+assert db.execute("SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'").fetchone()[0] == 0
+migration(21)
+# El mismo SELECT de solo lectura permite distinguir esquema actualizado.
+assert db.execute("SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'").fetchone()[0] == 1
+assert db.execute("SELECT refresh_hash FROM auth_sessions WHERE id='legacy-refresh'").fetchone() == (None,)
+# El primer canje de una sesión legacy reclama la generación una sola vez.
+first = db.execute("""UPDATE auth_sessions SET refresh_hash=?
+ WHERE id='legacy-refresh' AND refresh_hash IS NULL AND revoked_at IS NULL""",
+ ("sha256-primera-generacion-sintetica",))
+assert first.rowcount == 1
+second = db.execute("""UPDATE auth_sessions SET refresh_hash=?
+ WHERE id='legacy-refresh' AND refresh_hash IS NULL AND revoked_at IS NULL""",
+ ("sha256-no-debe-entrar",))
+assert second.rowcount == 0
+assert db.execute("SELECT refresh_hash FROM auth_sessions WHERE id='legacy-refresh'").fetchone() == ("sha256-primera-generacion-sintetica",)
+
 after = {name:snapshot(name) for name in tables}
 for name in tables:
     assert before[name] == after[name], f"La migración alteró datos existentes: {name}"
