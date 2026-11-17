@@ -74,6 +74,21 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
   const adminToken = adminSession.access_token;
   const adminRenewed = await request('Admin refresh uses current database permissions',
     '/api/auth/refresh','POST',{refresh_token:adminSession.refresh_token});
+  // Cada refresh emitido contiene un identificador criptográfico único.
+  // Esto no activa todavía consumo de un solo uso ni invalida tokens legacy.
+  const readJwtClaims = value => JSON.parse(Buffer.from(value.split('.')[1], 'base64url').toString('utf8'));
+  const initialRefreshClaims = readJwtClaims(adminSession.refresh_token);
+  const firstRefreshClaims = readJwtClaims(adminRenewed.refresh_token);
+  assert.match(initialRefreshClaims.jti, /^[0-9a-f-]{36}$/i);
+  assert.match(firstRefreshClaims.jti, /^[0-9a-f-]{36}$/i);
+  assert.notEqual(initialRefreshClaims.jti, firstRefreshClaims.jti, 'Every issued refresh token must have a distinct jti');
+  assert.equal(initialRefreshClaims.sid, firstRefreshClaims.sid, 'Renewal must keep the same device session');
+  const secondAdminRenewal = await request('Second admin renewal issues a fresh identifier',
+    '/api/auth/refresh','POST',{refresh_token:adminRenewed.refresh_token});
+  const secondRefreshClaims = readJwtClaims(secondAdminRenewal.refresh_token);
+  assert.notEqual(firstRefreshClaims.jti, secondRefreshClaims.jti, 'Consecutive renewals must not reuse jti');
+  assert.equal(secondRefreshClaims.sid, firstRefreshClaims.sid);
+  console.log('PASS Refresh tokens have distinct jti within one device session');
   const adminRenewedClaims = JSON.parse(Buffer.from(adminRenewed.access_token.split('.')[1], 'base64url').toString('utf8'));
   assert.equal(adminRenewedClaims.role,'admin');
   assert.equal(adminRenewedClaims.type,'admin');
