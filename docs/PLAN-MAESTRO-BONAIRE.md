@@ -1,5 +1,9 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## QA adicional de sesiones — 16/11/2026
+El PR #5 (borrador aislado) ahora incluye pruebas del cliente web de autenticación sin servicios reales: restauración de sesiones caducadas, single-flight, personal con token desactualizado, 403 sin renovación y cierre de sesión concurrente. Se añadió un paso obligatorio a GitHub Actions y se corrigieron dos regresiones del flujo de restauración. [Run 44012930520](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44012930520): paso de navegador simulado PASS, resultado total aún no confirmado al redactar. **No implica QA manual en dispositivos reales, aprobación de fotos, validación del administrador real ni autorización de desplegar.** No hay migración 021 en D1 remoto ni merge.
+
+
 ## Avance de seguridad de sesiones (16/11/2026, ensayo aislado)
 
 El [PR #5 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/5) contiene la migración 021 de huella de refresh JWT, rotación de un solo uso con compare-and-swap en D1, compatibilidad de primer canje para sesiones históricas, y renovación automática **en RAM** para clientes y personal. Se agregaron controles de logout ante renovaciones en curso, reintento de peticiones concurrentes del admin y protección ante fallos de red al restablecer la sesión. GitHub Actions [44012238458](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44012238458) aprobó el bloque anterior; últimos ajustes en CI [44012524232](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44012524232) pendientes de resultado. No almacenar refresh en sessionStorage/localStorage: al recargar puede requerirse autenticación otra vez. PR #5 sin fusionar, no aplicado a producción; QA real móvil, WAF, 401 admin real y consentimiento de fotografías siguen pendientes. No cerrar la etapa 2 ni ninguna de las 7 puertas de publicación por CI sintética.
