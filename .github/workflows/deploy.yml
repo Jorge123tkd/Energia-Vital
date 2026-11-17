@@ -32,6 +32,8 @@ jobs:
           cache: npm
       - name: Instalar dependencias del monorepo
         run: npm ci
+      - name: Bloquear configuración QA vinculada a recursos de producción
+        run: node scripts/prepare-cloudflare-qa-config.test.cjs
       - name: Probar política de auditoría de dependencias
         run: node apps/api/tests/release-dependency-audit.test.cjs
       - name: Bloquear CVE críticas, altas o moderadas en el lockfile combinado
