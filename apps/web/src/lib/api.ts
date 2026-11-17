@@ -10,6 +10,45 @@ export function customerToken(): string | null {
 // localStorage ni logs. Al recargar se pierde y puede requerirse nuevo login.
 let customerRefresh: string | null = null;
 let refreshing: Promise<string | null> | null = null;
+// Sesión de personal: también solo en memoria, separada de la del cliente.
+let adminRefresh: string | null = null;
+let adminRefreshing: Promise<string | null> | null = null;
+const adminListeners = new Set<(token: string) => void>();
+export function onAdminTokenUpdated(listener: (token: string) => void): () => void {
+  adminListeners.add(listener);
+  return () => { adminListeners.delete(listener); };
+}
+export function setAdminRefreshToken(token: string | null) { adminRefresh = token; }
+export function clearAdminSession() {
+  // Invalidar la memoria antes de cualquier petición de logout.
+  adminRefresh = null;
+  if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+async function renewAdminAccess(failedToken: string): Promise<string | null> {
+  const existing = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  if (existing && existing !== failedToken) return existing;
+  if (!adminRefresh) return null;
+  if (!adminRefreshing) {
+    const previous = adminRefresh;
+    adminRefreshing = (async () => {
+      const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: previous }), cache: 'no-store',
+      });
+      if (!response.ok) return null;
+      const data: unknown = await response.json().catch(() => null);
+      if (!data || typeof data !== 'object') return null;
+      const pair = data as { access_token?: unknown; refresh_token?: unknown };
+      if (typeof pair.access_token !== 'string' || typeof pair.refresh_token !== 'string') return null;
+      if (adminRefresh !== previous || sessionStorage.getItem(ADMIN_TOKEN_KEY) !== failedToken) return null;
+      adminRefresh = pair.refresh_token;
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, pair.access_token);
+      for (const listener of adminListeners) listener(pair.access_token);
+      return pair.access_token;
+    })().finally(() => { adminRefreshing = null; });
+  }
+  return adminRefreshing;
+}
 export function setCustomerRefreshToken(token: string | null) {
   customerRefresh = token;
 }
@@ -59,9 +98,22 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const suppliedAuth = headers.has('Authorization');
+  const explicitToken = suppliedAuth ? headers.get('Authorization')?.replace(/^Bearer /, '') || null : null;
   const token = suppliedAuth ? null : customerToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   let response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  // Renovar admin únicamente si el Bearer explícito corresponde a esta sesión.
+  // Nunca renovar login, logout, token externo ni permisos denegados (403).
+  if (response.status === 401 && explicitToken && accessExpired(explicitToken) &&
+      sessionStorage.getItem(ADMIN_TOKEN_KEY) === explicitToken &&
+      !path.startsWith('/api/auth/')) {
+    const renewed = await renewAdminAccess(explicitToken).catch(() => null);
+    if (renewed) {
+      const retryHeaders = new Headers(headers);
+      retryHeaders.set('Authorization', `Bearer ${renewed}`);
+      response = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders });
+    }
+  }
   // Nunca renovar por errores de permisos ni en rutas de login/logout.
   // Únicamente reintentar una vez si el access JWT del cliente ha expirado.
   if (response.status === 401 && token && !suppliedAuth && !path.startsWith('/api/auth/') && accessExpired(token)) {
