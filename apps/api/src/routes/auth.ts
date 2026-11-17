@@ -5,6 +5,12 @@ import { activeSession } from '../middleware';
 import { rateLimited } from '../rate-limit';
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
+// Evita que respuestas con access/refresh JWT se almacenen en cachés.
+authRoutes.use('*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-store');
+  c.header('Pragma', 'no-cache');
+});
 /** SHA-256 del refresh JWT firmado: nunca guardar el token en D1. */
 async function refreshFingerprint(token: string): Promise<string> {
   const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
