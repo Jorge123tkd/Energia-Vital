@@ -1,7 +1,7 @@
 name: Validar y desplegar Energía Vital
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/cloudflare-customer-accounts-hardening]
   push:
     branches: [main]
   workflow_dispatch:
