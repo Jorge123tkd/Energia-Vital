@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## Consolidación del candidato de seguridad — 17/11/2026
+
+Se eliminó el problema de divergencia de PR #5 sin mezclar en producción: se recreó sobre la última rama de desarrollo un candidato de **14 archivos** en [PR #6 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/6), con 14 commits ahead / 0 behind. Incorpora seguridad JWT, migración 021, renovación de clientes y personal, tests de concurrencia y cambios de usuario, auditoría D1 de solo lectura preparada y protección de futuros despliegues. [CI 44105736214](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44105736214) aún en curso al documentar. PR #5 sigue como historial, PR #6 es candidato de revisión aislado. Ninguna etapa de producción ha sido autorizada, las siete puertas siguen abiertas.
+
+
 ## Auditoría de esquema D1 segura preparada (17/11/2026)
 
 PR #5: se creó un workflow manual **no ejecutado** para consultar exclusivamente metadatos de esquema D1 (nombres de tablas y presencia de columna de renovación de tokens), con confirmación textual, acceso solo mediante secretos de Actions y sin leer registros privados. Se añadió validador estricto y test ficticio incorporado a CI; [run 44092428971](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44092428971) SUCCESS. Esta preparación **no equivale al inventario remoto autorizado de la etapa 3**. Continúan las necesidades de verificación Workers/Pages/R2 y migraciones, backup y restauración privados, QA móvil, WAF, 401 admin, privacidad fotográfica y revisión de PR #4. PR #5 requiere reconciliar 27 commits de diferencia con la rama base antes de fusionar; no desplegar por esta actualización.
