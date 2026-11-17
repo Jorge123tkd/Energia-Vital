@@ -13,15 +13,21 @@ let refreshing: Promise<string | null> | null = null;
 // Sesión de personal: también solo en memoria, separada de la del cliente.
 let adminRefresh: string | null = null;
 let adminRefreshing: Promise<string | null> | null = null;
+// Permitir reintentar requests iniciadas justo antes de una renovación válida.
+let priorAdminAccess: string | null = null;
 const adminListeners = new Set<(token: string) => void>();
 export function onAdminTokenUpdated(listener: (token: string) => void): () => void {
   adminListeners.add(listener);
   return () => { adminListeners.delete(listener); };
 }
-export function setAdminRefreshToken(token: string | null) { adminRefresh = token; }
+export function setAdminRefreshToken(token: string | null) {
+  adminRefresh = token;
+  priorAdminAccess = null;
+}
 export function clearAdminSession() {
   // Invalidar la memoria antes de cualquier petición de logout.
   adminRefresh = null;
+  priorAdminAccess = null;
   if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ADMIN_TOKEN_KEY);
 }
 async function renewAdminAccess(failedToken: string): Promise<string | null> {
@@ -42,6 +48,7 @@ async function renewAdminAccess(failedToken: string): Promise<string | null> {
       if (typeof pair.access_token !== 'string' || typeof pair.refresh_token !== 'string') return null;
       if (adminRefresh !== previous || sessionStorage.getItem(ADMIN_TOKEN_KEY) !== failedToken) return null;
       adminRefresh = pair.refresh_token;
+      priorAdminAccess = failedToken;
       sessionStorage.setItem(ADMIN_TOKEN_KEY, pair.access_token);
       for (const listener of adminListeners) listener(pair.access_token);
       return pair.access_token;
@@ -105,7 +112,8 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
   // Renovar admin únicamente si el Bearer explícito corresponde a esta sesión.
   // Nunca renovar login, logout, token externo ni permisos denegados (403).
   if (response.status === 401 && explicitToken && accessExpired(explicitToken) &&
-      sessionStorage.getItem(ADMIN_TOKEN_KEY) === explicitToken &&
+      (sessionStorage.getItem(ADMIN_TOKEN_KEY) === explicitToken ||
+        (priorAdminAccess === explicitToken && Boolean(adminRefresh))) &&
       !path.startsWith('/api/auth/')) {
     const renewed = await renewAdminAccess(explicitToken).catch(() => null);
     if (renewed) {
@@ -125,7 +133,11 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
     }
   }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || data.message || `Error HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(data.error || data.message || `Error HTTP ${response.status}`);
+    Object.assign(error, { status: response.status });
+    throw error;
+  }
   return data;
 }
 function withAdmin(token: string, options: RequestInit = {}): RequestInit {
