@@ -113,6 +113,20 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
   await request('Concurrent winning refresh is valid for one next renewal',
     '/api/auth/refresh','POST',{refresh_token:winnerTokens.refresh_token});
   console.log('PASS Concurrent refresh compare-and-swap permits exactly one winner');
+  // Un logout con access vencido puede usar únicamente el refresh firmado;
+  // jamás requiere volver a autenticar para revocar la sesión de ese equipo.
+  const expiringAdmin = await request('Open isolated admin session for refresh-only logout',
+    '/api/auth/login','POST',{email:adminEmail,password:adminPassword});
+  await request('Logout accepts signed refresh without bearer access',
+    '/api/auth/logout','POST',{refresh_token:expiringAdmin.refresh_token});
+  await request('Refresh-only logout revokes the original access',
+    '/api/admin/users','GET',null,expiringAdmin.access_token,401);
+  await request('Refresh-only logout revokes that refresh token',
+    '/api/auth/refresh','POST',{refresh_token:expiringAdmin.refresh_token},null,401);
+  await request('Logout rejects arbitrary refresh input',
+    '/api/auth/logout','POST',{refresh_token:'not-a-jwt'},null,401);
+  console.log('PASS Refresh-only logout revokes entire session without valid access');
+
   const adminRenewedClaims = JSON.parse(Buffer.from(adminRenewed.access_token.split('.')[1], 'base64url').toString('utf8'));
   assert.equal(adminRenewedClaims.role,'admin');
   assert.equal(adminRenewedClaims.type,'admin');
