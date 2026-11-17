@@ -72,6 +72,13 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
     { email: adminEmail, password: adminPassword });
   assert.ok(adminSession.access_token, 'admin returns a signed access token');
   const adminToken = adminSession.access_token;
+  const privateAuthResponse = await fetch(BASE + '/api/auth/admin/me', {
+    headers: { Authorization: 'Bearer ' + adminToken }
+  });
+  assert.equal(privateAuthResponse.status, 200);
+  assert.match(privateAuthResponse.headers.get('cache-control') || '', /no-store/i,
+    'Authentication responses must never be cached');
+  console.log('PASS Auth responses carry no-store headers');
   const adminRenewed = await request('Admin refresh uses current database permissions',
     '/api/auth/refresh','POST',{refresh_token:adminSession.refresh_token});
   // Cada refresh emitido contiene un identificador criptográfico único.
