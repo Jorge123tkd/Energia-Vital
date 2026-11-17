@@ -42,6 +42,8 @@ jobs:
         run: node apps/web/tests/auth-session.cjs
       - name: Ensayo de preservación de datos históricos ficticios (sin Cloudflare real)
         run: python3 apps/api/tests/migration-preservation.py
+      - name: Verificar inventario D1 de solo esquema (fixtures ficticios)
+        run: node apps/api/tests/remote-inventory-schema.test.cjs
 
       - name: Crear D1 de pruebas local (no production)
         working-directory: apps/api
