@@ -217,8 +217,13 @@ authRoutes.post('/customer/login', async c => {
 });
 
 authRoutes.post('/refresh', async c => {
+  // Defensa de aplicación adicional; WAF/Turnstile requiere revisión remota.
+  // Cuota suficientemente amplia para varias sesiones detrás de una NAT.
+  if (await rateLimited(c.env, c.req.raw, 'auth_refresh', 180, 60))
+    return c.json({ error: 'Demasiadas renovaciones. Inténtalo de nuevo más tarde.' }, 429);
   const b = await readBodyObject(c);
-  const token = typeof b?.refresh_token === 'string' ? await verifyToken(b.refresh_token, c.env.JWT_SECRET || '') : null;
+  const token = typeof b?.refresh_token === 'string' && b.refresh_token.length <= 4096
+    ? await verifyToken(b.refresh_token, c.env.JWT_SECRET || '') : null;
   if (!token || token.kind !== 'refresh' || !await activeSession(c.env, token)) return c.json({ error: 'Sesión expirada' }, 401);
   // El rol del refresh JWT puede estar obsoleto. Solo los permisos vigentes
   // en D1 pueden determinar el rol de los nuevos tokens.
@@ -254,7 +259,7 @@ authRoutes.post('/logout', async c => {
   // El access puede haber vencido. Se permite cerrar LA MISMA sesión
   // presentando el refresh firmado en el cuerpo, sin entregarlo en URL/cookie.
   const body = bearer ? null : await readBodyObject(c);
-  const refresh = !bearer && typeof body?.refresh_token === 'string'
+  const refresh = !bearer && typeof body?.refresh_token === 'string' && body.refresh_token.length <= 4096
     ? await verifyToken(body.refresh_token, c.env.JWT_SECRET || '') : null;
   const session = bearer || (refresh?.kind === 'refresh' ? refresh : null);
   if (!session) return c.json({ error: 'No autorizado' }, 401);
