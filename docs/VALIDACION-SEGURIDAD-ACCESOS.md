@@ -4,6 +4,14 @@
 Rama: `feat/cloudflare-customer-accounts-hardening`. Pruebas sobre Worker, D1 y R2 de CI **aislados**.
 
 
+## 16/11/2026 — Contraseña de cliente y cierre transaccional de otras sesiones
+
+- Se detectó que `PUT /api/auth/password` actualizaba `customers.password_hash` y después revocaba `auth_sessions` con dos operaciones independientes. Ante un fallo de la segunda, podrían permanecer sesiones ajenas activas tras el cambio.
+- La ruta ahora ejecuta `UPDATE customers ... WHERE password_hash = ? AND is_active = 1` y revocación de otras sesiones en **un único `D1.batch` transaccional**, comprobando que el hash anterior coincide para impedir sobrescrituras silenciosas entre cambios concurrentes. La revocación exige que el nuevo hash realmente quede aplicado. Si no se confirmó el cambio devuelve **409 controlado**.
+- Conserva la sesión del cliente que cambia la contraseña, como antes, pero revoca los accesos y tokens de renovación de los demás dispositivos. Rechaza claves actuales incorrectas sin alterar sesiones.
+- Pruebas Worker+D1 con identidades ficticias: segunda sesión previamente válida, clave actual incorrecta no afecta la sesión, cambio válido permite seguir al dispositivo actual, revoca el token de acceso y refresh del segundo dispositivo, rechaza clave antigua y acepta la nueva. GitHub Actions [44006778238](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44006778238), [44006778251](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44006778251) y [44006769880](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44006769880) **SUCCESS** en commit `559d48b0`; trabajos de despliegue omitidos.
+- **No se ensayaron cuentas reales** ni se realizaron resets de contraseñas en producción. Etapa 2/7 continúa abierta por QA móvil, WAF/Turnstile, error 401 real de administración y aprobación de privacidad de fotos.
+
 ## 16/11/2026 — Configuración inicial de administrador atómica
 
 - Se detectó que `POST /api/auth/setup` hacía `SELECT id FROM admin_users LIMIT 1` antes de insertar: dos solicitudes simultáneas con la clave de configuración y correos distintos podían superar la lectura por separado.
