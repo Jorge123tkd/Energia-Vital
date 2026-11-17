@@ -7,6 +7,14 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 **Estado de avance y número de etapas restantes:** consultar [PLAN-7-ETAPAS-PUBLICACION.md](./PLAN-7-ETAPAS-PUBLICACION.md). Son **7 hitos** para la publicación segura del alcance Brigadas/Expedientes, no 7 commits ni un plazo de entrega.
 
 
+## Etapa 2/7 — cambio de contraseña y sesiones de cliente (16/11/2026)
+
+- [x] Unificar cambio de hash de contraseña y revocación de otras sesiones en `D1.batch` transaccional; impedir sobrescribir una contraseña actualizada concurrentemente mediante condición sobre el hash anterior.
+- [x] Mantener la sesión actual del cliente y revocar acceso y refresh de otros dispositivos tras éxito; ante contraseña actual incorrecta conservar las sesiones. Pruebas Worker+D1 ficticias PASARON.
+- [x] CI de commit `559d48b0`: [44006778238](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44006778238), [44006778251](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44006778251) y [44006769880](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44006769880) SUCCESS, despliegues omitidos.
+- [ ] Evaluar política futura de revocar también la sesión actual según el nivel de riesgo y experiencia del cliente; no se cambió ese comportamiento sin revisión.
+- [ ] Mantener QA de móviles, WAF/Turnstile, error 401 de administrador real, fotos consentidas y [PR #4](https://github.com/Jorge123tkd/Energia-Vital/pull/4) como bloqueos de salida. **Siete hitos de publicación pendientes**.
+
 ## Etapa 2/7 — setup atómico de primer administrador (16/11/2026)
 - [x] Eliminar carrera `SELECT` seguido de `INSERT` en `/api/auth/setup`: una sola sentencia SQL permite crear como máximo el primer administrador, sin depender del correo único.
 - [x] Añadir pruebas con dos correos concurrentes y clave de setup ficticia: exactamente un 201, un 409, un administrador inicial; posteriores intentos rechazados.
