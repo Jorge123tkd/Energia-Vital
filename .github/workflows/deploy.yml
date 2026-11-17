@@ -32,6 +32,17 @@ jobs:
           cache: npm
       - name: Instalar dependencias del monorepo
         run: npm ci
+      - name: Probar política de auditoría de dependencias
+        run: node apps/api/tests/release-dependency-audit.test.cjs
+      - name: Bloquear CVE críticas, altas o moderadas en el lockfile combinado
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --json > "$RUNNER_TEMP/bonaire-audit-all.json" || true
+          node apps/api/tests/release-dependency-audit.cjs < "$RUNNER_TEMP/bonaire-audit-all.json"
+          npm audit --omit=dev --json > "$RUNNER_TEMP/bonaire-audit-production.json" || true
+          node apps/api/tests/release-dependency-audit.cjs < "$RUNNER_TEMP/bonaire-audit-production.json"
+          rm -f "$RUNNER_TEMP/bonaire-audit-all.json" "$RUNNER_TEMP/bonaire-audit-production.json"
       - name: Revisar TypeScript API
         run: npm run typecheck --workspace=apps/api
       - name: Revisar Svelte + TypeScript
