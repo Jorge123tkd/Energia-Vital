@@ -66,6 +66,12 @@ export function setCustomerToken(token: string | null) {
     customerRefresh = null;
   }
 }
+function isRefreshableRoute(path: string): boolean {
+  // Consultas de identidad también necesitan renovar para restaurar una sesión
+  // todavía abierta; las mutaciones de auth nunca deben reintentarse.
+  return !path.startsWith('/api/auth/') ||
+    path === '/api/auth/me' || path === '/api/auth/admin/me';
+}
 function accessExpired(token: string): boolean {
   try {
     const raw = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
@@ -114,7 +120,7 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
   if (response.status === 401 && explicitToken && accessExpired(explicitToken) &&
       (sessionStorage.getItem(ADMIN_TOKEN_KEY) === explicitToken ||
         (priorAdminAccess === explicitToken && Boolean(adminRefresh))) &&
-      !path.startsWith('/api/auth/')) {
+      isRefreshableRoute(path)) {
     const renewed = await renewAdminAccess(explicitToken).catch(() => null);
     if (renewed) {
       const retryHeaders = new Headers(headers);
@@ -124,7 +130,7 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
   }
   // Nunca renovar por errores de permisos ni en rutas de login/logout.
   // Únicamente reintentar una vez si el access JWT del cliente ha expirado.
-  if (response.status === 401 && token && !suppliedAuth && !path.startsWith('/api/auth/') && accessExpired(token)) {
+  if (response.status === 401 && token && !suppliedAuth && isRefreshableRoute(path) && accessExpired(token)) {
     const renewed = await renewCustomerAccess(token).catch(() => null);
     if (renewed) {
       const retryHeaders = new Headers(headers);
