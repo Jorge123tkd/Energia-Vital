@@ -10,6 +10,9 @@ Actualizado: 16 de noviembre de 2026 (America/Havana).
 - Petición permanente del usuario: actualizar esta documentación en GitHub después de cada paso con qué se hizo, resultado, último paso y siguiente paso. No depender solo del historial del chat.
 - Nunca guardar contraseñas, tokens, respaldos D1 ni datos privados en GitHub.
 
+## CI confirmada del bloque de endurecimiento — 2026-11-16
+La ejecución [44013833729](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013833729) ha finalizado **SUCCESS** en SHA `27a2c56b4ef978bd2ea05c14bec07df4fa752613`: comprobaciones de tipos, build Svelte, suite de sesión navegador simulado, preservación ficticia de 001–021 y pruebas Worker+D1 incluido logout por refresh firmado y rechazo de JWT sobredimensionados. `deploy-api` y `deploy-web` **SKIPPED**. PR #5 permanece en borrador y sin fusión; ninguna migración se aplicó a D1 remota ni se publicó la web. Bloqueos humanos/reales detallados en `RELEASE-V1-CHECKLIST.md` y `PLAN-7-ETAPAS-PUBLICACION.md` siguen vigentes.
+
 ## Endurecimiento final de refresh JWT en rama aislada — 2026-11-16
 En [PR #5 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/5) se añadió `rateLimited('auth_refresh', 180, 60)` sobre D1 para el endpoint de renovación, como defensa básica contra abuso complementaria a WAF, y se limita a 4096 caracteres el JWT recibido por `POST /api/auth/refresh` y `POST /api/auth/logout`. Nuevas pruebas HTTP verifican rechazo controlado 401 de tokens sobredimensionados; commits `67549d41`, `27a2c56b`. La CI [44013833729](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013833729) está **en progreso al documentar**; no confundir con [44013630792](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013630792) SUCCESS del bloque anterior. El límite no demuestra configuración WAF/Turnstile real y debe evaluarse ante clientes que compartan IP/NAT. Sin merge ni producción, las 7 etapas permanecen pendientes.
 
