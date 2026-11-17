@@ -7,6 +7,14 @@ Este documento define pruebas de aceptación, no constituye certificación de se
 **Estado de avance y número de etapas restantes:** consultar [PLAN-7-ETAPAS-PUBLICACION.md](./PLAN-7-ETAPAS-PUBLICACION.md). Son **7 hitos** para la publicación segura del alcance Brigadas/Expedientes, no 7 commits ni un plazo de entrega.
 
 
+## Última comprobación del candidato aislado — 16/11/2026
+
+- [x] [GitHub Actions 44013630792](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44013630792): **SUCCESS** para PR #5 en SHA `838ec746`. Incluye simulación de navegador (cliente/admin, logout mientras refresh está en vuelo, errores de red, 403), Worker/D1 local, migraciones ficticias 001–021, compilación y tipos. Deploy API/web omitidos.
+- [x] Cierre remoto por refresh firmado permitido aun con access caducado; pruebas confirman revocación de access/refresh del dispositivo y rechazo de refresh falsificado.
+- [ ] Probar que la política de cierre con pérdida de conectividad es aceptable: borrado local sí, **revocación remota sin conexión no garantizada**. Definir recuperación y respuesta del equipo.
+- [ ] Ejecutar en entorno autorizado pruebas E2E reales, revisión humana de PR #5, respaldo, ensayo de restauración, verificación D1 remoto y autorización explícita antes de migrar/desplegar.
+- [ ] Respetar las siete etapas de publicación: el éxito de CI **no cierra** las pendientes.
+
 ## Etapa 2/7 — candidato de rotación JWT, navegador simulado y protección de deploy (16/11/2026)
 
 - [x] [PR #5 DRAFT](https://github.com/Jorge123tkd/Energia-Vital/pull/5) **en rama aislada**: migración aditiva `021_refresh_rotation.sql` con SHA-256 del refresh vigente; `jti` aleatorio, canje atómico y rechazo de reutilización, sesiones legacy y aislamiento por dispositivo. No está fusionado ni aplicado a D1 real.
