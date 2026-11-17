@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, apiRequest, ADMIN_TOKEN_KEY, setAdminRefreshToken, clearAdminSession, onAdminTokenUpdated } from './lib/api';
+  import { api, apiRequest, ADMIN_TOKEN_KEY, setAdminRefreshToken, clearAdminSession, logoutCurrentSession, onAdminTokenUpdated } from './lib/api';
   import AdminContent from './components/AdminContent.svelte';
   import Pagination from './components/Pagination.svelte';
   import AdminCustomers from './components/AdminCustomers.svelte';
@@ -274,10 +274,8 @@
     finally { loading = false; }
   }
   async function logout() {
-    const oldToken = token;
-    clearAdminSession();
     token = '';
-    try { await apiRequest('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${oldToken}` }, body: '{}' }); } catch { /* Limpiar sesión local. */ }
+    await logoutCurrentSession('admin');
     mobileMenu = false; accountMenu = false; calendarOpen = false;
     customers = []; requests = []; appointments = []; products = []; services = []; categories = [];
     closeDossier();
