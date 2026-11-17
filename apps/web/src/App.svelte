@@ -15,7 +15,7 @@
   import ContactPage from './ContactPage.svelte';
   import AdminPage from './AdminPage.svelte';
   import ChiefPortal from './ChiefPortal.svelte';
-  import { api, customerToken, setCustomerToken, setCustomerRefreshToken, ADMIN_TOKEN_KEY } from './lib/api';
+  import { api, customerToken, setCustomerToken, setCustomerRefreshToken, setAdminRefreshToken, clearAdminSession, ADMIN_TOKEN_KEY } from './lib/api';
   import { isAssistantOpen, assistantSessionId, assistantMessages } from './lib/store';
 
   const publicRoutes = new Set(['/', '/catalogo', '/servicios', '/galeria', '/asesor-solar']);
@@ -77,11 +77,12 @@
   function onAuthenticated(customer: any, token: string, refreshToken?: string) {
     if ((customer.account_type === 'admin' || customer.role === 'admin' || customer.role === 'operator')) {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+      setAdminRefreshToken(refreshToken || null);
       setCustomerToken(null);
     } else {
       setCustomerToken(token);
       setCustomerRefreshToken(refreshToken || null);
-      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      clearAdminSession();
     }
     user = customer;
     assistantSessionId.set(null);
@@ -100,6 +101,8 @@
 
   async function signOut() {
     const admin = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+    clearAdminSession();
+    setCustomerToken(null);
     try {
       if (admin) await api.logoutAdmin(admin);
       else await api.logout();
