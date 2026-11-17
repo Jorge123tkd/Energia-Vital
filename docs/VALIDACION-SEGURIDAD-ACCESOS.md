@@ -4,6 +4,14 @@
 Rama: `feat/cloudflare-customer-accounts-hardening`. Pruebas sobre Worker, D1 y R2 de CI **aislados**.
 
 
+## 16/11/2026 — Tokens renovados con rol vigente de D1
+
+- **Antes:** `POST /api/auth/refresh` verificaba firma, tipo refresh, sesión activa y cuenta activa, pero generaba tokens nuevos con el `role` **almacenado en el refresh token antiguo**. Ese claim podía estar desactualizado ante cambios de rol realizados por vías externas al endpoint de administración (las rutas normales ya revocan sesiones).
+- **Ahora:** si `type=admin`, consulta en D1 `admin_users.role` y exige cuenta activa con rol `admin` u `operator` antes de firmar tokens nuevos. Si `type=customer`, exige cliente activo y fija el rol canónico `customer`. Ante cuenta desactivada/sin permiso devuelve 403; mantiene rechazo de sesión revocada/tipo incorrecto con 401. No cambia duración de sesiones ni firmas JWT.
+- Nuevas pruebas Worker+D1 aisladas comprueban renovación de admin/operador/cliente, separación de acceso vs refresh, bloqueo de permisos admin para operador/cliente, y revocación tras logout incluso de tokens generados previamente mediante refresh.
+- **Resultado:** GitHub Actions [44008224028](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44008224028), [44008223971](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44008223971) y [44008216502](https://github.com/Jorge123tkd/Energia-Vital/actions/runs/44008216502), los tres SUCCESS sobre SHA `8959a8a1`; API, Svelte, compilación, preservación de migraciones 013-020 e integración Worker+D1 ficticios PASS. `deploy-api` y `deploy-web` omitidos.
+- **Límite de esta mejora:** no implementa rotación de refresh tokens de un solo uso, que requiere una decisión separada sobre compatibilidad entre pestañas/dispositivos y riesgos de reutilización. No constituye verificación de sesiones reales ni corrige 401 de administración de producción. Etapa 2/7 permanece abierta.
+
 ## 16/11/2026 — Contraseña de cliente y cierre transaccional de otras sesiones
 
 - Se detectó que `PUT /api/auth/password` actualizaba `customers.password_hash` y después revocaba `auth_sessions` con dos operaciones independientes. Ante un fallo de la segunda, podrían permanecer sesiones ajenas activas tras el cambio.
