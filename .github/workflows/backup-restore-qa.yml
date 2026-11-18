@@ -1,0 +1,135 @@
+name: Bonaire - respaldo D1 a R2 y migraciones SOLO QA
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: 'SHA completo de la rama release aprobado para pruebas'
+        type: string
+        required: true
+      confirmation:
+        description: 'Escribe RESPALDAR_Y_PROBAR_QA (export D1 puede interrumpir consultas)'
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: bonaire-d1-backup-qa
+  cancel-in-progress: false
+
+jobs:
+  backup-restore-qa:
+    if: ${{ inputs.confirmation == 'RESPALDAR_Y_PROBAR_QA' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      PROD_NAME: energia-vital
+      PROD_ID: bbb91e7a-37c6-4290-aa9c-29a8022226b4
+      QA_NAME: energia-vital-qa-db
+      QA_ID: 62755365-2c9a-4b20-8933-21209609a94b
+      BACKUP_BUCKET: energia-vital-backups-private
+    steps:
+      - name: Verificar firma manual, secreto y SHA de fuente
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "SHA no válido"; exit 1; }
+          [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" && -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "Faltan secrets Cloudflare de GitHub"; exit 1; }
+          [[ "$PROD_ID" != "$QA_ID" && "$PROD_NAME" != "$QA_NAME" ]] || exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validar commit exacto y suite antes de operar
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$RELEASE_SHA" ]] || exit 1
+          npm ci
+          node apps/api/tests/backup-workflow-policy.cjs
+          node scripts/prepare-cloudflare-qa-config.test.cjs
+          python3 apps/api/tests/migration-preservation.py
+          npm run typecheck --workspace=apps/api
+          npm run typecheck --workspace=apps/web
+          npm run build --workspace=apps/web
+      - name: Verificar nombres, UUID reales y que QA sigue vacía
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROD_INFO="$(npx wrangler d1 info "$PROD_NAME")"
+          QA_INFO="$(npx wrangler d1 info "$QA_NAME")"
+          grep -Fq "$PROD_ID" <<< "$PROD_INFO" || { echo "D1 producción no coincide"; exit 1; }
+          grep -Fq "$QA_ID" <<< "$QA_INFO" || { echo "D1 QA no coincide"; exit 1; }
+          npx wrangler d1 execute "$QA_NAME" --remote --json \
+            --command "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> '_cf_KV'" > "$RUNNER_TEMP/qa-before.json"
+          node -e 'let d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));let n=Number((Array.isArray(d)?d[0]:d)?.results?.[0]?.count);if(n!==0){console.error("QA no está vacía; detenida para evitar sobrescrituras");process.exit(1)}' "$RUNNER_TEMP/qa-before.json"
+      - name: Exportar D1 producción, verificar y guardar SQL en R2 privado
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          TEMP_DIR="$(mktemp -d)"
+          echo "TEMP_DIR=$TEMP_DIR" >> "$GITHUB_ENV"
+          DUMP="$TEMP_DIR/bonaire-production.sql"
+          R2_COPY="$TEMP_DIR/from-r2.sql"
+          KEY="d1/energia-vital/$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}.sql"
+          echo "BACKUP_KEY=$KEY" >> "$GITHUB_ENV"
+          # No mostrar contenido SQL, ni enviar artifact privado a GitHub.
+          npx wrangler d1 export "$PROD_NAME" --remote --output "$DUMP" > "$TEMP_DIR/export.log" 2>&1 || { echo "Falló exportación D1, no se modifica producción"; exit 1; }
+          test "$(wc -c < "$DUMP")" -gt 4096 || { echo "Exportación demasiado pequeña"; exit 1; }
+          npx wrangler r2 object put "$BACKUP_BUCKET/$KEY" --file "$DUMP" --remote --content-type application/sql > "$TEMP_DIR/upload.log" 2>&1 || { echo "Falló subida a R2"; exit 1; }
+          npx wrangler r2 object get "$BACKUP_BUCKET/$KEY" --file "$R2_COPY" --remote > "$TEMP_DIR/download.log" 2>&1 || { echo "No se pudo recuperar copia R2"; exit 1; }
+          cmp -s "$DUMP" "$R2_COPY" || { echo "ERROR: copia R2 diferente"; exit 1; }
+          echo "Copia R2 confirmada por comparación binaria; tamaño $(wc -c < "$DUMP") bytes."
+          echo "Objeto: $BACKUP_BUCKET/$KEY"
+      - name: Restaurar exclusivamente la base QA desde copia R2 verificada
+        shell: bash
+        run: |
+          set -euo pipefail
+          # QA es la única base de destino. NO hay un comando de importación para PROD_NAME.
+          npx wrangler d1 execute "$QA_NAME" --remote --file "$TEMP_DIR/from-r2.sql" --yes > "$TEMP_DIR/import.log" 2>&1 || { echo "Falló restauración en QA; copia R2 conservada"; exit 1; }
+          npx wrangler d1 execute "$QA_NAME" --remote --json \
+            --command "SELECT COUNT(*) AS count FROM d1_migrations" > "$RUNNER_TEMP/qa-migrations-before.json"
+          node -e 'let d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));let n=Number((Array.isArray(d)?d[0]:d)?.results?.[0]?.count);if(n!==12){console.error("Se esperaban 12 migraciones en QA restaurada; obtuvimos "+n);process.exit(1)}' "$RUNNER_TEMP/qa-migrations-before.json"
+          echo "Restauración QA confirmada: 12 migraciones históricas."
+      - name: Ensayar migraciones 013 a 021 en D1 QA exclusivamente
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Config generada en runner, SIN los bindings D1/R2 del Worker productivo.
+          cat > apps/api/wrangler.qa-migration-ci.toml <<'TOML'
+          name = "energia-vital-migration-qa-check"
+          main = "src/index.ts"
+          compatibility_date = "2024-11-01"
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "energia-vital-qa-db"
+          database_id = "62755365-2c9a-4b20-8933-21209609a94b"
+          migrations_dir = "migrations"
+          TOML
+          cd apps/api
+          npx wrangler d1 migrations apply energia-vital-qa-db --remote --config wrangler.qa-migration-ci.toml > "$TEMP_DIR/migration.log" 2>&1 || { echo "Falló migración en QA; producción NO modificada"; exit 1; }
+          npx wrangler d1 execute energia-vital-qa-db --remote --json \
+            --command "SELECT COUNT(*) AS count FROM d1_migrations" > "$RUNNER_TEMP/qa-migrations-after.json"
+          node -e 'let d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));let n=Number((Array.isArray(d)?d[0]:d)?.results?.[0]?.count);if(n!==21){console.error("Esperadas 21 migraciones en QA; resultado "+n);process.exit(1)}' "$RUNNER_TEMP/qa-migrations-after.json"
+          npx wrangler d1 execute energia-vital-qa-db --remote --json \
+            --command "SELECT COUNT(*) AS count FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'" > "$RUNNER_TEMP/qa-column.json"
+          node -e 'let d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));let n=Number((Array.isArray(d)?d[0]:d)?.results?.[0]?.count);if(n!==1){console.error("Falta refresh_hash en QA");process.exit(1)}' "$RUNNER_TEMP/qa-column.json"
+          echo "QA migrada hasta 021 y columna de rotación verificada. PRODUCCIÓN sin migrar."
+      - name: Borrar SQL y logs del runner temporal
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -n "${TEMP_DIR:-}" && -d "$TEMP_DIR" ]]; then rm -rf -- "$TEMP_DIR"; fi
+          rm -f apps/api/wrangler.qa-migration-ci.toml
+          rm -f "$RUNNER_TEMP/qa-before.json" "$RUNNER_TEMP/qa-migrations-before.json" "$RUNNER_TEMP/qa-migrations-after.json" "$RUNNER_TEMP/qa-column.json"
