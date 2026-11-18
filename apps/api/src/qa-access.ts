@@ -1,5 +1,6 @@
 // Protección adicional del Worker QA. Cloudflare Access debe proteger también Pages.
 // No confundir con el JWT propio de clientes: verifica exclusivamente Access (RS256).
+type AccessJwk = JsonWebKey & { kid?: string };
 type QaAccessConfig = { team: string; audience: string };
 type AccessClaims = { aud?: string | string[]; iss?: string; exp?: number; nbf?: number };
 let cached: { url: string; keys: JsonWebKey[]; until: number } | undefined;
@@ -32,7 +33,7 @@ async function getKeys(team: string): Promise<JsonWebKey[]> {
   const body: unknown = await response.json();
   if (!body || typeof body !== 'object' || !('keys' in body) ||
       !Array.isArray((body as { keys: unknown }).keys)) throw Error('Certificados Access inválidos');
-  const keys = (body as { keys: JsonWebKey[] }).keys;
+  const keys = (body as { keys: AccessJwk[] }).keys;
   cached = { url, keys, until: Date.now() + 5 * 60_000 };
   return keys;
 }
