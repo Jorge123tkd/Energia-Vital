@@ -22,8 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       PROD_NAME: energia-vital
       PROD_ID: bbb91e7a-37c6-4290-aa9c-29a8022226b4
       QA_NAME: energia-vital-qa-db
@@ -37,11 +35,10 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "SHA no válido"; exit 1; }
-          [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" && -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "Faltan secrets Cloudflare de GitHub"; exit 1; }
           [[ "$PROD_ID" != "$QA_ID" && "$PROD_NAME" != "$QA_NAME" ]] || exit 1
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_sha }}
+          ref: release/combined-security-deps-20261117
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -63,8 +60,12 @@ jobs:
           npm run build --workspace=apps/web
       - name: Verificar nombres, UUID reales y que QA sigue vacía
         shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
+          [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" && -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "Faltan secrets Cloudflare en GitHub"; exit 1; }
           PROD_INFO="$(npx wrangler d1 info "$PROD_NAME")"
           QA_INFO="$(npx wrangler d1 info "$QA_NAME")"
           grep -Fq "$PROD_ID" <<< "$PROD_INFO" || { echo "D1 producción no coincide"; exit 1; }
@@ -74,6 +75,9 @@ jobs:
           node -e 'let d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));let n=Number((Array.isArray(d)?d[0]:d)?.results?.[0]?.count);if(n!==0){console.error("QA no está vacía; detenida para evitar sobrescrituras");process.exit(1)}' "$RUNNER_TEMP/qa-before.json"
       - name: Exportar D1 producción, verificar y guardar SQL en R2 privado
         shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
           umask 077
@@ -93,6 +97,9 @@ jobs:
           echo "Objeto: $BACKUP_BUCKET/$KEY"
       - name: Restaurar exclusivamente la base QA desde copia R2 verificada
         shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
           # QA es la única base de destino. NO hay un comando de importación para PROD_NAME.
@@ -103,6 +110,9 @@ jobs:
           echo "Restauración QA confirmada: 12 migraciones históricas."
       - name: Ensayar migraciones 013 a 021 en D1 QA exclusivamente
         shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
           # Config generada en runner, SIN los bindings D1/R2 del Worker productivo.
