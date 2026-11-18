@@ -49,6 +49,8 @@ jobs:
           QA_PAGES_PROJECT: ${{ vars.QA_PAGES_PROJECT }}
           QA_API_URL: ${{ vars.QA_API_URL }}
           QA_SITE_URL: ${{ vars.QA_SITE_URL }}
+          QA_ACCESS_TEAM_DOMAIN: ${{ vars.QA_ACCESS_TEAM_DOMAIN }}
+          QA_ACCESS_AUD: ${{ vars.QA_ACCESS_AUD }}
         run: |
           set -euo pipefail
           node scripts/prepare-cloudflare-qa-config.test.cjs
