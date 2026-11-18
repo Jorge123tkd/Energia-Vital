@@ -19,6 +19,7 @@ import { technicalRoutes } from './routes/technical-followup';
 import { chiefRoutes } from './routes/brigade-chief';
 import { calendarRoutes } from './routes/calendar';
 import { telegramRoutes } from './routes/telegram';
+import { customerDocumentRoutes, staffDocumentRoutes } from './routes/request-documents';
 import { runTelegramMorningReminders } from './telegram-reminders';
 import { whatsappRoutes } from './routes/whatsapp';
 import { giveawaysRoutes } from './routes/giveaways';
@@ -86,6 +87,8 @@ export default {
     app.route('/api/chief', chiefRoutes);
     app.route('/api/calendar', calendarRoutes);
     app.route('/api/telegram', telegramRoutes);
+    app.route('/api/private/documents', customerDocumentRoutes);
+    app.route('/api/admin-customers/documents', staffDocumentRoutes);
     app.route('/api/whatsapp', whatsappRoutes);
     app.route('/api/giveaways', giveawaysRoutes);
     app.route('/api/rewards', rewardsRoutes);
