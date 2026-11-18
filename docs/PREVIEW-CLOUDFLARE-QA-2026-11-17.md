@@ -1,4 +1,12 @@
 # Bonaire: preparación de vista previa Cloudflare totalmente aislada
+
+## Actualización de consolidación y datos QA — 17/11/2026
+La rama única autorizada para continuar el desarrollo es `feat/cloudflare-customer-accounts-hardening`. Se corrigió en `.github/workflows/cloudflare-qa-preview.yml` la condición de rama obsoleta del candidato de release, sin crear otra rama. Se añadió confirmación obligatoria `qa_snapshot_protected` para evitar publicar una vista previa mientras la copia restaurada contenga datos reales sin controles sobre **API y Pages**.
+
+**Estado real de QA:** el respaldo privado del 17/11/2026 ya fue restaurado a `energia-vital-qa-db`, con 59 tablas y migraciones registradas 001–012. Por tanto, las instrucciones anteriores que suponen una base vacía o solo datos ficticios ya no describen el entorno actual. Hasta que se verifique la protección efectiva del Worker y del proyecto Pages, **NO lanzar la vista previa**; marcar una casilla manual no instala Cloudflare Access. No reutilizar autenticaciones, secretos o datos reales para hacer pruebas públicas. Migraciones 013–021 aún no ejecutadas en QA.
+
+La ejecución `workflow_dispatch` puede requerir disponer del workflow en la rama predeterminada `main`; no se ha copiado allí ni se ha cambiado la rama por defecto. El entorno de producción no se ha modificado.
+
 **17/11/2026 — Estado: PREPARADO EN CÓDIGO, SIN DESPLIEGUE.** La aprobación de preparar QA no equivale a autorización para publicar la web final.
 
 ## Bloqueo real detectado
