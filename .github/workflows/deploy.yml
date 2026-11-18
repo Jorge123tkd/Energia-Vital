@@ -36,6 +36,8 @@ jobs:
         run: node scripts/prepare-cloudflare-qa-config.test.cjs
       - name: Verificar política de respaldo manual D1 hacia R2 privado
         run: node apps/api/tests/backup-workflow-policy.cjs
+      - name: Compilar Worker de respaldo sin publicar (dry-run)
+        run: npx wrangler deploy --dry-run --config apps/d1-backup/wrangler.toml --outdir "$RUNNER_TEMP/bonaire-backup-dryrun"
       - name: Probar política de auditoría de dependencias
         run: node apps/api/tests/release-dependency-audit.test.cjs
       - name: Bloquear CVE críticas, altas o moderadas en el lockfile combinado
