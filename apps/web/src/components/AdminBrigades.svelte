@@ -3,6 +3,7 @@
   import { api } from '../lib/api';
   import BrigadePlanner from './BrigadePlanner.svelte';
   import ChiefAccounts from './ChiefAccounts.svelte';
+  import Pagination from './Pagination.svelte';
 
   type Brigade = {
     id:string;name:string;leader_name:string;specialty:string|null;
@@ -16,6 +17,10 @@
   let brigades:Brigade[]=$state([]),members:Member[]=$state([]);
   let loading=$state(false),busy=$state(false),error=$state(''),success=$state('');
   let expanded=$state('');
+  let page=$state(1);
+  const perPage=10;
+  let pageCount=$derived(Math.max(1,Math.ceil(brigades.length/perPage)));
+  let visibleBrigades=$derived(brigades.slice((Math.min(page,pageCount)-1)*perPage,Math.min(page,pageCount)*perPage));
   let editor:Brigade|null=$state(null),showEditor=$state(false);
   let brigadeName=$state(''),leaderName=$state(''),specialty=$state('');
   let memberBrigade=$state(''),memberEditor:Member|null=$state(null);
@@ -27,6 +32,12 @@
     try{
       const result=await api.listBrigades(token);
       brigades=result.brigades||[];members=result.members||[];
+      if(page>Math.max(1,Math.ceil(brigades.length/perPage)))page=Math.max(1,Math.ceil(brigades.length/perPage));
+      if(expanded){
+        const position=brigades.findIndex(b=>b.id===expanded);
+        if(position>=0)page=Math.floor(position/perPage)+1;
+        else expanded='';
+      }
     }catch(e){error=e instanceof Error?e.message:'No se pudieron consultar las brigadas.';}
     finally{loading=false;}
   }
@@ -137,7 +148,7 @@
     </div>
   {/if}
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-    {#each brigades as brigade (brigade.id)}
+    {#each visibleBrigades as brigade (brigade.id)}
       <article class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-3">
         <div class="flex flex-wrap gap-2 justify-between items-start">
           <div class="min-w-0">
@@ -199,6 +210,8 @@
       </article>
     {/each}
   </div>
+  <Pagination page={Math.min(page,pageCount)} total={brigades.length} {perPage}
+    disabled={loading||busy} label="brigadas" onPage={n=>page=n}/>
   {#if canManage}<ChiefAccounts {token} {brigades}/>{/if}
   <BrigadePlanner {token} canApprove={canManage} {prefillRequestId}/>
 </section>
