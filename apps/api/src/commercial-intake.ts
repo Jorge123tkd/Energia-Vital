@@ -33,7 +33,7 @@ export function advanceCommercialIntake(message:string, prior:CommercialDraft|nu
  const invalid=(reply:string):CommercialStep=>({draft:prior,reply});
  switch(d.stage){
  case 'kind':{
-  const kind=kinds[m];if(!kind)return invalid('Selecciona mipyme, empresa estatal, negocio privado, TCP, cooperativa, residencial, proveedor o alianza.');
+  const kind=Object.prototype.hasOwnProperty.call(kinds,m)?kinds[m]:undefined;if(!kind)return invalid('Selecciona mipyme, empresa estatal, negocio privado, TCP, cooperativa, residencial, proveedor o alianza.');
   d.kind=kind;d.stage='company';return {draft:d,reply:'¿Cuál es el nombre de la entidad o titular? Usaremos el contacto de tu cuenta registrada.'};
  }
  case 'company':
