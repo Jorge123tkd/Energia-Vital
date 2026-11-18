@@ -59,9 +59,12 @@ export class BonaireD1Backup extends WorkflowEntrypoint<Env> {
         });
         if (!response.ok) throw new Error(`Consulta exportacion: HTTP ${response.status}`);
         const body: any = await response.json();
-        const signedUrl = body.result?.signed_url;
-        if (!body.success || typeof signedUrl !== 'string') {
-          throw new Error('Exportacion aun en proceso o respuesta invalida');
+        if (!body.success || body.result?.status === 'error') {
+          throw new Error('Cloudflare reportó un error de exportación');
+        }
+        const signedUrl = body.result?.result?.signed_url;
+        if (body.result?.status !== 'complete' || typeof signedUrl !== 'string') {
+          throw new Error('Exportacion D1 aun en proceso');
         }
         const dump = await fetch(signedUrl);
         if (!dump.ok || !dump.body) throw new Error('No se pudo obtener el SQL');
