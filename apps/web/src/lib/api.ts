@@ -453,6 +453,10 @@ export const api = {
   }) => patch('/api/admin-customers/requests/' + encodeURIComponent(id) + '/details', body, withAdmin(token)),
   deleteAdminRequest: (token: string, id: string) => apiRequest(
     '/api/admin-customers/requests/' + encodeURIComponent(id), withAdmin(token, {method:'DELETE'})),
+  createAdminAppointment: (token: string, body: {
+    customer_id: string; title: string; starts_at: string; ends_at: string;
+    status: 'pending'|'confirmed';
+  }) => post('/api/admin-customers/appointments', body, withAdmin(token)),
   updateAdminAppointment: (token: string, id: string, status: string) => patch(`/api/admin-customers/appointments/${id}`, { status }, withAdmin(token)),
   getAdminProducts: (token: string) => apiRequest('/api/admin/products', withAdmin(token)),
   getAdminServices: (token: string) => apiRequest('/api/admin/services', withAdmin(token)),
