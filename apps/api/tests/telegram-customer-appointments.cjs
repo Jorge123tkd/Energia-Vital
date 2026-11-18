@@ -11,7 +11,7 @@ assert.equal(time('2027-01-20 24:00'),null);
 assert.equal(time('2027-01-20'),null);
 (async()=>{
  let writes=0;
- const env={DB:{prepare(sql){return {bind(...args){return {first:async()=>null,run:async()=>{writes++;assert.ok(sql.includes("telegram_chat_id=?"));assert.ok(sql.includes("NOT EXISTS"));assert.ok(sql.includes("'pending'"));return {meta:{changes:1}}}}}}}}};
+ const env={DB:{prepare(sql){return {bind(...args){return {first:async()=>null,run:async()=>{writes++;assert.ok(sql.includes("telegram_customer_chat_id=?"));assert.ok(sql.includes("NOT EXISTS"));assert.ok(sql.includes("'pending'"));return {meta:{changes:1}}}}}}}}};
  assert.match(await request(env,'customer','123','100','solicitar cita'),/confirmar cita/);
  assert.equal(writes,0);
  assert.match(await request(env,'customer','123','100','confirmar cita 2001-01-01 10:00'),/futura/);
