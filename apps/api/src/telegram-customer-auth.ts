@@ -25,10 +25,10 @@ export async function verifiedTelegramUser(initData:unknown,token:string|undefin
  }catch{return null;}
 }
 export async function currentTelegramCustomer(env:Env,chatId:string):Promise<{id:string;name:string}|null>{
- // Fail closed when legacy duplicate bindings exist; never give access based on text or email alone.
- const {results}=await env.DB.prepare("SELECT id,name FROM customers WHERE telegram_chat_id=? LIMIT 2")
+ // Only independently verified customer identity is trusted. Legacy links never authorize access.
+ const {results}=await env.DB.prepare("SELECT id,name FROM customers WHERE telegram_customer_chat_id=? LIMIT 2")
   .bind(chatId).all<{id:string;name:string}>();
  if(results?.length!==1)return null;
- return env.DB.prepare("SELECT id,name FROM customers WHERE id=? AND telegram_chat_id=? AND is_active=1 AND password_hash IS NOT NULL")
+ return env.DB.prepare("SELECT id,name FROM customers WHERE id=? AND telegram_customer_chat_id=? AND is_active=1 AND password_hash IS NOT NULL")
   .bind(results[0].id,chatId).first<{id:string;name:string}>();
 }
