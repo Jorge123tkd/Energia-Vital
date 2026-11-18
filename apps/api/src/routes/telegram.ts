@@ -16,6 +16,9 @@ import { getElToqueRates,formatExchangeReply } from '../exchange-rates';
 import { agendaForTeam,pendingTicketSummary } from '../telegram-agenda';
 import { classifyTelegramMessage,telegramReplyKeyboard,presentTelegramReply,type TelegramReplyMarkup } from '../telegram-conversation';
 import { humanWhatsAppReply } from '../telegram-human-contact';
+import { currentTelegramCustomer } from '../telegram-customer-auth';
+import { advanceCommercialIntake, startCommercialIntake, type CommercialDraft } from '../commercial-intake';
+import { parseRequestIntake } from '../request-intake';
 
 export const telegramRoutes = new Hono<{ Bindings:Env; Variables:{user?:any} }>();
 const now=()=>new Date().toISOString();
@@ -110,10 +113,10 @@ async function redeemCode(env:Env,chatId:string,code:string):Promise<string>{
 }
 type Session={chat_id:string;thread_id:string;solar_context:string;window_start:string|null;window_count:number};
 type BotDecision={
-  reply:string;state?:SolarState|null;newThread?:boolean;skipHistory?:boolean;
+  reply:string;state?:SolarState|null;commercial?:CommercialDraft|null;newThread?:boolean;skipHistory?:boolean;
   keyboardView?:'reminders';replyMarkup?:TelegramReplyMarkup;
 };
-async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string):Promise<BotDecision>{
+async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string,prior:CommercialDraft|null):Promise<BotDecision>{
   const text=raw.trim();
   // Un empleado obtiene su código desde /admin y lo escribe AQUÍ sin comandos.
   // Por compatibilidad seguimos admitiendo /vincular 12345678.
@@ -123,20 +126,65 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   const staff=await currentTelegramStaff(env,chatId);
   const site=env.SITE_URL?.startsWith('https://')?env.SITE_URL:'https://energia-vital-web.pages.dev';
 
+  const customer=await currentTelegramCustomer(env,chatId);
+  const accountButton:TelegramReplyMarkup={inline_keyboard:[[{text:'Crear o vincular cuenta de cliente',web_app:{url:site+'/telegram-registro.html'}}]]};
+  if(action==='customer-account')return customer
+    ?{reply:'Tu cuenta Bonaire ya está vinculada, '+customer.name+'. Puedes entrar a la web con tu correo y contraseña o seguir aquí.',skipHistory:true}
+    :{reply:'Puedes crear tu cuenta o vincular una que ya tengas sin salir de Telegram. Usa el formulario seguro; nunca escribas tu contraseña en el chat.',replyMarkup:accountButton,skipHistory:true};
+  if(action==='customer-requests'||action==='customer-appointments'){
+    if(!customer)return {reply:'Para proteger tus datos, primero crea o vincula tu cuenta desde este formulario.',replyMarkup:accountButton,skipHistory:true};
+    const isRequests=action==='customer-requests';
+    const {results}=await env.DB.prepare(isRequests
+      ?"SELECT r.id,r.title,r.status,r.created_at AS date FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.customer_id=? AND c.telegram_chat_id=? AND c.is_active=1 ORDER BY r.created_at DESC LIMIT 10"
+      :"SELECT a.id,a.title,a.status,a.starts_at AS date FROM appointments a JOIN customers c ON c.id=a.customer_id WHERE a.customer_id=? AND c.telegram_chat_id=? AND c.is_active=1 ORDER BY a.starts_at DESC LIMIT 10")
+      .bind(customer.id,chatId).all<{id:string;title:string;status:string;date:string}>();
+    const labels:Record<string,string>={pending:'Pendiente',quoted:'Presupuestada',approved:'Aprobada',scheduled:'Programada',completed:'Completada',cancelled:'Cancelada',confirmed:'Confirmada',in_progress:'En proceso'};
+    return {reply:results?.length?(isRequests?'Tus últimas solicitudes:\n\n':'Tus últimas citas:\n\n')+results.map(x=>x.title+'\n'+(labels[x.status]||x.status)+' · '+x.date+'\nReferencia: '+x.id).join('\n\n'):'Todavía no tienes registros en esta sección.',skipHistory:true};
+  }
+  const intakeMessage=action==='request-service'?'registrar solicitud comercial':text;
+  // Las acciones administrativas, nueva conversación y contacto humano no se consumen como campos.
+  if((action===null||action==='request-service')&&(prior||startCommercialIntake(intakeMessage))){
+    if(!customer)return {reply:'Antes de registrar tu solicitud, crea o vincula tu cuenta desde Telegram. Después escribe «registrar solicitud comercial». No tienes que visitar la web.',replyMarkup:accountButton,skipHistory:true};
+    // Identificador estable por update de inicio: un reintento de Telegram no genera otro proyecto.
+    const step=advanceCommercialIntake(intakeMessage,prior,crypto.randomUUID());
+    if(step){
+      if(step.submit&&step.draft){
+        const d=step.draft, time=now();
+        const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment});
+        if(intake.error||!intake.value)return {reply:'Revisa el borrador antes de enviarlo.',commercial:prior,state:null};
+        const result=await env.DB.batch([
+          env.DB.prepare("INSERT INTO requests (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at) "+
+            "SELECT ?,id,'consultation',NULL,?,?,'pending','medium',?,NULL,?,? FROM customers WHERE id=? AND telegram_chat_id=? AND is_active=1 "+
+            "ON CONFLICT(id) DO NOTHING")
+            .bind(d.id,('Solicitud comercial: '+d.company).slice(0,180),'[Origen: Telegram]\nEntidad: '+d.company+'\nNecesidad: '+d.need,d.location||'',time,time,customer.id,chatId),
+          env.DB.prepare("INSERT INTO request_intake (request_id,available_budget_usd_cents,payment_method,payment_currency,customer_type,created_at,updated_at) "+
+            "SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_chat_id=? AND c.is_active=1) ON CONFLICT(request_id) DO NOTHING")
+            .bind(d.id,intake.value.available_budget_usd_cents,intake.value.payment_method,intake.value.payment_currency,intake.value.customer_type,time,time,d.id,customer.id,chatId)
+        ]);
+        // Un reintento puede encontrar la misma solicitud ya guardada. Verificar titularidad.
+        const saved=await env.DB.prepare("SELECT r.id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_chat_id=? AND c.is_active=1")
+          .bind(d.id,customer.id,chatId).first();
+        if(!saved)return {reply:'No fue posible confirmar el registro. Comprueba tu cuenta.',commercial:prior,state:null};
+        return {reply:'Solicitud registrada. Referencia: '+d.id+'. Pendiente de revisión. Escribe «mis solicitudes» para consultar su estado.',commercial:{...d,stage:'submitted'},state:null};
+      }
+      return {reply:step.reply,commercial:step.draft,state:null};
+    }
+  }
+
   switch(action){
     case 'welcome':
       return {reply:'¡Hola! ☀️ Soy el asistente de Bonaire. Cuéntame con tus palabras qué necesitas.\n\n'+
         'Puedo ayudarte a elegir un inversor, calcular baterías, consultar equipos del catálogo '+
         'y conocer nuestros servicios. También puedes tocar una de las opciones que aparecen abajo.\n\n'+
         (staff?'Como parte del equipo, también puedes preguntarme por la agenda de hoy, mañana o las solicitudes pendientes.':
-          'Si trabajas en Bonaire, puedes vincular tu cuenta de personal de manera segura desde /admin.')};
+          'Si eres cliente, escribe «mi cuenta» para registrarte desde Telegram. Si trabajas en Bonaire, vincula tu cuenta de personal desde /admin.')};
     case 'help':
       return {reply:'Hablemos de forma natural, como con un asesor de Bonaire. 😊\n\n'+
         'Por ejemplo, puedes decirme «Necesito energía para mi nevera y dos aires acondicionados», '+
         '«Quiero saber qué inversores venden» o «Necesito una reparación».\n\n'+
         (staff?'También puedes preguntar «¿Qué trabajos hay mañana?», «¿Cuántas solicitudes faltan?» '+
           'o «¿Cómo activo el recordatorio de las 7?».':
-          'Para compras, solicitudes y datos de tu cuenta, entra en la web de Bonaire: '+site)};
+          'Puedes crear tu cuenta, registrar solicitudes y consultar tus registros aquí mismo en Telegram. Escribe «mi cuenta».')};
     case 'new-chat':
       return {reply:'Empezamos otra conversación. ¿Qué te gustaría resolver hoy en Bonaire? ☀️',
         state:null,newThread:true,skipHistory:true};
@@ -298,9 +346,13 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
       ]);
       return;
     }
-    let state:SolarState|null=null;
-    try{state=JSON.parse(session.solar_context) as SolarState|null;}catch{/* recuperar estado vacío */}
-    const decision=await decide(env,input.chatId,input.text,state,session.thread_id);
+    let state:SolarState|null=null, commercial:CommercialDraft|null=null;
+    try{const parsed=JSON.parse(session.solar_context);
+      if(parsed&&typeof parsed==='object'&&'commercial' in parsed){state=parsed.solar||null;commercial=parsed.commercial||null;}
+      else state=parsed as SolarState|null;
+    }catch{/* recuperar estado vacío */}
+    const decision=await decide(env,input.chatId,input.text,state,session.thread_id,commercial);
+    const nextCommercial=decision.newThread?null:decision.commercial===undefined?commercial:decision.commercial;
     const nextThread=decision.newThread?crypto.randomUUID():session.thread_id;
     const nextState=decision.newThread?null:decision.state===undefined?state:decision.state;
     // Refrescar el vínculo después de procesar el mensaje: el OTP puede haberlo creado
@@ -320,7 +372,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     await env.DB.batch([
       env.DB.prepare(
         'UPDATE telegram_bot_sessions SET thread_id=?,solar_context=?,window_start=?,window_count=?,updated_at=? WHERE chat_id=?'
-      ).bind(nextThread,JSON.stringify(nextState),current?session.window_start:time,count,time,input.chatId),
+      ).bind(nextThread,JSON.stringify({solar:nextState,commercial:nextCommercial}),current?session.window_start:time,count,time,input.chatId),
       ...audit,
       env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?")
         .bind(time,input.updateId)
