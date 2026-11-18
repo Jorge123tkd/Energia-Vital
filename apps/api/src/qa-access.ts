@@ -3,7 +3,7 @@
 type AccessJwk = JsonWebKey & { kid?: string };
 type QaAccessConfig = { team: string; audience: string };
 type AccessClaims = { aud?: string | string[]; iss?: string; exp?: number; nbf?: number };
-let cached: { url: string; keys: JsonWebKey[]; until: number } | undefined;
+let cached: { url: string; keys: AccessJwk[]; until: number } | undefined;
 const jsonError = () => new Response(JSON.stringify({ error: 'Acceso restringido a QA' }), {
   status: 403, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 });
@@ -25,7 +25,7 @@ function validateConfig(env: { QA_ACCESS_TEAM_DOMAIN?: string; QA_ACCESS_AUD?: s
       !/^[a-zA-Z0-9_-]{10,128}$/.test(audience)) return null;
   return { team, audience };
 }
-async function getKeys(team: string): Promise<JsonWebKey[]> {
+async function getKeys(team: string): Promise<AccessJwk[]> {
   const url = 'https://' + team + '/cdn-cgi/access/certs';
   if (cached?.url === url && cached.until > Date.now()) return cached.keys;
   const response = await fetch(url, { redirect: 'error' });
