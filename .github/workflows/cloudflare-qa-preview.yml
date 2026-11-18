@@ -11,6 +11,11 @@ on:
         required: true
         type: boolean
         default: false
+      qa_snapshot_protected:
+        description: 'Confirmo que QA contiene copia de produccion, Access cubre API y Pages y no hay acceso publico'
+        required: true
+        type: boolean
+        default: false
       qa_schema_ready:
         description: 'Confirmo D1 QA aislada y migrada, solo datos de ensayo'
         required: true
@@ -21,9 +26,10 @@ permissions:
 jobs:
   preview:
     if: >-
-      github.ref == 'refs/heads/release/combined-security-deps-20261117' &&
+      github.ref == 'refs/heads/feat/cloudflare-customer-accounts-hardening' &&
       inputs.confirmation == 'PUBLICAR_SOLO_QA' &&
       inputs.qa_access_confirmed == true &&
+      inputs.qa_snapshot_protected == true &&
       inputs.qa_schema_ready == true
     runs-on: ubuntu-latest
     timeout-minutes: 25
