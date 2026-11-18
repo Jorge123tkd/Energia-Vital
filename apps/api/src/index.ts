@@ -20,6 +20,7 @@ import { chiefRoutes } from './routes/brigade-chief';
 import { calendarRoutes } from './routes/calendar';
 import { telegramRoutes } from './routes/telegram';
 import { customerDocumentRoutes, staffDocumentRoutes } from './routes/request-documents';
+import { runTelegramCustomerNotifications } from './telegram-customer-notifications';
 import { runTelegramMorningReminders } from './telegram-reminders';
 import { whatsappRoutes } from './routes/whatsapp';
 import { giveawaysRoutes } from './routes/giveaways';
@@ -97,6 +98,8 @@ export default {
     return app.fetch(request, env, ctx);
   },
   async scheduled(controller,env,ctx) {
-    ctx.waitUntil(runTelegramMorningReminders(env,new Date(controller.scheduledTime)));
+    const at=new Date(controller.scheduledTime);
+    if(controller.cron==='*/15 * * * *')ctx.waitUntil(runTelegramCustomerNotifications(env,at));
+    else ctx.waitUntil(runTelegramMorningReminders(env,at));
   },
 } satisfies ExportedHandler<Env>;
