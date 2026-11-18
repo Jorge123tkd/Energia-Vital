@@ -8,10 +8,14 @@ const ok={
  QA_WORKER_NAME:'energia-vital-api-qa',
  QA_PAGES_PROJECT:'energia-vital-qa-web',
  QA_API_URL:'https://energia-vital-api-qa.test-subdomain.workers.dev',
- QA_SITE_URL:'https://energia-vital-qa-web.pages.dev'
+ QA_SITE_URL:'https://energia-vital-qa-web.pages.dev',
+ QA_ACCESS_TEAM_DOMAIN:'bonaireqa.cloudflareaccess.com',
+ QA_ACCESS_AUD:'a1b2c3d4e5f6g7h8'
 };
 const c=validate(ok),toml=render(c);
 assert.match(toml,/ENVIRONMENT = "qa"/);
+assert.match(toml,/QA_ACCESS_TEAM_DOMAIN/);
+assert.match(toml,/QA_ACCESS_AUD/);
 assert.match(toml,/binding = "DB"/);
 assert.match(toml,/binding = "BUCKET"/);
 assert.ok(!toml.includes('[triggers]'),'QA must not schedule production reminders');
@@ -28,4 +32,6 @@ for(const [key,val] of Object.entries({
 }
 assert.throws(()=>validate({...ok,QA_API_URL:'http://energia-vital-api-qa.test.workers.dev'}));
 assert.throws(()=>validate({...ok,QA_D1_DATABASE_ID:''}));
+assert.throws(()=>validate({...ok,QA_ACCESS_AUD:''}));
+assert.throws(()=>validate({...ok,QA_ACCESS_TEAM_DOMAIN:'produccion.example.com'}));
 console.log('PASS QA preview config refuses production D1/R2/Worker/Pages, URLs, missing values and cron');
