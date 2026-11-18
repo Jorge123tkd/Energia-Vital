@@ -1,5 +1,12 @@
 # Continuidad de Bonaire
 
+## 17/11/2026 — Migraciones QA 013–021 y protección verificable de Access preparadas
+Se añadió `scripts/apply-qa-migrations.ps1`, que admite solamente la D1 QA conocida (`energia-vital-qa-db`, UUID `62755365-2c9a-4b20-8933-21209609a94b`), comprueba el historial 001–012 y la secuencia exacta 013–021, y exige confirmación `APLICAR_SOLO_QA`. **La migración todavía NO se ha ejecutado**: el script requiere el Cloudflare autenticado del operador. No migrar producción.
+
+Se añadió `apps/api/src/qa-access.ts` y su llamada previa a las rutas del Worker. En `ENVIRONMENT=qa`, todas las solicitudes de datos requieren JWT RS256 válido de Cloudflare Access con emisor, firma, audience y vencimiento verificados (solo el preflight OPTIONS del origen QA declarado queda exento, sin leer datos). Sin variables `QA_ACCESS_TEAM_DOMAIN` / `QA_ACCESS_AUD`, QA deniega por defecto. El generador de Wrangler QA y el flujo de preview exigen dichas variables. El frontend incluye credenciales de sesión solo con `VITE_QA_MODE=true`; QA responde CORS con credenciales únicamente para `SITE_URL` autorizado. **La política perimetral Cloudflare Access de Worker y Pages no está aún instalada ni verificada y no debe afirmarse que el entorno esté protegido/desplegado**. El proyecto QA tiene copia restaurada de datos reales, por lo que se debe proteger el hostname principal de Pages y sus previews, además del Worker.
+
+Procedimiento detallado: `docs/QA-MIGRACIONES-ACCESS-2026-11-17.md`. No se modificó D1 remota ni la web productiva. Dependencias de desarrollo todavía reportan 12 hallazgos high; no se ha regenerado el lockfile ni actualizado Tailwind. Publicación productiva sigue bloqueada.
+
 ## 17/11/2026 — Clientes administrativos: búsquedas sin resultados atrasados
 Corregido `apps/web/src/components/AdminCustomers.svelte` en la rama única (commit `0da7c53ce96eb73f29c3efed03295e6cae49942c`): se introdujo un identificador secuencial de peticiones que descarta respuestas antiguas cuando cambian el texto o la página; las respuestas remotas ya no se vuelven a filtrar con texto escrito pero todavía no enviado; tras editar, bloquear o eliminar se conserva la página actual y, si desaparece la última página por una eliminación, se vuelve a la última válida. Mensaje de ausencia de resultados más preciso. No hay cambios de API, permisos ni base de datos. Pendiente de compilar con la próxima descarga, sin pruebas repetitivas; no se publicó nada en Cloudflare.
 
