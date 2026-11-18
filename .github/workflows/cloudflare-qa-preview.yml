@@ -99,7 +99,18 @@ jobs:
         env:
           VITE_API_URL: ${{ vars.QA_API_URL }}
           VITE_QA_MODE: 'true'
-        run: npm run build --workspace=apps/web
+          QA_D1_DATABASE_ID: ${{ vars.QA_D1_DATABASE_ID }}
+          QA_D1_DATABASE_NAME: ${{ vars.QA_D1_DATABASE_NAME }}
+          QA_R2_BUCKET_NAME: ${{ vars.QA_R2_BUCKET_NAME }}
+          QA_WORKER_NAME: ${{ vars.QA_WORKER_NAME }}
+          QA_PAGES_PROJECT: ${{ vars.QA_PAGES_PROJECT }}
+          QA_API_URL: ${{ vars.QA_API_URL }}
+          QA_SITE_URL: ${{ vars.QA_SITE_URL }}
+          QA_ACCESS_TEAM_DOMAIN: ${{ vars.QA_ACCESS_TEAM_DOMAIN }}
+          QA_ACCESS_AUD: ${{ vars.QA_ACCESS_AUD }}
+        run: |
+          node scripts/verify-qa-build-env.cjs
+          npm run build --workspace=apps/web
       - name: Publicar SOLO proyecto Pages QA (nunca energia-vital-web)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
