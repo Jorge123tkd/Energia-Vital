@@ -9,7 +9,7 @@ export type TelegramAction =
   | 'welcome' | 'help' | 'new-chat' | 'history' | 'erase-history'
   | 'link-help' | 'unlink' | 'agenda-today' | 'agenda-tomorrow' | 'pending'
   | 'reminders-enable' | 'reminders-disable' | 'reminders-info'
-  | 'solar' | 'products' | 'services' | 'request-service' | 'human' | null;
+  | 'solar' | 'products' | 'services' | 'request-service' | 'human' | 'business-services' | 'business-partner' | null;
 
 const normalize=(input:string)=>input.toLowerCase().normalize('NFD')
   .replace(/[\u0300-\u036f]/g,'')
@@ -61,6 +61,10 @@ export function classifyTelegramMessage(input:string):TelegramAction {
       /\b(?:pendientes|por atender)\b.*\b(?:solicitudes|tickets)\b/.test(s))
     return 'pending';
 
+  if(/^(?:empresa|empresas|negocio|negocios|atencion a empresas|proyecto empresarial|servicios para empresas|soy una empresa|somos una mipyme|somos una empresa estatal)$/.test(s))
+    return 'business-services';
+  if(/^(?:proveedores|proveedor|alianzas|alianza comercial|ser proveedor|quiero ser proveedor|distribuidor|distribucion en cuba|colaboracion comercial)$/.test(s))
+    return 'business-partner';
   if(/^(?:asesor|asesoria solar|asesoramiento solar|quiero asesoramiento solar|quiero asesoria solar|quiero que me asesores|necesito asesoramiento solar|necesito un sistema solar|ayudame a calcular un sistema solar|quiero calcular mi sistema solar|orientame sobre un sistema solar|necesito energia para mi nevera y dos aires acondicionados)$/.test(s))
     return 'solar';
   if(/^(?:productos|ver productos|ver catalogo|catalogo|catalogo solar|que productos tienen|que equipos venden|quiero ver el catalogo)$/.test(s))
@@ -123,10 +127,12 @@ export function telegramReplyKeyboard(
     ?keyboard([
       ['📅 Agenda del equipo hoy','📆 Agenda del equipo mañana'],
       ['📋 Solicitudes pendientes','🔔 Recordatorios'],
+      ['🏢 Empresas y negocios','🤝 Proveedores y alianzas'],
       ['☀️ Asesoría solar','🛍️ Ver productos'],
       ['🛠️ Servicios','✏️ Nuevo chat']
     ])
     :keyboard([
+      ['🏢 Empresas y negocios','🤝 Proveedores y alianzas'],
       ['☀️ Asesoría solar','🛍️ Ver productos'],
       ['🛠️ Servicios','🧾 Solicitar servicio'],
       ['🙋 Hablar con una persona','✏️ Nuevo chat']
