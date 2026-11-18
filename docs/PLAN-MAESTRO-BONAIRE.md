@@ -1,5 +1,10 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## 18/11/2026 — Migraciones D1 producción 013–021 APLICADAS; paso de publicación preparado
+El operador ejecutó en producción `scripts/backup-migrar-produccion.ps1`, tras pull a `fcca46d`. Respaldó `energia-vital-db` D1 `bbb91e7a-37c6-4290-aa9c-29a8022226b4` a `C:\Users\Taliety\Respaldos-Energia-Vital\energia-vital-prod-previo-013-021-20261118-004527.sql` con SHA256 `869008208D28E62CC6EB9BCDA21EDD41853356F2BEEF44B87D96ED7B54E9CA1E`. NO divulgar el SQL ni la URL temporal firmada del export. Tras consentimiento explícito, Wrangler reportó **✅** en las nueve 013–021; el script terminó **PASS: 21 migraciones, refresh_hash presente**. **No volver a aplicar** esas migraciones. No se desplegó ni Worker ni Pages en esta operación.
+
+Se agregó `scripts/publicar-produccion.ps1` para el siguiente paso, que valida rama, configuración UUID, estado remoto D1 21/21/1, typechecks de API y web, tests sesiones, compila Svelte con `VITE_API_URL=https://energia-vital-api.astrustrus.workers.dev` y `VITE_QA_MODE=false`, exige que el operador indique la **Production Branch real** de Pages y autorice `PUBLICAR_BONAIRE_PRODUCCION`, despliega Worker `energia-vital-api`, exige `/health` OK y solo entonces publica proyecto existente `energia-vital-web`. No crea servicios ni configura Zero Trust. **Pendiente ejecutarlo y validar sitio real**. Avisos npm de dev siguen abiertos.
+
 ## 18/11/2026 — API y sesiones aprobadas; respaldo y migración productiva preparados
 El propietario descargó `bb18474` y ejecutó las verificaciones pendientes. `npm run typecheck --workspace=apps/api` **PASS**, `node apps/web/tests/auth-session.cjs` **16 pruebas PASS**, `node scripts/verify-qa-access.test.cjs` **PASS**. El preflight anterior ya había confirmado la compilación web, el ensayo de migraciones en SQLite y `npm audit --omit=dev` con **0 vulnerabilidades**. El historial remoto de D1 productiva sigue confirmado en **12 migraciones / 60 tablas / refresh_hash=0**; nueve migraciones 013–021 siguen pendientes. QA ya migrada a 21 no reemplaza migrar producción.
 
