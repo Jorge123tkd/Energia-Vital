@@ -11,7 +11,7 @@
     onExpand?:()=>void;onBack?:()=>void;
   }=$props();
   const welcome='¡Hola! Soy el asistente de Bonaire. Puedo ayudarte con productos, servicios y asesoramiento solar. ¿Qué necesitas hoy?';
-  const suggestions=['Quiero un asesoramiento solar','Necesito paneles o baterías','Quiero conocer precios','Necesito mantenimiento'];
+  const suggestions=['Registrar solicitud comercial','Somos una empresa estatal','Queremos ser proveedores de Bonaire','Quiero un asesoramiento solar','Necesito mantenimiento','Quiero conocer precios'];
   let sessions:Session[]=$state([]);
   let sessionId:string|null=$state(null);
   let messages:ChatMessage[]=$state([]);
@@ -327,7 +327,7 @@
         <label class="sr-only" for={fullPage?'assistant-full-input':'assistant-panel-input'}>Escribe al asistente</label>
         <textarea id={fullPage?'assistant-full-input':'assistant-panel-input'} bind:value={chatInput}
           maxlength="4000" rows="2" onkeydown={keydown} disabled={busy||loading}
-          placeholder="Pregúntame sobre energía solar, equipos o servicios…"
+          placeholder="Cuéntame qué necesita tu vivienda, empresa o negocio…"
           class="flex-1 min-w-0 max-h-32 rounded-xl border border-slate-300 p-3 text-sm outline-none focus:ring-2 focus:ring-teal-200 resize-none"></textarea>
         <button type="submit" disabled={busy||loading||!chatInput.trim()}
           class="rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold px-4 py-3 text-sm disabled:opacity-50">Enviar</button>
