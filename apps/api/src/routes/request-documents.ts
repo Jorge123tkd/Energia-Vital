@@ -37,8 +37,9 @@ for(const [router,direction] of [[customerDocumentRoutes,'customer'],[staffDocum
   }finally{reader.releaseLock();}
   const buffer=new Uint8Array(total);let offset=0;for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.length;}
   const body=await new Response(buffer,{headers:{'Content-Type':c.req.header('content-type')||''}}).formData().catch(()=>null);
-  const file=body?.get('file');
-  if(!file||typeof file==='string'||file.size>maxDocumentBytes||file.size<=0)return c.json({error:'Adjunta PDF, DOCX o XLSX de hasta 8 MB.'},400);
+  // Workers' FormData declarations may type get() as string, even for a runtime File.
+  const file:unknown=body?.get('file');
+  if(!(file instanceof File)||file.size>maxDocumentBytes||file.size<=0)return c.json({error:'Adjunta PDF, DOCX o XLSX de hasta 8 MB.'},400);
   const bytes=new Uint8Array(await file.arrayBuffer());
   if(!documentFormat(file.name,bytes))return c.json({error:'Formato no admitido.'},400);
   const id=crypto.randomUUID();
