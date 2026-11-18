@@ -213,6 +213,10 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
       const context=await loadAssistantContext(env.DB);
       return {reply:generateResponse('¿Qué servicios ofrecen?',context).text,state:null};
     }
+    case 'business-services':
+      return {reply:'Atención empresarial · Bonaire\n\nAtendemos mipymes, empresas estatales, TCP, cooperativas y otros negocios. Podemos evaluar proyectos, suministro, instalaciones, reparaciones y mantenimiento; no solo viviendas.\n\n¿Qué necesita tu organización y en qué municipio sería el trabajo? No pedimos anticipos ni autorizaciones en este primer contacto. Esta conversación todavía no registra una solicitud.',state:null};
+    case 'business-partner':
+      return {reply:'Propuesta comercial · Bonaire\n\nTambién recibimos ofertas de fabricantes y proveedores, marcas que buscan promoción, distribución en Cuba o alianzas en otros sectores.\n\n¿Qué empresa representas, de qué país es y qué colaboración propones? No hace falta tener contrato ni presupuesto cerrado. La conversación no registra todavía un expediente ni compromete un acuerdo.',state:null};
     case 'request-service':
       return {reply:'Claro. ¿Necesitas instalación, mantenimiento, reparación o una evaluación solar? '+
         'Cuéntame qué equipo tienes y en qué municipio de Cuba sería el trabajo.\n\n'+
