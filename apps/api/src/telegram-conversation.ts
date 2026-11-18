@@ -141,6 +141,7 @@ export function telegramReplyKeyboard(
       ['👤 Mi cuenta','📂 Mis solicitudes'],
       ['📅 Mis citas','Solicitar cita'],
       ['📄 Mis cotizaciones','🔔 Mis notificaciones'],
+      ['🔔 Configurar notificaciones'],
       ['🙋 Hablar con una persona','✏️ Nuevo chat']
     ]);
 }
