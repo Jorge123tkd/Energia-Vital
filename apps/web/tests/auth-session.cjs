@@ -9,7 +9,8 @@ const path = require('node:path');
 const ts = require('typescript');
 
 const source = fs.readFileSync(path.join(__dirname, '../src/lib/api.ts'), 'utf8')
-  .replace("import.meta.env.VITE_API_URL", "''");
+  .replace("import.meta.env.VITE_API_URL", "''")
+  .replace("import.meta.env.VITE_QA_MODE", "'false'");
 const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText;
