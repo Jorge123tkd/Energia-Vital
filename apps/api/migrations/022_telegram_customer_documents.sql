@@ -16,3 +16,15 @@ CREATE TABLE request_documents (
 );
 CREATE INDEX idx_request_documents_case ON request_documents(request_id,created_at);
 CREATE INDEX idx_request_documents_customer ON request_documents(customer_id);
+
+-- Explicit opt-in starts from the moment of consent, not historical notifications.
+ALTER TABLE customers ADD COLUMN telegram_notifications_since TEXT;
+CREATE TABLE telegram_customer_notice_deliveries (
+  notification_id TEXT PRIMARY KEY REFERENCES notifications(id) ON DELETE CASCADE,
+  customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  chat_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('processing','sent','failed','cancelled')),
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_telegram_notice_customer ON telegram_customer_notice_deliveries(customer_id);
+CREATE INDEX idx_customer_notice_pending ON notifications(user_type,user_id,is_read,created_at);
