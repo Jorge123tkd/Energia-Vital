@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, apiRequest, ADMIN_TOKEN_KEY } from './lib/api';
+  import { api, apiRequest, ADMIN_TOKEN_KEY, setAdminRefreshToken, clearAdminSession, logoutCurrentSession, onAdminTokenUpdated } from './lib/api';
   import AdminContent from './components/AdminContent.svelte';
   import Pagination from './components/Pagination.svelte';
   import AdminCustomers from './components/AdminCustomers.svelte';
@@ -240,15 +240,22 @@
     finally{pendingCountBusy=false;}
   }
   onMount(() => {
+    const unsubscribe = onAdminTokenUpdated(value => { token = value; });
     void restore();
     const interval=window.setInterval(()=>{void refreshPendingCount();},60000);
-    return ()=>window.clearInterval(interval);
+    return ()=>{ window.clearInterval(interval); unsubscribe(); };
   });
   async function restore() {
     const saved = sessionStorage.getItem(ADMIN_TOKEN_KEY);
     if (saved) {
-      try { const info = await api.adminMe(saved); staffRole = info.user.role; ownId = info.user.id; token = saved; await reload(saved); }
-      catch { sessionStorage.removeItem(ADMIN_TOKEN_KEY); }
+      try { const info = await api.adminMe(saved); staffRole = info.user.role; ownId = info.user.id;
+        token = sessionStorage.getItem(ADMIN_TOKEN_KEY) || saved;
+        await reload(token); }
+      catch (e) {
+        const status = (e as Error & { status?: number })?.status;
+        if (status === 401 || status === 403) clearAdminSession();
+        else error = 'No se pudo comprobar la sesión por un problema de conexión. Vuelve a intentarlo.';
+      }
     }
     checking = false;
   }
@@ -260,14 +267,15 @@
       staffRole = data.user.role;
       ownId = data.user.id;
       sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+      setAdminRefreshToken(data.refresh_token);
       password = '';
       await reload(token);
     } catch (e) { error = e instanceof Error ? e.message : 'Error al iniciar sesión'; }
     finally { loading = false; }
   }
   async function logout() {
-    try { await apiRequest('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: '{}' }); } catch { /* Limpiar sesión local. */ }
-    token = ''; sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+    token = '';
+    await logoutCurrentSession('admin');
     mobileMenu = false; accountMenu = false; calendarOpen = false;
     customers = []; requests = []; appointments = []; products = []; services = []; categories = [];
     closeDossier();

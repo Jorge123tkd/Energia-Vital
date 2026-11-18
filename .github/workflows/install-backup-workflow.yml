@@ -1,0 +1,66 @@
+name: Instalar SOLO Worker de respaldo D1 (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      install_confirmation:
+        description: 'Escribe INSTALAR_WORKFLOW_RESPALDO (NO exporta D1)'
+        type: string
+        required: true
+      reviewed_source_sha:
+        description: 'SHA completo del commit de release revisado y aprobado'
+        type: string
+        required: true
+permissions:
+  contents: read
+
+jobs:
+  install-backup-only:
+    if: >-
+      github.ref == 'refs/heads/release/combined-security-deps-20261117' &&
+      inputs.install_confirmation == 'INSTALAR_WORKFLOW_RESPALDO'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Comprobar SHA de release congelado
+        shell: bash
+        env:
+          REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REVIEWED_SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]] || [[ "$REVIEWED_SOURCE_SHA" != "$CURRENT_SHA" ]]; then
+            echo 'Bloqueado: el SHA aprobado no coincide con el commit seleccionado.'
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verificar política de respaldos y compilación sin publicar
+        run: |
+          set -euo pipefail
+          node apps/api/tests/backup-workflow-policy.cjs
+          npx wrangler deploy --dry-run --config apps/d1-backup/wrangler.toml --outdir "$RUNNER_TEMP/bonaire-backup-dryrun"
+      - name: Confirmar autenticación Cloudflare específica, nunca OAuth personal
+        shell: bash
+        env:
+          BACKUP_CF_DEPLOY_TOKEN: ${{ secrets.BACKUP_CF_DEPLOY_TOKEN }}
+        run: |
+          if [[ -z "$BACKUP_CF_DEPLOY_TOKEN" ]]; then
+            echo 'Bloqueado: falta secreto BACKUP_CF_DEPLOY_TOKEN con alcance mínimo.'
+            exit 1
+          fi
+      - name: Instalar SOLAMENTE Worker/Workflow de respaldo (NO exportar ni disparar)
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.BACKUP_CF_DEPLOY_TOKEN }}
+        run: npx wrangler deploy --config apps/d1-backup/wrangler.toml
+      - name: Verificar instalación del Workflow (NO ejecutar)
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.BACKUP_CF_DEPLOY_TOKEN }}
+        run: npx wrangler workflows describe energia-vital-d1-backup-manual --json

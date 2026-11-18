@@ -5,6 +5,8 @@ export interface JwtPayload {
   role?: string;
   sid: string;
   kind: 'access' | 'refresh';
+  /** Unique random token identifier; legacy signed JWTs may lack this claim. */
+  jti?: string;
   iat: number;
   exp: number;
 }
@@ -77,6 +79,7 @@ export async function verifyToken(token: string, value: string): Promise<JwtPayl
     if (!ok) return null;
     const payload = JSON.parse(new TextDecoder().decode(unbase64url(pieces[1]))) as JwtPayload;
     const now = Math.floor(Date.now() / 1000);
+    if (payload.jti !== undefined && (typeof payload.jti !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.jti))) return null;
     if (!payload.sid || !payload.user_id || !['admin', 'customer'].includes(payload.type) || !['access', 'refresh'].includes(payload.kind) || !Number.isSafeInteger(payload.exp) || payload.exp <= now || payload.iat > now + 60) return null;
     return payload;
   } catch { return null; }
@@ -87,7 +90,7 @@ export async function generateTokenPair(env: { JWT_SECRET?: string }, userId: st
   const value = secret(env);
   return {
     access_token: await sign({ ...common, kind: 'access', exp: now + ACCESS_TTL }, value),
-    refresh_token: await sign({ ...common, kind: 'refresh', exp: now + REFRESH_TTL }, value),
+    refresh_token: await sign({ ...common, kind: 'refresh', jti: crypto.randomUUID(), exp: now + REFRESH_TTL }, value),
   };
 }
 export async function extractToken(header: string | null | undefined, env: { JWT_SECRET?: string }): Promise<JwtPayload | null> {

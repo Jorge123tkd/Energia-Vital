@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from '../lib/api';
-  let { onSuccess, initialMode = 'login' }: { onSuccess: (user: any, token: string) => void; initialMode?: 'login' | 'register' } = $props();
+  let { onSuccess, initialMode = 'login' }: { onSuccess: (user: any, token: string, refreshToken?: string) => void; initialMode?: 'login' | 'register' } = $props();
   let mode = $state<'login' | 'register'>('login');
   $effect(() => { mode = initialMode; error = ''; });
   let email = $state('');
@@ -22,7 +22,7 @@
         ? await api.signIn({ email, password })
         : await api.register({ name, email, password, phone, address, city, province });
       password = '';
-      onSuccess(result.user, result.access_token);
+      onSuccess(result.user, result.access_token, result.refresh_token);
     } catch (e) {
       error = e instanceof Error ? e.message : 'No se pudo completar la operación';
     } finally { busy = false; }

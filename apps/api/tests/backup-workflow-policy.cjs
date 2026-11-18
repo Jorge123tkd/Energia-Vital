@@ -1,0 +1,31 @@
+'use strict';
+const fs=require('node:fs');
+const assert=require('node:assert/strict');
+const toml=fs.readFileSync('apps/d1-backup/wrangler.toml','utf8');
+const src=fs.readFileSync('apps/d1-backup/src/index.ts','utf8');
+assert.match(toml,/name = "energia-vital-d1-backup"/);
+assert.match(toml,/bucket_name = "energia-vital-backups-private"/);
+assert.match(toml,/class_name = "BonaireD1Backup"/);
+assert.ok(!/^\s*(?:crons\s*=|schedules\s*=|\[triggers\])/m.test(toml),'No automatic schedules');
+assert.ok(!toml.includes('energia-vital-assets'),'No production assets bucket');
+assert.match(src,/RESPALDAR_D1_EN_R2/);
+assert.match(src,/event\.payload\?\.confirm !== CONFIRMATION/);
+assert.match(src,/dump_options: \{ compatibility: 'd1' \}/);
+assert.match(src,/BACKUP_BUCKET\.put\(objectKey, dump\.body/);
+assert.match(src,/BACKUP_BUCKET\.head\(saved\.key\)/);
+assert.match(src,/return new Response\('No disponible', \{ status: 404 \}\)/);
+// D1 export signed URL is nested under result.result; status must be complete.
+assert.match(src,/body\.result\?\.result\?\.signed_url/);
+assert.match(src,/body\.result\?\.status !== 'complete'/);
+assert.match(src,/body\.result\?\.status === 'error'/);
+assert.ok(!/console\.(?:log|error)/.test(src),'No logs of signed URLs or private data');
+// Instalación solo mediante acción manual, ligada a SHA y sin disparar exportación.
+const installer=fs.readFileSync('.github/workflows/install-backup-workflow.yml','utf8');
+assert.match(installer,/workflow_dispatch:/);
+assert.match(installer,/INSTALAR_WORKFLOW_RESPALDO/);
+assert.match(installer,/github\.ref == 'refs\/heads\/release\/combined-security-deps-20261117'/);
+assert.match(installer,/REVIEWED_SOURCE_SHA.*CURRENT_SHA/);
+assert.match(installer,/BACKUP_CF_DEPLOY_TOKEN/);
+assert.match(installer,/wrangler deploy --config apps\/d1-backup\/wrangler\.toml/);
+assert.ok(!/workflows trigger|time-travel restore|migrations apply --remote/.test(installer),'Installation must not export, restore or migrate production');
+console.log('PASS: manual D1->R2 backup has consent gate, isolated private bucket, no schedule, R2 verification');

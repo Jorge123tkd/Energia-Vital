@@ -5,6 +5,17 @@ import { activeSession } from '../middleware';
 import { rateLimited } from '../rate-limit';
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
+// Evita que respuestas con access/refresh JWT se almacenen en cachés.
+authRoutes.use('*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-store');
+  c.header('Pragma', 'no-cache');
+});
+/** SHA-256 del refresh JWT firmado: nunca guardar el token en D1. */
+async function refreshFingerprint(token: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
+}
 const validEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validPhone = (phone: string) => /^\+?[0-9 ()-]{8,20}$/.test(phone) && (phone.match(/\d/g) || []).length >= 8;
 const validPassword = (s: unknown): s is string => typeof s === 'string' && s.length >= 10 && s.length <= 128;
@@ -25,9 +36,10 @@ async function issue(env: Env, userId: string, type: 'customer' | 'admin', role:
   const sid = crypto.randomUUID();
   const now = new Date();
   const expires = new Date(now.getTime() + REFRESH_TTL * 1000).toISOString();
-  await env.DB.prepare('INSERT INTO auth_sessions (id, user_id, user_type, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
-    .bind(sid, userId, type, now.toISOString(), expires).run();
-  return generateTokenPair(env, userId, type, role, sid);
+  const tokens = await generateTokenPair(env, userId, type, role, sid);
+  await env.DB.prepare('INSERT INTO auth_sessions (id, user_id, user_type, created_at, expires_at, refresh_hash) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(sid, userId, type, now.toISOString(), expires, await refreshFingerprint(tokens.refresh_token)).run();
+  return tokens;
 }
 async function signedIn(c: any, type: 'admin' | 'customer'): Promise<JwtPayload | null> {
   const p = await extractToken(c.req.header('authorization'), c.env);
@@ -148,14 +160,15 @@ authRoutes.post('/register', async c => {
     const now = new Date().toISOString();
     const expires = new Date(Date.now() + REFRESH_TTL * 1000).toISOString();
     const hash = await hashPassword(b.password);
+    const tokens = await generateTokenPair(c.env, id, 'customer', 'customer', sessionId);
     // D1.batch ejecuta ambas sentencias de forma transaccional:
     // no deja una cuenta creada a medias si la sesión no se puede guardar.
     await c.env.DB.batch([
       c.env.DB.prepare(`INSERT INTO customers (id, name, email, phone, address, city, province, password_hash, role, phone_verified, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer', 0, ?, ?)`)
         .bind(id, name, email, phone, address, city, province, hash, now, now),
-      c.env.DB.prepare('INSERT INTO auth_sessions (id, user_id, user_type, created_at, expires_at) VALUES (?, ?, ?, ?, ?)')
-        .bind(sessionId, id, 'customer', now, expires),
+      c.env.DB.prepare('INSERT INTO auth_sessions (id, user_id, user_type, created_at, expires_at, refresh_hash) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(sessionId, id, 'customer', now, expires, await refreshFingerprint(tokens.refresh_token)),
     ]);
     // Solo avisos internos: no enviamos SMS ni WhatsApp sin autorización expresa.
     try {
@@ -178,7 +191,6 @@ authRoutes.post('/register', async c => {
       console.error('[register] El aviso de bienvenida no se pudo guardar',e);
       // La cuenta ya está creada: un fallo de notificaciones no bloquea el alta.
     }
-    const tokens = await generateTokenPair(c.env, id, 'customer', 'customer', sessionId);
     return c.json({ user: { id, name, email, phone, address, city, province, role: 'customer', phone_verified: false }, ...tokens }, 201);
   } catch (error) {
     console.error('[register] Error en D1 al registrar una cuenta', error);
@@ -205,8 +217,13 @@ authRoutes.post('/customer/login', async c => {
 });
 
 authRoutes.post('/refresh', async c => {
+  // Defensa de aplicación adicional; WAF/Turnstile requiere revisión remota.
+  // Cuota suficientemente amplia para varias sesiones detrás de una NAT.
+  if (await rateLimited(c.env, c.req.raw, 'auth_refresh', 180, 60))
+    return c.json({ error: 'Demasiadas renovaciones. Inténtalo de nuevo más tarde.' }, 429);
   const b = await readBodyObject(c);
-  const token = typeof b?.refresh_token === 'string' ? await verifyToken(b.refresh_token, c.env.JWT_SECRET || '') : null;
+  const token = typeof b?.refresh_token === 'string' && b.refresh_token.length <= 4096
+    ? await verifyToken(b.refresh_token, c.env.JWT_SECRET || '') : null;
   if (!token || token.kind !== 'refresh' || !await activeSession(c.env, token)) return c.json({ error: 'Sesión expirada' }, 401);
   // El rol del refresh JWT puede estar obsoleto. Solo los permisos vigentes
   // en D1 pueden determinar el rol de los nuevos tokens.
@@ -224,14 +241,31 @@ authRoutes.post('/refresh', async c => {
     role = 'customer';
   }
   const tokens = await generateTokenPair(c.env, token.user_id, token.type, role, token.sid);
+  // Compare-and-swap atómico. La primera renovación legacy (hash NULL) gana
+  // una sola vez; dos requests concurrentes nunca pueden renovar ambos.
+  const prior = await refreshFingerprint(b!.refresh_token as string);
+  const next = await refreshFingerprint(tokens.refresh_token);
+  const updated = await c.env.DB.prepare(`UPDATE auth_sessions SET refresh_hash = ?
+    WHERE id = ? AND user_id = ? AND user_type = ?
+    AND revoked_at IS NULL AND expires_at > ?
+    AND (refresh_hash = ? OR (refresh_hash IS NULL AND ? = 1))`)
+    .bind(next, token.sid, token.user_id, token.type, new Date().toISOString(), prior, token.jti ? 0 : 1).run();
+  if (updated.meta.changes !== 1) return c.json({ error: 'Token de renovación utilizado o expirado' }, 401);
   return c.json(tokens);
 });
 
 authRoutes.post('/logout', async c => {
   const bearer = await extractToken(c.req.header('authorization'), c.env);
-  if (!bearer) return c.json({ error: 'No autorizado' }, 401);
-  await c.env.DB.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE id = ? AND user_id = ?')
-    .bind(new Date().toISOString(), bearer.sid, bearer.user_id).run();
+  // El access puede haber vencido. Se permite cerrar LA MISMA sesión
+  // presentando el refresh firmado en el cuerpo, sin entregarlo en URL/cookie.
+  const body = bearer ? null : await readBodyObject(c);
+  const refresh = !bearer && typeof body?.refresh_token === 'string' && body.refresh_token.length <= 4096
+    ? await verifyToken(body.refresh_token, c.env.JWT_SECRET || '') : null;
+  const session = bearer || (refresh?.kind === 'refresh' ? refresh : null);
+  if (!session) return c.json({ error: 'No autorizado' }, 401);
+  await c.env.DB.prepare(`UPDATE auth_sessions SET revoked_at = ?
+    WHERE id = ? AND user_id = ? AND user_type = ? AND revoked_at IS NULL`)
+    .bind(new Date().toISOString(), session.sid, session.user_id, session.type).run();
   return c.json({ message: 'Sesión cerrada' });
 });
 

@@ -15,7 +15,7 @@
   import ContactPage from './ContactPage.svelte';
   import AdminPage from './AdminPage.svelte';
   import ChiefPortal from './ChiefPortal.svelte';
-  import { api, customerToken, setCustomerToken, ADMIN_TOKEN_KEY } from './lib/api';
+  import { api, customerToken, setCustomerToken, logoutCurrentSession, setCustomerRefreshToken, setAdminRefreshToken, clearAdminSession, ADMIN_TOKEN_KEY } from './lib/api';
   import { isAssistantOpen, assistantSessionId, assistantMessages } from './lib/store';
 
   const publicRoutes = new Set(['/', '/catalogo', '/servicios', '/galeria', '/asesor-solar']);
@@ -40,11 +40,18 @@
         user = { ...result.user, name: result.user.role === 'operator' ? 'Moderador' : 'Administrador', account_type: 'admin' };
         checking = false;
         return;
-      } catch { sessionStorage.removeItem(ADMIN_TOKEN_KEY); }
+      } catch (e) {
+        // Una desconexión no invalida credenciales; solo 401/403 confirmados.
+        const status = (e as Error & { status?: number })?.status;
+        if (status === 401 || status === 403) clearAdminSession();
+      }
     }
     if (customerToken()) {
       try { const result = await api.me(); user = result.user; }
-      catch { setCustomerToken(null); }
+      catch (e) {
+        const status = (e as Error & { status?: number })?.status;
+        if (status === 401 || status === 403) setCustomerToken(null);
+      }
     }
     checking = false;
   }
@@ -74,13 +81,15 @@
     navigate('/asistente');
   }
 
-  function onAuthenticated(customer: any, token: string) {
+  function onAuthenticated(customer: any, token: string, refreshToken?: string) {
     if ((customer.account_type === 'admin' || customer.role === 'admin' || customer.role === 'operator')) {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+      setAdminRefreshToken(refreshToken || null);
       setCustomerToken(null);
     } else {
       setCustomerToken(token);
-      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      setCustomerRefreshToken(refreshToken || null);
+      clearAdminSession();
     }
     user = customer;
     assistantSessionId.set(null);
@@ -99,12 +108,8 @@
 
   async function signOut() {
     const admin = sessionStorage.getItem(ADMIN_TOKEN_KEY);
-    try {
-      if (admin) await api.logoutAdmin(admin);
-      else await api.logout();
-    } catch { /* Una sesión caducada también se cierra localmente. */ }
-    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-    setCustomerToken(null);
+    // logoutCurrentSession elimina las credenciales locales sin esperar la red.
+    await logoutCurrentSession(admin ? 'admin' : 'customer');
     user = null;
     assistantSessionId.set(null);
     assistantMessages.set([]);

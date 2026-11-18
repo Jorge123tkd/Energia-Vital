@@ -1,7 +1,7 @@
 name: Validar y desplegar Energía Vital
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/cloudflare-customer-accounts-hardening]
   push:
     branches: [main]
   workflow_dispatch:
@@ -32,14 +32,35 @@ jobs:
           cache: npm
       - name: Instalar dependencias del monorepo
         run: npm ci
+      - name: Bloquear configuración QA vinculada a recursos de producción
+        run: node scripts/prepare-cloudflare-qa-config.test.cjs
+      - name: Verificar política de respaldo manual D1 hacia R2 privado
+        run: node apps/api/tests/backup-workflow-policy.cjs
+      - name: Compilar Worker de respaldo sin publicar (dry-run)
+        run: npx wrangler deploy --dry-run --config apps/d1-backup/wrangler.toml --outdir "$RUNNER_TEMP/bonaire-backup-dryrun"
+      - name: Probar política de auditoría de dependencias
+        run: node apps/api/tests/release-dependency-audit.test.cjs
+      - name: Bloquear CVE críticas, altas o moderadas en el lockfile combinado
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --json > "$RUNNER_TEMP/bonaire-audit-all.json" || true
+          node apps/api/tests/release-dependency-audit.cjs < "$RUNNER_TEMP/bonaire-audit-all.json"
+          npm audit --omit=dev --json > "$RUNNER_TEMP/bonaire-audit-production.json" || true
+          node apps/api/tests/release-dependency-audit.cjs < "$RUNNER_TEMP/bonaire-audit-production.json"
+          rm -f "$RUNNER_TEMP/bonaire-audit-all.json" "$RUNNER_TEMP/bonaire-audit-production.json"
       - name: Revisar TypeScript API
         run: npm run typecheck --workspace=apps/api
       - name: Revisar Svelte + TypeScript
         run: npm run typecheck --workspace=apps/web
       - name: Construir frontend
         run: npm run build --workspace=apps/web
+      - name: Probar renovación y cierre de sesiones en navegador simulado
+        run: node apps/web/tests/auth-session.cjs
       - name: Ensayo de preservación de datos históricos ficticios (sin Cloudflare real)
         run: python3 apps/api/tests/migration-preservation.py
+      - name: Verificar inventario D1 de solo esquema (fixtures ficticios)
+        run: node apps/api/tests/remote-inventory-schema.test.cjs
 
       - name: Crear D1 de pruebas local (no production)
         working-directory: apps/api
@@ -95,6 +116,27 @@ jobs:
             }
             console.log("Verificación de estructura D1 remota correcta (15 tablas esperadas).");
           ' "$RUNNER_TEMP/bonaire-schema-count.json"
+      - name: Bloquear publicación si falta la columna de rotación en D1 remota (solo SELECT)
+        working-directory: apps/api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute energia-vital-db --remote --json \
+            --command "SELECT COUNT(*) AS present FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'" \
+            > "$RUNNER_TEMP/bonaire-refresh-column.json"
+          node -e '
+            const fs = require("fs");
+            const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const result = Array.isArray(raw) ? raw[0] : raw;
+            if (Number(result?.results?.[0]?.present) !== 1) {
+              console.error("Bloqueado: falta auth_sessions.refresh_hash de migración 021 en D1 remota.");
+              process.exit(1);
+            }
+            console.log("Esquema D1 remota compatible con refresh rotation 021.");
+          ' "$RUNNER_TEMP/bonaire-refresh-column.json"
       - name: Publicar Cloudflare Worker
         working-directory: apps/api
         run: npx wrangler deploy

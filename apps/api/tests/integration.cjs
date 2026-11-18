@@ -72,8 +72,65 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
     { email: adminEmail, password: adminPassword });
   assert.ok(adminSession.access_token, 'admin returns a signed access token');
   const adminToken = adminSession.access_token;
+  const privateAuthResponse = await fetch(BASE + '/api/auth/admin/me', {
+    headers: { Authorization: 'Bearer ' + adminToken }
+  });
+  assert.equal(privateAuthResponse.status, 200);
+  assert.match(privateAuthResponse.headers.get('cache-control') || '', /no-store/i,
+    'Authentication responses must never be cached');
+  console.log('PASS Auth responses carry no-store headers');
   const adminRenewed = await request('Admin refresh uses current database permissions',
     '/api/auth/refresh','POST',{refresh_token:adminSession.refresh_token});
+  // Cada refresh emitido contiene un identificador criptográfico único.
+  // Esto no activa todavía consumo de un solo uso ni invalida tokens legacy.
+  const readJwtClaims = value => JSON.parse(Buffer.from(value.split('.')[1], 'base64url').toString('utf8'));
+  const initialRefreshClaims = readJwtClaims(adminSession.refresh_token);
+  const firstRefreshClaims = readJwtClaims(adminRenewed.refresh_token);
+  assert.match(initialRefreshClaims.jti, /^[0-9a-f-]{36}$/i);
+  assert.match(firstRefreshClaims.jti, /^[0-9a-f-]{36}$/i);
+  assert.notEqual(initialRefreshClaims.jti, firstRefreshClaims.jti, 'Every issued refresh token must have a distinct jti');
+  assert.equal(initialRefreshClaims.sid, firstRefreshClaims.sid, 'Renewal must keep the same device session');
+  const secondAdminRenewal = await request('Second admin renewal issues a fresh identifier',
+    '/api/auth/refresh','POST',{refresh_token:adminRenewed.refresh_token});
+  const secondRefreshClaims = readJwtClaims(secondAdminRenewal.refresh_token);
+  assert.notEqual(firstRefreshClaims.jti, secondRefreshClaims.jti, 'Consecutive renewals must not reuse jti');
+  assert.equal(secondRefreshClaims.sid, firstRefreshClaims.sid);
+  console.log('PASS Refresh tokens have distinct jti within one device session');
+  await request('Consumed admin refresh cannot be reused',
+    '/api/auth/refresh','POST',{refresh_token:adminSession.refresh_token},null,401);
+  await request('Intermediate refresh is also consumed',
+    '/api/auth/refresh','POST',{refresh_token:adminRenewed.refresh_token},null,401);
+  const concurrentAdmin = await request('New admin session for simultaneous refresh',
+    '/api/auth/login','POST',{email:adminEmail,password:adminPassword});
+  const race = await Promise.all([1,2].map(()=>fetch(BASE+'/api/auth/refresh',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:concurrentAdmin.refresh_token})
+  })));
+  assert.deepEqual(race.map(x=>x.status).sort((a,b)=>a-b),[200,401],
+    'Two simultaneous renewals must have exactly one winner');
+  const winner = race.find(x=>x.status===200);
+  const winnerTokens = await winner.json();
+  await request('Concurrent winning refresh is valid for one next renewal',
+    '/api/auth/refresh','POST',{refresh_token:winnerTokens.refresh_token});
+  console.log('PASS Concurrent refresh compare-and-swap permits exactly one winner');
+  // Un logout con access vencido puede usar únicamente el refresh firmado;
+  // jamás requiere volver a autenticar para revocar la sesión de ese equipo.
+  const expiringAdmin = await request('Open isolated admin session for refresh-only logout',
+    '/api/auth/login','POST',{email:adminEmail,password:adminPassword});
+  await request('Logout accepts signed refresh without bearer access',
+    '/api/auth/logout','POST',{refresh_token:expiringAdmin.refresh_token});
+  await request('Refresh-only logout revokes the original access',
+    '/api/admin/users','GET',null,expiringAdmin.access_token,401);
+  await request('Refresh-only logout revokes that refresh token',
+    '/api/auth/refresh','POST',{refresh_token:expiringAdmin.refresh_token},null,401);
+  await request('Logout rejects arbitrary refresh input',
+    '/api/auth/logout','POST',{refresh_token:'not-a-jwt'},null,401);
+  await request('Reject oversized refresh without parsing JWT signature',
+    '/api/auth/refresh','POST',{refresh_token:'x'.repeat(4097)},null,401);
+  await request('Reject oversized refresh on logout',
+    '/api/auth/logout','POST',{refresh_token:'x'.repeat(4097)},null,401);
+  console.log('PASS Refresh-only logout revokes entire session without valid access');
+
   const adminRenewedClaims = JSON.parse(Buffer.from(adminRenewed.access_token.split('.')[1], 'base64url').toString('utf8'));
   assert.equal(adminRenewedClaims.role,'admin');
   assert.equal(adminRenewedClaims.type,'admin');
@@ -294,6 +351,26 @@ async function invalidJson(name, route, method, rawBody, expected, token, setupK
     '/api/private/requests','GET',null,ar.refresh_token,401);
   await request('Customer access token cannot be used to refresh',
     '/api/auth/refresh','POST',{refresh_token:at},null,401);
+  // Un token consumido en A no afecta una sesión independiente B.
+  const secondaryCustomerA = await request('Customer A opens an independent device',
+    '/api/auth/customer/login','POST',{email:a.email,password:a.password});
+  const independentRenewal = await request('Independent device renews normally',
+    '/api/auth/refresh','POST',{refresh_token:secondaryCustomerA.refresh_token});
+  const secondaryClaims = readJwtClaims(independentRenewal.refresh_token);
+  const originalClaims = readJwtClaims(customerRenewed.refresh_token);
+  assert.notEqual(secondaryClaims.sid, originalClaims.sid,
+    'Each login must create an independent device session');
+  await request('Original customer session still renews independently',
+    '/api/auth/refresh','POST',{refresh_token:customerRenewed.refresh_token});
+  await request('Consumed independent device token is rejected',
+    '/api/auth/refresh','POST',{refresh_token:secondaryCustomerA.refresh_token},null,401);
+  await request('Independent device logs out using access token',
+    '/api/auth/logout','POST',{},secondaryCustomerA.access_token);
+  await request('Logged-out device cannot use its new refresh',
+    '/api/auth/refresh','POST',{refresh_token:independentRenewal.refresh_token},null,401);
+  await request('Original device remains active after independent logout',
+    '/api/auth/me','GET',null,at);
+
 
   await invalidJson('Customer request rejects malformed JSON',
     '/api/private/requests','POST','{',400,at);

@@ -6,18 +6,189 @@ export const ADMIN_TOKEN_KEY = 'energia_vital_admin_session';
 export function customerToken(): string | null {
   return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(CUSTOMER_TOKEN_KEY) : null;
 }
+// El refresh se guarda SOLO en memoria de la pestaña; nunca en sessionStorage,
+// localStorage ni logs. Al recargar se pierde y puede requerirse nuevo login.
+let customerRefresh: string | null = null;
+let refreshing: Promise<string | null> | null = null;
+let refreshingFor: string | null = null;
+let priorCustomerAccess: string | null = null;
+// Sesión de personal: también solo en memoria, separada de la del cliente.
+let adminRefresh: string | null = null;
+let adminRefreshing: Promise<string | null> | null = null;
+let adminRefreshingFor: string | null = null;
+// Permitir reintentar requests iniciadas justo antes de una renovación válida.
+let priorAdminAccess: string | null = null;
+const adminListeners = new Set<(token: string) => void>();
+export function onAdminTokenUpdated(listener: (token: string) => void): () => void {
+  adminListeners.add(listener);
+  return () => { adminListeners.delete(listener); };
+}
+export function setAdminRefreshToken(token: string | null) {
+  adminRefresh = token;
+  priorAdminAccess = null;
+}
+/** Cierra la sesión en el navegador ANTES de esperar la red. El refresh
+ * firmado puede revocar la sesión en D1 aun cuando el access haya caducado.
+ * Nunca conserva el refresh ni lo manda en URL, logs o almacenamiento local. */
+export async function logoutCurrentSession(kind: 'customer' | 'admin'): Promise<void> {
+  const access = kind === 'admin' ? sessionStorage.getItem(ADMIN_TOKEN_KEY) : customerToken();
+  const refresh = kind === 'admin' ? adminRefresh : customerRefresh;
+  if (kind === 'admin') clearAdminSession();
+  else setCustomerToken(null);
+  if (!access && !refresh) return;
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  if (!refresh && access) headers.set('Authorization', `Bearer ${access}`);
+  try {
+    await fetch(`${API_BASE}/api/auth/logout`, {
+      method: 'POST', headers, cache: 'no-store',
+      body: JSON.stringify(refresh ? { refresh_token: refresh } : {}),
+    });
+  } catch { /* El navegador ya cerró. Una desconexión no asegura revocación remota. */ }
+}
+export function clearAdminSession() {
+  // Invalidar la memoria antes de cualquier petición de logout.
+  adminRefresh = null;
+  priorAdminAccess = null;
+  if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+async function renewAdminAccess(failedToken: string): Promise<string | null> {
+  const existing = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  // No reintentar una petición de la cuenta A con el token de la cuenta B.
+  if (existing && existing !== failedToken)
+    return priorAdminAccess === failedToken && adminRefresh ? existing : null;
+  if (!adminRefresh) return null;
+  const previous = adminRefresh;
+  // Una renovación pendiente de otra cuenta/sesión no puede bloquear ésta.
+  if (!adminRefreshing || adminRefreshingFor !== previous) {
+    adminRefreshingFor = previous;
+    const job = (async () => {
+      const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: previous }), cache: 'no-store',
+      });
+      if (!response.ok) return null;
+      const data: unknown = await response.json().catch(() => null);
+      if (!data || typeof data !== 'object') return null;
+      const pair = data as { access_token?: unknown; refresh_token?: unknown };
+      if (typeof pair.access_token !== 'string' || typeof pair.refresh_token !== 'string') return null;
+      if (adminRefresh !== previous || sessionStorage.getItem(ADMIN_TOKEN_KEY) !== failedToken) return null;
+      adminRefresh = pair.refresh_token;
+      priorAdminAccess = failedToken;
+      sessionStorage.setItem(ADMIN_TOKEN_KEY, pair.access_token);
+      for (const listener of adminListeners) listener(pair.access_token);
+      return pair.access_token;
+    })();
+    const flight = job.finally(() => {
+      if (adminRefreshing === flight) {
+        adminRefreshing = null;
+        adminRefreshingFor = null;
+      }
+    });
+    adminRefreshing = flight;
+  }
+  return adminRefreshing;
+}
+export function setCustomerRefreshToken(token: string | null) {
+  customerRefresh = token;
+  priorCustomerAccess = null;
+}
 export function setCustomerToken(token: string | null) {
   if (token) sessionStorage.setItem(CUSTOMER_TOKEN_KEY, token);
-  else sessionStorage.removeItem(CUSTOMER_TOKEN_KEY);
+  else {
+    sessionStorage.removeItem(CUSTOMER_TOKEN_KEY);
+    customerRefresh = null;
+    priorCustomerAccess = null;
+  }
+}
+function isRefreshableRoute(path: string): boolean {
+  // Consultas de identidad también necesitan renovar para restaurar una sesión
+  // todavía abierta; las mutaciones de auth nunca deben reintentarse.
+  return !path.startsWith('/api/auth/') ||
+    path === '/api/auth/me' || path === '/api/auth/admin/me';
+}
+function accessExpired(token: string): boolean {
+  try {
+    const raw = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(raw.padEnd(Math.ceil(raw.length / 4) * 4, '=')));
+    return typeof claims.exp === 'number' && claims.exp <= Math.floor(Date.now() / 1000);
+  } catch { return false; }
+}
+async function renewCustomerAccess(failedToken: string): Promise<string | null> {
+  // Si otra petición renovó esta misma sesión, reutiliza el access nuevo.
+  const newer = customerToken();
+  if (newer && newer !== failedToken)
+    return priorCustomerAccess === failedToken && customerRefresh ? newer : null;
+  if (!customerRefresh) return null;
+  const previousRefresh = customerRefresh;
+  // No compartir la renovación de la cuenta anterior después de logout/login.
+  if (!refreshing || refreshingFor !== previousRefresh) {
+    refreshingFor = previousRefresh;
+    const job = (async () => {
+      const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: previousRefresh }),
+        cache: 'no-store',
+      });
+      if (!response.ok) return null;
+      const pair: unknown = await response.json().catch(() => null);
+      if (!pair || typeof pair !== 'object') return null;
+      const tokens = pair as { access_token?: unknown; refresh_token?: unknown };
+      if (typeof tokens.access_token !== 'string' || typeof tokens.refresh_token !== 'string') return null;
+      // Un cierre de sesión durante la petición no debe reactivar su token.
+      if (customerRefresh !== previousRefresh || customerToken() !== failedToken) return null;
+      setCustomerToken(tokens.access_token);
+      customerRefresh = tokens.refresh_token;
+      priorCustomerAccess = failedToken;
+      return tokens.access_token;
+    })();
+    const flight = job.finally(() => {
+      if (refreshing === flight) {
+        refreshing = null;
+        refreshingFor = null;
+      }
+    });
+    refreshing = flight;
+  }
+  return refreshing;
 }
 export async function apiRequest(path: string, options: RequestInit = {}): Promise<any> {
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-  const token = customerToken();
-  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const suppliedAuth = headers.has('Authorization');
+  const explicitToken = suppliedAuth ? headers.get('Authorization')?.replace(/^Bearer /, '') || null : null;
+  const token = suppliedAuth ? null : customerToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  let response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  // Renovar admin únicamente si el Bearer explícito corresponde a esta sesión.
+  // Nunca renovar login, logout, token externo ni permisos denegados (403).
+  if (response.status === 401 && explicitToken && accessExpired(explicitToken) &&
+      (sessionStorage.getItem(ADMIN_TOKEN_KEY) === explicitToken ||
+        (priorAdminAccess === explicitToken && Boolean(adminRefresh))) &&
+      isRefreshableRoute(path)) {
+    const renewed = await renewAdminAccess(explicitToken).catch(() => null);
+    if (renewed) {
+      const retryHeaders = new Headers(headers);
+      retryHeaders.set('Authorization', `Bearer ${renewed}`);
+      response = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders });
+    }
+  }
+  // Nunca renovar por errores de permisos ni en rutas de login/logout.
+  // Únicamente reintentar una vez si el access JWT del cliente ha expirado.
+  if (response.status === 401 && token && !suppliedAuth && isRefreshableRoute(path) && accessExpired(token)) {
+    const renewed = await renewCustomerAccess(token).catch(() => null);
+    if (renewed) {
+      const retryHeaders = new Headers(headers);
+      retryHeaders.set('Authorization', `Bearer ${renewed}`);
+      response = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders });
+    }
+  }
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || data.message || `Error HTTP ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(data.error || data.message || `Error HTTP ${response.status}`);
+    Object.assign(error, { status: response.status });
+    throw error;
+  }
   return data;
 }
 function withAdmin(token: string, options: RequestInit = {}): RequestInit {
