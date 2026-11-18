@@ -250,3 +250,35 @@ quoteRoutes.patch('/:id/review',requireAdminAuth,async c=>{
     ?'Aprobación INTERNA registrada. No se envió ninguna oferta al cliente.'
     :'Rechazo interno registrado; crea otra versión corregida.'});
 });
+
+
+// Emitir es una acción explícita del administrador, distinta de aprobar internamente.
+// La notificación persistida es el registro de emisión visible para el titular.
+quoteRoutes.post('/:id/issue',requireAdminAuth,async c=>{
+  const id=c.req.param('id');
+  if(!validId(id))return c.json({error:'Cotización inválida.'},400);
+  const q=await c.env.DB.prepare(
+    "SELECT q.id,q.title,q.total_cents,q.valid_until,r.customer_id "+
+    "FROM commercial_quote_versions q JOIN requests r ON r.id=q.request_id "+
+    "JOIN customers cu ON cu.id=r.customer_id WHERE q.id=? AND q.status='approved_internal' "+
+    "AND r.status NOT IN ('cancelled','completed') AND cu.is_active=1"
+  ).bind(id).first<{id:string;title:string;total_cents:number;valid_until:string|null;customer_id:string}>();
+  if(!q||!q.valid_until||q.valid_until<cubaToday())return c.json({error:'La oferta debe estar aprobada, vigente y asociada a un cliente activo.'},409);
+  const time=new Date().toISOString(),notificationId='quote-issued-'+id;
+  const data=JSON.stringify({quote_version_id:id,kind:'quote_issued'});
+  const result=await c.env.DB.prepare(
+    "INSERT INTO notifications (id,user_id,user_type,type,title,message,data,is_read,created_at) "+
+    "SELECT ?,r.customer_id,'customer','system',?,?,?,0,? "+
+    "FROM commercial_quote_versions q JOIN requests r ON r.id=q.request_id JOIN customers cu ON cu.id=r.customer_id "+
+    "WHERE q.id=? AND q.status='approved_internal' AND q.valid_until>=? AND r.status NOT IN ('cancelled','completed') AND cu.is_active=1 "+
+    "ON CONFLICT(id) DO NOTHING"
+  ).bind(notificationId,'Cotización disponible: '+q.title,'Importe USD '+(q.total_cents/100).toFixed(2)+'. Vigencia: '+q.valid_until+'. Referencia: '+id,data,time,id,cubaToday()).run();
+  if(!result.meta?.changes){
+    const exists=await c.env.DB.prepare("SELECT id FROM notifications WHERE id=? AND user_id=? AND user_type='customer'").bind(notificationId,q.customer_id).first();
+    if(!exists)return c.json({error:'La cotización cambió antes de emitirse.'},409);
+    return c.json({message:'Esta versión ya fue emitida.',issued:true});
+  }
+  await c.env.DB.prepare("INSERT INTO audit_logs(id,admin_user_id,action,entity_type,entity_id,details,created_at) VALUES (?,?,'quote_issued','quote',?,?,?)")
+    .bind(crypto.randomUUID(),c.var.user!.user_id,id,JSON.stringify({notification_id:notificationId}),time).run();
+  return c.json({message:'Cotización publicada para su titular. Disponible en su cuenta y Telegram vinculado.',issued:true},201);
+});
