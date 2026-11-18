@@ -36,6 +36,8 @@ const follow=engine.businessServiceReply('Trabajamos en La Habana y podemos paga
 assert.ok(follow&&follow.includes('USD')&&follow.includes('NO un expediente'));
 assert.equal(engine.businessServiceReply('¿Qué venden?'),null);
 assert.equal(engine.businessServiceReply('Somos una empresa, ¿qué productos venden?'),null);
+assert.equal(engine.businessServiceReply('Soy una empresa y quiero saber qué equipos venden'),null);
+assert.ok(engine.businessServiceReply('Somos una empresa estatal').includes('Atención empresarial'));
 assert.equal(engine.businessServiceReply('Quiero instalar paneles en mi casa'),null);
 assert.equal(engine.businessServiceReply('No queremos asociarnos con Bonaire'),null);
 assert.equal(engine.businessServiceReply('¿Cómo está el dólar?'),null);
