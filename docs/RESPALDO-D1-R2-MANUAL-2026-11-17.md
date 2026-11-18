@@ -1,4 +1,8 @@
 # Respaldo D1 de producción a R2 privado — procedimiento manual preparado
+
+## 17/11/2026 — Instalador de Cloudflare preparado sin usar Windows
+En el [PR #7](https://github.com/Jorge123tkd/Energia-Vital/pull/7) se añadió `.github/workflows/install-backup-workflow.yml` (commit `597e0940`). Es una acción **manual** que exige confirmación `INSTALAR_WORKFLOW_RESPALDO`, rama de release específica, SHA exacto aprobado, `npm ci`, prueba de política y compilación `wrangler deploy --dry-run`. Despliega **solo** `apps/d1-backup/wrangler.toml` y consulta `workflows describe`; **NO llama** `workflows trigger`, no exporta D1, no modifica D1, no afecta Worker ni Pages públicos. La prueba de este bloqueo está en `apps/api/tests/backup-workflow-policy.cjs` (commit `56611964`). Requiere `BACKUP_CF_DEPLOY_TOKEN` de alcance mínimo, creado como GitHub Actions Secret sin exponerlo. El secreto `D1_EXPORT_API_TOKEN` del Worker sigue siendo independiente; debe configurarse por canal seguro antes de iniciar una exportación. **ADVERTENCIA GITHUB:** un workflow nuevo con `workflow_dispatch` en una rama no predeterminada no aparecerá ejecutable en la interfaz hasta que exista en la rama predeterminada. No copiar este workflow a `main` sin una revisión y autorización explícita; no improvisar un deploy local. Falta verificar CI del último SHA, revisión del instalador, permisos y disponibilidad del disparador.
+
 **Estado al 17/11/2026: CÓDIGO PREPARADO EN PR #7, NO INSTALADO EN CLOUDFLARE, NO EXPORTADO.**
 
 ## Evidencia comprobada por el propietario
