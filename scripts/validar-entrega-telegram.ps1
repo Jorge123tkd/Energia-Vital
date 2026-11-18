@@ -1,4 +1,5 @@
 # Checks only: no local server, remote mutation, migration or deployment.
+param([switch]$SkipInstall)
 $ErrorActionPreference='Stop'
 Set-Location (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ((git branch --show-current).Trim() -ne 'feat/cloudflare-customer-accounts-hardening') {throw 'Rama incorrecta.'}
@@ -7,7 +8,10 @@ function Test-Step([string]$label,[scriptblock]$command) {
   & $command
   if ($LASTEXITCODE -ne 0) {throw "FALLO: $label. No desplegar."}
 }
-Test-Step 'Dependencias reproducibles' {npm ci}
+if ($SkipInstall) {
+  if (!(Test-Path 'node_modules/typescript/package.json')) {throw 'Dependencias no instaladas. Ejecuta sin -SkipInstall.'}
+  Write-Host 'Reutilizando dependencias ya instaladas; no se ejecuta npm ci.' -ForegroundColor Cyan
+} else {Test-Step 'Dependencias reproducibles' {npm ci}}
 Test-Step 'Asistente empresarial' {node apps/api/tests/business-assistant-phase-a.cjs}
 Test-Step 'Solicitudes comerciales' {node apps/api/tests/commercial-intake.cjs}
 Test-Step 'Identidad Telegram' {node apps/api/tests/telegram-customer-auth.cjs}
