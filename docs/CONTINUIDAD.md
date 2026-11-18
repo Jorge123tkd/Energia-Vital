@@ -1,5 +1,10 @@
 # Continuidad de Bonaire
 
+## 17/11/2026 — D1 QA 013–021 completadas (salida real del operador)
+El operador descargó la rama habitual mediante `git pull --ff-only` (fast-forward a `4b5185e`) y ejecutó `scripts/apply-qa-migrations.ps1` con confirmación `APLICAR_SOLO_QA`. La salida de Wrangler 4.151.2 muestra ejecutadas con ✅ las nueve migraciones `013_brigades_foundation.sql`, `014_request_activities.sql`, `015_commercial_quote_versions.sql`, `016_request_financial_tracking.sql`, `017_technical_followup.sql`, `018_chief_access_evidence.sql`, `019_chief_completion_review_bridge.sql`, `020_last_admin_guard.sql` y `021_refresh_rotation.sql` exclusivamente en D1 `energia-vital-qa-db` (ID `62755365-2c9a-4b20-8933-21209609a94b`). Confirmación final del script: **21 migraciones registradas**. No repetir el script: su precondición 12 migraciones ya no se cumple. **No hay evidencia de cambios en producción** por esta ejecución. La evidencia corresponde a historial de migraciones, no a validación funcional integral.
+
+Próximo bloqueo: configurar de verdad Cloudflare Access para Worker QA y Pages QA, con política restrictiva y URL(s) protegidas antes de publicar cualquier preview con copia de datos personales. Se reforzó `apps/api/src/qa-access.ts` para que una petición OPTIONS sin `SITE_URL` válido no eluda la verificación (commit `16058a23739c1e95661192e5cddefaab15907337`). La configuración Access aún no está instalada/verificada en Cloudflare. Auditoría de dependencias dev (12 high) sigue pendiente.
+
 ## 17/11/2026 — Migraciones QA 013–021 y protección verificable de Access preparadas
 Se añadió `scripts/apply-qa-migrations.ps1`, que admite solamente la D1 QA conocida (`energia-vital-qa-db`, UUID `62755365-2c9a-4b20-8933-21209609a94b`), comprueba el historial 001–012 y la secuencia exacta 013–021, y exige confirmación `APLICAR_SOLO_QA`. **La migración todavía NO se ha ejecutado**: el script requiere el Cloudflare autenticado del operador. No migrar producción.
 
