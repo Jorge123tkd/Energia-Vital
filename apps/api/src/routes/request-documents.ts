@@ -23,7 +23,20 @@ for(const [router,direction] of [[customerDocumentRoutes,'customer'],[staffDocum
   if(!request)return c.notFound();
   const length=Number(c.req.header('content-length')||0);
   if(!Number.isFinite(length)||length>maxDocumentBytes+65536)return c.json({error:'Archivo demasiado grande.'},413);
-  const body=await c.req.formData().catch(()=>null);
+  // Enforce the real stream length even without Content-Length.
+  const raw=c.req.raw.body;
+  if(!raw)return c.json({error:'Adjunta un documento.'},400);
+  const reader=raw.getReader(),chunks:Uint8Array[]=[];let total=0;
+  try{
+    while(true){
+      const {done,value}=await reader.read();if(done)break;
+      total+=value.length;
+      if(total>maxDocumentBytes+65536){await reader.cancel();return c.json({error:'Archivo demasiado grande.'},413);}
+      chunks.push(value);
+    }
+  }finally{reader.releaseLock();}
+  const buffer=new Uint8Array(total);let offset=0;for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.length;}
+  const body=await new Response(buffer,{headers:{'Content-Type':c.req.header('content-type')||''}}).formData().catch(()=>null);
   const file=body?.get('file');
   if(!file||typeof file==='string'||file.size>maxDocumentBytes||file.size<=0)return c.json({error:'Adjunta PDF, DOCX o XLSX de hasta 8 MB.'},400);
   const bytes=new Uint8Array(await file.arrayBuffer());
