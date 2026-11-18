@@ -24,7 +24,7 @@ function validate(input) {
   const site=required(input.QA_SITE_URL,'QA_SITE_URL');
   const accessTeam=required(input.QA_ACCESS_TEAM_DOMAIN,'QA_ACCESS_TEAM_DOMAIN').toLowerCase();
   const accessAud=required(input.QA_ACCESS_AUD,'QA_ACCESS_AUD');
-  if(!/^[a-z0-9][a-z0-9-]*\\.cloudflareaccess\\.com$/.test(accessTeam) ||
+  if(!/^[a-z0-9][a-z0-9-]*\.cloudflareaccess\.com$/.test(accessTeam) ||
      !/^[A-Za-z0-9_-]{10,128}$/.test(accessAud))
     throw Error('Cloudflare Access QA exige team y audience válidos');
   if(!/^[0-9a-f-]{36}$/i.test(d1id) || d1id.toLowerCase()===PROD_D1)
