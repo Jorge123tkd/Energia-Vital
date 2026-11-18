@@ -144,7 +144,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   if(/^(?:mis notificaciones|mis novedades|mis avisos de cliente|🔔 mis notificaciones)$/i.test(text)){
     if(!customer)return {reply:'Vincula tu cuenta para consultar tus notificaciones privadas.',replyMarkup:accountButton,skipHistory:true};
     const {results}=await env.DB.prepare(
-      "SELECT n.title,n.message,n.created_at FROM notifications n JOIN customers c ON c.id=n.user_id WHERE n.user_id=? AND n.user_type='customer' AND c.telegram_chat_id=? AND c.is_active=1 ORDER BY n.created_at DESC,n.id DESC LIMIT 5"
+      "SELECT n.title,n.message,n.created_at FROM notifications n JOIN customers c ON c.id=n.user_id WHERE n.user_id=? AND n.user_type='customer' AND c.telegram_customer_chat_id=? AND c.is_active=1 ORDER BY n.created_at DESC,n.id DESC LIMIT 5"
     ).bind(customer.id,chatId).all<{title:string;message:string;created_at:string}>();
     return {reply:results?.length?'Tus últimas notificaciones:\n\n'+results.map(n=>n.title+'\n'+n.message.slice(0,500)+'\n'+n.created_at.slice(0,10)).join('\n\n'):'No tienes notificaciones todavía.',skipHistory:true};
   }
@@ -152,8 +152,8 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     if(!customer)return {reply:'Para proteger tus datos, primero crea o vincula tu cuenta desde este formulario.',replyMarkup:accountButton,skipHistory:true};
     const isRequests=action==='customer-requests';
     const {results}=await env.DB.prepare(isRequests
-      ?"SELECT r.id,r.title,r.status,r.created_at AS date FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.customer_id=? AND c.telegram_chat_id=? AND c.is_active=1 ORDER BY r.created_at DESC LIMIT 10"
-      :"SELECT a.id,a.title,a.status,a.starts_at AS date FROM appointments a JOIN customers c ON c.id=a.customer_id WHERE a.customer_id=? AND c.telegram_chat_id=? AND c.is_active=1 ORDER BY a.starts_at DESC LIMIT 10")
+      ?"SELECT r.id,r.title,r.status,r.created_at AS date FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.customer_id=? AND c.telegram_customer_chat_id=? AND c.is_active=1 ORDER BY r.created_at DESC LIMIT 10"
+      :"SELECT a.id,a.title,a.status,a.starts_at AS date FROM appointments a JOIN customers c ON c.id=a.customer_id WHERE a.customer_id=? AND c.telegram_customer_chat_id=? AND c.is_active=1 ORDER BY a.starts_at DESC LIMIT 10")
       .bind(customer.id,chatId).all<{id:string;title:string;status:string;date:string}>();
     const labels:Record<string,string>={pending:'Pendiente',quoted:'Presupuestada',approved:'Aprobada',scheduled:'Programada',completed:'Completada',cancelled:'Cancelada',confirmed:'Confirmada',in_progress:'En proceso'};
     return {reply:results?.length?(isRequests?'Tus últimas solicitudes:\n\n':'Tus últimas citas:\n\n')+results.map(x=>x.title+'\n'+(labels[x.status]||x.status)+' · '+x.date+'\nReferencia: '+x.id).join('\n\n'):'Todavía no tienes registros en esta sección.',skipHistory:true};
@@ -175,15 +175,15 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
         if(intake.error||!intake.value)return {reply:'Revisa el borrador antes de enviarlo.',commercial:prior,state:null};
         await env.DB.batch([
           env.DB.prepare("INSERT INTO requests (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at) "+
-            "SELECT ?,id,'consultation',NULL,?,?,'pending','medium',?,NULL,?,? FROM customers WHERE id=? AND telegram_chat_id=? AND is_active=1 "+
+            "SELECT ?,id,'consultation',NULL,?,?,'pending','medium',?,NULL,?,? FROM customers WHERE id=? AND telegram_customer_chat_id=? AND is_active=1 "+
             "ON CONFLICT(id) DO NOTHING")
             .bind(d.id,('Solicitud comercial: '+d.company).slice(0,180),'[Origen: Telegram]\nEntidad: '+d.company+'\nNecesidad: '+d.need,d.location||'',time,time,customer.id,chatId),
           env.DB.prepare("INSERT INTO request_intake (request_id,available_budget_usd_cents,payment_method,payment_currency,customer_type,created_at,updated_at) "+
-            "SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_chat_id=? AND c.is_active=1) ON CONFLICT(request_id) DO NOTHING")
+            "SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1) ON CONFLICT(request_id) DO NOTHING")
             .bind(d.id,intake.value.available_budget_usd_cents,intake.value.payment_method,intake.value.payment_currency,intake.value.customer_type,time,time,d.id,customer.id,chatId)
         ]);
         // Un reintento puede encontrar la misma solicitud ya guardada. Verificar titularidad.
-        const saved=await env.DB.prepare("SELECT r.id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_chat_id=? AND c.is_active=1")
+        const saved=await env.DB.prepare("SELECT r.id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1")
           .bind(d.id,customer.id,chatId).first();
         if(!saved)return {reply:'No fue posible confirmar el registro. Comprueba tu cuenta.',commercial:prior,state:null};
         return {reply:'Solicitud registrada. Referencia: '+d.id+'. Pendiente de revisión. Escribe «mis solicitudes» para consultar su estado.',commercial:{...d,stage:'submitted'},state:null};
