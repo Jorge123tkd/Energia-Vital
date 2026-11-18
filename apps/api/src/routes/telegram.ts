@@ -21,6 +21,7 @@ import { advanceCommercialIntake, startCommercialIntake, type CommercialDraft } 
 import { parseRequestIntake } from '../request-intake';
 import { requestTelegramAppointment } from '../telegram-customer-appointments';
 import { issuedCustomerQuotes } from '../customer-quotes';
+import { extractTelegramPhoto, receiveTelegramPhoto } from '../telegram-customer-photos';
 
 export const telegramRoutes = new Hono<{ Bindings:Env; Variables:{user?:any} }>();
 const now=()=>new Date().toISOString();
@@ -409,6 +410,22 @@ telegramRoutes.post('/webhook',async c=>{
   if(encoder.encode(raw).byteLength>64000)return c.text('Payload grande',413);
   let body:unknown;
   try{body=JSON.parse(raw);}catch{return c.json({error:'JSON inválido'},400);}
+  const photo=extractTelegramPhoto(body);
+  if(photo){
+    if(!await claimUpdate(env,photo.updateId,photo.chatId))return c.json({ok:true});
+    try{
+      const reply=await receiveTelegramPhoto(env,photo);
+      await sendTelegramText(env,photo.chatId,reply);
+      await env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?")
+        .bind(now(),photo.updateId).run();
+      return c.json({ok:true});
+    }catch{
+      // No loguear URLs de descarga que contienen el token del bot.
+      await env.DB.prepare("UPDATE telegram_bot_updates SET status='failed',updated_at=? WHERE update_id=?")
+        .bind(now(),photo.updateId).run().catch(()=>null);
+      return c.json({error:'No se pudo procesar la foto'},503);
+    }
+  }
   const message=extractTelegramMessage(body);
   if(!message)return c.json({ok:true});
   try{await processUpdate(env,message);return c.json({ok:true});}
