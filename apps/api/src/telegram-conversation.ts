@@ -61,9 +61,9 @@ export function classifyTelegramMessage(input:string):TelegramAction {
       /\b(?:pendientes|por atender)\b.*\b(?:solicitudes|tickets)\b/.test(s))
     return 'pending';
 
-  if(/^(?:empresa|empresas|negocio|negocios|atencion a empresas|proyecto empresarial|servicios para empresas|soy una empresa|somos una mipyme|somos una empresa estatal)$/.test(s))
+  if(/^(?:empresa|empresas|negocio|negocios|atencion a empresas|empresas y negocios|proyecto empresarial|servicios para empresas|soy una empresa|somos una mipyme|somos una empresa estatal)$/.test(s))
     return 'business-services';
-  if(/^(?:proveedores|proveedor|alianzas|alianza comercial|ser proveedor|quiero ser proveedor|distribuidor|distribucion en cuba|colaboracion comercial)$/.test(s))
+  if(/^(?:proveedores|proveedor|proveedores y alianzas|alianzas|alianza comercial|ser proveedor|quiero ser proveedor|distribuidor|distribucion en cuba|colaboracion comercial)$/.test(s))
     return 'business-partner';
   if(/^(?:asesor|asesoria solar|asesoramiento solar|quiero asesoramiento solar|quiero asesoria solar|quiero que me asesores|necesito asesoramiento solar|necesito un sistema solar|ayudame a calcular un sistema solar|quiero calcular mi sistema solar|orientame sobre un sistema solar|necesito energia para mi nevera y dos aires acondicionados)$/.test(s))
     return 'solar';
