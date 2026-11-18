@@ -45,6 +45,7 @@ export default {
       : [...knownOrigins, env.SITE_URL].filter(Boolean);
     app.use('*', cors({
       origin: origin => origin && allowedOrigins.includes(origin) ? origin : '',
+      credentials: env.ENVIRONMENT === 'qa',
       allowHeaders: ['Content-Type', 'Authorization', 'X-Setup-Key'],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     }));
