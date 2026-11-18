@@ -1,5 +1,8 @@
 # Continuidad de Bonaire
 
+## 17/11/2026 — Paginación compacta compartida para listados grandes
+Se actualizó `apps/web/src/components/Pagination.svelte` en la rama única: ahora muestra hasta cinco páginas cercanas a la actual más primera/última y separadores, en lugar de crear una opción `<option>` por cada página de datos. Conserva botones Primera/Anterior/Siguiente/Última, contador de registros, desactivación durante cargas y accesibilidad `aria-current`. Beneficia solicitudes, citas, clientes, personal, notificaciones, brigadas, galería y servicios que usan el componente compartido. Commit `315d77d6fee5fb2eda990fbba7d62a845eb066ee`. Sin cambios en D1 ni despliegue. `npm audit` global (12 high de dev), migraciones 013–021 QA y control real de acceso QA permanecen pendientes.
+
 ## 17/11/2026 — Paginación de brigadas en el panel administrativo
 Se completó la paginación de la pantalla privada de Brigadas en `apps/web/src/components/AdminBrigades.svelte`, reutilizando el componente común `Pagination`: 10 brigadas por página y contador basado en brigadas reales. Si el usuario crea o edita una brigada con la ficha de integrantes expandida, la actualización mantiene visible esa brigada; si desapareció del listado, elimina la selección. No cambia asignaciones, reglas de ocupación, permisos ni D1. Commit `f0c867ed7d40d778a3424ebeb0844fe1e6c38eff`. Sin despliegue ni migraciones. Pendientes: 12 hallazgos high en dependencias de desarrollo, migraciones 013–021 en QA y protección efectiva de acceso QA antes de publicar vista previa.
 
