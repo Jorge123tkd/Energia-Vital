@@ -1,0 +1,13 @@
+const assert=require('node:assert/strict');
+const ts=require('typescript'),fs=require('node:fs'),path=require('node:path');
+const src=fs.readFileSync(path.join(__dirname,'../src/request-documents.ts'),'utf8');
+const mod={exports:{}};
+new Function('module','exports',ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(mod,mod.exports);
+const {documentFormat}=mod.exports;
+assert.equal(documentFormat('plan.pdf',Buffer.from('%PDF-1.7')).contentType,'application/pdf');
+assert.equal(documentFormat('plan.pdf',Buffer.from('invalid')),null);
+assert.equal(documentFormat('plan.exe',Buffer.from('%PDF-1.7')),null);
+assert.equal(documentFormat('plan.docm',Buffer.from([80,75,3,4,0])),null);
+assert.equal(documentFormat('plan.xlsx',Buffer.from([80,75,3,4,0])).filename,'plan.xlsx');
+assert.equal(documentFormat('bad/../plan.pdf',Buffer.from('%PDF-1.7')).filename,'bad_.._plan.pdf');
+console.log('PASS document format checks; no malware-scanning claim');
