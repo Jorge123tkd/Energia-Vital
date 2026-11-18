@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { getUser, requireCustomerAuth } from '../middleware';
 import { parseRequestIntake } from '../request-intake';
+import { issuedCustomerQuotes } from '../customer-quotes';
 
 export const privateRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 privateRoutes.use('*', requireCustomerAuth);
@@ -102,3 +103,5 @@ privateRoutes.post('/appointments', async c => {
   return c.json({ id, message: 'Cita solicitada', status: 'pending' }, 201);
 });
 // Cambios de estado, notas y asignaciones solo desde endpoints del administrador.
+
+privateRoutes.get('/quotes', async c => c.json({quotes:await issuedCustomerQuotes(c.env,getUser(c)!.user_id)}));
