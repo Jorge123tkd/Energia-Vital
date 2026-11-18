@@ -20,6 +20,7 @@ import { currentTelegramCustomer } from '../telegram-customer-auth';
 import { advanceCommercialIntake, startCommercialIntake, type CommercialDraft } from '../commercial-intake';
 import { parseRequestIntake } from '../request-intake';
 import { requestTelegramAppointment } from '../telegram-customer-appointments';
+import { issuedCustomerQuotes } from '../customer-quotes';
 
 export const telegramRoutes = new Hono<{ Bindings:Env; Variables:{user?:any} }>();
 const now=()=>new Date().toISOString();
@@ -134,6 +135,11 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   if(action==='customer-account')return customer
     ?{reply:'Tu cuenta Bonaire ya está vinculada, '+customer.name+'. Puedes entrar a la web con tu correo y contraseña o seguir aquí.',skipHistory:true}
     :{reply:'Puedes crear tu cuenta o vincular una que ya tengas sin salir de Telegram. Usa el formulario seguro; nunca escribas tu contraseña en el chat.',replyMarkup:accountButton,skipHistory:true};
+  if(/^(?:mis cotizaciones|mis presupuestos|ver cotizaciones|📄 mis cotizaciones)$/i.test(text)){
+    if(!customer)return {reply:'Para consultar cotizaciones privadas, vincula tu cuenta de cliente.',replyMarkup:accountButton,skipHistory:true};
+    const quotes=await issuedCustomerQuotes(env,customer.id);
+    return {reply:quotes.length?'Cotizaciones emitidas para tu cuenta:\n\n'+quotes.slice(0,8).map(q=>q.title+'\nUSD '+(q.total_cents/100).toFixed(2)+' · Vigencia: '+q.valid_until+'\nReferencia: '+q.id).join('\n\n'):'Todavía no tienes cotizaciones emitidas por Bonaire.',skipHistory:true};
+  }
   if(action==='customer-requests'||action==='customer-appointments'){
     if(!customer)return {reply:'Para proteger tus datos, primero crea o vincula tu cuenta desde este formulario.',replyMarkup:accountButton,skipHistory:true};
     const isRequests=action==='customer-requests';
