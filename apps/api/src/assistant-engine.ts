@@ -81,6 +81,33 @@ export function businessProposalReply(message: string, history: {role:string;con
     + '\n\nEsto prepara la conversación con nuestro equipo; no confirma un acuerdo ni crea una solicitud de servicio. Si prefieres hablar directamente con una persona: https://energia-vital-web.pages.dev/contacto#contacto-comercial';
 }
 
+/** Trámite de servicios para organizaciones; NO sustituye la creación autenticada del expediente.
+ * Solo se activa con intención explícita de servicio/proyecto/cotización, no ante una pregunta general.
+ */
+export function businessServiceReply(message:string, history:{role:string;content:string}[]=[]):string|null {
+  const m=normalize(message).replace(/[¿?¡!]/g,'').trim();
+  const previous=[...history].reverse().find(x=>x.role==='assistant');
+  const pending=Boolean(previous?.content.startsWith('Atención empresarial · Bonaire'));
+  const organization=/\b(?:somos|soy|represento|trabajo en|desde|para|de)\b.{0,65}\b(?:empresa|mipyme|mi pyme|negocio|cooperativa|tcp|institucion|organismo|hotel|fabrica|estatal|escuela|hospital)\b|\b(?:empresa estatal|mipyme|mi pyme|negocio privado|sector estatal|centro estatal|cooperativa|proyecto empresarial)\b/.test(m);
+  const request=/\b(?:necesit[oa]mos?|queremos|quiero|solicita(?:r|mos)|contrata(?:r|mos)|cotiza(?:r|cion)|presupuesto|proyecto|instala(?:r|cion)|mantenimiento|reparaci[oó]n|servicio|visita tecnica|evaluacion|suministro)\b/.test(m);
+  const general=/^(?:que|cuales|como|tienen|trabajan|ofrecen|venden|informacion|cuanto cuesta)\b/.test(m);
+  const proposal=isBusinessProposal(message);
+  if(proposal)return null;
+  if(pending && /^(?:cancelar|cancela|olvidalo|otra cosa|no gracias)$/.test(m))
+    return 'De acuerdo, dejamos esta consulta empresarial aquí. ¿Qué otra cosa necesitas?';
+  if (!pending && (!organization || !request || general))return null;
+  // Preguntas nuevas no se confunden con el contexto de una propuesta en curso.
+  if(pending && (general || isOutOfScopeMessage(message) ||
+      /\b(?:asesoria solar|asesoramiento solar|precio del dolar|tipo de cambio)\b/.test(m)))return null;
+  if(pending){
+    return 'Atención empresarial · Bonaire\n\nGracias por la información. Para preparar la evaluación de tu empresa, indica únicamente lo que falte: nombre de la entidad y persona de contacto; necesidad concreta y municipio; forma de pago prevista (transferencia, efectivo u otra) y presupuesto disponible aproximado en USD, si ya lo conoces.\n\nNo pedimos anticipo, saldos pendientes, autorizaciones ni estados financieros en esta primera conversación. Si es una empresa estatal, las condiciones y posibles aprobaciones se revisarán antes de comprometer recursos.\n\nEsto todavía es una orientación por chat, NO un expediente registrado. Para formalizar la solicitud, accede a tu cuenta en https://energia-vital-web.pages.dev/ o solicita contacto humano.';
+  }
+  const estatal=/\b(?:estatal|organismo|institucion publica|centro estatal)\b/.test(m);
+  const tipo=estatal?'empresa estatal':/\b(?:mipyme|mi pyme)\b/.test(m)?'mipyme':
+    /\b(?:cooperativa|tcp)\b/.test(m)?'cooperativa o TCP':'negocio o empresa privada';
+  return 'Atención empresarial · Bonaire\n\nEntiendo que consultas en nombre de una '+tipo+'. Atendemos proyectos, mantenimiento, suministro, reparaciones y otros servicios para organizaciones, no solo viviendas.\n\nCuéntame qué necesita tu entidad y en qué municipio sería el trabajo. Si ya lo mencionaste, puedes ampliar con el nombre de la empresa y un contacto; después podremos conocer cómo prevén pagar y qué presupuesto en USD tienen disponible. No hace falta tener todo decidido para comenzar.\n\nEsta conversación no crea una solicitud ni confirma condiciones comerciales.';
+}
+
 export function detectIntent(message: string): AssistantIntent {
   const m = normalizeWithTypos(message);
 
