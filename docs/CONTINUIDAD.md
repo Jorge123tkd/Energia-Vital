@@ -1,5 +1,8 @@
 # Continuidad de Bonaire
 
+## 17/11/2026 — Paginación de brigadas en el panel administrativo
+Se completó la paginación de la pantalla privada de Brigadas en `apps/web/src/components/AdminBrigades.svelte`, reutilizando el componente común `Pagination`: 10 brigadas por página y contador basado en brigadas reales. Si el usuario crea o edita una brigada con la ficha de integrantes expandida, la actualización mantiene visible esa brigada; si desapareció del listado, elimina la selección. No cambia asignaciones, reglas de ocupación, permisos ni D1. Commit `f0c867ed7d40d778a3424ebeb0844fe1e6c38eff`. Sin despliegue ni migraciones. Pendientes: 12 hallazgos high en dependencias de desarrollo, migraciones 013–021 en QA y protección efectiva de acceso QA antes de publicar vista previa.
+
 ## 17/11/2026 — Separación CORS entre API QA y web de producción
 En `apps/api/src/index.ts` se corrigió la lista de orígenes permitidos: cuando `ENVIRONMENT=qa` solo se permite el origen `SITE_URL` definido para QA. Sin `SITE_URL`, QA no autoriza solicitudes de navegadores por CORS. Producción mantiene sus orígenes anteriores. Commit `a34207ae2ff7b569a30ab8fb79b633f97625f027`. **CORS NO es un control de acceso ni bloquea clientes directos**: por contener una copia de datos de producción, la API QA y Pages QA no deben hacerse públicas sin Cloudflare Access/política equivalente de acceso efectivo. No hay despliegue. Auditoría de dependencias dev (12 high) sigue sin resolver; no se han modificado `package.json` o `package-lock.json` ni aplicado migraciones.
 
