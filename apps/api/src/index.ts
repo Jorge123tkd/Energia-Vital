@@ -34,8 +34,13 @@ const knownOrigins = [
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const app = new Hono<{ Bindings: Env; Variables: { user?: JwtPayload } }>();
+    // QA contiene una copia restaurada: nunca habilitar CORS hacia la web productiva.
+    // CORS no sustituye Cloudflare Access ni la autorización de los endpoints.
+    const allowedOrigins = env.ENVIRONMENT === 'qa'
+      ? (env.SITE_URL ? [env.SITE_URL] : [])
+      : [...knownOrigins, env.SITE_URL].filter(Boolean);
     app.use('*', cors({
-      origin: origin => origin && [...knownOrigins, env.SITE_URL].includes(origin) ? origin : '',
+      origin: origin => origin && allowedOrigins.includes(origin) ? origin : '',
       allowHeaders: ['Content-Type', 'Authorization', 'X-Setup-Key'],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     }));
