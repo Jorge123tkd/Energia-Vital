@@ -19,6 +19,7 @@ import { humanWhatsAppReply } from '../telegram-human-contact';
 import { currentTelegramCustomer } from '../telegram-customer-auth';
 import { advanceCommercialIntake, startCommercialIntake, type CommercialDraft } from '../commercial-intake';
 import { parseRequestIntake } from '../request-intake';
+import { requestTelegramAppointment } from '../telegram-customer-appointments';
 
 export const telegramRoutes = new Hono<{ Bindings:Env; Variables:{user?:any} }>();
 const now=()=>new Date().toISOString();
@@ -116,7 +117,7 @@ type BotDecision={
   reply:string;state?:SolarState|null;commercial?:CommercialDraft|null;newThread?:boolean;skipHistory?:boolean;
   keyboardView?:'reminders';replyMarkup?:TelegramReplyMarkup;
 };
-async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string,prior:CommercialDraft|null):Promise<BotDecision>{
+async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string,prior:CommercialDraft|null,updateId:string):Promise<BotDecision>{
   const text=raw.trim();
   // Un empleado obtiene su código desde /admin y lo escribe AQUÍ sin comandos.
   // Por compatibilidad seguimos admitiendo /vincular 12345678.
@@ -142,6 +143,10 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
       .bind(customer.id,chatId).all<{id:string;title:string;status:string;date:string}>();
     const labels:Record<string,string>={pending:'Pendiente',quoted:'Presupuestada',approved:'Aprobada',scheduled:'Programada',completed:'Completada',cancelled:'Cancelada',confirmed:'Confirmada',in_progress:'En proceso'};
     return {reply:results?.length?(isRequests?'Tus últimas solicitudes:\n\n':'Tus últimas citas:\n\n')+results.map(x=>x.title+'\n'+(labels[x.status]||x.status)+' · '+x.date+'\nReferencia: '+x.id).join('\n\n'):'Todavía no tienes registros en esta sección.',skipHistory:true};
+  }
+  if(/^(?:solicitar cita|pedir cita|reservar cita|confirmar cita\b.*)$/i.test(text)){
+    if(!customer)return {reply:'Para solicitar una cita, crea o vincula tu cuenta mediante este formulario.',replyMarkup:accountButton,skipHistory:true};
+    return {reply:await requestTelegramAppointment(env,customer.id,chatId,updateId,text),skipHistory:true};
   }
   const intakeMessage=action==='request-service'?'registrar solicitud comercial':text;
   // Las acciones administrativas, nueva conversación y contacto humano no se consumen como campos.
@@ -353,7 +358,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
       if(parsed&&typeof parsed==='object'&&'commercial' in parsed){state=parsed.solar||null;commercial=parsed.commercial||null;}
       else state=parsed as SolarState|null;
     }catch{/* recuperar estado vacío */}
-    const decision=await decide(env,input.chatId,input.text,state,session.thread_id,commercial);
+    const decision=await decide(env,input.chatId,input.text,state,session.thread_id,commercial,input.updateId);
     const nextCommercial=decision.newThread?null:decision.commercial===undefined?commercial:decision.commercial;
     const nextThread=decision.newThread?crypto.randomUUID():session.thread_id;
     const nextState=decision.newThread?null:decision.state===undefined?state:decision.state;
