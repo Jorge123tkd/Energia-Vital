@@ -1,0 +1,36 @@
+name: Bonaire - validacion previa de QA sin despliegue
+on:
+  push:
+    branches:
+      - feat/cloudflare-customer-accounts-hardening
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qa-code-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias del lockfile
+        run: npm ci
+      - name: Auditar dependencias de produccion
+        run: npm audit --omit=dev --audit-level=high
+      - name: Verificar aislamiento QA y reglas Access (datos sinteticos)
+        run: |
+          node scripts/prepare-cloudflare-qa-config.test.cjs
+          node scripts/verify-qa-access.test.cjs
+      - name: Typecheck API y Svelte
+        run: |
+          npm run typecheck --workspace=apps/api
+          npm run typecheck --workspace=apps/web
+      - name: Compilar frontend
+        run: npm run build --workspace=apps/web
+      - name: Probar protecciones de sesion
+        run: node apps/web/tests/auth-session.cjs
+      - name: Ensayar migraciones en memoria con registros ficticios
+        run: python3 apps/api/tests/migration-preservation.py
