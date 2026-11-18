@@ -1,5 +1,8 @@
 # Continuidad de Bonaire
 
+## 18/11/2026 — Dominio personalizado bnergiv.com
+Usuario indica que completó alta de dominio en Cloudflare, cambio de nameservers IONOS y asociación a Pages. Commit faaa4b2 autoriza exactamente https://bnergiv.com y https://www.bnergiv.com en CORS de producción; conserva Pages original y aislamiento QA. No modifica autenticación, D1, R2, ni SITE_URL de Telegram hasta verificar HTTPS y disponibilidad real. Pendiente desplegar Worker y comprobar ambos orígenes con OPTIONS/GET, y estado Active del dominio personalizado en Pages. Si www no está asociado, añadirlo o redirigirlo explícitamente. No asumir éxito DNS/SSL hasta confirmación.
+
 ## 18/11/2026 — Respaldo y migración 022 en producción
 Usuario confirmó desde Wrangler remoto: bucket energia-vital-assets sin r2.dev público ni dominios personalizados; respaldo D1 exportado a R2 privado y descargado de nuevo con hash coincidente. Migración 022 aplicada correctamente (11 comandos); lista remota sin migraciones pendientes. No se modificó el Worker ni Pages todavía. Próximo paso: publicar mediante scripts/publicar-produccion.ps1 tras git pull --ff-only, confirmar la rama configurada como Production Branch de Pages, verificar health, autenticación, privacidad de expedientes, cotizaciones y Telegram. Evitar repetir respaldo o migración salvo necesidad comprobada. No guardar URLs firmadas de exportación en documentación.
 
