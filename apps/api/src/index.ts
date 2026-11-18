@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { allowQaRequest } from './qa-access';
 import type { Env } from './types';
 import type { JwtPayload } from './auth';
 import { requireCustomerAuth } from './middleware';
@@ -34,6 +35,9 @@ const knownOrigins = [
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const app = new Hono<{ Bindings: Env; Variables: { user?: JwtPayload } }>();
+    // Ante una copia QA restaurada de producción, no aceptar NINGUNA ruta sin Access válido.
+    const blocked = await allowQaRequest(request, env);
+    if (blocked) return blocked;
     // QA contiene una copia restaurada: nunca habilitar CORS hacia la web productiva.
     // CORS no sustituye Cloudflare Access ni la autorización de los endpoints.
     const allowedOrigins = env.ENVIRONMENT === 'qa'
