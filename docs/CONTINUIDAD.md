@@ -1,5 +1,8 @@
 # Continuidad de Bonaire
 
+## 18/11/2026 — Respaldo y migración 022 en producción
+Usuario confirmó desde Wrangler remoto: bucket energia-vital-assets sin r2.dev público ni dominios personalizados; respaldo D1 exportado a R2 privado y descargado de nuevo con hash coincidente. Migración 022 aplicada correctamente (11 comandos); lista remota sin migraciones pendientes. No se modificó el Worker ni Pages todavía. Próximo paso: publicar mediante scripts/publicar-produccion.ps1 tras git pull --ff-only, confirmar la rama configurada como Production Branch de Pages, verificar health, autenticación, privacidad de expedientes, cotizaciones y Telegram. Evitar repetir respaldo o migración salvo necesidad comprobada. No guardar URLs firmadas de exportación en documentación.
+
 ## 18/11/2026 — Validación técnica superada en PowerShell
 Usuario confirmó salida de `scripts/validar-entrega-telegram.ps1 -SkipInstall` sobre commit 4c02599: dependencias instaladas (npm informó 0 vulnerabilidades), cinco suites nuevas PASS, typecheck API 0 errores, Svelte 0 errores/2 advertencias de estado inicial en BrigadePlanner y DossierPanel, 16 pruebas de sesiones PASS, preservación de migraciones 013–022 con datos ficticios PASS, build Vite correcto (advertencia de chunk >500 kB). Sin servidor local ni cambios en Cloudflare. Se corrigió el tipado multipart (19a2b50). No se ha comprobado la operación real de Telegram y R2 ni se ha aplicado 022. Antes de desplegar: confirmar privacidad de energia-vital-assets, verificar migraciones remotas, respaldo D1 remoto, aplicar 022, publicar y realizar smoke tests reales. No hay antivirus integrado para documentos.
 
