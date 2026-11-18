@@ -18,7 +18,7 @@ export async function receiveTelegramPhoto(env:Env,input:TelegramPhoto):Promise<
  const match=/^solicitud\s+([a-z0-9-]{1,128})$/i.exec(input.caption);
  if(!match)return 'Para guardar esta foto en tu expediente, reenvíala con el texto «solicitud REFERENCIA». Escribe «mis solicitudes» para ver tu referencia.';
  const requestId=match[1],imageId='tg-photo-'+input.updateId;
- const owner=await env.DB.prepare("SELECT r.id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_chat_id=? AND c.is_active=1 AND r.status NOT IN ('cancelled','completed')")
+ const owner=await env.DB.prepare("SELECT r.id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1 AND r.status NOT IN ('cancelled','completed')")
  .bind(requestId,customer.id,input.chatId).first();
  if(!owner)return 'No encuentro una solicitud abierta con esa referencia en tu cuenta.';
  const existing=await env.DB.prepare('SELECT id FROM request_images WHERE id=? AND request_id=? AND customer_id=?').bind(imageId,requestId,customer.id).first();
@@ -44,7 +44,7 @@ export async function receiveTelegramPhoto(env:Env,input:TelegramPhoto):Promise<
  await env.BUCKET.put(key,bytes,{httpMetadata:{contentType:'image/jpeg'}});
  try{
  const saved=await env.DB.prepare("INSERT INTO request_images(id,request_id,customer_id,r2_key,content_type) "+
- "SELECT ?,r.id,c.id,?,'image/jpeg' FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_chat_id=? AND c.is_active=1 "+
+ "SELECT ?,r.id,c.id,?,'image/jpeg' FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1 "+
  "AND r.status NOT IN ('cancelled','completed') AND (SELECT COUNT(*) FROM request_images WHERE request_id=r.id)<5 ON CONFLICT(id) DO NOTHING")
  .bind(imageId,key,requestId,customer.id,input.chatId).run();
  if(!saved.meta?.changes){await env.BUCKET.delete(key);const prior=await env.DB.prepare('SELECT id FROM request_images WHERE id=? AND request_id=? AND customer_id=?').bind(imageId,requestId,customer.id).first();return prior?'Fotografía ya guardada.':'No se pudo añadir la fotografía. Revisa el estado o el límite de archivos.';}
