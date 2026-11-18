@@ -120,8 +120,10 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   const text=raw.trim();
   // Un empleado obtiene su código desde /admin y lo escribe AQUÍ sin comandos.
   // Por compatibilidad seguimos admitiendo /vincular 12345678.
-  const linkCode=text.match(/^(?:\/?vincular\s+|codigo\s+|mi codigo es\s+)?(\d{8})$/i);
+  const linkCode=text.match(/^(?:\/?vincular\s+|codigo\s+|mi codigo es\s+)(\d{8})$/i);
   if(linkCode)return {reply:await redeemCode(env,chatId,linkCode[1]),skipHistory:true};
+  // Compatibilidad con códigos de personal sin prefijo, excepto durante un trámite comercial.
+  if(!prior && /^\d{8}$/.test(text))return {reply:await redeemCode(env,chatId,text),skipHistory:true};
   const action=classifyTelegramMessage(text);
   const staff=await currentTelegramStaff(env,chatId);
   const site=env.SITE_URL?.startsWith('https://')?env.SITE_URL:'https://energia-vital-web.pages.dev';
@@ -145,14 +147,14 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   // Las acciones administrativas, nueva conversación y contacto humano no se consumen como campos.
   if((action===null||action==='request-service')&&(prior||startCommercialIntake(intakeMessage))){
     if(!customer)return {reply:'Antes de registrar tu solicitud, crea o vincula tu cuenta desde Telegram. Después escribe «registrar solicitud comercial». No tienes que visitar la web.',replyMarkup:accountButton,skipHistory:true};
-    // Identificador estable por update de inicio: un reintento de Telegram no genera otro proyecto.
+    // Una vez persistido el borrador, su ID estable evita duplicar confirmaciones.
     const step=advanceCommercialIntake(intakeMessage,prior,crypto.randomUUID());
     if(step){
       if(step.submit&&step.draft){
         const d=step.draft, time=now();
         const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment});
         if(intake.error||!intake.value)return {reply:'Revisa el borrador antes de enviarlo.',commercial:prior,state:null};
-        const result=await env.DB.batch([
+        await env.DB.batch([
           env.DB.prepare("INSERT INTO requests (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at) "+
             "SELECT ?,id,'consultation',NULL,?,?,'pending','medium',?,NULL,?,? FROM customers WHERE id=? AND telegram_chat_id=? AND is_active=1 "+
             "ON CONFLICT(id) DO NOTHING")
