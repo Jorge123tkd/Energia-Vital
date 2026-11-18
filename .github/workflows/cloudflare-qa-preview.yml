@@ -82,6 +82,19 @@ jobs:
             --command "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('auth_sessions','customers','admin_users','requests','brigades','brigade_members','brigade_work','request_activities','commercial_quote_versions','request_financial_declarations','request_payment_reports','technical_work_reports','service_followup_cases','service_case_notes','brigade_chief_accounts','brigade_chief_sessions','brigade_chief_reports','brigade_evidence_images','chief_completion_reviews') UNION ALL SELECT name FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'" \
             > "$RUNNER_TEMP/d1-qa-schema.json"
           node tests/remote-inventory-schema.cjs < "$RUNNER_TEMP/d1-qa-schema.json"
+      - name: Confirmar 21 migraciones QA y columna refresh_hash (solo SELECT)
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute energia-vital-qa-db --remote --json \
+            --config wrangler.qa.generated.toml \
+            --command "SELECT (SELECT COUNT(*) FROM d1_migrations) AS migrations, (SELECT MAX(id) FROM d1_migrations) AS last_id, (SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash') AS refresh_column" \
+            > "$RUNNER_TEMP/d1-qa-migrations.json"
+          node ../../scripts/verify-qa-migrations.cjs < "$RUNNER_TEMP/d1-qa-migrations.json"
+
       - name: Ejecutar validaciones de código y seguridad
         run: |
           npm run typecheck --workspace=apps/api
@@ -119,4 +132,4 @@ jobs:
         run: npx wrangler pages deploy apps/web/dist --project-name "$QA_PAGES_PROJECT" --branch release-preview
       - name: Limpiar configuracion y metadatos QA
         if: always()
-        run: rm -f apps/api/wrangler.qa.generated.toml "$RUNNER_TEMP/d1-qa-schema.json"
+        run: rm -f apps/api/wrangler.qa.generated.toml "$RUNNER_TEMP/d1-qa-schema.json" "$RUNNER_TEMP/d1-qa-migrations.json"
