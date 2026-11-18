@@ -39,6 +39,43 @@
   let requestActionBusy = $state(false);
   let requestQuery = $state('');
   let appointmentQuery = $state('');
+  let appointmentCreateOpen=$state(false),appointmentCreateBusy=$state(false),appointmentCreateError=$state('');
+  let appointmentCustomerSearch=$state(''),appointmentCustomerResults:any[]=$state([]);
+  let appointmentCustomerSelected:any=$state(null),appointmentCustomerBusy=$state(false);
+  let appointmentTitle=$state(''),appointmentStart=$state(''),appointmentEnd=$state('');
+  let appointmentCreateStatus:'pending'|'confirmed'=$state('confirmed');
+  async function findAppointmentCustomer(){
+    if(appointmentCustomerSearch.trim().length<2){appointmentCreateError='Escribe al menos dos caracteres para buscar clientes.';return;}
+    appointmentCustomerBusy=true;appointmentCreateError='';appointmentCustomerSelected=null;
+    try{
+      const result=await api.adminCustomers(token,appointmentCustomerSearch.trim(),1,12);
+      appointmentCustomerResults=(result.customers||[]).filter((customer:any)=>Boolean(customer.is_active));
+      if(!appointmentCustomerResults.length)appointmentCreateError='No encontramos cuentas activas con esa búsqueda.';
+    }catch(e){appointmentCreateError=e instanceof Error?e.message:'No se pudo buscar clientes.';}
+    finally{appointmentCustomerBusy=false;}
+  }
+  async function createStaffAppointment(event:SubmitEvent){
+    event.preventDefault();
+    if(appointmentCreateBusy)return;
+    if(!appointmentCustomerSelected){appointmentCreateError='Selecciona una cuenta de cliente registrada.';return;}
+    const start=new Date(appointmentStart),end=new Date(appointmentEnd);
+    if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||end<=start){
+      appointmentCreateError='Comprueba el horario de inicio y fin.';return;
+    }
+    appointmentCreateBusy=true;appointmentCreateError='';
+    try{
+      await api.createAdminAppointment(token,{
+        customer_id:appointmentCustomerSelected.id,title:appointmentTitle.trim(),
+        starts_at:start.toISOString(),ends_at:end.toISOString(),status:appointmentCreateStatus
+      });
+      appointmentCreateOpen=false;appointmentCustomerSearch='';appointmentCustomerResults=[];
+      appointmentCustomerSelected=null;appointmentTitle='';appointmentStart='';appointmentEnd='';
+      appointmentQuery='';await loadAppointmentPage(1);
+      message='Cita registrada correctamente y vinculada al cliente.';
+    }catch(e){appointmentCreateError=e instanceof Error?e.message:'No se pudo crear la cita.';}
+    finally{appointmentCreateBusy=false;}
+  }
+
   let requestPage = $state(1);
   let appointmentPage = $state(1);
   let requestTotal = $state(0);
@@ -575,7 +612,65 @@
       <AdminBrigades {token} canManage={staffRole === 'admin'} prefillRequestId={brigadeRequestId} />
     {:else if tab === 'appointments'}
       <section class="space-y-4">
-        <h2 class="font-extrabold text-xl text-slate-900">Citas ({appointmentTotal})</h2>
+        <div class="flex items-center justify-between flex-wrap gap-3">
+          <h2 class="font-extrabold text-xl text-slate-900">Citas ({appointmentTotal})</h2>
+          <button type="button" onclick={()=>{appointmentCreateOpen=!appointmentCreateOpen;appointmentCreateError='';}}
+            class="rounded-xl bg-teal-700 px-4 py-3 text-white font-bold text-sm">
+            {appointmentCreateOpen?'Cerrar formulario':'＋ Crear cita'}
+          </button>
+        </div>
+        {#if appointmentCreateOpen}
+          <form onsubmit={createStaffAppointment} class="space-y-4 rounded-2xl bg-white border border-teal-200 p-4 sm:p-5" aria-label="Crear cita desde administración">
+            <h3 class="font-extrabold text-slate-900">Nueva cita para un cliente</h3>
+            <p class="text-sm text-slate-600">Disponible para administradores y operadores autorizados. La cita se vincula a una cuenta activa de cliente.</p>
+            <div class="flex gap-2 items-end flex-wrap">
+              <label class="flex-1 min-w-52 text-xs font-bold text-slate-700">Buscar cliente por nombre, correo o teléfono
+                <input type="search" bind:value={appointmentCustomerSearch} oninput={()=>{appointmentCustomerSelected=null;appointmentCustomerResults=[];}}
+                  placeholder="Nombre o teléfono del cliente" class="block w-full rounded-xl border border-slate-300 p-3 mt-1 text-sm font-normal"/>
+              </label>
+              <button type="button" onclick={findAppointmentCustomer} disabled={appointmentCustomerBusy}
+                class="rounded-xl bg-slate-800 text-white font-semibold px-4 py-3 text-sm">Buscar cliente</button>
+            </div>
+            {#if appointmentCustomerResults.length}
+              <div class="grid gap-1 max-h-48 overflow-auto" aria-label="Resultados de búsqueda de clientes">
+                {#each appointmentCustomerResults as customer (customer.id)}
+                  <button type="button" onclick={()=>{appointmentCustomerSelected=customer;appointmentCustomerResults=[];appointmentCreateError='';}}
+                    class="text-left rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-teal-50">
+                    {customer.name} · {customer.phone||customer.email}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+            {#if appointmentCustomerSelected}
+              <p class="text-sm font-semibold text-teal-800">Cliente seleccionado: {appointmentCustomerSelected.name}</p>
+            {/if}
+            <label class="block text-xs font-bold text-slate-700">Motivo de la cita
+              <input required minlength="3" maxlength="180" bind:value={appointmentTitle}
+                placeholder="Ej. Reunión para instalación solar" class="block w-full rounded-xl border border-slate-300 p-3 mt-1 text-sm font-normal"/>
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="text-xs font-bold text-slate-700">Comienzo
+                <input required type="datetime-local" bind:value={appointmentStart}
+                  class="block w-full rounded-xl border border-slate-300 p-3 mt-1 text-sm font-normal"/>
+              </label>
+              <label class="text-xs font-bold text-slate-700">Finalización (máx. 4 horas)
+                <input required type="datetime-local" bind:value={appointmentEnd}
+                  class="block w-full rounded-xl border border-slate-300 p-3 mt-1 text-sm font-normal"/>
+              </label>
+            </div>
+            <p class="text-xs text-amber-800">La hora se interpreta según la zona horaria del dispositivo. Comprueba que coincida con la hora prevista en Cuba.</p>
+            <label class="block text-xs font-bold text-slate-700">Estado inicial
+              <select bind:value={appointmentCreateStatus} class="block w-full rounded-xl border border-slate-300 p-3 mt-1 text-sm">
+                <option value="confirmed">Confirmada</option><option value="pending">Pendiente de confirmación</option>
+              </select>
+            </label>
+            {#if appointmentCreateError}<p role="alert" class="text-sm text-red-700">{appointmentCreateError}</p>{/if}
+            <button type="submit" disabled={appointmentCreateBusy||!appointmentCustomerSelected}
+              class="rounded-xl bg-teal-700 px-5 py-3 text-white font-bold text-sm disabled:opacity-50">
+              {appointmentCreateBusy?'Guardando…':'Guardar cita'}
+            </button>
+          </form>
+        {/if}
         <form onsubmit={searchAppointment} class="flex flex-col sm:flex-row gap-2 rounded-2xl bg-white border border-slate-200 p-3">
           <label class="flex-1 text-xs font-bold text-slate-600">Buscar cita por ID, cliente, asunto o teléfono
             <input type="search" bind:value={appointmentQuery} class="block w-full rounded-xl border border-slate-300 mt-1.5 px-3 py-3 font-normal text-sm" placeholder="Buscar cita o pegar su ID…" />
