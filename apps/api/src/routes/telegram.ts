@@ -22,6 +22,7 @@ import { parseRequestIntake } from '../request-intake';
 import { requestTelegramAppointment } from '../telegram-customer-appointments';
 import { issuedCustomerQuotes } from '../customer-quotes';
 import { extractTelegramPhoto, receiveTelegramPhoto } from '../telegram-customer-photos';
+import { extractTelegramDocument, receiveTelegramDocument, telegramDocuments } from '../telegram-customer-documents';
 
 export const telegramRoutes = new Hono<{ Bindings:Env; Variables:{user?:any} }>();
 const now=()=>new Date().toISOString();
@@ -162,6 +163,8 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     if(!customer)return {reply:'Para solicitar una cita, crea o vincula tu cuenta mediante este formulario.',replyMarkup:accountButton,skipHistory:true};
     return {reply:await requestTelegramAppointment(env,customer.id,chatId,updateId,text),skipHistory:true};
   }
+  const documentReply=await telegramDocuments(env,chatId,text);
+  if(documentReply!==null)return {reply:documentReply,skipHistory:true};
   const intakeMessage=action==='request-service'?'registrar solicitud comercial':text;
   // Las acciones administrativas, nueva conversación y contacto humano no se consumen como campos.
   if((action===null||action==='request-service')&&(prior||startCommercialIntake(intakeMessage))){
@@ -417,6 +420,18 @@ telegramRoutes.post('/webhook',async c=>{
   if(encoder.encode(raw).byteLength>64000)return c.text('Payload grande',413);
   let body:unknown;
   try{body=JSON.parse(raw);}catch{return c.json({error:'JSON inválido'},400);}
+  const document=extractTelegramDocument(body);
+  if(document){
+    if(!await claimUpdate(env,document.updateId,document.chatId))return c.json({ok:true});
+    try{
+      await sendTelegramText(env,document.chatId,await receiveTelegramDocument(env,document));
+      await env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?").bind(now(),document.updateId).run();
+      return c.json({ok:true});
+    }catch{
+      await env.DB.prepare("UPDATE telegram_bot_updates SET status='failed',updated_at=? WHERE update_id=?").bind(now(),document.updateId).run().catch(()=>null);
+      return c.json({error:'No se pudo procesar documento'},503);
+    }
+  }
   const photo=extractTelegramPhoto(body);
   if(photo){
     if(!await claimUpdate(env,photo.updateId,photo.chatId))return c.json({ok:true});
