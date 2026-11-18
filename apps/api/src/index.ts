@@ -30,6 +30,8 @@ import { publicExtrasRoutes, privateExtrasRoutes, adminExtrasRoutes, staffExtras
 
 // Vista previa controlada del panel: misma API, sin habilitar cualquier subdominio.
 const knownOrigins = [
+  'https://bnergiv.com',
+  'https://www.bnergiv.com',
   'https://energia-vital-web.pages.dev',
   'https://admin-visual-preview.energia-vital-web.pages.dev',
   'http://localhost:5173',
