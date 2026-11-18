@@ -382,8 +382,9 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
       return;
     }
     let state:SolarState|null=null, commercial:CommercialDraft|null=null;
+    const currentCustomer=await currentTelegramCustomer(env,input.chatId);
     try{const parsed=JSON.parse(session.solar_context);
-      if(parsed&&typeof parsed==='object'&&'commercial' in parsed){state=parsed.solar||null;commercial=parsed.commercial||null;}
+      if(parsed&&typeof parsed==='object'&&'commercial' in parsed){state=parsed.solar||null;commercial=parsed.customerId===currentCustomer?.id?parsed.commercial||null:null;}
       else state=parsed as SolarState|null;
     }catch{/* recuperar estado vacío */}
     const decision=await decide(env,input.chatId,input.text,state,session.thread_id,commercial,input.updateId);
@@ -407,7 +408,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     await env.DB.batch([
       env.DB.prepare(
         'UPDATE telegram_bot_sessions SET thread_id=?,solar_context=?,window_start=?,window_count=?,updated_at=? WHERE chat_id=?'
-      ).bind(nextThread,JSON.stringify({solar:nextState,commercial:nextCommercial}),current?session.window_start:time,count,time,input.chatId),
+      ).bind(nextThread,JSON.stringify({solar:nextState,commercial:nextCommercial,customerId:currentCustomer?.id??null}),current?session.window_start:time,count,time,input.chatId),
       ...audit,
       env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?")
         .bind(time,input.updateId)
