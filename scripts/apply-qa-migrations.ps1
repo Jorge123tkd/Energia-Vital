@@ -31,7 +31,13 @@ try {
     if ($confirmation -cne "APLICAR_SOLO_QA") { throw "Cancelado sin migrar" }
     npx wrangler d1 migrations apply energia-vital-qa-db --remote --config wrangler.qa.toml
     if ($LASTEXITCODE -ne 0) { throw "Migración QA no finalizada; revisar antes de repetir" }
-    Write-Host "Migraciones QA solicitadas. Producción no fue seleccionada." -ForegroundColor Green
+    $final = npx wrangler d1 execute energia-vital-qa-db --remote --config wrangler.qa.toml --json --command "SELECT COUNT(*) AS total,MAX(id) AS ultimo FROM d1_migrations"
+    if ($LASTEXITCODE -ne 0) { throw "Importación solicitada, pero no se pudo confirmar historial de QA" }
+    $verified = $final | ConvertFrom-Json
+    if ([int]$verified[0].results[0].total -ne 21 -or [int]$verified[0].results[0].ultimo -ne 21) {
+        throw "Migración QA incompleta: historial diferente de 21. No repetir a ciegas."
+    }
+    Write-Host "QA actualizada: 21 migraciones registradas. Producción no fue seleccionada." -ForegroundColor Green
 } finally {
     Pop-Location
 }
