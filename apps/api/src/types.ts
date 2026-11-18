@@ -205,6 +205,10 @@ export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   ENVIRONMENT: string;
+  /** Solo QA: dominio de equipo Cloudflare Access, sin https:// */
+  QA_ACCESS_TEAM_DOMAIN?: string;
+  /** Solo QA: Audience Tag de la aplicación Access del Worker. */
+  QA_ACCESS_AUD?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   /** WhatsApp Cloud API de Meta; configurar únicamente como secretos de Worker. */
