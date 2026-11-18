@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import RequestDocuments from './RequestDocuments.svelte';
   import QuoteManager from './QuoteManager.svelte';
   import FinanceTracker from './FinanceTracker.svelte';
   import TechnicalFollowUp from './TechnicalFollowUp.svelte';
@@ -215,6 +216,7 @@
         {#key currentRequestId}
           <TechnicalFollowUp {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
           <FinanceTracker {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
+          <RequestDocuments {token} requestId={currentRequestId}/>
           <QuoteManager {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
         {/key}
         <section class="space-y-3">
