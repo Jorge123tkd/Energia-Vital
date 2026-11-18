@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { businessProposalReply, businessServiceReply, detectIntent, generateResponse, loadAssistantContext, isOutOfScopeMessage, OUT_OF_SCOPE_REPLY } from '../assistant-engine';
+import { advanceCommercialIntake, type CommercialDraft } from '../commercial-intake';
+import { parseRequestIntake } from '../request-intake';
 import { callAI } from '../assistant-ai';
 import { getUser, requireCustomerAuth } from '../middleware';
 import { rateLimited } from '../rate-limit';
@@ -89,6 +91,49 @@ assistantRoutes.post('/message', async c => {
         .bind(messageId, message, intent, now, sessionId, user.user_id),
     ]);
     if (!batch[1].meta?.changes) return c.json({ error: 'Esta conversación pertenece a otra cuenta' }, 403);
+
+    // Borrador comercial privado, con compare-and-swap para impedir confirmaciones paralelas.
+    const stored = await DB.prepare("SELECT context FROM assistant_sessions WHERE id=? AND customer_id=? AND channel='web'")
+      .bind(sessionId,user.user_id).first<{context:string}>();
+    if(!stored)return c.json({error:'Conversación no disponible'},409);
+    let privateContext:Record<string,any>={};
+    try{const parsed=JSON.parse(stored.context||'{}');if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))privateContext=parsed;}catch{}
+    const step=advanceCommercialIntake(message,(privateContext.commercial as CommercialDraft|undefined)||null,crypto.randomUUID());
+    if(step){
+      let reply=step.reply;
+      const writes:D1PreparedStatement[]=[];
+      if(step.submit && step.draft){
+        const d=step.draft;
+        const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment});
+        if(intake.error||!intake.value)return c.json({error:'Revisa los datos del borrador'},400);
+        const description='[Origen: asistente web]\nEntidad: '+d.company+'\nNecesidad: '+d.need;
+        // INSERT condicional: solo el dueño con el borrador exacto puede registrar.
+        writes.push(DB.prepare(`INSERT INTO requests
+          (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at)
+          SELECT ?,?,'consultation',NULL,?,?,'pending','medium',?,NULL,?,?
+          WHERE EXISTS(SELECT 1 FROM assistant_sessions WHERE id=? AND customer_id=? AND channel='web' AND context=?)
+          ON CONFLICT(id) DO NOTHING`)
+          .bind(d.id,user.user_id,('Solicitud comercial: '+d.company).slice(0,180),description,d.location||'',now,now,sessionId,user.user_id,stored.context));
+        writes.push(DB.prepare(`INSERT INTO request_intake
+          (request_id,available_budget_usd_cents,payment_method,payment_currency,customer_type,created_at,updated_at)
+          SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM requests WHERE id=? AND customer_id=?)
+          ON CONFLICT(request_id) DO NOTHING`)
+          .bind(d.id,intake.value.available_budget_usd_cents,intake.value.payment_method,intake.value.payment_currency,intake.value.customer_type,now,now,d.id,user.user_id));
+        step.draft={...d,stage:'submitted'};
+        reply='Solicitud comercial registrada. Referencia: '+d.id+'. Estado inicial: pendiente de revisión. Puedes consultarla en Mis solicitudes. No implica aceptación ni aprobación.';
+      }
+      if(step.draft)privateContext.commercial=step.draft;
+      else delete privateContext.commercial;
+      writes.push(DB.prepare("UPDATE assistant_sessions SET context=?,updated_at=? WHERE id=? AND customer_id=? AND channel='web' AND context=?")
+        .bind(JSON.stringify(privateContext),now,sessionId,user.user_id,stored.context));
+      const results=await DB.batch(writes);
+      if(!results[results.length-1].meta?.changes)return c.json({error:'El borrador cambió. Actualiza la conversación y vuelve a intentarlo.'},409);
+      const replyId=crypto.randomUUID();
+      await DB.prepare(`INSERT INTO assistant_messages (id,session_id,role,content,intent,metadata,created_at)
+        SELECT ?,id,'assistant',?,'service_request',?,? FROM assistant_sessions WHERE id=? AND customer_id=? AND channel='web'`)
+        .bind(replyId,reply,JSON.stringify({source:'commercial_intake'}),now,sessionId,user.user_id).run();
+      return c.json({session_id:sessionId,response:reply,source:'commercial_intake',intent:'service_request',message_id:replyId});
+    }
 
     // Propuestas comerciales antes del asesor solar/FAQ/IA, con historial privado del dueño.
     const { results: recentMessages } = await DB.prepare(`SELECT role, content FROM assistant_messages
