@@ -14,11 +14,13 @@
   let remoteRows: any[] | null = $state(null);
   let remoteTotal = $state(0);
   let searching = $state(false);
+  let searchSequence = 0;
   let edit: any = $state(null);
   let busy = $state(false);
   let error = $state('');
   let success = $state('');
-  let visible = $derived((remoteRows ?? customers).filter(c =>
+  // El servidor ya filtró remoteRows; no aplicar encima una búsqueda que aún no se envió.
+  let visible = $derived(remoteRows ?? customers.filter(c =>
     [c.id, c.name, c.email, c.phone, c.city, c.province].some(v =>
       String(v || '').toLowerCase().includes(query.toLowerCase().trim()))));
   let totalRows = $derived(remoteRows === null ? visible.length : remoteTotal);
@@ -27,15 +29,25 @@
     ? visible.slice((Math.min(page,pageCount)-1)*perPage, Math.min(page,pageCount)*perPage)
     : visible);
   async function searchNow(nextPage = 1) {
+    const sequence = ++searchSequence;
+    const term = query.trim();
     error = ''; searching = true;
     try {
-      const result = await api.adminCustomers(token, query.trim(), nextPage, perPage);
+      const result = await api.adminCustomers(token, term, nextPage, perPage);
+      if (sequence !== searchSequence) return;
       const rows: any[] = result.customers ?? [];
+      const total = result.total ?? rows.length;
+      const lastPage = Math.max(1, Math.ceil(total / perPage));
+      // Si se eliminó el último cliente de una página, volver a la última válida.
+      if (nextPage > lastPage) { await searchNow(lastPage); return; }
       remoteRows = rows;
-      remoteTotal = result.total ?? rows.length;
+      remoteTotal = total;
       page = nextPage;
-    } catch (e) { error = e instanceof Error ? e.message : 'No se pudo buscar el cliente'; }
-    finally { searching = false; }
+    } catch (e) {
+      if (sequence === searchSequence) error = e instanceof Error ? e.message : 'No se pudo buscar el cliente';
+    } finally {
+      if (sequence === searchSequence) searching = false;
+    }
   }
   onMount(() => { void searchNow(1); });
   function search(event: SubmitEvent) { event.preventDefault(); page = 1; void searchNow(); }
@@ -62,7 +74,7 @@
         name: edit.name, email: edit.email, phone: edit.phone,
         address: edit.address, city: edit.city, province: edit.province
       });
-      edit = null; await onRefresh(); if (remoteRows !== null) await searchNow(); success = 'Datos del cliente actualizados.';
+      edit = null; await onRefresh(); if (remoteRows !== null) await searchNow(page); success = 'Datos del cliente actualizados.';
     });
   }
   async function setStatus(customer: any) {
@@ -71,7 +83,7 @@
     if (!window.confirm(`¿Quieres ${action} la cuenta de ${customer.name}?`)) return;
     await task(async () => {
       await api.setAdminCustomerStatus(token, customer.id, !active);
-      await onRefresh(); if (remoteRows !== null) await searchNow();
+      await onRefresh(); if (remoteRows !== null) await searchNow(page);
       success = active ? 'Cliente bloqueado: las sesiones activas se han cerrado.' : 'Cliente reactivado.';
     });
   }
@@ -79,7 +91,7 @@
     if (!window.confirm(`Eliminar definitivamente a ${customer.name}? Esta operación no se puede deshacer. Si tiene solicitudes o citas guardadas, el sistema impedirá eliminarlo.`)) return;
     await task(async () => {
       await api.deleteAdminCustomer(token, customer.id);
-      await onRefresh(); if (remoteRows !== null) await searchNow();
+      await onRefresh(); if (remoteRows !== null) await searchNow(page);
       success = 'Cuenta eliminada definitivamente.';
     });
   }
@@ -92,7 +104,7 @@
       <p class="text-sm text-slate-500 mt-1">Gestiona sus datos, bloquea cuentas y protege el historial de solicitudes.</p>
     </div>
     <form onsubmit={search} class="flex flex-wrap gap-2 w-full sm:w-auto">
-      <input class="border border-slate-300 bg-white rounded-xl px-4 py-2.5 flex-1 min-w-0 sm:w-72" placeholder="ID, nombre o correo…" aria-label="Buscar cliente por identificador, nombre o correo" bind:value={query} oninput={() => { remoteRows = null; page = 1; }} />
+      <input class="border border-slate-300 bg-white rounded-xl px-4 py-2.5 flex-1 min-w-0 sm:w-72" placeholder="ID, nombre o correo…" aria-label="Buscar cliente por identificador, nombre o correo" bind:value={query} oninput={() => { searchSequence++; searching = false; remoteRows = null; page = 1; }} />
       <button class="rounded-xl bg-teal-700 text-white font-semibold text-sm px-4 py-2.5" disabled={searching}>{searching ? 'Buscando…' : 'Buscar'}</button>
       {#if remoteRows !== null}
         <button type="button" class="rounded-xl border border-slate-200 text-slate-700 text-sm px-3 py-2.5" onclick={() => { query = ''; page = 1; void searchNow(1); }}>Limpiar</button>
@@ -137,7 +149,7 @@
       {/each}
     </div>
   {:else}
-    <p class="rounded-2xl border border-slate-200 bg-white p-8 text-slate-500">{customers.length ? 'No hay clientes con esos datos.' : 'Todavía no se han registrado clientes.'}</p>
+    <p class="rounded-2xl border border-slate-200 bg-white p-8 text-slate-500">{searching ? 'Buscando clientes…' : totalRows === 0 && !query.trim() ? 'Todavía no se han registrado clientes.' : 'No hay clientes con esos datos.'}</p>
   {/if}
   <Pagination page={Math.min(page,pageCount)} total={totalRows} perPage={perPage}
     label="clientes" onPage={searchNow} disabled={searching} />
