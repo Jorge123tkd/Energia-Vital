@@ -355,6 +355,52 @@ adminCustomersRoutes.get('/appointments', async c => {
   const total=await c.env.DB.prepare('SELECT COUNT(*) AS n'+joins+where).bind(...args).first<{n:number}>();
   return c.json({appointments:results||[],page,page_size:pageSize,total:total?.n||0});
 });
+/** El personal autorizado puede crear citas para clientes existentes sin entrar en la cuenta del cliente.
+ * La comprobación de solapamiento se integra en el INSERT para evitar carreras entre reservas.
+ */
+adminCustomersRoutes.post('/appointments', async c => {
+  const b: unknown = await c.req.json().catch(() => null);
+  if (!b || typeof b !== 'object' || Array.isArray(b)) return c.json({error:'Datos de cita inválidos'},400);
+  const input=b as Record<string,unknown>;
+  const title=typeof input.title==='string'?input.title.trim():'';
+  const customerId=typeof input.customer_id==='string'?input.customer_id.trim():'';
+  const startsText=typeof input.starts_at==='string'?input.starts_at:'';
+  const endsText=typeof input.ends_at==='string'?input.ends_at:'';
+  if (title.length<3 || title.length>180 || !customerId || customerId.length>100 ||
+      !startsText || startsText.length>64 || !endsText || endsText.length>64 ||
+      (input.status!==undefined && !['pending','confirmed'].includes(String(input.status))))
+    return c.json({error:'Selecciona cliente, título, fecha y horario válidos'},400);
+  const starts=new Date(startsText),ends=new Date(endsText);
+  if (!Number.isFinite(starts.getTime()) || !Number.isFinite(ends.getTime()) ||
+      starts.getTime()<Date.now() || ends<=starts ||
+      ends.getTime()-starts.getTime()>4*3600000)
+    return c.json({error:'La cita debe ser futura y durar como máximo 4 horas'},400);
+  const customer=await c.env.DB.prepare('SELECT id FROM customers WHERE id=? AND is_active=1')
+    .bind(customerId).first();
+  if(!customer)return c.json({error:'Selecciona un cliente activo existente'},404);
+  const status=input.status==='pending'?'pending':'confirmed';
+  const now=new Date().toISOString(),id=crypto.randomUUID();
+  const start=starts.toISOString(),end=ends.toISOString();
+  const result=await c.env.DB.prepare(`INSERT INTO appointments
+    (id,customer_id,service_id,request_id,title,starts_at,ends_at,status,notes,created_at,updated_at)
+    SELECT ?,?,NULL,NULL,?,?,?, ?,NULL,?,?
+    WHERE NOT EXISTS (
+      SELECT 1 FROM appointments
+      WHERE status!='cancelled' AND starts_at<? AND ends_at>?
+    )`).bind(id,customerId,title,start,end,status,now,now,end,start).run();
+  if(!result.meta?.changes)return c.json({error:'Horario ocupado; selecciona otro'},409);
+  try {
+    await c.env.DB.prepare(`INSERT INTO notifications
+      (id,user_id,user_type,type,title,message,is_read,created_at)
+      VALUES (?,?,'customer','system',?,?,0,?)`).bind(
+      crypto.randomUUID(),customerId,'Cita registrada por Bonaire',
+      'Tu cita «'+title+'» fue '+(status==='confirmed'?'confirmada':'registrada como pendiente')+
+      '. Referencia: '+id+'.',now
+    ).run();
+  } catch(e){console.error('No se pudo notificar la nueva cita',e);}
+  return c.json({id,status,message:'Cita creada desde administración'},201);
+});
+
 adminCustomersRoutes.patch('/appointments/:id', async c => {
   const b=await c.req.json<any>().catch(()=>null);
   if(!b || !['pending','confirmed','in_progress','completed','cancelled'].includes(b.status))
