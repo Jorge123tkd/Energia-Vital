@@ -1,5 +1,7 @@
 /** Cliente REST para Cloudflare Workers. Evita tokens Bearer manuales en cada pantalla. */
 const API_BASE = (import.meta.env.VITE_API_URL as string || '').replace(/\/$/, '');
+// Solo QA usa cookies de Cloudflare Access entre Pages y Worker.
+const QA_CREDENTIALS: RequestCredentials = import.meta.env.VITE_QA_MODE === 'true' ? 'include' : 'same-origin';
 export const CUSTOMER_TOKEN_KEY = 'energia_vital_customer_session';
 export const ADMIN_TOKEN_KEY = 'energia_vital_admin_session';
 
@@ -39,7 +41,7 @@ export async function logoutCurrentSession(kind: 'customer' | 'admin'): Promise<
   const headers = new Headers({ 'Content-Type': 'application/json' });
   if (!refresh && access) headers.set('Authorization', `Bearer ${access}`);
   try {
-    await fetch(`${API_BASE}/api/auth/logout`, {
+    await fetch(`${API_BASE}/api/auth/logout`, { credentials: QA_CREDENTIALS,
       method: 'POST', headers, cache: 'no-store',
       body: JSON.stringify(refresh ? { refresh_token: refresh } : {}),
     });
@@ -62,7 +64,7 @@ async function renewAdminAccess(failedToken: string): Promise<string | null> {
   if (!adminRefreshing || adminRefreshingFor !== previous) {
     adminRefreshingFor = previous;
     const job = (async () => {
-      const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+      const response = await fetch(`${API_BASE}/api/auth/refresh`, { credentials: QA_CREDENTIALS,
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: previous }), cache: 'no-store',
       });
@@ -124,7 +126,7 @@ async function renewCustomerAccess(failedToken: string): Promise<string | null> 
   if (!refreshing || refreshingFor !== previousRefresh) {
     refreshingFor = previousRefresh;
     const job = (async () => {
-      const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+      const response = await fetch(`${API_BASE}/api/auth/refresh`, { credentials: QA_CREDENTIALS,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: previousRefresh }),
@@ -159,7 +161,7 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
   const explicitToken = suppliedAuth ? headers.get('Authorization')?.replace(/^Bearer /, '') || null : null;
   const token = suppliedAuth ? null : customerToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  let response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let response = await fetch(`${API_BASE}${path}`, { credentials: QA_CREDENTIALS, ...options, headers });
   // Renovar admin únicamente si el Bearer explícito corresponde a esta sesión.
   // Nunca renovar login, logout, token externo ni permisos denegados (403).
   if (response.status === 401 && explicitToken && accessExpired(explicitToken) &&
@@ -170,7 +172,7 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
     if (renewed) {
       const retryHeaders = new Headers(headers);
       retryHeaders.set('Authorization', `Bearer ${renewed}`);
-      response = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders });
+      response = await fetch(`${API_BASE}${path}`, { credentials: QA_CREDENTIALS, ...options, headers: retryHeaders });
     }
   }
   // Nunca renovar por errores de permisos ni en rutas de login/logout.
@@ -180,7 +182,7 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
     if (renewed) {
       const retryHeaders = new Headers(headers);
       retryHeaders.set('Authorization', `Bearer ${renewed}`);
-      response = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders });
+      response = await fetch(`${API_BASE}${path}`, { credentials: QA_CREDENTIALS, ...options, headers: retryHeaders });
     }
   }
   const data = await response.json().catch(() => ({}));
@@ -201,7 +203,7 @@ const patch = (path: string, body: unknown, options: RequestInit = {}) => apiReq
 export async function authorizedImageBlob(path: string, token?: string): Promise<Blob> {
   const auth = token || customerToken();
   if (!auth) throw new Error('Necesitas iniciar sesión para ver este archivo.');
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${API_BASE}${path}`, { credentials: QA_CREDENTIALS,
     headers: { Authorization: `Bearer ${auth}` }
   });
   if (!response.ok) throw new Error('No se pudo cargar esta imagen privada.');
