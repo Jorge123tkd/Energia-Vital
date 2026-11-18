@@ -1,5 +1,8 @@
 # Continuidad de Bonaire
 
+## 18/11/2026 — Emisión de cotizaciones a clientes (código, sin despliegue)
+Añadida acción administrativa POST `/api/quotes/:id/issue`, distinta de la aprobación interna. Registro de emisión idempotente mediante notificación con ID determinista; solo cotización aprobada vigente y cliente activo, sin publicar notas internas. Consulta de cotizaciones emitidas `GET /api/private/quotes` y comando Telegram «Mis cotizaciones», con botón. Commits b8454b0, 99a0cfb, 5bb5ee1, c5acf15. Pendiente enganchar botón de emisión al panel admin y vista completa web, verificación de identidad heredada, pruebas y publicación. La emisión registra disponibilidad; NO confirma entrega automática por Telegram. Pendientes documentos y notificaciones push. No se han ejecutado pruebas ni migraciones.
+
 ## 18/11/2026 — Telegram clientes: registro, solicitudes y citas (código pendiente de validar)
 Implementados el formulario Mini App `apps/web/public/telegram-registro.html`, endpoints de alta y vinculación, comprobación de initData y comandos de solicitudes/citas propias. Alta con correo y contraseña, sin contraseña en mensajes. Registro comercial con confirmación expresa y datos de primer contacto. Citas desde Telegram: botón Solicitar cita, fecha Cuba AAAA-MM-DD HH:mm, duración inicial de una hora, comprobación de cruces e identidad, estado pendiente, referencia estable por update. Commits citas 05c4308, 161ab7e, 15f69b9. Pruebas sintéticas añadidas, aún no ejecutadas. Revisar origen de vínculos antiguos, separar identidad verificada de vínculos heredados antes del release y comprobar todos los SQL con D1. Pendientes documentos privados, emisión explícita de cotización, notificaciones, controles y release. No se ha desplegado ni migrado producción.
 
