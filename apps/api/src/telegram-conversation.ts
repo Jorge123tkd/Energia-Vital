@@ -9,7 +9,7 @@ export type TelegramAction =
   | 'welcome' | 'help' | 'new-chat' | 'history' | 'erase-history'
   | 'link-help' | 'unlink' | 'agenda-today' | 'agenda-tomorrow' | 'pending'
   | 'reminders-enable' | 'reminders-disable' | 'reminders-info'
-  | 'solar' | 'products' | 'services' | 'request-service' | 'human' | 'business-services' | 'business-partner' | null;
+  | 'customer-account' | 'customer-requests' | 'customer-appointments' | 'solar' | 'products' | 'services' | 'request-service' | 'human' | 'business-services' | 'business-partner' | null;
 
 const normalize=(input:string)=>input.toLowerCase().normalize('NFD')
   .replace(/[\u0300-\u036f]/g,'')
@@ -61,6 +61,9 @@ export function classifyTelegramMessage(input:string):TelegramAction {
       /\b(?:pendientes|por atender)\b.*\b(?:solicitudes|tickets)\b/.test(s))
     return 'pending';
 
+  if(/^(?:crear cuenta|mi cuenta|registrarme|vincular cuenta existente|registro de cliente)$/.test(s))return 'customer-account';
+  if(/^(?:mis solicitudes|mis expedientes|estado de mi solicitud|estado de mi expediente|mis proyectos)$/.test(s))return 'customer-requests';
+  if(/^(?:mis citas|consultar mis citas)$/.test(s))return 'customer-appointments';
   if(/^(?:empresa|empresas|negocio|negocios|atencion a empresas|empresas y negocios|proyecto empresarial|servicios para empresas|soy una empresa|somos una mipyme|somos una empresa estatal)$/.test(s))
     return 'business-services';
   if(/^(?:proveedores|proveedor|proveedores y alianzas|alianzas|alianza comercial|ser proveedor|quiero ser proveedor|distribuidor|distribucion en cuba|colaboracion comercial)$/.test(s))
@@ -93,7 +96,7 @@ export function presentTelegramReply(reply:string,stage?:SolarStage|null):string
 export type TelegramReplyMarkup =
   | {keyboard:{text:string}[][];resize_keyboard:true;one_time_keyboard:true;input_field_placeholder:string}
   | {remove_keyboard:true}
-  | {inline_keyboard:{text:string;url:string}[][]};
+  | {inline_keyboard:({text:string;url:string}|{text:string;web_app:{url:string}})[][]};
 
 const keyboard=(labels:string[][]):TelegramReplyMarkup=>({
   keyboard:labels.map(row=>row.map(text=>({text}))),
@@ -135,6 +138,8 @@ export function telegramReplyKeyboard(
       ['🏢 Empresas y negocios','🤝 Proveedores y alianzas'],
       ['☀️ Asesoría solar','🛍️ Ver productos'],
       ['🛠️ Servicios','🧾 Solicitar servicio'],
+      ['👤 Mi cuenta','📂 Mis solicitudes'],
+      ['📅 Mis citas'],
       ['🙋 Hablar con una persona','✏️ Nuevo chat']
     ]);
 }
