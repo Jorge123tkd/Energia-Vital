@@ -88,6 +88,7 @@ jobs:
           npm run typecheck --workspace=apps/web
           node apps/web/tests/auth-session.cjs
           node scripts/prepare-cloudflare-qa-config.test.cjs
+          node scripts/verify-qa-access.test.cjs
       - name: Publicar SOLAMENTE Worker QA
         working-directory: apps/api
         env:
