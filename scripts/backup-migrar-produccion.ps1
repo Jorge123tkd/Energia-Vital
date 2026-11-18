@@ -18,7 +18,8 @@ if ($cfg -notmatch '(?m)^name\s*=\s*"energia-vital-api"\s*$' -or
 $migrations = @(Get-ChildItem (Join-Path $api 'migrations') -File -Filter '*.sql' |
   Where-Object { $_.Name -match '^\d{3}_.*\.sql$' } |
   Where-Object { [int]$_.Name.Substring(0,3) -gt 12 } | Sort-Object Name)
-if (($migrations | ForEach-Object { [int]$_.Name.Substring(0,3) }) -join ',' -ne '13,14,15,16,17,18,19,20,21') {
+$numbers = @($migrations | ForEach-Object { [int]$_.Name.Substring(0,3) })
+if (($numbers -join ',') -ne '13,14,15,16,17,18,19,20,21') {
   throw 'El conjunto esperado de migraciones 013-021 no coincide.'
 }
 function Read-DbState {
@@ -39,7 +40,8 @@ try {
   $backupDir = Join-Path $env:USERPROFILE 'Respaldos-Energia-Vital'
   New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
   # Intentar limitar acceso al usuario Windows antes de guardar registros privados.
-  & icacls.exe $backupDir /inheritance:r /grant:r "${env:USERNAME}:(OI)(CI)F" /grant:r 'SYSTEM:(OI)(CI)F' /grant:r 'Administrators:(OI)(CI)F' | Out-Null
+  $userSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+  & icacls.exe $backupDir /inheritance:r /grant:r "*${userSid}:(OI)(CI)F" /grant:r '*S-1-5-18:(OI)(CI)F' /grant:r '*S-1-5-32-544:(OI)(CI)F' | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'No se pudo restringir permisos de carpeta de respaldos.' }
   $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
   $backup = Join-Path $backupDir "energia-vital-prod-previo-013-021-$timestamp.sql"
