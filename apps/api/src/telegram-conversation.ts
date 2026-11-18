@@ -140,6 +140,7 @@ export function telegramReplyKeyboard(
       ['🛠️ Servicios','🧾 Solicitar servicio'],
       ['👤 Mi cuenta','📂 Mis solicitudes'],
       ['📅 Mis citas','Solicitar cita'],
+      ['📄 Mis cotizaciones'],
       ['🙋 Hablar con una persona','✏️ Nuevo chat']
     ]);
 }
