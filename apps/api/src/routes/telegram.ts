@@ -141,6 +141,13 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     const quotes=await issuedCustomerQuotes(env,customer.id);
     return {reply:quotes.length?'Cotizaciones emitidas para tu cuenta:\n\n'+quotes.slice(0,8).map(q=>q.title+'\nUSD '+(q.total_cents/100).toFixed(2)+' · Vigencia: '+q.valid_until+'\nReferencia: '+q.id).join('\n\n'):'Todavía no tienes cotizaciones emitidas por Bonaire.',skipHistory:true};
   }
+  if(/^(?:mis notificaciones|mis novedades|mis avisos de cliente|🔔 mis notificaciones)$/i.test(text)){
+    if(!customer)return {reply:'Vincula tu cuenta para consultar tus notificaciones privadas.',replyMarkup:accountButton,skipHistory:true};
+    const {results}=await env.DB.prepare(
+      "SELECT n.title,n.message,n.created_at FROM notifications n JOIN customers c ON c.id=n.user_id WHERE n.user_id=? AND n.user_type='customer' AND c.telegram_chat_id=? AND c.is_active=1 ORDER BY n.created_at DESC,n.id DESC LIMIT 5"
+    ).bind(customer.id,chatId).all<{title:string;message:string;created_at:string}>();
+    return {reply:results?.length?'Tus últimas notificaciones:\n\n'+results.map(n=>n.title+'\n'+n.message.slice(0,500)+'\n'+n.created_at.slice(0,10)).join('\n\n'):'No tienes notificaciones todavía.',skipHistory:true};
+  }
   if(action==='customer-requests'||action==='customer-appointments'){
     if(!customer)return {reply:'Para proteger tus datos, primero crea o vincula tu cuenta desde este formulario.',replyMarkup:accountButton,skipHistory:true};
     const isRequests=action==='customer-requests';
