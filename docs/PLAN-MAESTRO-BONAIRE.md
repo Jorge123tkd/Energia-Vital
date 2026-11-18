@@ -1,5 +1,8 @@
 # Bonaire — Plan maestro de crecimiento seguro (acuerdos con dirección)
 
+## 17/11/2026 — Clientes administrativos: búsquedas sin resultados atrasados
+Corregido `apps/web/src/components/AdminCustomers.svelte` en la rama única (commit `0da7c53ce96eb73f29c3efed03295e6cae49942c`): se introdujo un identificador secuencial de peticiones que descarta respuestas antiguas cuando cambian el texto o la página; las respuestas remotas ya no se vuelven a filtrar con texto escrito pero todavía no enviado; tras editar, bloquear o eliminar se conserva la página actual y, si desaparece la última página por una eliminación, se vuelve a la última válida. Mensaje de ausencia de resultados más preciso. No hay cambios de API, permisos ni base de datos. Pendiente de compilar con la próxima descarga, sin pruebas repetitivas; no se publicó nada en Cloudflare.
+
 ## 17/11/2026 — Paginación compacta compartida para listados grandes
 Se actualizó `apps/web/src/components/Pagination.svelte` en la rama única: ahora muestra hasta cinco páginas cercanas a la actual más primera/última y separadores, en lugar de crear una opción `<option>` por cada página de datos. Conserva botones Primera/Anterior/Siguiente/Última, contador de registros, desactivación durante cargas y accesibilidad `aria-current`. Beneficia solicitudes, citas, clientes, personal, notificaciones, brigadas, galería y servicios que usan el componente compartido. Commit `315d77d6fee5fb2eda990fbba7d62a845eb066ee`. Sin cambios en D1 ni despliegue. `npm audit` global (12 high de dev), migraciones 013–021 QA y control real de acceso QA permanecen pendientes.
 
