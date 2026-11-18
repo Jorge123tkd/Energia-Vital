@@ -487,3 +487,15 @@ assert db.execute("SELECT is_active FROM brigade_chief_accounts WHERE id='chief-
 assert db.execute("SELECT revoked_at FROM brigade_chief_sessions WHERE id='session-chief-old'").fetchone()[0] is not None
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
 print("PASS migraciones 013-020: preservación histórica, último administrador protegido y brigada aislada, token hash y evidencias técnicas inmutables (SQLite ficticia).")
+
+
+# 022: la identidad antigua de Telegram jamás concede acceso a documentos.
+db.execute("UPDATE customers SET telegram_chat_id='123456' WHERE id='customer-old'")
+migration(22)
+assert db.execute("SELECT telegram_chat_id,telegram_customer_chat_id FROM customers WHERE id='customer-old'").fetchone()==('123456',None)
+db.execute("UPDATE customers SET telegram_customer_chat_id='123456' WHERE id='customer-old'")
+db.execute("""INSERT INTO request_documents(id,request_id,customer_id,r2_key,filename,content_type,size_bytes,direction)
+VALUES('doc-test','request-old','customer-old','private-documents/test','test.pdf','application/pdf',15,'customer')""")
+assert db.execute("SELECT customer_id FROM request_documents WHERE id='doc-test'").fetchone()==('customer-old',)
+assert db.execute("PRAGMA foreign_key_check").fetchall()==[]
+print("PASS migration 022: unverified legacy identity ignored and documents linked")
