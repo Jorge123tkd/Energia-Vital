@@ -10,7 +10,7 @@
     delivery_terms:string|null;warranty_terms:string|null;payment_terms:string|null;
     stock_notes:string|null;tax_notes:string|null;freight_notes:string|null;
     internal_notes:string|null;status:string;created_by_email:string;
-    reviewed_by_email?:string|null;review_reason?:string|null;created_at:string};
+    issued_at?:string|null;reviewed_by_email?:string|null;review_reason?:string|null;created_at:string};
   type ItemEdit={key:number;description:string;quantity:number;price_usd:number};
   let {token,requestId,canReview=false}:{token:string;requestId:string;canReview?:boolean}=$props();
   let versions:Version[]=$state([]),loading=$state(false),busy=$state(false),
@@ -115,6 +115,14 @@
     }catch(e){error=e instanceof Error?e.message:'No se pudo registrar la revisión.';}
     finally{busy=false;}
   }
+  async function issue(v:Version){
+    if(!canReview||busy||v.issued_at)return;
+    if(!window.confirm('¿Emitir esta cotización al titular del expediente? Será visible en su cuenta y Telegram.'))return;
+    busy=true;error='';success='';
+    try{const r=await api.issueQuote(token,v.id);success=r.message;await reload();}
+    catch(e){error=e instanceof Error?e.message:'No se pudo emitir.';}
+    finally{busy=false;}
+  }
   onMount(()=>{void reload();});
 </script>
 
@@ -134,9 +142,7 @@
     </div>
   </div>
   <p class="rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-xs p-3">
-    <strong>No es un contrato ni una oferta emitida.</strong> Incluso una versión aprobada
-    internamente necesita un proceso separado de emisión autorizado. No se envía correo,
-    WhatsApp, factura ni propuesta contractual desde este módulo.
+    <strong>La aprobación interna no emite una oferta.</strong> Solo el administrador puede emitir una versión aprobada al titular. La emisión no equivale a un contrato, factura o aceptación del cliente.
   </p>
   {#if error}<p role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>{/if}
   {#if success}<p role="status" class="rounded-xl border border-teal-200 bg-teal-50 p-3 text-sm text-teal-950">{success}</p>{/if}
@@ -151,7 +157,7 @@
         </div>
         <div class="text-right">
           <p class="font-extrabold text-teal-900">{amount(v.total_cents)}</p>
-          <p class="text-xs font-semibold">{states[v.status]||v.status}</p>
+          <p class="text-xs font-semibold">{v.issued_at?'Emitida al cliente':states[v.status]||v.status}</p>
         </div>
       </div>
       <details>
@@ -174,6 +180,11 @@
       </details>
       {#if v.reviewed_by_email}
         <p class="text-xs text-slate-600">Revisó: {v.reviewed_by_email}{v.review_reason?' · '+v.review_reason:''}</p>
+      {/if}
+      {#if v.issued_at}
+        <p class="text-xs text-teal-800">Emitida: {v.issued_at.slice(0,10)}</p>
+      {:else if v.status==='approved_internal' && canReview}
+        <button type="button" disabled={busy} onclick={()=>issue(v)} class="rounded-lg bg-teal-700 text-white font-semibold text-xs px-3 py-2">Emitir al cliente</button>
       {/if}
       {#if v.status==='draft'}
         <button type="button" disabled={busy} onclick={()=>submit(v)}
