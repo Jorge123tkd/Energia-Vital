@@ -24,6 +24,8 @@ jobs:
         run: |
           node scripts/prepare-cloudflare-qa-config.test.cjs
           node scripts/verify-qa-access.test.cjs
+      - name: Probar conversaciones con empresas y proveedores en Telegram y web
+        run: node apps/api/tests/business-assistant-phase-a.cjs
       - name: Typecheck API y Svelte
         run: |
           npm run typecheck --workspace=apps/api
