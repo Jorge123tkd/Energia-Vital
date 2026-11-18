@@ -8,6 +8,7 @@ import type { Env } from '../types';
 import { requireAdminAuth,requireStaffAuth,getUser } from '../middleware';
 import {
   generateResponse,loadAssistantContext,detectIntent,isOutOfScopeMessage,
+  businessProposalReply,businessServiceReply,
   OUT_OF_SCOPE_REPLY,isCurrencyQuestion
 } from '../assistant-engine';
 import { advanceSolarGuidance,type SolarState } from '../solar-guidance';
@@ -233,6 +234,16 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     return {reply:'Ya estás conversando conmigo aquí en Telegram. Puedes escribirme con libertad '+
       'sobre los equipos y servicios de Bonaire. El WhatsApp de la empresa sigue atendido por gestores humanos.'};
   }
+
+  // Priorizar propuestas y servicios empresariales antes de activar un asesor solar.
+  // Historial limitado al chat/hilo actual: jamás reutilizar el de otra empresa.
+  const commercialHistory=await env.DB.prepare(
+    "SELECT role,content FROM telegram_bot_messages WHERE chat_id=? AND thread_id=? "+
+    "ORDER BY created_at DESC LIMIT 12"
+  ).bind(chatId,threadId).all<{role:string;content:string}>();
+  const recent=(commercialHistory.results||[]).reverse();
+  const commercial=businessProposalReply(text,recent) || businessServiceReply(text,recent);
+  if(commercial)return {reply:commercial,state:null};
 
   const solar=advanceSolarGuidance(text,state);
   if(solar.handled)return {reply:solar.reply,state:solar.state};
