@@ -92,14 +92,14 @@ export function businessServiceReply(message:string, history:{role:string;conten
   const request=/\b(?:necesit(?:o|a|amos|an)|queremos|quiero|solicita(?:r|mos)|contrata(?:r|mos)|cotiza(?:r|cion)|presupuesto|proyecto|instala(?:r|cion)|mantenimiento|reparaci[oó]n|servicio|visita tecnica|evaluacion|suministro)\b/.test(m);
   const general=/^(?:que|cuales|como|tienen|trabajan|ofrecen|venden|informacion|cuanto cuesta)\b/.test(m) ||
     /\b(?:quiero|queremos|necesito|necesitamos|solo)\b.{0,28}\b(?:saber|conocer|informacion|preguntar)\b/.test(m) ||
-    /\b(?:que venden|que ofrecen|trabajan con)\b/.test(m);
+    /\b(?:que\s+(?:(?:productos|equipos|servicios|modelos|marcas)\s+)?(?:venden|ofrecen|tienen)|trabajan con)\b/.test(m);
   const introduction=/^(?:soy|somos|represento|tengo una|tenemos una|mi empresa|mi negocio)\b/.test(m);
   const proposal=isBusinessProposal(message);
   if(proposal)return null;
   if(pending && /^(?:cancelar|cancela|olvidalo|otra cosa|no gracias)$/.test(m))
     return 'De acuerdo, dejamos esta consulta empresarial aquí. ¿Qué otra cosa necesitas?';
   if (!pending && organization && introduction && !request && !general)
-    return 'Atención empresarial · Bonaire\\n\\nGracias por presentarte. Trabajamos con mipymes, empresas estatales, negocios privados y otras organizaciones. ¿Qué necesita tu entidad: un proyecto, mantenimiento, reparación, suministro u otra colaboración? También puedes hacer una consulta sin abrir una solicitud.';
+    return 'Atención empresarial · Bonaire\n\nGracias por presentarte. Trabajamos con mipymes, empresas estatales, negocios privados y otras organizaciones. ¿Qué necesita tu entidad: un proyecto, mantenimiento, reparación, suministro u otra colaboración? También puedes hacer una consulta sin abrir una solicitud.';
   if (!pending && (!organization || !request || general))return null;
   // Preguntas nuevas no se confunden con el contexto de una propuesta en curso.
   if(pending && (general || isOutOfScopeMessage(message) ||
