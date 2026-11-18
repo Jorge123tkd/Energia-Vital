@@ -22,6 +22,11 @@ function validate(input) {
   const pages=required(input.QA_PAGES_PROJECT,'QA_PAGES_PROJECT');
   const api=required(input.QA_API_URL,'QA_API_URL');
   const site=required(input.QA_SITE_URL,'QA_SITE_URL');
+  const accessTeam=required(input.QA_ACCESS_TEAM_DOMAIN,'QA_ACCESS_TEAM_DOMAIN').toLowerCase();
+  const accessAud=required(input.QA_ACCESS_AUD,'QA_ACCESS_AUD');
+  if(!/^[a-z0-9][a-z0-9-]*\\.cloudflareaccess\\.com$/.test(accessTeam) ||
+     !/^[A-Za-z0-9_-]{10,128}$/.test(accessAud))
+    throw Error('Cloudflare Access QA exige team y audience válidos');
   if(!/^[0-9a-f-]{36}$/i.test(d1id) || d1id.toLowerCase()===PROD_D1)
     throw Error('D1 QA inválida o idéntica a producción');
   for(const [label,value,prod] of [['D1',d1name,PROD_DB],['R2',bucket,PROD_BUCKET],
@@ -38,7 +43,7 @@ function validate(input) {
     throw Error('QA debe usar dominios Cloudflare independientes');
   if(!parsedApi.hostname.startsWith(worker+'.')||!(parsedSite.hostname===pages+'.pages.dev'))
     throw Error('Los dominios QA no corresponden a Worker/Pages aislados');
-  return {d1id,d1name,bucket,worker,pages,api:parsedApi.origin,site:parsedSite.origin};
+  return {d1id,d1name,bucket,worker,pages,api:parsedApi.origin,site:parsedSite.origin,accessTeam,accessAud};
 }
 function render(cfg) {
   const toml=s=>JSON.stringify(s);
@@ -59,6 +64,8 @@ function render(cfg) {
     '[vars]',
     'ENVIRONMENT = "qa"',
     'SITE_URL = '+toml(cfg.site),
+    'QA_ACCESS_TEAM_DOMAIN = '+toml(cfg.accessTeam),
+    'QA_ACCESS_AUD = '+toml(cfg.accessAud),
     'WORKERS_AI_ENABLED = "false"',
     'WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"',
     // Sin triggers cron: el despliegue de ensayo no programa recordatorios.
