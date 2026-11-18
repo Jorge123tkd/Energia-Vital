@@ -20,16 +20,18 @@ if ($cfg -notmatch '(?m)^name\s*=\s*"energia-vital-api"\s*$' -or
 }
 Push-Location $apiDir
 try {
-  $raw=npx wrangler d1 execute energia-vital-db --remote --config wrangler.toml --json --command "SELECT (SELECT COUNT(*) FROM d1_migrations) AS total, (SELECT MAX(id) FROM d1_migrations) AS ultimo, (SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash') AS refresh_hash, (SELECT COUNT(*) FROM pragma_table_info('customers') WHERE name='telegram_customer_chat_id') AS telegram_verified, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='request_documents') AS documents, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_customer_notice_deliveries') AS telegram_notices"
+  $raw=npx wrangler d1 execute energia-vital-db --remote --config wrangler.toml --json --command "SELECT (SELECT COUNT(*) FROM d1_migrations) AS total, (SELECT MAX(id) FROM d1_migrations) AS ultimo, (SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash') AS refresh_hash, (SELECT COUNT(*) FROM pragma_table_info('customers') WHERE name='telegram_customer_chat_id') AS telegram_verified, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='request_documents') AS documents, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_customer_notice_deliveries') AS telegram_notices, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_attachment_quota') AS attachment_quota"
   if($LASTEXITCODE -ne 0){throw 'Falló lectura remota D1. NO desplegar.'}
   $parsed=$raw | ConvertFrom-Json
   $row=@($parsed)[0].results[0]
-  if([int]$row.total -ne 22 -or [int]$row.ultimo -ne 22 -or [int]$row.refresh_hash -ne 1 -or [int]$row.telegram_verified -ne 1 -or [int]$row.documents -ne 1 -or [int]$row.telegram_notices -ne 1){
+  if([int]$row.total -ne 22 -or [int]$row.ultimo -ne 22 -or [int]$row.refresh_hash -ne 1 -or [int]$row.telegram_verified -ne 1 -or [int]$row.documents -ne 1 -or [int]$row.telegram_notices -ne 1 -or [int]$row.attachment_quota -ne 1){
     throw 'D1 requiere migracion 022, sesiones seguras, identidad Telegram verificada y documentos. NO desplegar.'
   }
 } finally {Pop-Location}
 node apps/api/tests/commercial-intake.cjs
 if($LASTEXITCODE -ne 0){throw 'Prueba comercial falló. NO desplegar.'}
+node apps/api/tests/telegram-customer-auth.cjs
+if($LASTEXITCODE -ne 0){throw 'Prueba identidad Telegram falló. NO desplegar.'}
 node apps/api/tests/telegram-customer-appointments.cjs
 if($LASTEXITCODE -ne 0){throw 'Prueba citas falló. NO desplegar.'}
 node apps/api/tests/request-documents.cjs
