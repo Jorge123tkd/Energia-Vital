@@ -50,7 +50,7 @@ for(const query of ['Quiero ser proveedor de Bonaire','Quiero distribuir sus pro
 }
 assert.equal(telegram.classifyTelegramMessage('🏢 Empresas y negocios'),'business-services');
 assert.equal(telegram.classifyTelegramMessage('🤝 Proveedores y alianzas'),'business-partner');
-assert.equal(telegram.classifyTelegramMessage('¿Qué productos tienen?'),null);
+assert.equal(telegram.classifyTelegramMessage('¿Qué productos tienen?'),'products');
 assert.equal(telegram.classifyTelegramMessage('Necesito asesoramiento solar'),'solar');
 assert.equal(telegram.classifyTelegramMessage('Quiero reservar una cita mañana'),null);
 assert.equal(telegram.classifyTelegramMessage('Agenda del equipo hoy'),'agenda-today');
