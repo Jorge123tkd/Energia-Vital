@@ -28,3 +28,10 @@ CREATE TABLE telegram_customer_notice_deliveries (
 );
 CREATE INDEX idx_telegram_notice_customer ON telegram_customer_notice_deliveries(customer_id);
 CREATE INDEX idx_customer_notice_pending ON notifications(user_type,user_id,is_read,created_at);
+
+-- Bound Telegram file-processing load per private chat.
+CREATE TABLE telegram_attachment_quota (
+  chat_id TEXT PRIMARY KEY,
+  window_start TEXT NOT NULL,
+  attempts INTEGER NOT NULL CHECK(attempts BETWEEN 1 AND 12)
+);
