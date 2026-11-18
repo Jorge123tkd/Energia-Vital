@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import CustomerQuotes from './CustomerQuotes.svelte';
   import RequestDocuments from './RequestDocuments.svelte';
   import RequestPhotoGallery from './RequestPhotoGallery.svelte';
   import Pagination from './Pagination.svelte';
@@ -70,6 +71,7 @@
   </div>
   <Pagination page={Math.min(requestPage,requestPages)} total={requests.length} perPage={perPage}
     label="solicitudes" onPage={n => requestPage = n} />
+  <CustomerQuotes/>
   <h2 class="text-xl font-semibold mb-3">Citas</h2>
   {#if !loading && appointments.length === 0}<p class="text-gray-500">Todavía no tienes citas.</p>{/if}
   <div class="space-y-3">
