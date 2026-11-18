@@ -30,7 +30,7 @@ function Step([string]$title, [scriptblock]$body) {
     Write-Warning "$title : $($_.Exception.Message)"
   }
 }
-Step 'Dependencias npm (sin actualizar versiones)' { npm ci --ignore-scripts }
+Step 'Dependencias npm (sin actualizar versiones)' { npm ci }
 Step 'Auditoria de paquetes de produccion' { npm audit --omit=dev --audit-level=high }
 Step 'Tipos de la API' { npm run typecheck --workspace=apps/api }
 Step 'Tipos del frontend' { npm run typecheck --workspace=apps/web }
