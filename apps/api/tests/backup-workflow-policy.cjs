@@ -19,4 +19,13 @@ assert.match(src,/body\.result\?\.result\?\.signed_url/);
 assert.match(src,/body\.result\?\.status !== 'complete'/);
 assert.match(src,/body\.result\?\.status === 'error'/);
 assert.ok(!/console\.(?:log|error)/.test(src),'No logs of signed URLs or private data');
+// Instalación solo mediante acción manual, ligada a SHA y sin disparar exportación.
+const installer=fs.readFileSync('.github/workflows/install-backup-workflow.yml','utf8');
+assert.match(installer,/workflow_dispatch:/);
+assert.match(installer,/INSTALAR_WORKFLOW_RESPALDO/);
+assert.match(installer,/github\.ref == 'refs\/heads\/release\/combined-security-deps-20261117'/);
+assert.match(installer,/REVIEWED_SOURCE_SHA.*CURRENT_SHA/);
+assert.match(installer,/BACKUP_CF_DEPLOY_TOKEN/);
+assert.match(installer,/wrangler deploy --config apps\/d1-backup\/wrangler\.toml/);
+assert.ok(!/workflows trigger|time-travel restore|migrations apply --remote/.test(installer),'Installation must not export, restore or migrate production');
 console.log('PASS: manual D1->R2 backup has consent gate, isolated private bucket, no schedule, R2 verification');
