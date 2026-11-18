@@ -29,6 +29,7 @@ jobs:
       - name: Probar solicitudes comerciales, citas y documentos
         run: |
           node apps/api/tests/commercial-intake.cjs
+          node apps/api/tests/telegram-customer-auth.cjs
           node apps/api/tests/telegram-customer-appointments.cjs
           node apps/api/tests/request-documents.cjs
       - name: Typecheck API y Svelte
