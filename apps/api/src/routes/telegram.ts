@@ -176,7 +176,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   }
   const documentReply=await telegramDocuments(env,chatId,text);
   if(documentReply!==null)return {reply:documentReply,skipHistory:true};
-  const intakeMessage=action==='request-service'?'registrar solicitud comercial':text;
+  const intakeMessage=action==='request-service'&&!prior?'registrar solicitud comercial':text;
   // Las acciones administrativas, nueva conversación y contacto humano no se consumen como campos.
   if((action===null||action==='request-service')&&(prior||startCommercialIntake(intakeMessage))){
     if(!customer)return {reply:'Antes de registrar tu solicitud, crea o vincula tu cuenta desde Telegram. Después escribe «registrar solicitud comercial». No tienes que visitar la web.',replyMarkup:accountButton,skipHistory:true};
@@ -189,7 +189,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
         if(intake.error||!intake.value)return {reply:'Revisa el borrador antes de enviarlo.',commercial:prior,state:null};
         await env.DB.batch([
           env.DB.prepare("INSERT INTO requests (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at) "+
-            "SELECT ?,id,'consultation',NULL,?,?,'pending','medium',?,NULL,?,? FROM customers WHERE id=? AND telegram_customer_chat_id=? AND is_active=1 "+
+            "SELECT ?,id,'consultation','consultation',?,?,'pending','medium',?,NULL,?,? FROM customers WHERE id=? AND telegram_customer_chat_id=? AND is_active=1 "+
             "ON CONFLICT(id) DO NOTHING")
             .bind(d.id,('Solicitud comercial: '+d.company).slice(0,180),'[Origen: Telegram]\nEntidad: '+d.company+'\nNecesidad: '+d.need,d.location||'',time,time,customer.id,chatId),
           env.DB.prepare("INSERT INTO request_intake (request_id,available_budget_usd_cents,payment_method,payment_currency,customer_type,created_at,updated_at) "+
@@ -341,6 +341,16 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   ).bind(chatId,threadId).all<{role:string;content:string}>();
   return {reply:generateResponse(text,context,(history.results||[]).reverse()).text};
 }
+async function claimAttachmentQuota(env:Env,chatId:string):Promise<boolean>{
+  const time=now(),threshold=new Date(Date.now()-3600000).toISOString();
+  const result=await env.DB.prepare(
+    "INSERT INTO telegram_attachment_quota(chat_id,window_start,attempts) VALUES (?,?,1) "+
+    "ON CONFLICT(chat_id) DO UPDATE SET window_start=CASE WHEN window_start<? THEN excluded.window_start ELSE window_start END,"+
+    "attempts=CASE WHEN window_start<? THEN 1 ELSE attempts+1 END WHERE window_start<? OR attempts<12"
+  ).bind(chatId,time,threshold,threshold,threshold).run();
+  return !!result.meta?.changes;
+}
+
 async function claimUpdate(env:Env,updateId:string,chatId:string):Promise<boolean>{
   const time=now();
   const accepted=await env.DB.prepare(
@@ -435,6 +445,10 @@ telegramRoutes.post('/webhook',async c=>{
   const document=extractTelegramDocument(body);
   if(document){
     if(!await claimUpdate(env,document.updateId,document.chatId))return c.json({ok:true});
+    if(!await claimAttachmentQuota(env,document.chatId)){
+      await env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?").bind(now(),document.updateId).run();
+      return c.json({ok:true});
+    }
     try{
       await sendTelegramText(env,document.chatId,await receiveTelegramDocument(env,document));
       await env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?").bind(now(),document.updateId).run();
@@ -447,6 +461,10 @@ telegramRoutes.post('/webhook',async c=>{
   const photo=extractTelegramPhoto(body);
   if(photo){
     if(!await claimUpdate(env,photo.updateId,photo.chatId))return c.json({ok:true});
+    if(!await claimAttachmentQuota(env,photo.chatId)){
+      await env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?").bind(now(),photo.updateId).run();
+      return c.json({ok:true});
+    }
     try{
       const reply=await receiveTelegramPhoto(env,photo);
       await sendTelegramText(env,photo.chatId,reply);
