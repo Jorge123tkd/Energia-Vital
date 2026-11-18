@@ -224,7 +224,31 @@ async function getAllPublic(path: string, key: 'products' | 'services' | 'galler
   throw new Error('La lista es muy extensa. Ajusta los filtros o consulta al equipo.');
 }
 
+const documentBase=(token?:string)=>token?'/api/admin-customers/documents':'/api/private/documents';
+export async function downloadRequestDocument(id:string,filename:string,token?:string){
+  const auth=token||customerToken();
+  if(!auth)throw new Error('Inicia sesión para descargar el documento.');
+  const response=await fetch(API_BASE+documentBase(token)+'/files/'+encodeURIComponent(id),{
+    credentials:QA_CREDENTIALS,headers:{Authorization:'Bearer '+auth},cache:'no-store'
+  });
+  if(!response.ok)throw new Error('Documento no disponible. Comprueba tu sesión.');
+  const blob=await response.blob();
+  if(blob.size>8*1024*1024||blob.type!=='application/octet-stream')throw new Error('Formato de descarga inesperado.');
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=filename.replace(/[^a-zA-Z0-9._ -]/g,'_');document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
 export const api = {
+  listRequestDocuments:(id:string,token?:string)=>apiRequest(documentBase(token)+'/requests/'+encodeURIComponent(id),token?withAdmin(token):{}),
+  uploadRequestDocument:(id:string,file:File,token?:string)=>{
+    const body=new FormData();body.append('file',file);
+    const options:RequestInit={method:'POST',body};
+    return apiRequest(documentBase(token)+'/requests/'+encodeURIComponent(id),token?withAdmin(token,options):options);
+  },
+  getMyQuotes:()=>apiRequest('/api/private/quotes'),
+  issueQuote:(token:string,id:string)=>post('/api/quotes/'+encodeURIComponent(id)+'/issue',{},withAdmin(token)),
+
   getProducts: (params?: Record<string, string>) => getAllPublic('/api/public/products', 'products', params),
   getProduct: (id: string) => apiRequest(`/api/public/products/${encodeURIComponent(id)}`),
   getCategories: () => apiRequest('/api/public/categories'),
