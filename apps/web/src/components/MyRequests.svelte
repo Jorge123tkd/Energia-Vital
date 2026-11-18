@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from '../lib/api';
+  import RequestDocuments from './RequestDocuments.svelte';
   import RequestPhotoGallery from './RequestPhotoGallery.svelte';
   import Pagination from './Pagination.svelte';
   import PageHero from './PageHero.svelte';
@@ -60,10 +61,10 @@
             </div>
             <button type="button" class="rounded-xl border border-teal-200 px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-50"
               onclick={() => expanded = expanded === item.id ? '' : item.id}>
-              {expanded===item.id?'Ocultar fotos':'Fotos ('+(item.image_count||0)+') · Ver o añadir'}
+              {expanded===item.id?'Ocultar adjuntos':'Fotos ('+(item.image_count||0)+') y documentos'}
             </button>
           </div>
-          {#if expanded===item.id}<RequestPhotoGallery requestId={item.id} canUpload />{/if}
+          {#if expanded===item.id}<RequestPhotoGallery requestId={item.id} canUpload /><RequestDocuments requestId={item.id}/>{/if}
         </article>
     {/each}
   </div>
