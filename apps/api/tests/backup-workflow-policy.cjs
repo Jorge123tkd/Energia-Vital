@@ -14,5 +14,9 @@ assert.match(src,/dump_options: \{ compatibility: 'd1' \}/);
 assert.match(src,/BACKUP_BUCKET\.put\(objectKey, dump\.body/);
 assert.match(src,/BACKUP_BUCKET\.head\(saved\.key\)/);
 assert.match(src,/return new Response\('No disponible', \{ status: 404 \}\)/);
+// D1 export signed URL is nested under result.result; status must be complete.
+assert.match(src,/body\.result\?\.result\?\.signed_url/);
+assert.match(src,/body\.result\?\.status !== 'complete'/);
+assert.match(src,/body\.result\?\.status === 'error'/);
 assert.ok(!/console\.(?:log|error)/.test(src),'No logs of signed URLs or private data');
 console.log('PASS: manual D1->R2 backup has consent gate, isolated private bucket, no schedule, R2 verification');
