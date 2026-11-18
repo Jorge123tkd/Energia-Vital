@@ -499,3 +499,19 @@ VALUES('doc-test','request-old','customer-old','private-documents/test','test.pd
 assert db.execute("SELECT customer_id FROM request_documents WHERE id='doc-test'").fetchone()==('customer-old',)
 assert db.execute("PRAGMA foreign_key_check").fetchall()==[]
 print("PASS migration 022: unverified legacy identity ignored and documents linked")
+
+# No consent by default; ledger deduplicates and respects notification ownership.
+assert db.execute("SELECT telegram_notifications_since FROM customers WHERE id='customer-old'").fetchone()==(None,)
+db.execute("UPDATE customers SET telegram_notifications_since='2026-11-18T10:00:00Z' WHERE id='customer-old'")
+db.execute("""INSERT INTO notifications(id,user_id,user_type,type,title,message,is_read,created_at)
+ VALUES('notice-test','customer-old','customer','system','Aviso','Prueba',0,'2026-11-18T11:00:00Z')""")
+db.execute("""INSERT INTO telegram_customer_notice_deliveries(notification_id,customer_id,chat_id,status,updated_at)
+ VALUES('notice-test','customer-old','123456','processing','2026-11-18T11:15:00Z')""")
+try:
+    db.execute("""INSERT INTO telegram_customer_notice_deliveries(notification_id,customer_id,chat_id,status,updated_at)
+    VALUES('notice-test','customer-old','123456','sent','2026-11-18T11:15:00Z')""")
+    raise AssertionError("Duplicated Telegram notification")
+except sqlite3.IntegrityError:
+    pass
+assert db.execute("PRAGMA foreign_key_check").fetchall()==[]
+print("PASS migration 022: opt-in and unique notification delivery")
