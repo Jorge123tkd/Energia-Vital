@@ -220,8 +220,8 @@ authRoutes.post('/telegram/register', async c => {
     const id=crypto.randomUUID(),time=new Date().toISOString();
     const hash=await hashPassword(b.password);
     // La comprobación de correo y Telegram ocurre en el mismo INSERT, no en una consulta anterior.
-    const result=await c.env.DB.prepare("INSERT INTO customers (id,name,email,phone,address,city,province,password_hash,role,phone_verified,telegram_chat_id,created_at,updated_at) "+
-      "SELECT ?,?,?,?,?,?,?,?,'customer',0,?,?,? WHERE NOT EXISTS(SELECT 1 FROM customers WHERE lower(email)=? OR telegram_chat_id=?) "+
+    const result=await c.env.DB.prepare("INSERT INTO customers (id,name,email,phone,address,city,province,password_hash,role,phone_verified,telegram_customer_chat_id,created_at,updated_at) "+
+      "SELECT ?,?,?,?,?,?,?,?,'customer',0,?,?,? WHERE NOT EXISTS(SELECT 1 FROM customers WHERE lower(email)=? OR telegram_customer_chat_id=?) "+
       "AND NOT EXISTS(SELECT 1 FROM admin_users WHERE lower(email)=?)")
       .bind(id,name,email,phone,address,city,province,hash,chatId,time,time,email,chatId,email).run();
     if(result.meta.changes!==1)return c.json({error:'Ya existe una cuenta asociada a estos datos. Si tienes cuenta web, utiliza «Vincular cuenta existente».'},409);
@@ -237,7 +237,7 @@ authRoutes.post('/telegram/link', async c=>{
   if(!validEmail(email)||typeof password!=='string'||password.length>128)return c.json({error:'Credenciales inválidas.'},401);
   const customer=await c.env.DB.prepare("SELECT id,password_hash FROM customers WHERE lower(email)=? AND is_active=1 AND password_hash IS NOT NULL").bind(email).first<{id:string;password_hash:string}>();
   if(!customer||!await comparePassword(password,customer.password_hash))return c.json({error:'Credenciales inválidas.'},401);
-  const result=await c.env.DB.prepare("UPDATE customers SET telegram_chat_id=?,updated_at=? WHERE id=? AND is_active=1 AND password_hash=? AND (telegram_chat_id IS NULL OR telegram_chat_id=?) AND NOT EXISTS(SELECT 1 FROM customers WHERE telegram_chat_id=? AND id<>?)")
+  const result=await c.env.DB.prepare("UPDATE customers SET telegram_customer_chat_id=?,updated_at=? WHERE id=? AND is_active=1 AND password_hash=? AND (telegram_customer_chat_id IS NULL OR telegram_customer_chat_id=?) AND NOT EXISTS(SELECT 1 FROM customers WHERE telegram_customer_chat_id=? AND id<>?)")
     .bind(chatId,new Date().toISOString(),customer.id,customer.password_hash,chatId,chatId,customer.id).run();
   if(result.meta.changes!==1)return c.json({error:'Ya existe una vinculación. Contacta con Bonaire para revisarla.'},409);
   return c.json({message:'Cuenta vinculada correctamente.'});
