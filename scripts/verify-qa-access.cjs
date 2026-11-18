@@ -37,6 +37,7 @@ function assertApps(apps,cfg,policies){
   must(main,'Falta Access en el dominio principal Pages QA');
   must(previews,'Falta Access en previews Pages QA');
   for(const app of [worker,main,previews]){
+    if(app.bypass)throw Error('QA BLOQUEADA: bypass Access en '+app.name);
     const rules=must(policies[app.id],'No se pueden leer políticas de '+app.name);
     if(!rules.length || !rules.some(goodPolicy) ||
        rules.some(p=>p.decision==='bypass' || p.decision==='non_identity' ||
