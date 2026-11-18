@@ -139,7 +139,7 @@ export function telegramReplyKeyboard(
       ['☀️ Asesoría solar','🛍️ Ver productos'],
       ['🛠️ Servicios','🧾 Solicitar servicio'],
       ['👤 Mi cuenta','📂 Mis solicitudes'],
-      ['📅 Mis citas'],
+      ['📅 Mis citas','Solicitar cita'],
       ['🙋 Hablar con una persona','✏️ Nuevo chat']
     ]);
 }
