@@ -83,6 +83,7 @@ jobs:
       - name: Construir web para Worker QA
         env:
           VITE_API_URL: ${{ vars.QA_API_URL }}
+          VITE_QA_MODE: 'true'
         run: npm run build --workspace=apps/web
       - name: Publicar SOLO proyecto Pages QA (nunca energia-vital-web)
         env:
