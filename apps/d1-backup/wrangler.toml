@@ -1,0 +1,19 @@
+# Worker EXCLUSIVO para respaldos D1 -> R2. No modificar apps/api/wrangler.toml.
+# Se despliega solo con autorización independiente; no tiene rutas HTTP ni cron.
+name = "energia-vital-d1-backup"
+main = "src/index.ts"
+compatibility_date = "2026-11-17"
+
+[vars]
+ACCOUNT_ID = "466af6f26fce494d6dc640128e200e24"
+DATABASE_ID = "bbb91e7a-37c6-4290-aa9c-29a8022226b4"
+
+[[r2_buckets]]
+binding = "BACKUP_BUCKET"
+bucket_name = "energia-vital-backups-private"
+
+[[workflows]]
+name = "energia-vital-d1-backup-manual"
+binding = "BACKUP_WORKFLOW"
+class_name = "BonaireD1Backup"
+# Ningun schedule, ningun cron, ningun endpoint HTTP de activacion.
