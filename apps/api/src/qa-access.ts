@@ -42,6 +42,9 @@ export async function allowQaRequest(request: Request, env: {
   if (env.ENVIRONMENT !== 'qa') return null;
   const config = validateConfig(env);
   if (!config) return jsonError(); // Falla cerrado ante configuración incompleta.
+  // El preflight no lee datos y no envía JWT en el navegador. Solo el origen QA declarado.
+  if (request.method === 'OPTIONS' && request.headers.get('Origin') ===
+      (env as { SITE_URL?: string }).SITE_URL) return null;
   const jwt = request.headers.get('Cf-Access-Jwt-Assertion') || '';
   const parts = jwt.split('.');
   if (parts.length !== 3 || parts.some(p => !p)) return jsonError();
