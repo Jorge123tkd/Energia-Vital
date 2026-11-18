@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { businessProposalReply, detectIntent, generateResponse, loadAssistantContext, isOutOfScopeMessage, OUT_OF_SCOPE_REPLY } from '../assistant-engine';
+import { businessProposalReply, businessServiceReply, detectIntent, generateResponse, loadAssistantContext, isOutOfScopeMessage, OUT_OF_SCOPE_REPLY } from '../assistant-engine';
 import { callAI } from '../assistant-ai';
 import { getUser, requireCustomerAuth } from '../middleware';
 import { rateLimited } from '../rate-limit';
@@ -102,6 +102,15 @@ assistantRoutes.post('/message', async c => {
         VALUES (?,?,'assistant',?,'business_proposal',?,?)`)
         .bind(replyId,sessionId,commercial,JSON.stringify({source:'commercial'}),new Date().toISOString()).run();
       return c.json({session_id:sessionId,response:commercial,source:'commercial',intent:'business_proposal',message_id:replyId});
+    }
+
+    const enterprise = businessServiceReply(message,history);
+    if(enterprise){
+      const replyId=crypto.randomUUID();
+      await DB.prepare(`INSERT INTO assistant_messages (id,session_id,role,content,intent,metadata,created_at)
+        VALUES (?,?,'assistant',?,'service_request',?,?)`)
+        .bind(replyId,sessionId,enterprise,JSON.stringify({source:'commercial_guidance'}),new Date().toISOString()).run();
+      return c.json({session_id:sessionId,response:enterprise,source:'commercial_guidance',intent:'service_request',message_id:replyId});
     }
 
     // Respetar el alcance de Bonaire antes de IA y antes de una asesoría solar activa.
