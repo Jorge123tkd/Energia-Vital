@@ -88,7 +88,7 @@ export function businessServiceReply(message:string, history:{role:string;conten
   const m=normalize(message).replace(/[¿?¡!]/g,'').trim();
   const previous=[...history].reverse().find(x=>x.role==='assistant');
   const pending=Boolean(previous?.content.startsWith('Atención empresarial · Bonaire'));
-  const organization=/\b(?:somos|soy|represento|trabajo en|desde|para|de)\b.{0,65}\b(?:empresa|mipyme|mi pyme|negocio|cooperativa|tcp|institucion|organismo|hotel|fabrica|estatal|escuela|hospital)\b|\b(?:empresa estatal|mipyme|mi pyme|negocio privado|sector estatal|centro estatal|cooperativa|proyecto empresarial)\b/.test(m);
+  const organization=/\b(?:somos|soy|tengo una|tenemos una|represento|trabajo en|desde|para|de)\b.{0,65}\b(?:empresa|mipyme|mi pyme|negocio|cooperativa|tcp|institucion|organismo|hotel|fabrica|estatal|escuela|hospital)\b|\b(?:empresa estatal|mipyme|mi pyme|negocio privado|sector estatal|centro estatal|cooperativa|proyecto empresarial|mi empresa|mi negocio)\b/.test(m);
   const request=/\b(?:necesit(?:o|a|amos|an)|queremos|quiero|solicita(?:r|mos)|contrata(?:r|mos)|cotiza(?:r|cion)|presupuesto|proyecto|instala(?:r|cion)|mantenimiento|reparaci[oó]n|servicio|visita tecnica|evaluacion|suministro)\b/.test(m);
   const general=/^(?:que|cuales|como|tienen|trabajan|ofrecen|venden|informacion|cuanto cuesta)\b/.test(m);
   const proposal=isBusinessProposal(message);
