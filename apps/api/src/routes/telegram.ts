@@ -20,6 +20,7 @@ import { currentTelegramCustomer } from '../telegram-customer-auth';
 import { advanceCommercialIntake, startCommercialIntake, type CommercialDraft } from '../commercial-intake';
 import { parseRequestIntake } from '../request-intake';
 import { requestTelegramAppointment } from '../telegram-customer-appointments';
+import { setTelegramCustomerNotifications } from '../telegram-customer-notifications';
 import { issuedCustomerQuotes } from '../customer-quotes';
 import { extractTelegramPhoto, receiveTelegramPhoto } from '../telegram-customer-photos';
 import { extractTelegramDocument, receiveTelegramDocument, telegramDocuments } from '../telegram-customer-documents';
@@ -141,6 +142,16 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     if(!customer)return {reply:'Para consultar cotizaciones privadas, vincula tu cuenta de cliente.',replyMarkup:accountButton,skipHistory:true};
     const quotes=await issuedCustomerQuotes(env,customer.id);
     return {reply:quotes.length?'Cotizaciones emitidas para tu cuenta:\n\n'+quotes.slice(0,8).map(q=>q.title+'\nUSD '+(q.total_cents/100).toFixed(2)+' · Vigencia: '+q.valid_until+'\nReferencia: '+q.id).join('\n\n'):'Todavía no tienes cotizaciones emitidas por Bonaire.',skipHistory:true};
+  }
+  if(/^(?:activar notificaciones de cliente|desactivar notificaciones de cliente|configurar notificaciones|🔔 configurar notificaciones)$/i.test(text)){
+    if(!customer)return {reply:'Vincula primero tu cuenta de cliente.',replyMarkup:accountButton,skipHistory:true};
+    if(/^activar/i.test(text)||/^desactivar/i.test(text)){
+      const enabled=/^activar/i.test(text);
+      const saved=await setTelegramCustomerNotifications(env,customer.id,chatId,enabled);
+      return {reply:saved?(enabled?'Avisos automáticos activados. Recibirás avisos de nuevas notificaciones, sin información privada en el mensaje. Para desactivarlos escribe «desactivar notificaciones de cliente».':'Avisos automáticos desactivados. Puedes consultar tu bandeja cuando quieras.'):'No se pudo cambiar la preferencia.',skipHistory:true};
+    }
+    const preference=await env.DB.prepare("SELECT telegram_notifications_since FROM customers WHERE id=? AND telegram_customer_chat_id=?").bind(customer.id,chatId).first<{telegram_notifications_since:string|null}>();
+    return {reply:'Avisos automáticos: '+(preference?.telegram_notifications_since?'activados':'desactivados')+'. Escribe «activar notificaciones de cliente» para recibir avisos nuevos o «desactivar notificaciones de cliente» para dejar de recibirlos.',skipHistory:true};
   }
   if(/^(?:mis notificaciones|mis novedades|mis avisos de cliente|🔔 mis notificaciones)$/i.test(text)){
     if(!customer)return {reply:'Vincula tu cuenta para consultar tus notificaciones privadas.',replyMarkup:accountButton,skipHistory:true};
