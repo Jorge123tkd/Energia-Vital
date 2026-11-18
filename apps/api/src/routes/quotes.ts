@@ -112,6 +112,7 @@ quoteRoutes.get('/requests/:requestId',async c=>{
     'v.valid_until,v.delivery_terms,v.warranty_terms,v.payment_terms,v.stock_notes,'+
     'v.tax_notes,v.freight_notes,v.internal_notes,v.status,v.created_at,v.updated_at,'+
     'v.reviewed_at,v.review_reason,author.email AS created_by_email,'+
+    "(SELECT n.created_at FROM notifications n WHERE n.id='quote-issued-'||v.id AND n.user_type='customer') AS issued_at,"+
     'reviewer.email AS reviewed_by_email FROM commercial_quote_versions v '+
     'JOIN admin_users author ON author.id=v.created_by '+
     'LEFT JOIN admin_users reviewer ON reviewer.id=v.reviewed_by '+
