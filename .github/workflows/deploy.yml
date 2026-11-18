@@ -34,6 +34,8 @@ jobs:
         run: npm ci
       - name: Bloquear configuración QA vinculada a recursos de producción
         run: node scripts/prepare-cloudflare-qa-config.test.cjs
+      - name: Verificar política de respaldo manual D1 hacia R2 privado
+        run: node apps/api/tests/backup-workflow-policy.cjs
       - name: Probar política de auditoría de dependencias
         run: node apps/api/tests/release-dependency-audit.test.cjs
       - name: Bloquear CVE críticas, altas o moderadas en el lockfile combinado
