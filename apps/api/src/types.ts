@@ -205,8 +205,18 @@ export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   ENVIRONMENT: string;
+  /** Solo QA: dominio de equipo Cloudflare Access, sin https:// */
+  QA_ACCESS_TEAM_DOMAIN?: string;
+  /** Solo QA: Audience Tag de la aplicación Access del Worker. */
+  QA_ACCESS_AUD?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
+  /** WhatsApp Cloud API de Meta; configurar únicamente como secretos de Worker. */
+  WA_APP_SECRET?: string;
+  WA_VERIFY_TOKEN?: string;
+  WA_ACCESS_TOKEN?: string;
+  WA_PHONE_NUMBER_ID?: string;
+  WA_GRAPH_API_VERSION?: string;
   ADMIN_PASSWORD_HASH?: string;
   JWT_SECRET?: string;
   ADMIN_TOKEN?: string;
@@ -220,6 +230,8 @@ export interface Env {
   AI_API_BASE?: string;
   AI_API_KEY?: string;
   AI_MODEL?: string;
+  /** Token privado de la API de tasas de elTOQUE; configurar con wrangler secret put. */
+  ELTOQUE_API_TOKEN?: string;
 }
 
 // === Auth request/response types ===
@@ -371,6 +383,7 @@ export interface CustomerPoints {
 // === Notifications ===
 
 export type NotificationType =
+  | 'welcome'
   | 'telegram_login'
   | 'phone_verified'
   | 'giveaway_win'

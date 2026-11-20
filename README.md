@@ -1,150 +1,47 @@
-# Energia Vital — Plataforma Comercial Inteligente
+# Energía Vital — plataforma comercial Cloudflare
 
-**Versión:** 1.0  1
+**Desarrollo en revisión.** Esta rama incorpora acceso de clientes con correo y contraseña, perfil (teléfono, dirección, municipio y provincia), catálogo solar, solicitudes, citas, asistente y panel administrativo. El software se ejecuta sobre **Cloudflare Pages + Cloudflare Workers + D1 + R2**.
 
-## Enfoque principal: asistente conversacional
+## Antes de desplegar
 
-La página principal de Energía Vital es un asistente digital con el que el cliente habla directamente, en lugar de buscar por su cuenta. El cliente escribe lo que necesita y el asistente lo guía paso a paso.
+> No publiques con datos reales hasta que se aprueben las comprobaciones de CI, migraciones, control de acceso y la política de privacidad. No hay recuperación de contraseña ni verificación de email/teléfono implementadas: habilítalas con un proveedor real antes de un lanzamiento masivo.
 
-### Qué puede hacer el cliente
+- Node.js 22 y npm.
+- Cuenta Cloudflare con Pages, Workers, D1 y R2 activos; en `apps/api/wrangler.toml` revisar el `database_id`, binding `DB` y bucket `BUCKET`.
+- Nunca subir secretos a GitHub ni colocar `JWT_SECRET` en `VITE_*`.
 
-1. Escribir: «Quiero poner electricidad solar en mi casa, pero no sé qué equipos necesito».
-2. Recibir preguntas sencillas del asistente y ser guiado paso a paso.
-3. Obtener recomendaciones de equipos reales del catálogo (inversores, baterías, paneles, estaciones EcoFlow).
-4. Solicitar reparaciones, instalaciones y citas.
-5. Ver una galería de trabajos realizados con botón «Quiero algo parecido».
-6. Acceder a videos de YouTube del canal oficial de Energía Vital.
-7. Continuar la conversación por Telegram si lo prefiere.
+## Instalación y pruebas locales
 
-### Paneles
-
-- **Panel del negocio:** administración de precios, productos, fotos, citas, clientes potenciales y trabajos publicados.
-- **Seguimiento del cliente:** consulta de sus propias solicitudes y citas, sin acceso a información de otros clientes.
-**Objetivo:** Plataforma web comercial funcional, administrable, segura y ampliable, con coste mensual inicial de US$0 dentro de los planes gratuitos disponibles.
-
-## Tecnologías utilizadas
-
-| Capa | Tecnología | Función |
-|---|---|---|
-| Frontend | Svelte 5 + SvelteKit | Interfaz interactiva, adaptable a móviles y tabletas, menor complejidad que React. |
-| Estilos | Tailwind CSS | Diseño rápido, adaptable y fácil de mantener. |
-| Backend | Cloudflare Workers + Hono | Lógica del servidor, API REST y webhooks de Telegram. |
-| Base de datos | Cloudflare D1 | Productos, servicios, citas, solicitudes, configuración del asistente, usuarios. |
-| Archivos | Cloudflare R2 | Fotografías, videos y documentos del catálogo y galería. |
-| Comunicación | Telegram Bot API | Notificaciones al equipo y seguimiento de solicitudes. |
-| Versionado | GitHub + GitHub Actions | Código fuente y despliegue automático. |
-| Desarrollo local | Node.js, npm, Wrangler CLI | Emulación y despliegue de los Workers. |
-
-La primera versión puede atender las necesidades esenciales **sin depender de una API de IA de pago**. Las reglas conversacionales, el catálogo, las preguntas frecuentes y los cálculos solares funcionan con lógica determinista y reglas configurables desde el panel de administración.
-
-## Estructura del proyecto
-
+```sh
+npm ci
+npm run typecheck --workspace=apps/api
+npm run typecheck --workspace=apps/web
+npm run build --workspace=apps/web
 ```
-energia-vital/
-├── .github/
-│   └── workflows/
-│       └── deploy.yml
-├── apps/
-│   ├── web/                     # SPA Svelte 5 + Tailwind CSS
-│   │   ├── src/
-│   │   │   ├── routes/          # Páginas públicas y admin
-│   │   │   ├── lib/             # API, asistente, catálogo, solar, auth
-│   │   │   ├── layouts/         # Layout público y admin
-│   │   │   ├── components/      # Componentes reutilizables
-│   │   │   └── app.html
-│   │   ├── static/
-│   │   ├── package.json
-│   │   ├── vite.config.ts
-│   │   ├── tailwind.config.cjs
-│   │   └── wrangler.toml
-│   ├── api/                     # Cloudflare Workers + Hono
-│   │   ├── src/
-│   │   │   ├── index.ts
-│   │   │   ├── routes/
-│   │   │   ├── services/
-│   │   │   ├── middleware/
-│   │   │   ├── db.ts
-│   │   │   └── types.ts
-│   │   ├── migrations/
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   └── wrangler.toml
-│   └── cli/                     # Herramienta local opcional (migraciones, seed)
-│       ├── src/
-│       │   ├── commands.ts
-│       │   ├── db.ts
-│       │   ├── migrate.ts
-│       │   └── seed.ts
-│       ├── package.json
-│       └── tsconfig.json
-├── docs/
-│   ├── README.md
-│   ├── PROYECTO.md
-│   ├── ARCHITECTURE.md
-│   ├── DEPLOYMENT.md
-│   ├── ADMIN_MANUAL.md
 
-## Modelo de datos mínimo (D1)
+Para integrar D1 local: desde `apps/api`, ejecutar `npx wrangler d1 migrations apply energia-vital-db --local`. Para usar Worker en local con la clave JWT, crear `apps/api/.dev.vars` (ignorado por Git) con `JWT_SECRET` de 32 caracteres o más y `ADMIN_SETUP_KEY` distinta; ejecutar `npm run dev --workspace=apps/api`. La web local (`npm run dev --workspace=apps/web`) usa `VITE_API_URL=http://127.0.0.1:8787` desde `apps/web/.env.local`.
 
-Las tablas principales incluyen:
+## Despliegue Cloudflare (primero a prueba y tras respaldo)
 
-- `admin_users` — administradores y roles del panel.
-- `categories` — categorías de productos y servicios.
-- `products` — productos reales del catálogo.
-- `product_images` — fotos de productos (referencia a R2).
-- `services` — servicios ofrecidos.
-- `frequently_asked_questions` — preguntas y respuestas configurables.
-- `assistant_config` — configuración del asistente (tono, reglas, preguntas por defecto).
-- `assistant_sessions` — sesiones de conversación del asistente.
-- `assistant_messages` — mensajes de cada sesión.
-- `customers` — clientes y datos de contacto necesarios.
-- `requests` — solicitudes comerciales, instalaciones, reparaciones.
-- `appointments` — citas y calendario.
-- `appointments_notes` — notas del técnico sobre cada cita.
+1. Crear/verificar **D1** `energia-vital-db`, **R2** `energia-vital-assets`, proyecto **Pages** `energia-vital-web` y Worker `energia-vital-api`.
+2. Revisar y corregir bindings en `apps/api/wrangler.toml` para el entorno real. Confirmar la región y dependencias.
+3. Respaldar D1. **No ejecutar migraciones a ciegas**: revisar datos actuales, emails duplicados y aplicar 001, 002, 003, 004 en orden. En `apps/api`: `npx wrangler d1 migrations apply energia-vital-db --remote`.
+4. Configurar en Workers los secretos `JWT_SECRET`, `ADMIN_SETUP_KEY` y, si se utiliza Telegram, `TELEGRAM_BOT_TOKEN` y `TELEGRAM_WEBHOOK_SECRET`: `npx wrangler secret put JWT_SECRET`. `JWT_SECRET` debe ser largo, aleatorio e independiente del setup.
+5. Configurar `SITE_URL` con el origen de Pages (sin ruta) para permitir CORS; configurar `VITE_API_URL` con el origen público del Worker **en el build del frontend**.
+6. Crear el administrador inicial con `POST /api/auth/setup` enviando `X-Setup-Key` y `{"email":"...","password":"..."}`. Eliminar `ADMIN_SETUP_KEY` después del alta inicial.
+7. Verificar registro, autenticación, solicitud, visita, panel administrador, reintentos y cierre de sesión.
+8. Para CI, añadir a GitHub Secrets `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID`, y a variables `VITE_API_URL`. El workflow de despliegue solo se ejecuta desde `main` tras aprobar CI.
 
-## Estándares de entrega
+Consulta `docs/CLIENTES_CLOUDFLARE.md` para detalles de privacidad, seguridad y limitaciones.
 
-- Código fuente completo y organizado en repositorio GitHub.
-- Migraciones de D1 versionadas.
-- Variables de entorno en `.env.example` sin secretos.
-- Manual de despliegue paso a paso.
-- Manual de administración del asistente y del panel.
-- Pruebas unitarias, e2e y de carga.
-- Documentación de cálculos solares y supuestos.
-- Procedimiento de copias de seguridad y recuperación.
+## Acceso y datos personales
 
-## Requisitos obligatorios
+- El frontend pide inicio de sesión antes de abrir el catálogo y las gestiones.
+- El backend verifica autenticación y propietario de los datos; no se confía en IDs proporcionados por clientes.
+- Los datos del teléfono y la dirección son declarados, **no verificados**.
+- Contraseñas derivadas con PBKDF2 y sal; JWT de acceso ligado a sesión revocable en D1.
+- El acceso administrativo es independiente y requiere rol de administrador activo.
 
-- Las funciones esenciales (catálogo, citas, solicitudes, administración) funcionan sin IA.
-- No se incluyen secretos en el código público ni en el repositorio.
-- El panel de administración es privado y protegido con autenticación real.
-- Los clientes no pueden acceder a datos privados de otros clientes ni al dashboard.
-- Las API validan permisos en el servidor, no solo ocultan botones en la interfaz.
+## Trabajo pendiente antes de producción
 
-## Cómo contribuir
-
-1. Crear una rama desde `main`.
-2. Desarrollar la funcionalidad en la rama.
-3. Ejecutar pruebas.
-4. Abrir un pull request.
-5. Revisar y fusionar a `main`.
-
----
-
-> Nota: el dominio propio no se incluye en el coste de infraestructura mensual y suele tener un coste anual independiente.
-- `work_gallery` — galería de trabajos realizados.
-- `system_settings` — configuración general (YouTube, dominio, etc.).
-- `audit_logs` — registro de operaciones administrativas.
-│   ├── TELEGRAM_SETUP.md
-│   ├── SOLAR_CALCULATIONS.md
-│   ├── CONFIG_ASISTENTE.md
-│   └── PRUEBAS.md
-├── tests/
-│   ├── unit/
-│   ├── e2e/
-│   └── load/
-├── .gitignore
-├── .env.example
-├── package.json
-└── README.md
-```
+Se necesitan pruebas de instalación real, revisión de sorteos, recuperación segura de cuenta, verificación de correo y teléfono, antispam (Turnstile/WAF), pruebas de carga y controles de eliminación/exportación de datos personales. El asesor solar produce estimaciones preliminares, nunca cálculos técnicos definitivos.

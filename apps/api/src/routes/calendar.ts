@@ -1,65 +1,40 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
+import type { Env } from '../types';
+import { requireCustomerAuth } from '../middleware';
 
-export const calendarRoutes = new Hono<{ Bindings: Env }>();
+export const calendarRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
+calendarRoutes.use('*', requireCustomerAuth);
 
-calendarRoutes.use('*', async (c, next) => {
-  const auth = c.req.header('Authorization');
-  if (!auth || !auth.startsWith('Bearer ')) return c.json({ error: 'Token requerido' }, 401);
-  await next();
+function dayBounds(date: string): { start: string; end: string } | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) return null;
+  const start = `${date}T00:00:00.000Z`;
+  const end = new Date(Date.parse(start) + 86400000).toISOString();
+  return { start, end };
+}
+
+calendarRoutes.get('/availability', async c => {
+  const date = c.req.query('date') || '';
+  const bounds = dayBounds(date);
+  if (!bounds) return c.json({ error: 'Fecha inválida' }, 400);
+  const { results } = await c.env.DB.prepare(
+    `SELECT starts_at, ends_at FROM appointments WHERE status != 'cancelled' AND starts_at < ? AND ends_at > ? ORDER BY starts_at`)
+    .bind(bounds.end, bounds.start).all();
+  // No revelar nombres, teléfonos ni datos personales de otras reservas.
+  return c.json({ date, occupied: results ?? [] });
 });
 
-// Disponibilidad para citas
-calendarRoutes.get('/availability', async (c) => {
-  const { DB } = c.env;
-  const date = c.req.query('date');
-  if (!date) return c.json({ error: 'Fecha requerida' }, 400);
-
-  const start = new Date(date + 'T00:00:00').toISOString();
-  const end = new Date(date + 'T23:59:59').toISOString();
-
-  const { results } = await DB.prepare(
-    'SELECT * FROM appointments WHERE starts_at >= ? AND starts_at <= ? AND status != ? ORDER BY starts_at ASC'
-  ).bind(start, end, 'cancelled').all();
-
-  return c.json({ date, appointments: results ?? [] });
-});
-
-// Horarios disponibles (franjas horarias)
-calendarRoutes.get('/slots', async (c) => {
-  const date = c.req.query('date');
-  const serviceId = c.req.query('service_id');
-  const duration = parseInt(c.req.query('duration_minutes') || '60');
-
-  if (!date) return c.json({ error: 'Fecha requerida' }, 400);
-
-  const startDay = new Date(date + 'T08:00:00').toISOString();
-  const endDay = new Date(date + 'T18:00:00').toISOString();
-
-  const { DB } = c.env;
-  const { results } = await DB.prepare(
-    'SELECT * FROM appointments WHERE starts_at >= ? AND starts_at <= ? AND status != ? ORDER BY starts_at ASC'
-  ).bind(startDay, endDay, 'cancelled').all();
-
-  const slots: string[] = [];
-  let current = new Date(startDay);
-  const end = new Date(endDay);
-
-  while (current < end) {
-    const slotStart = current.toISOString();
-    const slotEnd = new Date(current.getTime() + duration * 60000).toISOString();
-
-    const conflict = (results ?? []).some((a: any) => {
-      const aStart = new Date(a.starts_at).getTime();
-      const aEnd = new Date(a.ends_at).getTime();
-      const sStart = new Date(slotStart).getTime();
-      const sEnd = new Date(slotEnd).getTime();
-      return sStart < aEnd && sEnd > aStart;
-    });
-
-    if (!conflict) slots.push(slotStart);
-    current = new Date(current.getTime() + 30 * 60000); // pasos de 30 min
+calendarRoutes.get('/slots', async c => {
+  const date = c.req.query('date') || '';
+  const bounds = dayBounds(date);
+  const duration = Number(c.req.query('duration_minutes') || 60);
+  if (!bounds || !Number.isInteger(duration) || duration < 30 || duration > 240) return c.json({ error: 'Fecha o duración inválidas' }, 400);
+  const { results } = await c.env.DB.prepare('SELECT starts_at, ends_at FROM appointments WHERE status != ? AND starts_at < ? AND ends_at > ?')
+    .bind('cancelled', bounds.end, bounds.start).all<any>();
+  const base = Date.parse(bounds.start), slots: string[] = [];
+  for (let minute = 8 * 60; minute + duration <= 18 * 60; minute += 30) {
+    const s = base + minute * 60000, e = s + duration * 60000;
+    if (s <= Date.now()) continue;
+    if (!(results ?? []).some(a => s < Date.parse(a.ends_at) && e > Date.parse(a.starts_at))) slots.push(new Date(s).toISOString());
   }
-
-  return c.json({ date, duration_minutes: duration, slots });
+  return c.json({ date, duration_minutes: duration, slots, timezone: 'UTC' });
 });

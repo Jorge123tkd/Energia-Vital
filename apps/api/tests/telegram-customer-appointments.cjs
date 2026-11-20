@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
+const src=fs.readFileSync(path.join(__dirname,'../src/telegram-customer-appointments.ts'),'utf8');
+const mod={exports:{}};
+new Function('module','exports',ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(mod,mod.exports);
+const {cubanAppointmentTime:time,requestTelegramAppointment:request}=mod.exports;
+assert.equal(time('2027-01-20 10:00').toISOString(),'2027-01-20T15:00:00.000Z');
+assert.equal(time('2027-07-20 10:00').toISOString(),'2027-07-20T14:00:00.000Z');
+assert.equal(time('2027-02-30 10:00'),null);
+assert.equal(time('2027-01-20 24:00'),null);
+assert.equal(time('2027-01-20'),null);
+(async()=>{
+ let writes=0;
+ const env={DB:{prepare(sql){return {bind(...args){return {first:async()=>null,run:async()=>{writes++;assert.ok(sql.includes("telegram_customer_chat_id=?"));assert.ok(sql.includes("NOT EXISTS"));assert.ok(sql.includes("'pending'"));return {meta:{changes:1}}}}}}}}};
+ assert.match(await request(env,'customer','123','100','solicitar cita'),/confirmar cita/);
+ assert.equal(writes,0);
+ assert.match(await request(env,'customer','123','100','confirmar cita 2001-01-01 10:00'),/futura/);
+ assert.equal(writes,0);
+ console.log('PASS Cuban appointment time, invalid calendar dates and explicit confirmation');
+})().catch(e=>{console.error(e);process.exitCode=1});

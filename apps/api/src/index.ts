@@ -1,69 +1,111 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
-import { Env } from './types';
-
-// Importar rutas
+import { allowQaRequest } from './qa-access';
+import type { Env } from './types';
+import type { JwtPayload } from './auth';
+import { requireCustomerAuth } from './middleware';
 import { publicRoutes } from './routes/public';
 import { privateRoutes } from './routes/private';
 import { assistantRoutes } from './routes/assistant';
 import { authRoutes } from './routes/auth';
 import { adminRoutes } from './routes/admin';
+import { adminCustomersRoutes } from './routes/admin-customers';
+import { brigadeRoutes } from './routes/brigades';
+import { brigadeWorkRoutes } from './routes/brigade-work';
+import { dossierRoutes } from './routes/dossiers';
+import { quoteRoutes } from './routes/quotes';
+import { financeRoutes } from './routes/finance';
+import { technicalRoutes } from './routes/technical-followup';
+import { chiefRoutes } from './routes/brigade-chief';
 import { calendarRoutes } from './routes/calendar';
 import { telegramRoutes } from './routes/telegram';
+import { customerDocumentRoutes, staffDocumentRoutes } from './routes/request-documents';
+import { runTelegramCustomerNotifications } from './telegram-customer-notifications';
+import { cleanTelegramOnboarding } from './telegram-customer-onboarding';
+import { runTelegramMorningReminders } from './telegram-reminders';
+import { whatsappRoutes } from './routes/whatsapp';
 import { giveawaysRoutes } from './routes/giveaways';
 import { rewardsRoutes } from './routes/rewards';
 import { notificationsRoutes } from './routes/notifications';
+import { publicExtrasRoutes, privateExtrasRoutes, adminExtrasRoutes, staffExtrasRoutes } from './routes/content-extras';
 
-const ALLOWED_ORIGINS = [
+// Vista previa controlada del panel: misma API, sin habilitar cualquier subdominio.
+const knownOrigins = [
+  'https://bnergiv.com',
+  'https://www.bnergiv.com',
   'https://energia-vital-web.pages.dev',
+  'https://admin-visual-preview.energia-vital-web.pages.dev',
   'http://localhost:5173',
-  'http://localhost:3000',
 ];
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const app = new Hono<{ Bindings: Env }>();
-
-    app.use('*', logger());
+    const app = new Hono<{ Bindings: Env; Variables: { user?: JwtPayload } }>();
+    // Ante una copia QA restaurada de producción, no aceptar NINGUNA ruta sin Access válido.
+    const blocked = await allowQaRequest(request, env);
+    if (blocked) return blocked;
+    // QA contiene una copia restaurada: nunca habilitar CORS hacia la web productiva.
+    // CORS no sustituye Cloudflare Access ni la autorización de los endpoints.
+    const allowedOrigins = env.ENVIRONMENT === 'qa'
+      ? (env.SITE_URL ? [env.SITE_URL] : [])
+      : [...knownOrigins, env.SITE_URL].filter(Boolean);
     app.use('*', cors({
-      origin: (origin) => {
-        // Allow configured SITE_URL plus known web origins
-        const allowed = [...ALLOWED_ORIGINS];
-        if (env.SITE_URL) allowed.push(env.SITE_URL);
-        if (origin && allowed.includes(origin)) return origin;
-        // Fallback: allow if no origin (same-origin / server-to-server)
-        if (!origin) return '*';
-        return null;
-      },
-      allowHeaders: ['Content-Type', 'Authorization'],
+      origin: origin => origin && allowedOrigins.includes(origin) ? origin : '',
+      credentials: env.ENVIRONMENT === 'qa',
+      allowHeaders: ['Content-Type', 'Authorization', 'X-Setup-Key'],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      credentials: true,
     }));
-
-    // Rutas públicas
+    // Información comercial pública: solo consultas GET, sin datos personales.
+    // Operaciones de clientes, conversaciones, citas y administración siguen protegidas.
+    app.use('/api/public/*', async (c, next) => {
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) return c.json({ error: 'Método no permitido' }, 405);
+      await next();
+    });
+    // Los sorteos públicos también exigen cuenta; no se aceptan participantes anónimos.
+    app.use('/api/giveaways/public/*', requireCustomerAuth);
+    // Limitar tipos y tamaño en subidas al bucket R2. El backend verifica JWT después.
+    app.use('/api/admin/gallery', async (c, next) => {
+      if (c.req.method === 'POST' && (c.req.header('content-type') || '').includes('multipart/form-data')) {
+        const form = await c.req.raw.clone().formData().catch(() => null);
+        const file = form?.get('file') as unknown as { size: number; type: string } | null;
+        if (file && typeof file.size === 'number' && file.size > 0 && (file.size > 8 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)))
+          return c.json({ error: 'Solo imágenes JPG, PNG o WebP de hasta 8 MB' }, 400);
+      }
+      await next();
+    });
     app.route('/api/public', publicRoutes);
-    // Rutas del asistente
-    app.route('/api/assistant', assistantRoutes);
-    // Autenticación
-    app.route('/api/auth', authRoutes);
-    // Rutas privadas (requieren autenticación)
+    app.route('/api/public/extras', publicExtrasRoutes);
+    app.route('/api/private/extras', privateExtrasRoutes);
+    app.route('/api/admin/extras', adminExtrasRoutes);
+    app.route('/api/admin-customers/extras', staffExtrasRoutes);
     app.route('/api/private', privateRoutes);
-    // Admin
+    app.route('/api/assistant', assistantRoutes);
+    app.route('/api/auth', authRoutes);
     app.route('/api/admin', adminRoutes);
-    // Calendario y citas
+    app.route('/api/admin-customers', adminCustomersRoutes);
+    app.route('/api/brigades', brigadeRoutes);
+    app.route('/api/brigade-work', brigadeWorkRoutes);
+    app.route('/api/dossiers', dossierRoutes);
+    app.route('/api/quotes', quoteRoutes);
+    app.route('/api/finance', financeRoutes);
+    app.route('/api/technical', technicalRoutes);
+    app.route('/api/chief', chiefRoutes);
     app.route('/api/calendar', calendarRoutes);
-    // Telegram webhook
     app.route('/api/telegram', telegramRoutes);
-    // SISTEMA DE SORTEOS (giveaways)
+    app.route('/api/private/documents', customerDocumentRoutes);
+    app.route('/api/admin-customers/documents', staffDocumentRoutes);
+    app.route('/api/whatsapp', whatsappRoutes);
     app.route('/api/giveaways', giveawaysRoutes);
-    // RECOMPENSAS
     app.route('/api/rewards', rewardsRoutes);
-    // NOTIFICACIONES
     app.route('/api/notifications', notificationsRoutes);
-
-    app.get('/health', (c) => c.json({ status: 'ok', service: 'energia-vital-api' }));
-
+    app.get('/health', c => c.json({ status: 'ok', service: 'energia-vital-api' }));
     return app.fetch(request, env, ctx);
+  },
+  async scheduled(controller,env,ctx) {
+    const at=new Date(controller.scheduledTime);
+    if(controller.cron==='*/15 * * * *'){
+      ctx.waitUntil(runTelegramCustomerNotifications(env,at));
+      ctx.waitUntil(cleanTelegramOnboarding(env,at));
+    }
+    else ctx.waitUntil(runTelegramMorningReminders(env,at));
   },
 } satisfies ExportedHandler<Env>;
