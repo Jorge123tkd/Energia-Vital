@@ -256,8 +256,8 @@
       if(mode==='replace')history.replaceState(null,'',path);
     }
     if (next !== 'brigades') brigadeRequestId = '';
-    if (token && next === 'requests') void loadRequestPage(1);
-    if (token && next === 'appointments') void loadAppointmentPage(1);
+    if (mode!=='replace' && token && next === 'requests') void loadRequestPage(1);
+    if (mode!=='replace' && token && next === 'appointments') void loadAppointmentPage(1);
     mobileMenu = false;
     accountMenu = false;
   }
@@ -276,14 +276,14 @@
   let categories: any[] = $state([]);
 
 
-  let pendingCountBusy=false;
+  let pendingCountBusy=false,viewGeneration=0;
   async function refreshPendingCount(){
     if(!token||pendingCountBusy)return;
-    pendingCountBusy=true;
+    pendingCountBusy=true;const generation=viewGeneration;
     try{
       const data=await api.adminRequests(token,'',1,5);
-      if(typeof data.pending_count==='number')pendingRequests=data.pending_count;
-    }catch(e){if((e as Error&{status?:number}).status===401){clearAdminSession();error='La sesión ha vencido. Vuelve a iniciar sesión.';}}
+      if(generation===viewGeneration&&token&&typeof data.pending_count==='number')pendingRequests=data.pending_count;
+    }catch(e){if(generation===viewGeneration&&token&&(e as Error&{status?:number}).status===401){clearAdminSession();error='La sesión ha vencido. Vuelve a iniciar sesión.';}}
     finally{pendingCountBusy=false;}
   }
   onMount(() => {
@@ -299,7 +299,7 @@
   async function restore() {
     checking=true;error='';
     try{
-      const saved=sessionStorage.getItem(ADMIN_TOKEN_KEY)||await restoreAdminBrowserAccess();
+      const saved=await restoreAdminBrowserAccess();
       if(saved){
         const info=await api.adminMe(saved);staffRole=info.user.role;ownId=info.user.id;
         token=sessionStorage.getItem(ADMIN_TOKEN_KEY)||saved;
@@ -326,6 +326,7 @@
     finally { loading = false; }
   }
   function resetPrivateView(){
+    viewGeneration++;ownId='';
     mobileMenu=false;accountMenu=false;calendarOpen=false;
     customers=[];requests=[];appointments=[];products=[];services=[];categories=[];
     closeDossier();pendingRequests=0;manualRequestOpen=false;requestEditor=null;appointmentCreateOpen=false;telegramLinkOpen=false;
@@ -337,11 +338,13 @@
   }
   async function reload(t = token) {
     if (!t) return;
+    const generation=viewGeneration;
     if (staffRole === 'operator') {
       const [c, r, a] = await Promise.all([
         api.adminCustomers(t), api.adminRequests(t, requestQuery, requestPage, pageSize),
         api.adminAppointments(t, appointmentQuery, appointmentPage, pageSize),
       ]);
+      if(generation!==viewGeneration||!token)return;
       customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
       requestTotal = r.total ?? requests.length; pendingRequests = r.pending_count ?? 0;
       appointmentTotal = a.total ?? appointments.length;
@@ -353,6 +356,7 @@
       api.adminAppointments(t, appointmentQuery, appointmentPage, pageSize),
       api.getAdminProducts(t), api.getAdminServices(t), api.getAdminCategories(t),
     ]);
+    if(generation!==viewGeneration||!token)return;
     customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
     requestTotal = r.total ?? requests.length; pendingRequests = r.pending_count ?? 0;
     appointmentTotal = a.total ?? appointments.length;
