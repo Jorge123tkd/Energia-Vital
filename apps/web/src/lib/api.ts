@@ -240,7 +240,7 @@ export async function downloadRequestDocument(id:string,filename:string,token?:s
 }
 
 export const api = {
-  getAssistantUsage:(token:string,period:string,q:string,page=1)=>apiRequest('/api/admin/assistant-usage?'+new URLSearchParams({period,q,page:String(page)}),withAdmin(token)),
+  getAssistantUsage:(token:string,period:string,q:string,page=1,scope='web')=>apiRequest('/api/admin/assistant-usage?'+new URLSearchParams({period,q,page:String(page),scope}),withAdmin(token)),
 
   listRequestDocuments:(id:string,token?:string)=>apiRequest(documentBase(token)+'/requests/'+encodeURIComponent(id),token?withAdmin(token):{}),
   uploadRequestDocument:(id:string,file:File,token?:string)=>{
