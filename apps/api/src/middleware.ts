@@ -34,6 +34,7 @@ export async function requireStaffAuth(c: AppContext, next: Next) {
   if (!account) return c.json({ error: 'Sin permisos de personal' }, 403);
   c.set('user', user);
   await next();
+  c.header('Cache-Control','private, no-store');
 }
 
 export async function requireAdminAuth(c: AppContext, next: Next) {
@@ -43,6 +44,7 @@ export async function requireAdminAuth(c: AppContext, next: Next) {
   if (!admin) return c.json({ error: 'Sin permisos de administrador principal' }, 403);
   c.set('user', user);
   await next();
+  c.header('Cache-Control','private, no-store');
 }
 export async function optionalAuth(c: AppContext, next: Next) {
   const user = await currentUser(c);
