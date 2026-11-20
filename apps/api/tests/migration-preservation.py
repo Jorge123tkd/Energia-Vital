@@ -527,11 +527,7 @@ migration(24)
 assert before_024 == {name:snapshot(name) for name in tables}
 onboarding = (ROOT.parent / 'src' / 'telegram-customer-onboarding.ts').read_text(encoding='utf-8')
 def onboarding_sql(prefix):
-    matches = re.findall(r'''["']((?:INSERT INTO|UPDATE|DELETE FROM)[^"\n]*?)["']''', onboarding)
-    matching = [x for x in matches if x.startswith(prefix)]
-    # Statements with embedded single quotes are double-quoted in TypeScript.
-    if len(matching) != 1:
-        matching = [x for x in re.findall(r'"([^"\n]+)"', onboarding) if x.startswith(prefix)]
+    matching = [x for x in re.findall(r'"([^"\n]+)"', onboarding) if x.startswith(prefix)]
     assert len(matching) == 1, prefix
     return matching[0]
 # Preserve the historical linked account and create only synthetic test accounts.
