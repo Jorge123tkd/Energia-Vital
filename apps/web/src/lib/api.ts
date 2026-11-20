@@ -462,6 +462,7 @@ export const api = {
 
   register: (body: { name: string; email: string; phone: string; address: string; city: string; province: string; password: string }) => post('/api/auth/register', body),
   customerLogin: (body: { email: string; password: string }) => post('/api/auth/customer/login', body),
+  createTelegramCustomerLinkCode: () => post('/api/auth/telegram/link-code',{}),
   signIn: (body: { email: string; password: string }) => post('/api/auth/sign-in', body),
   logoutAdmin: (token: string) => post('/api/auth/logout', {}, withAdmin(token)),
   me: () => apiRequest('/api/auth/me'),
