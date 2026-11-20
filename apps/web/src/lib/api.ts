@@ -55,7 +55,7 @@ async function browserSessionRequest(action:'login'|'sign-in'|'register'|'refres
   return data;
 }
 function acceptBrowserToken(token:unknown){
-  if(typeof token!=='string'||!jwtSid(token))throw Object.assign(new Error('Respuesta de sesión inválida'),{status:502});
+  if(typeof token!=='string'||!jwtSid(token)||jwtType(token)!=='admin')throw Object.assign(new Error('Respuesta de sesión inválida'),{status:502});
   adminRefresh=null;
   sessionStorage.setItem(ADMIN_BROWSER_KEY,'1');
   sessionStorage.setItem(ADMIN_TOKEN_KEY,token);
@@ -141,7 +141,7 @@ export async function restoreAdminBrowserAccess():Promise<string|null>{
     try{
       const data=await browserSessionRequest('refresh',{});
       if(signedOut()||sessionStorage.getItem(ADMIN_TOKEN_KEY))return null;
-      return acceptBrowserToken(data.access_token);
+      const token=acceptBrowserToken(data.access_token);setCustomerToken(null);return token;
     }catch(e){
       const status=(e as Error&{status?:number}).status;
       if(status===401||status===403)return null;
@@ -161,7 +161,7 @@ async function renewCookieAdmin(failedToken:string):Promise<string|null>{
     try{
       const data=await browserSessionRequest('refresh',{sid});
       if(signedOut()||!browserSession()||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==failedToken)return null;
-      if(jwtSid(data.access_token)!==sid)throw Object.assign(new Error('La sesión cambió'),{status:401});
+      if(jwtSid(data.access_token)!==sid||jwtType(data.access_token)!=='admin')throw Object.assign(new Error('La sesión cambió'),{status:401});
       priorAdminAccess=failedToken;
       return acceptBrowserToken(data.access_token);
     }catch(e){
