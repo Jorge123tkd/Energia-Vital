@@ -16,7 +16,7 @@
   import AdminPage from './AdminPage.svelte';
   import { isAdminPath } from './lib/admin-navigation';
   import ChiefPortal from './ChiefPortal.svelte';
-  import { api, customerToken, setCustomerToken, logoutCurrentSession, setCustomerRefreshToken, setAdminRefreshToken, clearAdminSession, ADMIN_TOKEN_KEY } from './lib/api';
+  import { api, customerToken, setCustomerToken, logoutCurrentSession, setCustomerRefreshToken, setAdminRefreshToken, clearAdminSession, ADMIN_TOKEN_KEY, restorePublicBrowserAccess } from './lib/api';
   import { isAssistantOpen, assistantSessionId, assistantMessages } from './lib/store';
 
   const publicRoutes = new Set(['/', '/catalogo', '/servicios', '/galeria', '/asesor-solar']);
@@ -28,35 +28,31 @@
     user.account_type !== 'admin' && user.role !== 'admin' && user.role !== 'operator');
 
   onMount(() => {
-    const handler = () => { currentRoute = window.location.pathname || '/'; };
+    const handler = () => { const wasAdmin=isAdminPath(currentRoute);currentRoute = window.location.pathname || '/';if(wasAdmin&&!isAdminPath(currentRoute))void restoreSession(); };
+    const signedOut=(event:StorageEvent)=>{if(event.key==='energia_vital_admin_signed_out'&&event.newValue==='1'){clearAdminSession();setCustomerToken(null);user=null;assistantSessionId.set(null);assistantMessages.set([]);isAssistantOpen.set(false);}};
     window.addEventListener('popstate', handler);
+    window.addEventListener('storage',signedOut);
     void restoreSession();
-    return () => window.removeEventListener('popstate', handler);
+    return () => {window.removeEventListener('popstate', handler);window.removeEventListener('storage',signedOut);};
   });
   async function restoreSession() {
     // AdminPage restores its own session: never rotate the same cookie twice.
     if(isAdminPath(window.location.pathname)){checking=false;return;}
-    const admin = sessionStorage.getItem(ADMIN_TOKEN_KEY);
-    if (admin) {
-      try {
-        const result = await api.adminMe(admin);
-        user = { ...result.user, name: result.user.role === 'operator' ? 'Moderador' : 'Administrador', account_type: 'admin' };
-        checking = false;
-        return;
-      } catch (e) {
-        // Una desconexión no invalida credenciales; solo 401/403 confirmados.
-        const status = (e as Error & { status?: number })?.status;
-        if (status === 401 || status === 403) clearAdminSession();
+    checking=true;user=null;
+    try {
+      const saved=await restorePublicBrowserAccess();
+      if(!saved)return;
+      try{
+        if(saved.kind==='admin'){
+          const result=await api.adminMe(saved.token);
+          user={...result.user,name:result.user.role==='operator'?'Moderador':'Administrador',account_type:'admin'};
+        }else{const result=await api.me();user=result.user;}
+      }catch(e){
+        const status=(e as Error&{status?:number})?.status;
+        if(status===401||status===403){if(saved.kind==='admin')clearAdminSession();else setCustomerToken(null);}
       }
-    }
-    if (customerToken()) {
-      try { const result = await api.me(); user = result.user; }
-      catch (e) {
-        const status = (e as Error & { status?: number })?.status;
-        if (status === 401 || status === 403) setCustomerToken(null);
-      }
-    }
-    checking = false;
+    }catch{ /* No bloquear la navegación pública si el servicio temporalmente falla. */ }
+    finally{checking=false;}
   }
 
   function navigate(path: string) {
@@ -84,12 +80,13 @@
     navigate('/asistente');
   }
 
-  function onAuthenticated(customer: any, token: string, refreshToken?: string) {
-    if ((customer.account_type === 'admin' || customer.role === 'admin' || customer.role === 'operator')) {
+  function onAuthenticated(customer: any, token: string, refreshToken?: string, browserSession=false) {
+    // The cookie bridge already stored the matching access and isolated the roles.
+    if (!browserSession && (customer.account_type === 'admin' || customer.role === 'admin' || customer.role === 'operator')) {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
       setAdminRefreshToken(refreshToken || null);
       setCustomerToken(null);
-    } else {
+    } else if(!browserSession) {
       setCustomerToken(token);
       setCustomerRefreshToken(refreshToken || null);
       clearAdminSession();
