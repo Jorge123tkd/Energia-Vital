@@ -15,9 +15,9 @@ const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText;
 
-function accessToken(exp, nonce, sid) {
+function accessToken(exp, nonce, sid, type) {
   const encode = data => Buffer.from(JSON.stringify(data)).toString('base64url');
-  return encode({alg:'none'}) + '.' + encode({exp, nonce, sid}) + '.test';
+  return encode({alg:'none'}) + '.' + encode({exp, nonce, sid, type}) + '.test';
 }
 const expired = accessToken(Math.floor(Date.now()/1000) - 60, 'old');
 const valid = accessToken(Math.floor(Date.now()/1000) + 3600, 'new');
@@ -352,8 +352,8 @@ const refreshCalls = entries => entries.filter(item=>item.url.endsWith('/api/aut
     console.log('PASS logout never retries refresh');
   }
   {
-    const old=accessToken(Math.floor(Date.now()/1000)-60,'cookie-old','browser-session');
-    const next=accessToken(Math.floor(Date.now()/1000)+3600,'cookie-new','browser-session');
+    const old=accessToken(Math.floor(Date.now()/1000)-60,'cookie-old','browser-session','admin');
+    const next=accessToken(Math.floor(Date.now()/1000)+3600,'cookie-new','browser-session','admin');
     let offline=false;
     const {api,requests,storage,local}=harness(entry=>{
       if(entry.url==='/api/admin-session/login')return response(200,{access_token:old,user:{id:'admin-a',role:'admin'}});
@@ -389,7 +389,7 @@ const refreshCalls = entries => entries.filter(item=>item.url.endsWith('/api/aut
     console.log('PASS cookie admin automatic renewal, temporary network errors, concurrent requests and logout');
   }
   {
-    const token=accessToken(Math.floor(Date.now()/1000)+3600,'restored','browser-session');
+    const token=accessToken(Math.floor(Date.now()/1000)+3600,'restored','browser-session','admin');
     const {api,requests,storage}=harness(entry=>response(200,{access_token:token}),true);
     assert.equal(await api.restoreAdminBrowserAccess(),token);
     assert.equal(requests[0].url,'/api/admin-session/refresh');
@@ -398,5 +398,42 @@ const refreshCalls = entries => entries.filter(item=>item.url.endsWith('/api/aut
     assert.equal(await api.restoreAdminBrowserAccess(),token);
     assert.equal(requests.length,1);
     console.log('PASS cookie restores a new tab without storing refresh secrets');
+  }
+  {
+    const old=accessToken(Math.floor(Date.now()/1000)-60,'customer-cookie-old','public-session','customer');
+    const next=accessToken(Math.floor(Date.now()/1000)+3600,'customer-cookie-new','public-session','customer');
+    const {api,requests,storage,local}=harness(entry=>{
+      if(entry.url==='/api/admin-session/sign-in')return response(200,{access_token:old,user:{id:'customer-a',role:'customer'}});
+      if(entry.url==='/api/admin-session/refresh'){
+        const body=JSON.parse(entry.body);if(body.kind!=='customer'&&body.kind!=='any')return response(401);
+        return response(200,{access_token:next});
+      }
+      if(entry.url==='/api/admin-session/logout')return response(200,{message:'Sesión cerrada'});
+      if(entry.authorization==='Bearer '+old)return response(401);
+      if(entry.authorization==='Bearer '+next)return response(200,{user:{id:'customer-a'}});
+      return response(500);
+    },true);
+    const result=await api.signInSite({email:'customer@invalid.example',password:'synthetic',remember:true});
+    assert.equal(result.browser_session,true);assert.equal(api.customerToken(),old);assert.equal(storage.get('energia_vital_customer_browser'),'1');
+    assert.equal(JSON.parse(requests[0].body).remember,true);
+    await Promise.all([api.apiRequest('/api/auth/me'),api.apiRequest('/api/private/requests')]);
+    assert.equal(api.customerToken(),next);assert.equal(requests.filter(r=>r.url==='/api/admin-session/refresh').length,1);
+    assert.deepEqual(JSON.parse(requests.find(r=>r.url==='/api/admin-session/refresh').body),{kind:'customer',sid:'public-session'});
+    assert.equal(await api.restoreAdminBrowserAccess(),null,'Customer cookie cannot restore admin');
+    api.setCustomerToken(null);
+    const restored=await api.restorePublicBrowserAccess();assert.equal(restored.kind,'customer');assert.equal(restored.token,next);
+    await api.logoutCurrentSession('customer');assert.equal(api.customerToken(),null);assert.equal(local.get('energia_vital_admin_signed_out'),'1');
+    assert.deepEqual(JSON.parse(requests.at(-1).body),{kind:'customer',sid:'public-session'});
+    assert.equal(await api.restorePublicBrowserAccess(),null);
+    console.log('PASS public customer remember, parallel renewal, role isolation, browser restoration and logout');
+  }
+  {
+    const token=accessToken(Math.floor(Date.now()/1000)+3600,'public-admin','shared-admin','admin');
+    const {api,storage}=harness(entry=>response(200,{access_token:token,user:{id:'admin-a',role:'admin'}}),true);
+    await api.signInSite({email:'admin@invalid.example',password:'synthetic',remember:false});
+    assert.equal(await api.restoreAdminBrowserAccess(),token);
+    assert.equal(storage.get('energia_vital_admin_browser'),'1');
+    assert.equal(api.customerToken(),null);
+    console.log('PASS public administrator sign-in shares cookie state with admin panel');
   }
 })().catch(error=>{console.error(error);process.exitCode=1});
