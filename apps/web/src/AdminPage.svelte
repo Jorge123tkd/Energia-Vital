@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, apiRequest, ADMIN_TOKEN_KEY, setAdminRefreshToken, clearAdminSession, logoutCurrentSession, onAdminTokenUpdated } from './lib/api';
+  import { api, apiRequest, ADMIN_TOKEN_KEY, clearAdminSession, logoutCurrentSession, onAdminTokenUpdated, loginAdminBrowser, restoreAdminBrowserAccess, browserAdminAvailable } from './lib/api';
+  import {adminPaths,adminTabForPath,type AdminTab} from './lib/admin-navigation';
   import AdminContent from './components/AdminContent.svelte';
   import Pagination from './components/Pagination.svelte';
   import AdminCustomers from './components/AdminCustomers.svelte';
@@ -17,11 +18,12 @@
   let ownId = $state('');
   let email = $state('');
   let password = $state('');
+  let remember = $state(false);
   let loading = $state(false);
   let checking = $state(true);
   let error = $state('');
   let message = $state('');
-  let tab = $state<'customers' | 'requests' | 'appointments' | 'brigades' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'notifications' | 'assistant-usage'>('requests');
+  let tab = $state<AdminTab>(adminTabForPath(window.location.pathname));
   let mobileMenu = $state(false);
   let accountMenu = $state(false);
   let calendarOpen = $state(false);
@@ -245,8 +247,14 @@
     ] : []),
     ...(staffRole === 'admin' ? [{ id: 'notifications', title: 'Notificaciones a clientes' }] : [])
   ]);
-  function chooseTab(next: typeof tab) {
+  function chooseTab(next: AdminTab,mode:'push'|'replace'|'none'='push') {
+    next=adminTabForPath(adminPaths[next],staffRole);
     tab = next;
+    const path=adminPaths[next];
+    if(window.location.pathname!==path){
+      if(mode==='push')history.pushState(null,'',path);
+      if(mode==='replace')history.replaceState(null,'',path);
+    }
     if (next !== 'brigades') brigadeRequestId = '';
     if (token && next === 'requests') void loadRequestPage(1);
     if (token && next === 'appointments') void loadAppointmentPage(1);
@@ -275,50 +283,57 @@
     try{
       const data=await api.adminRequests(token,'',1,5);
       if(typeof data.pending_count==='number')pendingRequests=data.pending_count;
-    }catch{/* conservar último valor si no se puede conectar */}
+    }catch(e){if((e as Error&{status?:number}).status===401){clearAdminSession();error='La sesión ha vencido. Vuelve a iniciar sesión.';}}
     finally{pendingCountBusy=false;}
   }
   onMount(() => {
-    const unsubscribe = onAdminTokenUpdated(value => { token = value; });
+    const unsubscribe = onAdminTokenUpdated(value => { token = value; if(!value)resetPrivateView(); });
+    const pop=()=>{if(window.location.pathname==='/admin'||window.location.pathname.startsWith('/admin/'))chooseTab(adminTabForPath(window.location.pathname,staffRole),'none');};
+    const visible=()=>{if(document.visibilityState==='visible'&&token)void refreshPendingCount();};
+    const signedOut=(e:StorageEvent)=>{if(e.key==='energia_vital_admin_signed_out'&&e.newValue==='1'){clearAdminSession();resetPrivateView();}};
+    window.addEventListener('popstate',pop);window.addEventListener('storage',signedOut);document.addEventListener('visibilitychange',visible);
     void restore();
     const interval=window.setInterval(()=>{void refreshPendingCount();},60000);
-    return ()=>{ window.clearInterval(interval); unsubscribe(); };
+    return ()=>{ window.clearInterval(interval);unsubscribe();window.removeEventListener('popstate',pop);window.removeEventListener('storage',signedOut);document.removeEventListener('visibilitychange',visible); };
   });
   async function restore() {
-    const saved = sessionStorage.getItem(ADMIN_TOKEN_KEY);
-    if (saved) {
-      try { const info = await api.adminMe(saved); staffRole = info.user.role; ownId = info.user.id;
-        token = sessionStorage.getItem(ADMIN_TOKEN_KEY) || saved;
-        await reload(token); }
-      catch (e) {
-        const status = (e as Error & { status?: number })?.status;
-        if (status === 401 || status === 403) clearAdminSession();
-        else error = 'No se pudo comprobar la sesión por un problema de conexión. Vuelve a intentarlo.';
+    checking=true;error='';
+    try{
+      const saved=sessionStorage.getItem(ADMIN_TOKEN_KEY)||await restoreAdminBrowserAccess();
+      if(saved){
+        const info=await api.adminMe(saved);staffRole=info.user.role;ownId=info.user.id;
+        token=sessionStorage.getItem(ADMIN_TOKEN_KEY)||saved;
+        chooseTab(adminTabForPath(window.location.pathname,staffRole),'replace');
+        try{await reload(token);}catch(e){error=e instanceof Error?e.message:'No se pudieron cargar los datos.';}
       }
-    }
-    checking = false;
+    }catch(e){
+      const status=(e as Error&{status?:number}).status;
+      if(status===401||status===403)clearAdminSession();
+      else{token='';error='No se pudo comprobar la sesión. Usa Reintentar conexión antes de volver a identificarte.';}
+    }finally{checking=false;}
   }
   async function login(event: SubmitEvent) {
     event.preventDefault(); loading = true; error = '';
     try {
-      const data = await api.adminLogin({ email, password });
+      const data = await loginAdminBrowser({ email, password, remember });
       token = data.access_token;
       staffRole = data.user.role;
       ownId = data.user.id;
-      sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
-      setAdminRefreshToken(data.refresh_token);
       password = '';
+      chooseTab(adminTabForPath(window.location.pathname,staffRole),'replace');
       await reload(token);
     } catch (e) { error = e instanceof Error ? e.message : 'Error al iniciar sesión'; }
     finally { loading = false; }
   }
+  function resetPrivateView(){
+    mobileMenu=false;accountMenu=false;calendarOpen=false;
+    customers=[];requests=[];appointments=[];products=[];services=[];categories=[];
+    closeDossier();pendingRequests=0;manualRequestOpen=false;requestEditor=null;appointmentCreateOpen=false;telegramLinkOpen=false;
+  }
   async function logout() {
-    token = '';
-    await logoutCurrentSession('admin');
-    mobileMenu = false; accountMenu = false; calendarOpen = false;
-    customers = []; requests = []; appointments = []; products = []; services = []; categories = [];
-    closeDossier();
-    pendingRequests=0;manualRequestOpen=false;
+    token='';resetPrivateView();error='';
+    try{await logoutCurrentSession('admin');}
+    catch{error='Se cerró el acceso en este navegador, pero no se pudo confirmar la revocación remota. Revisa la conexión.';}
   }
   async function reload(t = token) {
     if (!t) return;
@@ -497,6 +512,8 @@
       <label class="block text-sm font-semibold text-slate-700">Contraseña
         <input required type="password" autocomplete="current-password" bind:value={password} class="block border border-slate-300 rounded-xl px-4 py-3 mt-2 w-full focus:outline-teal-600" />
       </label>
+      {#if browserAdminAvailable()}<label class="flex gap-3 items-start text-sm text-slate-700"><input type="checkbox" bind:checked={remember} class="mt-1"/><span><strong>Mantener sesión iniciada</strong><span class="block text-xs text-slate-500">Hasta 7 días en este navegador. No marques esta opción en equipos compartidos. Sin marcar: hasta 8 horas en esta sesión del navegador.</span></span></label>{/if}
+      {#if error}<button type="button" onclick={()=>restore()} class="text-sm font-semibold text-teal-800 underline">Reintentar conexión</button>{/if}
       {#if error}<p role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>{/if}
       <button disabled={loading} class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white py-3.5 px-5 rounded-xl font-bold">{loading ? 'Entrando…' : 'Entrar en administración'}</button>
     </form>
@@ -514,7 +531,7 @@
     <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6" aria-label="Resumen de operaciones">
       {#each [{label:'Solicitudes pendientes',count:pendingRequests,id:'requests'}, {label:'Citas',count:appointmentTotal,id:'appointments'},
         {label:'Clientes',count:customers.length,id:'customers'}, {label:'Productos',count:products.length,id:'products'}] as item}
-        <button class="rounded-2xl text-left bg-white border border-slate-200 shadow-sm p-4 hover:border-teal-500" onclick={() => tab = item.id as typeof tab}>
+        <button class="rounded-2xl text-left bg-white border border-slate-200 shadow-sm p-4 hover:border-teal-500" onclick={() => chooseTab(item.id as AdminTab)}>
           <span class="block text-slate-500 text-xs uppercase tracking-wide">{item.label}</span>
           <span class="block text-3xl font-bold mt-2 text-slate-900">{item.count}</span>
         </button>
