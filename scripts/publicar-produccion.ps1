@@ -28,6 +28,8 @@ try {
     throw 'D1 requiere migracion 022, sesiones seguras, identidad Telegram verificada y documentos. NO desplegar.'
   }
 } finally {Pop-Location}
+node apps/api/tests/assistant-usage.cjs
+if($LASTEXITCODE -ne 0){throw 'Prueba estadisticas de asistente falló. NO desplegar.'}
 node apps/api/tests/commercial-intake.cjs
 if($LASTEXITCODE -ne 0){throw 'Prueba comercial falló. NO desplegar.'}
 node apps/api/tests/telegram-customer-auth.cjs
