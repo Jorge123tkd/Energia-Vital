@@ -33,10 +33,10 @@ function safeCustomer(row: any) {
   return { id: row.id, name: row.name, email: row.email, phone: row.phone, address: row.address,
     city: row.city, province: row.province, phone_verified: Boolean(row.phone_verified), role: 'customer' };
 }
-async function issue(env: Env, userId: string, type: 'customer' | 'admin', role: string) {
+async function issue(env: Env, userId: string, type: 'customer' | 'admin', role: string, ttl=REFRESH_TTL) {
   const sid = crypto.randomUUID();
   const now = new Date();
-  const expires = new Date(now.getTime() + REFRESH_TTL * 1000).toISOString();
+  const expires = new Date(now.getTime() + ttl * 1000).toISOString();
   const tokens = await generateTokenPair(env, userId, type, role, sid);
   await env.DB.prepare('INSERT INTO auth_sessions (id, user_id, user_type, created_at, expires_at, refresh_hash) VALUES (?, ?, ?, ?, ?, ?)')
     .bind(sid, userId, type, now.toISOString(), expires, await refreshFingerprint(tokens.refresh_token)).run();
@@ -82,7 +82,9 @@ authRoutes.post('/login', async c => {
   const admin = await c.env.DB.prepare('SELECT * FROM admin_users WHERE LOWER(email) = ? AND is_active = 1')
     .bind(email).first<any>();
   if (!admin || !await comparePassword(password, admin.password_hash)) return c.json({ error: 'Credenciales inválidas' }, 401);
-  const tokens = await issue(c.env, admin.id, 'admin', admin.role);
+  // Browser sessions have a fixed absolute lifetime in D1, never extended on refresh.
+  const ttl=b?.browser_session===true?(b.remember===true?7*86400:8*3600):REFRESH_TTL;
+  const tokens = await issue(c.env, admin.id, 'admin', admin.role,ttl);
   return c.json({ user: { id: admin.id, email: admin.email, role: admin.role }, token: tokens.access_token, ...tokens });
 });
 
