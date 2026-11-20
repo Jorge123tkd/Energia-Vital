@@ -35,7 +35,15 @@ export async function onRequest({request,params,env}){
  const upstreamHeaders=new Headers({'Content-Type':'application/json'});
  const ip=request.headers.get('CF-Connecting-IP');
  if(ip)upstreamHeaders.set('CF-Connecting-IP',ip);
- const call=(route,body)=>env.ADMIN_SESSION_API.fetch(api+route,{method:'POST',headers:upstreamHeaders,body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(15000)});
+ // Workers supports manual/follow only. Never follow redirects carrying credentials.
+ const call=async(route,body)=>{
+  const upstream=await env.ADMIN_SESSION_API.fetch(api+route,{method:'POST',headers:upstreamHeaders,body:JSON.stringify(body),redirect:'manual',signal:AbortSignal.timeout(15000)});
+  if(upstream.status>=300&&upstream.status<400){
+   console.warn('ADMIN_SESSION_UPSTREAM_REDIRECT',route,upstream.status);
+   return json({error:'Respuesta de autenticación inválida'},502);
+  }
+  return upstream;
+ };
  const action=params.action;
  if(!['login','refresh','logout'].includes(action))return json({error:'Ruta no disponible'},404);
  if(!request.headers.get('Content-Type')?.startsWith('application/json'))return json({error:'Formato inválido'},415);
@@ -74,5 +82,9 @@ export async function onRequest({request,params,env}){
    if(!revoked.ok&&revoked.status!==401)return json({error:'No se pudo cerrar la sesión anterior. Intenta de nuevo.'},503);
   }
   return json({access_token:result.access_token,...(action==='login'?{user:result.user}:{})},200,setCookie(result.refresh_token,action==='login'?body.remember===true:!!b));
- }catch{return json({error:'Servicio de sesión temporalmente no disponible'},503,action==='logout'?[expire(normal),expire(remembered)]:[]);} 
+ }catch(e){
+  // Never log request bodies, credentials, tokens, URLs or exception messages.
+  console.error('ADMIN_SESSION_UPSTREAM_FAILURE',action,e instanceof TypeError?'TypeError':e?.name==='TimeoutError'?'TimeoutError':'Other');
+  return json({error:'Servicio de sesión temporalmente no disponible'},503,action==='logout'?[expire(normal),expire(remembered)]:[]);
+ }
 }
