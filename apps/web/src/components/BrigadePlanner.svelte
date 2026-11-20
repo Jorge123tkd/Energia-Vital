@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { api } from '../lib/api';
 
   type Availability={id:string;name:string;active:boolean;day_jobs:number;planned_minutes:number;jobs_in_period:number};
@@ -18,7 +18,8 @@
   };
   const today=cubaDate(new Date());
   let month=$state(today.slice(0,7)),date=$state(today);
-  let requestId=$state(prefillRequestId);
+  // Initial prefill only; the existing effect handles subsequent nonempty prefills.
+  let requestId=$state(untrack(()=>prefillRequestId));
   let brigadeId=$state(''),hours=$state(8),acknowledged=$state(false),cancelReason=$state('');
   let reviewReason=$state('');
   let loads:Availability[]=$state([]),suggested=$state<string|null>(null),activeCount=$state(0);
