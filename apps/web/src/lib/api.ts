@@ -38,9 +38,9 @@ function markSignedOut(value:boolean){try{if(typeof localStorage!=='undefined'){
 function jwtSid(token:string|null):string|null{
   try{const part=token!.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');const p=JSON.parse(atob(part.padEnd(Math.ceil(part.length/4)*4,'=')));return typeof p.sid==='string'?p.sid:null;}catch{return null;}
 }
-function browserLock<T>(job:()=>Promise<T>):Promise<T>{
+async function browserLock<T>(job:()=>Promise<T>):Promise<T>{
   return typeof navigator!=='undefined'&&navigator.locks
-    ?navigator.locks.request('bonaire-admin-session',job):job();
+    ?await navigator.locks.request('bonaire-admin-session',job):await job();
 }
 async function browserSessionRequest(action:'login'|'refresh'|'logout',body:Record<string,unknown>):Promise<any>{
   const res=await fetch('/api/admin-session/'+action,{method:'POST',credentials:'same-origin',cache:'no-store',
