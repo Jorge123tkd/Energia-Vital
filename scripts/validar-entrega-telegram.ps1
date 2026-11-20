@@ -30,6 +30,7 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
 $env:VITE_API_URL='https://energia-vital-api.astrustrus.workers.dev'
 $env:VITE_QA_MODE='false'
 Test-Step 'Compilar frontend' {npm run build --workspace=apps/web}
+if (!(Test-Path 'apps/web/dist/telegram-registro.html')) {throw 'Falta Mini App compilada. No desplegar.'}
 $sessionBuild=Join-Path ([System.IO.Path]::GetTempPath()) ('bonaire-session-build-'+[guid]::NewGuid())
 New-Item -ItemType Directory -Path $sessionBuild | Out-Null
 Push-Location apps/web
