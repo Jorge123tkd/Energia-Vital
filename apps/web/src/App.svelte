@@ -14,6 +14,7 @@
   import GalleryPage from './GalleryPage.svelte';
   import ContactPage from './ContactPage.svelte';
   import AdminPage from './AdminPage.svelte';
+  import { isAdminPath } from './lib/admin-navigation';
   import ChiefPortal from './ChiefPortal.svelte';
   import { api, customerToken, setCustomerToken, logoutCurrentSession, setCustomerRefreshToken, setAdminRefreshToken, clearAdminSession, ADMIN_TOKEN_KEY } from './lib/api';
   import { isAssistantOpen, assistantSessionId, assistantMessages } from './lib/store';
@@ -33,6 +34,8 @@
     return () => window.removeEventListener('popstate', handler);
   });
   async function restoreSession() {
+    // AdminPage restores its own session: never rotate the same cookie twice.
+    if(isAdminPath(window.location.pathname)){checking=false;return;}
     const admin = sessionStorage.getItem(ADMIN_TOKEN_KEY);
     if (admin) {
       try {
@@ -120,7 +123,7 @@
 
 {#if currentRoute === '/jefe-brigada'}
   <ChiefPortal />
-{:else if currentRoute === '/admin'}
+{:else if isAdminPath(currentRoute)}
   <AdminPage />
 {:else if checking}
   <div class="min-h-screen flex justify-center items-center text-gray-600">Verificando tu sesión…</div>
