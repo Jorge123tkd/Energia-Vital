@@ -519,3 +519,39 @@ print("PASS migration 022: opt-in and unique notification delivery")
 # 023: additive, no destructive schema changes.
 migration(23)
 print("PASS migration 023: additive Telegram visitor profile table")
+
+# 024: exercise the actual D1 SQL for registration drafts and one-time customer codes.
+import re
+before_024 = {name:snapshot(name) for name in tables}
+migration(24)
+assert before_024 == {name:snapshot(name) for name in tables}
+onboarding = (ROOT.parent / 'src' / 'telegram-customer-onboarding.ts').read_text(encoding='utf-8')
+def onboarding_sql(prefix):
+    matches = re.findall(r'''["']((?:INSERT INTO|UPDATE|DELETE FROM)[^"\n]*?)["']''', onboarding)
+    matching = [x for x in matches if x.startswith(prefix)]
+    # Statements with embedded single quotes are double-quoted in TypeScript.
+    if len(matching) != 1:
+        matching = [x for x in re.findall(r'"([^"\n]+)"', onboarding) if x.startswith(prefix)]
+    assert len(matching) == 1, prefix
+    return matching[0]
+# Preserve the historical linked account and create only synthetic test accounts.
+for i in ('link-a','link-b'):
+    db.execute('INSERT INTO customers(id,name,email,phone,address,city,province,password_hash) VALUES(?,?,?,?,?,?,?,?)',(i,'Cliente ficticio',i+'@invalid.example','5350000000','Calle de prueba 123','Municipio','Provincia','hash-ficticio'))
+issue_sql = onboarding_sql('INSERT INTO telegram_customer_link_codes')
+redeem_sql = onboarding_sql('UPDATE customers SET telegram_customer_chat_id=')
+start_sql = onboarding_sql('INSERT INTO telegram_customer_registration_drafts')
+now='2026-11-20T12:00:00.000Z'; expired='2026-11-20T11:00:00.000Z'; until='2026-11-20T12:10:00.000Z'
+assert db.execute(start_sql,('10001','draft-a',until,'100',now)).rowcount==1
+assert db.execute(start_sql,('10001','draft-b',until,'101',now)).rowcount==0
+assert db.execute('SELECT draft_id,stage,data_json FROM telegram_customer_registration_drafts WHERE chat_id=?',('10001',)).fetchone()==('draft-a','name','{}')
+assert db.execute(issue_sql,('hash-a',until,now,'link-a',expired)).rowcount==1
+assert db.execute(issue_sql,('hash-b',until,now,'link-a',expired)).rowcount==0
+assert db.execute(redeem_sql,('123456',now,'hash-a',now,'123456')).rowcount==0 # historical chat must not be taken over
+assert db.execute(redeem_sql,('10001',now,'hash-a',now,'10001')).rowcount==1
+assert db.execute('DELETE FROM telegram_customer_link_codes WHERE code_hash=?',('hash-a',)).rowcount==1
+assert db.execute(redeem_sql,('10002',now,'hash-a',now,'10002')).rowcount==0
+assert db.execute(issue_sql,('hash-expired',expired,expired,'link-b',expired)).rowcount==1
+assert db.execute(redeem_sql,('10002',now,'hash-expired',now,'10002')).rowcount==0
+assert db.execute("SELECT telegram_customer_chat_id,phone_verified FROM customers WHERE id='link-a'").fetchone()==('10001',0)
+assert db.execute('PRAGMA foreign_key_check').fetchall()==[]
+print('PASS migration 024: preserves accounts, temporary drafts, code expiration, one-use and existing link protection')
