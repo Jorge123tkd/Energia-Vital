@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { Env } from '../types';
 import { requireAdminAuth } from '../middleware';
+import { assistantUsageFilters, usageRowsSql, usageSummarySql } from '../assistant-usage';
 
 export const adminRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 
@@ -31,6 +32,19 @@ async function uploadMedia(c: any, folder: 'products' | 'services' | 'site', own
 
 // Middleware de autenticación
 adminRoutes.use('*', requireAdminAuth);
+
+// Only full administrators may see customer-identifying usage statistics.
+adminRoutes.get('/assistant-usage',async c=>{
+  const f=assistantUsageFilters({period:c.req.query('period'),q:c.req.query('q'),page:c.req.query('page')});
+  const [summary,rows]=await c.env.DB.batch([
+    c.env.DB.prepare(usageSummarySql).bind(...f.args),
+    c.env.DB.prepare(usageRowsSql).bind(...f.args,f.pageSize,f.offset)
+  ]);
+  c.header('Cache-Control','private, no-store');
+  return c.json({summary:summary.results?.[0]||{users:0,conversations:0,messages:0,returning_users:0},
+    users:rows.results||[],page:f.page,page_size:f.pageSize,period:f.period,since:f.since||null});
+});
+
 
 // --- IMÁGENES DEL SITIO EN R2 (no dependen de proyectos de galería) ---
 adminRoutes.post('/site-media', async c => {
