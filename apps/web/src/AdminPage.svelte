@@ -4,6 +4,7 @@
   import AdminContent from './components/AdminContent.svelte';
   import Pagination from './components/Pagination.svelte';
   import AdminCustomers from './components/AdminCustomers.svelte';
+  import AdminAssistantUsage from './components/AdminAssistantUsage.svelte';
   import AdminStaff from './components/AdminStaff.svelte';
   import AdminBrigades from './components/AdminBrigades.svelte';
   import DossierPanel from './components/DossierPanel.svelte';
@@ -20,7 +21,7 @@
   let checking = $state(true);
   let error = $state('');
   let message = $state('');
-  let tab = $state<'customers' | 'requests' | 'appointments' | 'brigades' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'notifications'>('requests');
+  let tab = $state<'customers' | 'requests' | 'appointments' | 'brigades' | 'products' | 'services' | 'gallery' | 'site' | 'staff' | 'notifications' | 'assistant-usage'>('requests');
   let mobileMenu = $state(false);
   let accountMenu = $state(false);
   let calendarOpen = $state(false);
@@ -235,6 +236,7 @@
     { id: 'brigades', title: 'Brigadas' },
     { id: 'customers', title: 'Clientes' },
     ...(staffRole === 'admin' ? [
+      { id: 'assistant-usage', title: 'Actividad del asistente' },
       { id: 'products', title: 'Productos' },
       { id: 'services', title: 'Servicios' },
       { id: 'gallery', title: 'Galería' },
@@ -715,6 +717,8 @@
         <Pagination page={appointmentPage} total={appointmentTotal} perPage={pageSize}
           disabled={pagingBusy} label="citas" onPage={loadAppointmentPage} />
       </section>
+    {:else if staffRole === 'admin' && tab === 'assistant-usage'}
+      <AdminAssistantUsage {token} onCustomer={id=>openDossier(id)} />
     {:else if staffRole === 'admin' && (tab === 'products' || tab === 'services' || tab === 'gallery' || tab === 'site')}
       <AdminContent {token} {tab} {products} {services} {categories} onRefresh={async () => { await reload(); }} />
     {:else if staffRole === 'admin' && tab === 'staff'}
