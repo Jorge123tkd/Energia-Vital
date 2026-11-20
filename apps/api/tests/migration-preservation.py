@@ -515,3 +515,7 @@ except sqlite3.IntegrityError:
     pass
 assert db.execute("PRAGMA foreign_key_check").fetchall()==[]
 print("PASS migration 022: opt-in and unique notification delivery")
+
+# 023: additive, no destructive schema changes.
+migration(23)
+print("PASS migration 023: additive Telegram visitor profile table")
