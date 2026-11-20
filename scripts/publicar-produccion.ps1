@@ -44,6 +44,8 @@ npm run typecheck --workspace=apps/web
 if($LASTEXITCODE -ne 0){throw 'Typecheck frontend falló. NO desplegar.'}
 node apps/web/tests/auth-session.cjs
 if($LASTEXITCODE -ne 0){throw 'Pruebas de sesiones fallaron. NO desplegar.'}
+node apps/web/tests/admin-browser-session.cjs
+if($LASTEXITCODE -ne 0){throw 'Pruebas de navegacion y cookie fallaron. NO desplegar.'}
 # Variables del build solo en este proceso PowerShell; no escribir secretos ni .env.
 $env:VITE_API_URL=$apiUrl
 $env:VITE_QA_MODE='false'
@@ -79,5 +81,12 @@ try{
   npx wrangler pages deploy dist --project-name $pages --branch $branch
   if($LASTEXITCODE -ne 0){throw 'Publicacion Pages falló, revisar Cloudflare.'}
 }finally{Pop-Location}
-Write-Host 'PUBLICACION TERMINADA: API /health OK y Pages deploy aceptado.' -ForegroundColor Green
-Write-Host "Comprobar manualmente https://energia-vital-web.pages.dev (home, login, admin, solicitudes)." -ForegroundColor Yellow
+$site='https://bnergiv.com'
+$withoutCookie=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/api/admin-session/refresh" -H "Origin: $site" -H "Content-Type: application/json" --data '{}'
+if($LASTEXITCODE -ne 0 -or "$withoutCookie".Trim() -ne '401'){throw "Pages desplegado pero proxy de sesion sin cookie devolvio $withoutCookie, se esperaba 401. Revisar Functions/binding."}
+$foreign=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/api/admin-session/refresh" -H 'Origin: https://invalid.example' -H 'Content-Type: application/json' --data '{}'
+if($LASTEXITCODE -ne 0 -or "$foreign".Trim() -ne '403'){throw "Pages desplegado pero control de origen devolvio $foreign, se esperaba 403."}
+$deepLink=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/admin/citas"
+if($LASTEXITCODE -ne 0 -or "$deepLink".Trim() -ne '200'){throw "Ruta directa /admin/citas devolvio $deepLink."}
+Write-Host 'PUBLICACION TERMINADA: API health OK, Pages desplegado, rutas y rechazo de origen/sesion anonima OK.' -ForegroundColor Green
+Write-Host "Comprobar manualmente https://bnergiv.com/admin/citas (login, recarga, recordar, logout)." -ForegroundColor Yellow
