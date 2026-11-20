@@ -17,7 +17,7 @@ console.log('PASS admin navigation: deep links, reload, canonical fallback, oper
 (async()=>{
  const {onRequest}=await import(pathToFileURL(path.join(__dirname,'../functions/api/admin-session/[action].js')).href);
  const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
- const jwt=(sid,kind)=>encode({alg:'HS256'})+'.'+encode({sid,kind,type:'admin',exp:Math.floor(Date.now()/1000)+86400})+'.sig';
+ const jwt=(sid,kind,type='admin')=>encode({alg:'HS256'})+'.'+encode({sid,kind,type,exp:Math.floor(Date.now()/1000)+86400})+'.sig';
  const refreshA=jwt('session-a','refresh'),accessA=jwt('session-a','access');
  const refreshB=jwt('session-b','refresh'),accessB=jwt('session-b','access');
  const origin='https://bnergiv.com';
@@ -70,5 +70,20 @@ console.log('PASS admin navigation: deep links, reload, canonical fallback, oper
  assert.equal(res.status,502);assert.equal(redirectCalls,1);assert.equal(res.headers.getSetCookie().length,0);assert.equal(res.headers.get('Location'),null);
  res=await request('refresh',{sid:'session-a'},{cookie,env:redirectEnv});
  assert.equal(res.status,502);assert.equal(redirectCalls,2);assert.equal(res.headers.getSetCookie().length,0);
- console.log('PASS same-origin admin session bridge: CSRF/QA rejection, private binding, cookies, no refresh exposure, account isolation, logout and blocked redirects');
+ const customerRefresh=jwt('customer-session','refresh','customer'),customerAccess=jwt('customer-session','access','customer');
+ upstreamResult={access_token:customerAccess,refresh_token:customerRefresh,user:{id:'customer-a',role:'customer'}};
+ res=await request('sign-in',{email:'customer@invalid.example',password:'fake-test-password',remember:true});
+ assert.equal(res.status,200);assert.equal((await res.json()).access_token,customerAccess);assert.ok(res.headers.getSetCookie().some(x=>x.startsWith('__Host-bonaire_admin_remembered='+customerRefresh)&&x.includes('Max-Age=604800')));
+ assert.ok(calls.at(-1).url.endsWith('/sign-in'));assert.equal(calls.at(-1).body.browser_session,true);
+ const customerCookie='__Host-bonaire_admin_remembered='+customerRefresh;
+ const count=calls.length;
+ res=await request('refresh',{}, {cookie:customerCookie});assert.equal(res.status,401);assert.equal(calls.length,count);
+ res=await request('refresh',{kind:'customer',sid:'customer-session'},{cookie:customerCookie});assert.equal(res.status,200);assert.ok(!('refresh_token'in await res.json()));
+ res=await request('refresh',{kind:'any'},{cookie:customerCookie});assert.equal(res.status,200);
+ res=await request('login',{email:'customer@invalid.example',password:'fake-test-password'});assert.equal(res.status,502,'Admin route must reject customer tokens');
+ upstreamResult={access_token:accessA,refresh_token:refreshA,user:{id:'admin-a',role:'admin'}};
+ res=await request('sign-in',{email:'admin@invalid.example',password:'fake-test-password',remember:false},{cookie:customerCookie});assert.equal(res.status,200);
+ assert.ok(calls.at(-1).url.endsWith('/logout'));assert.equal(calls.at(-1).body.refresh_token,customerRefresh);
+ res=await request('refresh',{kind:'customer'},{cookie});assert.equal(res.status,401);
+ console.log('PASS shared public/admin session bridge, cookie security, role isolation, account switch and redirect protection');
 })().catch(e=>{console.error(e);process.exitCode=1});
