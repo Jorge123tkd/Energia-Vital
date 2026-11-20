@@ -23,7 +23,7 @@ export function advanceRegistration(stage:Stage,input:string){
  if(stage==='password')return null;
  const limits:Record<string,number>={name:120,phone:25,email:254,address:250,city:100,province:100};
  if(value.length>(limits[stage]||0))return null;
- const valid=stage==='phone'?/^[+0-9 ()-]{8,25}$/.test(value)&&(value.match(/\d/g)||[]).length>=8:
+ const valid=stage==='phone'?/^[+0-9 ()-]{8,20}$/.test(value)&&(value.match(/\d/g)||[]).length>=8:
  stage==='email'?/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value):
  value.length>=(stage==='address'?6:stage==='name'?3:2);
  if(!valid)return null;
