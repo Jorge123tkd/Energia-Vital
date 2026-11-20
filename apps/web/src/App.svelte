@@ -112,7 +112,8 @@
   async function signOut() {
     const admin = sessionStorage.getItem(ADMIN_TOKEN_KEY);
     // logoutCurrentSession elimina las credenciales locales sin esperar la red.
-    await logoutCurrentSession(admin ? 'admin' : 'customer');
+    try{await logoutCurrentSession(admin ? 'admin' : 'customer');}
+    catch{window.alert('Se cerró el acceso en este navegador, pero no se pudo confirmar el cierre remoto. Comprueba tu conexión.');}
     user = null;
     assistantSessionId.set(null);
     assistantMessages.set([]);
