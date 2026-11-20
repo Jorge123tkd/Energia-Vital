@@ -96,7 +96,7 @@ export function presentTelegramReply(reply:string,stage?:SolarStage|null):string
 export type TelegramReplyMarkup =
   | {keyboard:{text:string}[][];resize_keyboard:true;one_time_keyboard:true;input_field_placeholder:string}
   | {remove_keyboard:true}
-  | {inline_keyboard:({text:string;url:string}|{text:string;web_app:{url:string}})[][]};
+  | {inline_keyboard:({text:string;url:string}|{text:string;web_app:{url:string}}|{text:string;callback_data:string})[][]};
 
 const keyboard=(labels:string[][]):TelegramReplyMarkup=>({
   keyboard:labels.map(row=>row.map(text=>({text}))),
