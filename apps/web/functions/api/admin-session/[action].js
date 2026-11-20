@@ -25,17 +25,28 @@ function sessionId(jwt){
 function setCookie(token,persist){
  return [(persist?remembered:normal)+'='+token+cookieOptions+(persist?'; Max-Age=604800':''),expire(persist?normal:remembered)];
 }
-export async function onRequest({request,params}){
+export async function onRequest({request,params,env}){
  const origin=new URL(request.url).origin;
  if(!origins.has(origin)||request.method!=='POST'||request.headers.get('Origin')!==origin||
     (request.headers.get('Sec-Fetch-Site')&&request.headers.get('Sec-Fetch-Site')!=='same-origin'))
    return json({error:'Solicitud no autorizada'},403);
+ if(!env?.ADMIN_SESSION_API)return json({error:'Servicio de sesión no configurado'},503);
+ // The private Pages service binding forwards only the actual Cloudflare client IP.
+ const upstreamHeaders=new Headers({'Content-Type':'application/json'});
+ const ip=request.headers.get('CF-Connecting-IP');
+ if(ip)upstreamHeaders.set('CF-Connecting-IP',ip);
+ const call=(route,body)=>env.ADMIN_SESSION_API.fetch(api+route,{method:'POST',headers:upstreamHeaders,body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(15000)});
  const action=params.action;
  if(!['login','refresh','logout'].includes(action))return json({error:'Ruta no disponible'},404);
  if(!request.headers.get('Content-Type')?.startsWith('application/json'))return json({error:'Formato inválido'},415);
  if(Number(request.headers.get('Content-Length')||0)>8192)return json({error:'Solicitud demasiado grande'},413);
  let body;
- try{const raw=await request.text();if(raw.length>8192)return json({error:'Solicitud demasiado grande'},413);body=JSON.parse(raw);}
+ try{
+  const reader=request.body?.getReader();if(!reader)return json({error:'Solicitud inválida'},400);
+  const decoder=new TextDecoder();let raw='',size=0;
+  while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.byteLength;if(size>8192){await reader.cancel();return json({error:'Solicitud demasiado grande'},413);}raw+=decoder.decode(chunk.value,{stream:true});}
+  body=JSON.parse(raw+decoder.decode());
+ }
  catch{return json({error:'Solicitud inválida'},400);}
  if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'Solicitud inválida'},400);
  const cookie=request.headers.get('Cookie');
@@ -47,7 +58,7 @@ export async function onRequest({request,params}){
  const payload=action==='login'?{email:body.email,password:body.password,browser_session:true,remember:body.remember===true}:{refresh_token:current};
  try{
   if(action==='logout'&&!current)return json({message:'Sesión cerrada'},200,[expire(normal),expire(remembered)]);
-  const upstream=await fetch(api+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),redirect:'error',signal:AbortSignal.timeout(15000)});
+  const upstream=await call(action,payload);
   if(action==='logout'){
    if(!upstream.ok&&upstream.status!==401)return json({error:'No se pudo confirmar el cierre remoto'},503);
    return json({message:'Sesión cerrada'},200,[expire(normal),expire(remembered)]);
@@ -59,7 +70,7 @@ export async function onRequest({request,params}){
    return json({error:'Respuesta de autenticación inválida'},502);
   // A successful account switch must revoke the prior browser session.
   if(action==='login'&&current){
-   const revoked=await fetch(api+'logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:current}),redirect:'error',signal:AbortSignal.timeout(15000)});
+   const revoked=await call('logout',{refresh_token:current});
    if(!revoked.ok&&revoked.status!==401)return json({error:'No se pudo cerrar la sesión anterior. Intenta de nuevo.'},503);
   }
   return json({access_token:result.access_token,...(action==='login'?{user:result.user}:{})},200,setCookie(result.refresh_token,action==='login'?body.remember===true:!!b));
