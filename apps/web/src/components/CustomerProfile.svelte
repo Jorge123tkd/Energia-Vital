@@ -19,6 +19,21 @@
   let error = $state('');
   let success = $state('');
   let busy = $state(false);
+  let telegramBusy=$state(false);
+  let telegramCode=$state('');
+  let telegramError=$state('');
+  async function generateTelegramCode(){
+    telegramBusy=true;telegramError='';telegramCode='';
+    try{const result=await api.createTelegramCustomerLinkCode();telegramCode=result.code;}
+    catch(e){telegramError=e instanceof Error?e.message:'No se pudo generar el código.';}
+    finally{telegramBusy=false;}
+  }
+  async function checkTelegramLink(){
+    telegramBusy=true;telegramError='';
+    try{const result=await api.me();onUpdate(result.user);if(result.user.telegram_linked)telegramCode='';}
+    catch(e){telegramError=e instanceof Error?e.message:'No se pudo comprobar el vínculo.';}
+    finally{telegramBusy=false;}
+  }
 
   async function save(event: SubmitEvent) {
     event.preventDefault(); error = ''; success = ''; busy = true;
@@ -66,6 +81,18 @@
         <button disabled={busy} class="bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white rounded-xl px-6 py-3.5 w-full font-bold">Cambiar contraseña</button>
       </form>
     </div>
+    <section class="bg-white border border-slate-200 rounded-3xl p-5 sm:p-7 shadow-lg shadow-slate-200/40 space-y-4">
+      <div class="flex items-center gap-3"><span class="flex w-10 h-10 justify-center items-center bg-teal-700 rounded-xl text-white font-bold">03</span><h2 class="text-xl font-extrabold text-slate-900">Vincular Telegram</h2></div>
+      {#if user.telegram_linked}
+        <p class="text-sm font-semibold text-teal-800">Tu cuenta ya está vinculada con Telegram.</p>
+        <p class="text-sm text-slate-600">Puedes consultar tus citas, solicitudes y cotizaciones desde el chatbot. Si necesitas cambiar la vinculación, contacta con Bonaire.</p>
+      {:else}
+        <p class="text-sm text-slate-600">Genera un código de un solo uso y envíalo al chatbot privado de Bonaire desde tu cuenta de Telegram. Vence en 10 minutos. Esto vincula Telegram, no verifica el número de teléfono.</p>
+        {#if telegramCode}<div class="rounded-xl bg-teal-50 border border-teal-200 p-4"><p class="text-xs text-slate-600">Copia este código completo y envíalo únicamente al bot.</p><p class="mt-2 font-mono text-lg font-bold text-teal-900 break-all select-all">{telegramCode}</p></div>{/if}
+        <div class="flex flex-wrap gap-3"><button type="button" onclick={generateTelegramCode} disabled={telegramBusy} class="bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white rounded-xl px-5 py-3 font-bold">Generar código</button><button type="button" onclick={checkTelegramLink} disabled={telegramBusy} class="border border-teal-300 rounded-xl px-5 py-3 text-teal-800 font-semibold disabled:opacity-50">Comprobar vínculo</button></div>
+      {/if}
+      {#if telegramError}<p role="alert" class="text-sm text-red-700">{telegramError}</p>{/if}
+    </section>
   </div>
 </div>
 <style>
