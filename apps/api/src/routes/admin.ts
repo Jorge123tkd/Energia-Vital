@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { Env } from '../types';
 import { requireAdminAuth } from '../middleware';
 import { assistantUsageFilters, usageRowsSql, usageSummarySql } from '../assistant-usage';
+import { visitorSummarySql, visitorRowsSql } from '../telegram-visitor-usage';
 
 export const adminRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 
@@ -36,9 +37,10 @@ adminRoutes.use('*', requireAdminAuth);
 // Only full administrators may see customer-identifying usage statistics.
 adminRoutes.get('/assistant-usage',async c=>{
   const f=assistantUsageFilters({period:c.req.query('period'),q:c.req.query('q'),page:c.req.query('page')});
+  const visitors=c.req.query('scope')==='telegram-visitors';
   const [summary,rows]=await c.env.DB.batch([
-    c.env.DB.prepare(usageSummarySql).bind(...f.args),
-    c.env.DB.prepare(usageRowsSql).bind(...f.args,f.pageSize,f.offset)
+    c.env.DB.prepare(visitors?visitorSummarySql:usageSummarySql).bind(...f.args),
+    c.env.DB.prepare(visitors?visitorRowsSql:usageRowsSql).bind(...f.args,f.pageSize,f.offset)
   ]);
   c.header('Cache-Control','private, no-store');
   return c.json({summary:summary.results?.[0]||{users:0,conversations:0,messages:0,returning_users:0},
