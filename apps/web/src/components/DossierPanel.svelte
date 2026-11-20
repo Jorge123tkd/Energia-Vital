@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { api } from '../lib/api';
   import RequestDocuments from './RequestDocuments.svelte';
   import QuoteManager from './QuoteManager.svelte';
@@ -24,7 +24,8 @@
   let {token,customerId='',requestId='',canReviewQuotes=false,onClose}:{
     token:string;customerId?:string;requestId?:string;canReviewQuotes?:boolean;onClose:()=>void;
   }=$props();
-  let currentRequestId=$state(requestId);
+  // Capture the entry request once; internal dossier navigation owns this state.
+  let currentRequestId=$state(untrack(()=>requestId));
   let customerData:{customer:Customer;requests:Request[];appointments:Appointment[];
     activities:Activity[];works:Work[];assistant_conversations_count:number;
     truncated:Record<string,boolean>}|null=$state(null);
