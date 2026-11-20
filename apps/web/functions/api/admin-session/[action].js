@@ -1,8 +1,8 @@
 // Same-origin production session bridge: the refresh JWT never goes to browser JavaScript.
 const origins=new Set(['https://bnergiv.com','https://www.bnergiv.com','https://energia-vital-web.pages.dev']);
 const api='https://energia-vital-api.astrustrus.workers.dev/api/auth/';
-const normal='__Secure-bonaire_admin',remembered='__Secure-bonaire_admin_remembered';
-const cookieOptions='; Path=/api/admin-session; HttpOnly; Secure; SameSite=Strict';
+const normal='__Host-bonaire_admin',remembered='__Host-bonaire_admin_remembered';
+const cookieOptions='; Path=/; HttpOnly; Secure; SameSite=Strict';
 function json(data,status=200,cookies=[]){
  const headers=new Headers({'Content-Type':'application/json; charset=utf-8','Cache-Control':'private, no-store','Pragma':'no-cache','X-Content-Type-Options':'nosniff'});
  for(const cookie of cookies)headers.append('Set-Cookie',cookie);
@@ -54,8 +54,14 @@ export async function onRequest({request,params}){
   }
   if(!upstream.ok)return json({error:upstream.status===401?'Credenciales o sesión inválidas':upstream.status===429?'Demasiados intentos. Intenta más tarde.':'No se pudo comprobar la sesión'},upstream.status);
   const result=await upstream.json();
-  if(typeof result.access_token!=='string'||typeof result.refresh_token!=='string'||!sessionId(result.refresh_token))
+  if(typeof result.access_token!=='string'||typeof result.refresh_token!=='string'||!sessionId(result.refresh_token)||
+    (action==='refresh'&&sessionId(result.refresh_token)!==sessionId(current)))
    return json({error:'Respuesta de autenticación inválida'},502);
+  // A successful account switch must revoke the prior browser session.
+  if(action==='login'&&current){
+   const revoked=await fetch(api+'logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:current}),redirect:'error',signal:AbortSignal.timeout(15000)});
+   if(!revoked.ok&&revoked.status!==401)return json({error:'No se pudo cerrar la sesión anterior. Intenta de nuevo.'},503);
+  }
   return json({access_token:result.access_token,...(action==='login'?{user:result.user}:{})},200,setCookie(result.refresh_token,action==='login'?body.remember===true:!!b));
  }catch{return json({error:'Servicio de sesión temporalmente no disponible'},503);}
 }
