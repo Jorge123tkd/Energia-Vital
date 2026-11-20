@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { api } from '../lib/api';
-  let { onSuccess, initialMode = 'login' }: { onSuccess: (user: any, token: string, refreshToken?: string) => void; initialMode?: 'login' | 'register' } = $props();
+  import { signInSite, registerSite, browserAdminAvailable } from '../lib/api';
+  let { onSuccess, initialMode = 'login' }: { onSuccess: (user: any, token: string, refreshToken?: string, browserSession?: boolean) => void; initialMode?: 'login' | 'register' } = $props();
   let mode = $state<'login' | 'register'>('login');
   $effect(() => { mode = initialMode; error = ''; });
   let email = $state('');
   let password = $state('');
+  let remember = $state(false);
   let name = $state('');
   let phone = $state('');
   let address = $state('');
@@ -19,10 +20,10 @@
     busy = true;
     try {
       const result = mode === 'login'
-        ? await api.signIn({ email, password })
-        : await api.register({ name, email, password, phone, address, city, province });
+        ? await signInSite({ email, password, remember })
+        : await registerSite({ name, email, password, phone, address, city, province });
       password = '';
-      onSuccess(result.user, result.access_token, result.refresh_token);
+      onSuccess(result.user, result.access_token, result.refresh_token, result.browser_session === true);
     } catch (e) {
       error = e instanceof Error ? e.message : 'No se pudo completar la operación';
     } finally { busy = false; }
@@ -79,6 +80,12 @@
             autocomplete={mode === 'register' ? 'new-password' : 'current-password'}
             bind:value={password} class="field-control" placeholder={mode === 'register' ? 'Mínimo 10 caracteres' : 'Tu contraseña'} />
         </label>
+        {#if mode === 'login' && browserAdminAvailable()}
+          <label class="flex gap-3 items-start text-sm text-slate-700">
+            <input type="checkbox" bind:checked={remember} class="mt-1" />
+            <span><strong>Mantener sesión iniciada</strong><span class="block text-xs text-slate-500">Hasta 7 días en este navegador. No marques esta opción en equipos compartidos. Sin marcar: hasta 8 horas en esta sesión del navegador.</span></span>
+          </label>
+        {/if}
         {#if mode === 'register'}
           <p class="text-xs text-slate-500 leading-relaxed bg-slate-50 border border-slate-100 rounded-xl p-3">
             Usaremos estos datos para gestionar solicitudes y visitas. Tu teléfono no se considera verificado hasta confirmarlo por un canal autorizado.
