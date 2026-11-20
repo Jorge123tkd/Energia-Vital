@@ -32,5 +32,13 @@ function signed(date=now,user={id:123456,is_bot:false}){
  assert.equal(advanceRegistration('phone','hola'),null);assert.equal(advanceRegistration('email','correo incorrecto'),null);
  const code=newCustomerCode();assert.ok(isCustomerCode(code));assert.equal(isCustomerCode('12345678'),false);assert.equal((await codeDigest(code)).length,64);assert.equal(await codeDigest(code.toLowerCase()),await codeDigest(code));
  assert.notEqual(newCustomerCode(),code);assert.notEqual(await codeDigest(newCustomerCode()),await codeDigest(code));
- console.log('PASS Telegram signed identity, tampering, expiration, duplicate parameters, guided registration and separate customer code format');
+ const routeSrc=fs.readFileSync(path.join(__dirname,'../src/routes/telegram.ts'),'utf8');
+ const routeModule={exports:{}};
+ const deny=async c=>c.json({error:'not authorized'},401);
+ new Function('require','module','exports',ts.transpileModule(routeSrc,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(name=>name==='hono'?require('hono'):name==='../middleware'?{requireAdminAuth:deny,requireStaffAuth:deny}:name==='../telegram-customer-onboarding'?onboardingModule.exports:{},routeModule,routeModule.exports);
+ const callback={update_id:999,callback_query:{id:'callback-test',data:'customer:create',from:{id:123456},message:{chat:{id:123456,type:'private'}}}};
+ assert.equal(routeModule.exports.extractTelegramAccountCallback(callback).input.text,'crear cuenta');
+ assert.equal(routeModule.exports.extractTelegramAccountCallback({...callback,callback_query:{...callback.callback_query,from:{id:654321}}}),null);
+ assert.equal(routeModule.exports.extractTelegramAccountCallback({...callback,callback_query:{...callback.callback_query,message:{chat:{id:123456,type:'group'}}}}),null);
+ console.log('PASS Telegram signed identity, tampering, expiration, duplicate parameters, guided registration, separate customer code format and private callbacks');
 })().catch(e=>{console.error(e);process.exitCode=1});
