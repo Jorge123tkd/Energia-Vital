@@ -74,7 +74,7 @@ export async function loginAdminBrowser(body:{email:string;password:string;remem
 export async function restoreAdminBrowserAccess():Promise<string|null>{
   const existing=sessionStorage.getItem(ADMIN_TOKEN_KEY);
   if(!browserAdminAvailable())return existing;
-  if(signedOut()){if(browserSession())clearAdminSession();return browserSession()?null:sessionStorage.getItem(ADMIN_TOKEN_KEY);}
+  if(signedOut()){if(browserSession()){clearAdminSession();return null;}return existing;}
   if(existing)return existing;
   return browserLock(async()=>{
     if(signedOut())return null;
@@ -129,15 +129,16 @@ export function setAdminRefreshToken(token: string | null) {
 export async function logoutCurrentSession(kind: 'customer' | 'admin'): Promise<void> {
   const access = kind === 'admin' ? sessionStorage.getItem(ADMIN_TOKEN_KEY) : customerToken();
   const refresh = kind === 'admin' ? adminRefresh : customerRefresh;
-  const cookieMode=kind==='admin'&&browserAdminAvailable()&&browserSession();
-  if(cookieMode)markSignedOut(true);
+  const browserAdmin=kind==='admin'&&browserAdminAvailable();
+  const cookieMode=browserAdmin&&browserSession();
+  if(browserAdmin)markSignedOut(true);
   if (kind === 'admin') clearAdminSession();
   else setCustomerToken(null);
   if(cookieMode){
     await browserLock(()=>browserSessionRequest('logout',jwtSid(access)?{sid:jwtSid(access)}:{}));
     return;
   }
-  if (!access && !refresh) return;
+  if (!access && !refresh){if(browserAdmin)await browserLock(()=>browserSessionRequest('logout',{}));return;}
   const headers = new Headers({ 'Content-Type': 'application/json' });
   if (!refresh && access) headers.set('Authorization', `Bearer ${access}`);
   try {
@@ -146,6 +147,8 @@ export async function logoutCurrentSession(kind: 'customer' | 'admin'): Promise<
       body: JSON.stringify(refresh ? { refresh_token: refresh } : {}),
     });
   } catch { /* El navegador ya cerró. Una desconexión no asegura revocación remota. */ }
+  // A legacy sign-in on this host must not leave a remembered cookie behind.
+  if(browserAdmin)await browserLock(()=>browserSessionRequest('logout',{}));
 }
 export function clearAdminSession() {
   // Invalidar la memoria antes de cualquier petición de logout.
