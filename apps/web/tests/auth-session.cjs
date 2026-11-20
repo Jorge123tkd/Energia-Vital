@@ -15,17 +15,17 @@ const javascript = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText;
 
-function accessToken(exp, nonce) {
+function accessToken(exp, nonce, sid) {
   const encode = data => Buffer.from(JSON.stringify(data)).toString('base64url');
-  return encode({alg:'none'}) + '.' + encode({exp, nonce}) + '.test';
+  return encode({alg:'none'}) + '.' + encode({exp, nonce, sid}) + '.test';
 }
 const expired = accessToken(Math.floor(Date.now()/1000) - 60, 'old');
 const valid = accessToken(Math.floor(Date.now()/1000) + 3600, 'new');
 const adminOld = accessToken(Math.floor(Date.now()/1000) - 60, 'admin-old');
 const adminNew = accessToken(Math.floor(Date.now()/1000) + 3600, 'admin-new');
 
-function harness(handler) {
-  const storage = new Map();
+function harness(handler,browser=false) {
+  const storage = new Map(),local = new Map();
   const exports = {};
   const requests = [];
   const sessionStorage = {
@@ -35,6 +35,7 @@ function harness(handler) {
   };
   const context = vm.createContext({
     exports, sessionStorage, Headers, FormData,
+    ...(browser?{location:{origin:'https://bnergiv.com'},localStorage:{getItem:k=>local.get(k)||null,setItem:(k,v)=>local.set(k,String(v)),removeItem:k=>local.delete(k)}}:{}),
     atob: value => Buffer.from(value, 'base64').toString('binary'),
     fetch: async (url, options) => {
       const method = options?.method || 'GET';
@@ -45,7 +46,7 @@ function harness(handler) {
     }
   });
   vm.runInContext(javascript, context, { filename:'api-session-test.js' });
-  return { api:exports, requests, storage };
+  return { api:exports, requests, storage, local };
 }
 const response = (status, body={}) => ({status, ok:status>=200 && status<300, json:async()=>body});
 const refreshCalls = entries => entries.filter(item=>item.url.endsWith('/api/auth/refresh'));
@@ -349,5 +350,53 @@ const refreshCalls = entries => entries.filter(item=>item.url.endsWith('/api/aut
     await assert.rejects(()=>api.apiRequest('/api/auth/logout',{method:'POST'}),e=>e.status===401);
     assert.equal(refreshCalls(requests).length,0,'Logout must not auto-refresh');
     console.log('PASS logout never retries refresh');
+  }
+  {
+    const old=accessToken(Math.floor(Date.now()/1000)-60,'cookie-old','browser-session');
+    const next=accessToken(Math.floor(Date.now()/1000)+3600,'cookie-new','browser-session');
+    let offline=false;
+    const {api,requests,storage,local}=harness(entry=>{
+      if(entry.url==='/api/admin-session/login')return response(200,{access_token:old,user:{id:'admin-a',role:'admin'}});
+      if(entry.url==='/api/admin-session/refresh'){
+        if(offline)return response(503,{error:'offline'});
+        return response(200,{access_token:next});
+      }
+      if(entry.url==='/api/admin-session/logout')return response(200,{message:'Sesión cerrada'});
+      if(entry.authorization==='Bearer '+old)return response(401,{error:'expired'});
+      if(entry.authorization==='Bearer '+next)return response(200,{user:{id:'admin-a'}});
+      return response(500,{error:'Unexpected request'});
+    },true);
+    await api.loginAdminBrowser({email:'test@invalid.example',password:'synthetic',remember:true});
+    assert.equal(storage.get(api.ADMIN_TOKEN_KEY),old);
+    assert.equal(storage.get('energia_vital_admin_browser'),'1');
+    offline=true;
+    await assert.rejects(()=>api.apiRequest('/api/auth/admin/me',{headers:{Authorization:'Bearer '+old}}),e=>e.status===503);
+    assert.equal(storage.get(api.ADMIN_TOKEN_KEY),old,'Temporary failure preserves cookie-mode access');
+    offline=false;
+    const results=await Promise.all([
+      api.apiRequest('/api/auth/admin/me',{headers:{Authorization:'Bearer '+old}}),
+      api.apiRequest('/api/admin/users',{headers:{Authorization:'Bearer '+old}})
+    ]);
+    assert.equal(results[0].user.id,'admin-a');
+    assert.equal(storage.get(api.ADMIN_TOKEN_KEY),next);
+    assert.equal(requests.filter(r=>r.url==='/api/admin-session/refresh').length,2,'One failed attempt and one concurrent renewal');
+    const cookieRefresh=requests.find(r=>r.url==='/api/admin-session/refresh');
+    assert.deepEqual(JSON.parse(cookieRefresh.body),{sid:'browser-session'});
+    await api.logoutCurrentSession('admin');
+    assert.equal(storage.has(api.ADMIN_TOKEN_KEY),false);
+    assert.equal(local.get('energia_vital_admin_signed_out'),'1');
+    const before=requests.length;assert.equal(await api.restoreAdminBrowserAccess(),null);assert.equal(requests.length,before);
+    console.log('PASS cookie admin automatic renewal, temporary network errors, concurrent requests and logout');
+  }
+  {
+    const token=accessToken(Math.floor(Date.now()/1000)+3600,'restored','browser-session');
+    const {api,requests,storage}=harness(entry=>response(200,{access_token:token}),true);
+    assert.equal(await api.restoreAdminBrowserAccess(),token);
+    assert.equal(requests[0].url,'/api/admin-session/refresh');
+    assert.deepEqual(JSON.parse(requests[0].body),{});
+    assert.equal(storage.get(api.ADMIN_TOKEN_KEY),token);
+    assert.equal(await api.restoreAdminBrowserAccess(),token);
+    assert.equal(requests.length,1);
+    console.log('PASS cookie restores a new tab without storing refresh secrets');
   }
 })().catch(error=>{console.error(error);process.exitCode=1});
