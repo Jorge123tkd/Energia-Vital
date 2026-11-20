@@ -21,6 +21,7 @@ Test-Step 'Validar documentos' {node apps/api/tests/request-documents.cjs}
 Test-Step 'Typecheck API' {npm run typecheck --workspace=apps/api}
 Test-Step 'Typecheck frontend' {npm run typecheck --workspace=apps/web}
 Test-Step 'Sesiones autenticadas' {node apps/web/tests/auth-session.cjs}
+Test-Step 'Rutas y cookies administrativas' {node apps/web/tests/admin-browser-session.cjs}
 if (Get-Command python -ErrorAction SilentlyContinue) {
   Test-Step 'Migraciones con datos ficticios en memoria' {python apps/api/tests/migration-preservation.py}
 } elseif (Get-Command py -ErrorAction SilentlyContinue) {
@@ -29,4 +30,9 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
 $env:VITE_API_URL='https://energia-vital-api.astrustrus.workers.dev'
 $env:VITE_QA_MODE='false'
 Test-Step 'Compilar frontend' {npm run build --workspace=apps/web}
+$sessionBuild=Join-Path ([System.IO.Path]::GetTempPath()) ('bonaire-session-build-'+[guid]::NewGuid())
+New-Item -ItemType Directory -Path $sessionBuild | Out-Null
+Push-Location apps/web
+try{Test-Step 'Compilar Pages Functions sin servidor' {npx wrangler pages functions build functions --outfile (Join-Path $sessionBuild 'worker.js') --output-routes-path (Join-Path $sessionBuild 'routes.json')}}
+finally{Pop-Location;Remove-Item -LiteralPath $sessionBuild -Recurse -Force}
 Write-Host 'VALIDACION TECNICA COMPLETADA. No se ha iniciado servidor ni modificado Cloudflare.' -ForegroundColor Green
