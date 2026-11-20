@@ -101,12 +101,12 @@
   let telegramSetupBusy=$state(false),telegramSetupStatus=$state('');
   async function activateTelegramWebhook(){
     if(staffRole!=='admin'||telegramSetupBusy)return;
-    if(!window.confirm('¿Activar el webhook de Telegram? Hazlo únicamente después de aplicar la migración 011 de Telegram y configurar sus dos secretos privados en Cloudflare.'))return;
+    if(!window.confirm('¿Activar o actualizar el webhook de Telegram? Hazlo después de aplicar las migraciones requeridas (incluida 024) y configurar los dos secretos privados de Telegram en Cloudflare.'))return;
     telegramSetupBusy=true;telegramLinkError='';telegramSetupStatus='';
     try{
       const r=await api.setupTelegramWebhook(token);
       if(!r.ok)throw new Error(r.description||'Telegram no confirmó la conexión.');
-      telegramSetupStatus='Webhook registrado con Telegram. Prueba /start en el bot y usa «Comprobar conexión».';
+      telegramSetupStatus='Webhook registrado con Telegram (mensajes y botones de acción). Prueba /start y Crear cuenta en el bot y usa «Comprobar conexión».';
     }catch(e){telegramLinkError=e instanceof Error?e.message:'No se pudo activar el bot.';}
     finally{telegramSetupBusy=false;}
   }
