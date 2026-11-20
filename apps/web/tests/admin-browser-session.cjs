@@ -25,6 +25,7 @@ console.log('PASS admin navigation: deep links, reload, canonical fallback, oper
  let upstreamResult={access_token:accessA,refresh_token:refreshA,user:{id:'admin-a',role:'admin'}};
  let status=200;
  const env={ADMIN_SESSION_API:{fetch:async(url,options)=>{
+   assert.equal(options.redirect,'manual','Workers does not implement redirect:error');
    calls.push({url,body:JSON.parse(options.body),headers:new Headers(options.headers)});
    return Response.json(url.endsWith('/logout')?{message:'Sesión cerrada'}:upstreamResult,{status});
  }}};
@@ -59,5 +60,15 @@ console.log('PASS admin navigation: deep links, reload, canonical fallback, oper
  res=await request('refresh',{sid:'session-a'},{cookie});assert.equal(res.status,502);
  res=await request('logout',{sid:'session-a'},{cookie});assert.equal(res.status,200);assert.ok(res.headers.getSetCookie().every(x=>x.includes('Max-Age=0')));
  assert.ok(calls.at(-1).url.endsWith('/logout'));assert.equal(calls.at(-1).body.refresh_token,refreshA);
- console.log('PASS same-origin admin session bridge: CSRF/QA rejection, private binding, cookies, no refresh exposure, account isolation and logout');
+ // A real binding must not follow redirects with a password or refresh token.
+ let redirectCalls=0;
+ const redirectEnv={ADMIN_SESSION_API:{fetch:async(url,options)=>{
+   redirectCalls++;assert.equal(options.redirect,'manual');
+   return new Response(null,{status:302,headers:{Location:'https://evil.invalid/collect'}});
+ }}};
+ res=await request('login',{email:'test@invalid.example',password:'fake-test-password'},{env:redirectEnv});
+ assert.equal(res.status,502);assert.equal(redirectCalls,1);assert.equal(res.headers.getSetCookie().length,0);assert.equal(res.headers.get('Location'),null);
+ res=await request('refresh',{sid:'session-a'},{cookie,env:redirectEnv});
+ assert.equal(res.status,502);assert.equal(redirectCalls,2);assert.equal(res.headers.getSetCookie().length,0);
+ console.log('PASS same-origin admin session bridge: CSRF/QA rejection, private binding, cookies, no refresh exposure, account isolation, logout and blocked redirects');
 })().catch(e=>{console.error(e);process.exitCode=1});
