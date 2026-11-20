@@ -4,6 +4,7 @@ import { REFRESH_TTL, comparePassword, extractToken, generateTokenPair, hashPass
 import { activeSession } from '../middleware';
 import { rateLimited } from '../rate-limit';
 import { verifiedTelegramUser } from '../telegram-customer-auth';
+import { activeRegistration, issueCustomerCode, notifyCustomerOnboarding } from '../telegram-customer-onboarding';
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
 // Evita que respuestas con access/refresh JWT se almacenen en cachés.
@@ -31,7 +32,7 @@ async function readBodyObject(c: { req: { json: () => Promise<unknown> } }): Pro
 
 function safeCustomer(row: any) {
   return { id: row.id, name: row.name, email: row.email, phone: row.phone, address: row.address,
-    city: row.city, province: row.province, phone_verified: Boolean(row.phone_verified), role: 'customer' };
+    city: row.city, province: row.province, phone_verified: Boolean(row.phone_verified), telegram_linked: Boolean(row.telegram_customer_chat_id), role: 'customer' };
 }
 async function issue(env: Env, userId: string, type: 'customer' | 'admin', role: string, ttl=REFRESH_TTL) {
   const sid = crypto.randomUUID();
@@ -208,6 +209,25 @@ authRoutes.post('/register', async c => {
 });
 
 // Mini App: la contraseña viaja por HTTPS, nunca por mensaje de Telegram.
+authRoutes.post('/telegram/registration-draft', async c=>{
+  if(await rateLimited(c.env,c.req.raw,'telegram_registration_draft',30,600))return c.json({error:'Demasiados intentos.'},429);
+  const b=await readBodyObject(c);
+  const chatId=await verifiedTelegramUser(b?.init_data,c.env.TELEGRAM_BOT_TOKEN);
+  if(!chatId)return c.json({error:'Abre el formulario nuevamente desde Telegram.'},401);
+  const draft=await activeRegistration(c.env,chatId);
+  if(!draft||draft.stage!=='password')return c.json({error:'El registro no está listo o venció. Regresa al chatbot para continuar.'},409);
+  return c.json({ready:true,draft_id:draft.draft_id});
+});
+authRoutes.post('/telegram/link-code',async c=>{
+  const user=await signedIn(c,'customer');
+  if(!user)return c.json({error:'Inicia sesión con tu cuenta de cliente.'},401);
+  if(await rateLimited(c.env,c.req.raw,'telegram_customer_code',12,900))return c.json({error:'Demasiados intentos.'},429);
+  const customer=await c.env.DB.prepare('SELECT telegram_customer_chat_id FROM customers WHERE id=? AND is_active=1 AND password_hash IS NOT NULL').bind(user.user_id).first<{telegram_customer_chat_id:string|null}>();
+  if(!customer)return c.json({error:'Cuenta no disponible.'},403);
+  if(customer.telegram_customer_chat_id)return c.json({error:'Tu cuenta ya está vinculada. Para cambiar el vínculo, contacta a Bonaire.'},409);
+  const result=await issueCustomerCode(c.env,user.user_id);
+  return result?c.json(result):c.json({error:'Espera un minuto antes de generar otro código.'},429);
+});
 authRoutes.post('/telegram/register', async c => {
   if(await rateLimited(c.env,c.req.raw,'telegram_customer_register',5,3600))
     return c.json({error:'Demasiados intentos. Inténtalo más tarde.'},429);
@@ -215,8 +235,12 @@ authRoutes.post('/telegram/register', async c => {
   if(!b)return c.json({error:'Datos inválidos'},400);
   const chatId=await verifiedTelegramUser(b.init_data,c.env.TELEGRAM_BOT_TOKEN);
   if(!chatId)return c.json({error:'Abre el formulario nuevamente desde el bot de Bonaire.'},401);
-  const name=clean(b.name,120),email=clean(b.email,254).toLowerCase(),phone=clean(b.phone,25);
-  const address=clean(b.address,250),city=clean(b.city,100),province=clean(b.province,100);
+  const finish=b.mode==='finish';
+  const draft=finish?await activeRegistration(c.env,chatId):null;
+  if(finish&&(!draft||draft.stage!=='password'||draft.draft_id!==b.draft_id))return c.json({error:'El registro venció o cambió. Vuelve al chatbot.'},409);
+  const data=finish&&draft?JSON.parse(draft.data_json) as Record<string,unknown>:b;
+  const name=clean(data.name,120),email=clean(data.email,254).toLowerCase(),phone=clean(data.phone,25);
+  const address=clean(data.address,250),city=clean(data.city,100),province=clean(data.province,100);
   if(name.length<3||!validEmail(email)||!validPhone(phone)||address.length<6||city.length<2||province.length<2||!validPassword(b.password))
     return c.json({error:'Completa todos los campos y usa una contraseña de 10 a 128 caracteres.'},400);
   try{
@@ -226,9 +250,14 @@ authRoutes.post('/telegram/register', async c => {
     // La comprobación de correo y Telegram ocurre en el mismo INSERT, no en una consulta anterior.
     const result=await c.env.DB.prepare("INSERT INTO customers (id,name,email,phone,address,city,province,password_hash,role,phone_verified,telegram_customer_chat_id,created_at,updated_at) "+
       "SELECT ?,?,?,?,?,?,?,?,'customer',0,?,?,? WHERE NOT EXISTS(SELECT 1 FROM customers WHERE lower(email)=? OR telegram_customer_chat_id=?) "+
-      "AND NOT EXISTS(SELECT 1 FROM admin_users WHERE lower(email)=?)")
-      .bind(id,name,email,phone,address,city,province,hash,chatId,time,time,email,chatId,email).run();
+      "AND NOT EXISTS(SELECT 1 FROM admin_users WHERE lower(email)=?) "+
+      "AND (? IS NULL OR EXISTS(SELECT 1 FROM telegram_customer_registration_drafts WHERE chat_id=? AND draft_id=? AND stage='password' AND expires_at>?))")
+      .bind(id,name,email,phone,address,city,province,hash,chatId,time,time,email,chatId,email,draft?.draft_id??null,chatId,draft?.draft_id??null,new Date().toISOString()).run();
     if(result.meta.changes!==1)return c.json({error:'Ya existe una cuenta asociada a estos datos. Si tienes cuenta web, utiliza «Vincular cuenta existente».'},409);
+    if(draft){
+      await c.env.DB.prepare('DELETE FROM telegram_customer_registration_drafts WHERE chat_id=? AND draft_id=?').bind(chatId,draft.draft_id).run().catch(()=>null);
+      await notifyCustomerOnboarding(c.env,chatId,'¡Cuenta creada y vinculada correctamente! Ya puedes entrar en Bonaire con tu correo y contraseña, o cerrar el formulario y seguir conversando aquí.');
+    }
     return c.json({message:'Cuenta creada y vinculada. Ya puedes acceder a la web con tu correo y contraseña.'},201);
   }catch{return c.json({error:'No se pudo completar el registro. Inténtalo de nuevo o contacta con Bonaire.'},500);}
 });
