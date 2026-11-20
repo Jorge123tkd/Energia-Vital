@@ -20,12 +20,12 @@ if ($cfg -notmatch '(?m)^name\s*=\s*"energia-vital-api"\s*$' -or
 }
 Push-Location $apiDir
 try {
-  $raw=npx wrangler d1 execute energia-vital-db --remote --config wrangler.toml --json --command "SELECT (SELECT COUNT(*) FROM d1_migrations) AS total, (SELECT MAX(id) FROM d1_migrations) AS ultimo, (SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash') AS refresh_hash, (SELECT COUNT(*) FROM pragma_table_info('customers') WHERE name='telegram_customer_chat_id') AS telegram_verified, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='request_documents') AS documents, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_customer_notice_deliveries') AS telegram_notices, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_attachment_quota') AS attachment_quota, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_visitor_profiles') AS visitor_profiles"
+  $raw=npx wrangler d1 execute energia-vital-db --remote --config wrangler.toml --json --command "SELECT (SELECT COUNT(*) FROM d1_migrations) AS total, (SELECT MAX(id) FROM d1_migrations) AS ultimo, (SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash') AS refresh_hash, (SELECT COUNT(*) FROM pragma_table_info('customers') WHERE name='telegram_customer_chat_id') AS telegram_verified, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='request_documents') AS documents, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_customer_notice_deliveries') AS telegram_notices, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_attachment_quota') AS attachment_quota, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_visitor_profiles') AS visitor_profiles, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_customer_registration_drafts') AS onboarding_drafts, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='telegram_customer_link_codes') AS customer_link_codes"
   if($LASTEXITCODE -ne 0){throw 'Falló lectura remota D1. NO desplegar.'}
   $parsed=$raw | ConvertFrom-Json
   $row=@($parsed)[0].results[0]
-  if([int]$row.total -ne 23 -or [int]$row.ultimo -ne 23 -or [int]$row.refresh_hash -ne 1 -or [int]$row.telegram_verified -ne 1 -or [int]$row.documents -ne 1 -or [int]$row.telegram_notices -ne 1 -or [int]$row.attachment_quota -ne 1 -or [int]$row.visitor_profiles -ne 1){
-    throw 'D1 requiere migracion 023, sesiones seguras, identidad Telegram verificada y documentos. NO desplegar.'
+  if([int]$row.total -ne 24 -or [int]$row.ultimo -ne 24 -or [int]$row.refresh_hash -ne 1 -or [int]$row.telegram_verified -ne 1 -or [int]$row.documents -ne 1 -or [int]$row.telegram_notices -ne 1 -or [int]$row.attachment_quota -ne 1 -or [int]$row.visitor_profiles -ne 1 -or [int]$row.onboarding_drafts -ne 1 -or [int]$row.customer_link_codes -ne 1){
+    throw 'D1 requiere migracion 024, sesiones seguras, identidad Telegram verificada y documentos. NO desplegar.'
   }
 } finally {Pop-Location}
 node apps/api/tests/assistant-usage.cjs
@@ -52,6 +52,7 @@ $env:VITE_QA_MODE='false'
 npm run build --workspace=apps/web
 if($LASTEXITCODE -ne 0){throw 'Build frontend falló. NO desplegar.'}
 if(!(Test-Path (Join-Path $webDir 'dist/index.html'))){throw 'Falta dist/index.html.'}
+if(!(Test-Path (Join-Path $webDir 'dist/telegram-registro.html'))){throw 'Falta formulario Telegram compilado. NO desplegar.'}
 $mainConfig=Get-Content (Join-Path $webDir 'wrangler.toml') -Raw
 if($mainConfig -notmatch '(?m)^name\s*=\s*"energia-vital-web"\s*$'){
   throw 'El proyecto Pages no coincide con producción.'
@@ -92,5 +93,8 @@ $foreign=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/api/
 if($LASTEXITCODE -ne 0 -or "$foreign".Trim() -ne '403'){throw "Pages desplegado pero control de origen devolvio $foreign, se esperaba 403."}
 $deepLink=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/admin/citas"
 if($LASTEXITCODE -ne 0 -or "$deepLink".Trim() -ne '200'){throw "Ruta directa /admin/citas devolvio $deepLink."}
-Write-Host 'PUBLICACION TERMINADA: API health OK, Pages desplegado, rutas y rechazo de origen/sesion anonima OK.' -ForegroundColor Green
-Write-Host "Comprobar manualmente https://bnergiv.com/admin/citas (login, recarga, recordar, logout)." -ForegroundColor Yellow
+$miniApp=Invoke-WebRequest -Uri "$site/telegram-registro.html?mode=finish" -UseBasicParsing -TimeoutSec 20
+if($miniApp.StatusCode -ne 200 -or $miniApp.Content -notmatch 'registration-draft'){throw 'Mini App no publicada correctamente. Revisar Pages.'}
+Write-Host 'PUBLICACION TERMINADA: API health OK, Pages desplegado, rutas, login y Mini App OK.' -ForegroundColor Green
+Write-Host "Comprobar manualmente https://bnergiv.com/admin/citas (login, recarga, recordar, logout)."
+Write-Host 'Telegram: volver a pulsar Configurar webhook desde admin para habilitar callback_query; comprobar Crear cuenta, Vincular cuenta y el codigo de cliente.' -ForegroundColor Yellow -ForegroundColor Yellow
