@@ -86,6 +86,8 @@ $withoutCookie=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$sit
 if($LASTEXITCODE -ne 0 -or "$withoutCookie".Trim() -ne '401'){throw "Pages desplegado pero proxy de sesion sin cookie devolvio $withoutCookie, se esperaba 401. Revisar Functions/binding."}
 $loginProbe=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/api/admin-session/login" -H "Origin: $site" -H "Content-Type: application/json" --data '{}'
 if($LASTEXITCODE -ne 0 -or "$loginProbe".Trim() -ne '401'){throw "Pages desplegado pero login sin credenciales devolvio $loginProbe, se esperaba 401. Revisar llamada al Worker; no considerar publicacion validada."}
+$publicLoginProbe=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/api/admin-session/sign-in" -H "Origin: $site" -H "Content-Type: application/json" --data '{}'
+if($LASTEXITCODE -ne 0 -or "$publicLoginProbe".Trim() -ne '401'){throw "Pages desplegado pero login publico sin credenciales devolvio $publicLoginProbe, se esperaba 401. Revisar llamada al Worker."}
 $foreign=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/api/admin-session/refresh" -H 'Origin: https://invalid.example' -H 'Content-Type: application/json' --data '{}'
 if($LASTEXITCODE -ne 0 -or "$foreign".Trim() -ne '403'){throw "Pages desplegado pero control de origen devolvio $foreign, se esperaba 403."}
 $deepLink=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/admin/citas"
