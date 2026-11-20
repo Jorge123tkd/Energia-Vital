@@ -25,9 +25,100 @@ export function onAdminTokenUpdated(listener: (token: string) => void): () => vo
   adminListeners.add(listener);
   return () => { adminListeners.delete(listener); };
 }
+// Production admin refresh cookies live on the Pages origin, not workers.dev.
+const ADMIN_BROWSER_KEY='energia_vital_admin_browser';
+const ADMIN_SIGNED_OUT_KEY='energia_vital_admin_signed_out';
+export function browserAdminAvailable(){
+  return typeof location!=='undefined' &&
+    ['https://bnergiv.com','https://www.bnergiv.com','https://energia-vital-web.pages.dev'].includes(location.origin);
+}
+function browserSession(){return typeof sessionStorage!=='undefined'&&sessionStorage.getItem(ADMIN_BROWSER_KEY)==='1';}
+function signedOut(){try{return typeof localStorage!=='undefined'&&localStorage.getItem(ADMIN_SIGNED_OUT_KEY)==='1';}catch{return false;}}
+function markSignedOut(value:boolean){try{if(typeof localStorage!=='undefined'){if(value)localStorage.setItem(ADMIN_SIGNED_OUT_KEY,'1');else localStorage.removeItem(ADMIN_SIGNED_OUT_KEY);}}catch{}}
+function jwtSid(token:string|null):string|null{
+  try{const part=token!.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');const p=JSON.parse(atob(part.padEnd(Math.ceil(part.length/4)*4,'=')));return typeof p.sid==='string'?p.sid:null;}catch{return null;}
+}
+function browserLock<T>(job:()=>Promise<T>):Promise<T>{
+  return typeof navigator!=='undefined'&&navigator.locks
+    ?navigator.locks.request('bonaire-admin-session',job):job();
+}
+async function browserSessionRequest(action:'login'|'refresh'|'logout',body:Record<string,unknown>):Promise<any>{
+  const res=await fetch('/api/admin-session/'+action,{method:'POST',credentials:'same-origin',cache:'no-store',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await res.json().catch(()=>null);
+  if(!res.ok||!data){throw Object.assign(new Error(data?.error||'Servicio de sesión temporalmente no disponible'),{status:res.ok?503:res.status});}
+  return data;
+}
+function acceptBrowserToken(token:unknown){
+  if(typeof token!=='string'||!jwtSid(token))throw Object.assign(new Error('Respuesta de sesión inválida'),{status:502});
+  adminRefresh=null;
+  sessionStorage.setItem(ADMIN_BROWSER_KEY,'1');
+  sessionStorage.setItem(ADMIN_TOKEN_KEY,token);
+  for(const listener of adminListeners)listener(token);
+  return token;
+}
+export async function loginAdminBrowser(body:{email:string;password:string;remember:boolean}){
+  if(!browserAdminAvailable()){
+    const data=await api.adminLogin(body);
+    sessionStorage.setItem(ADMIN_TOKEN_KEY,data.access_token);
+    setAdminRefreshToken(data.refresh_token);
+    return data;
+  }
+  return browserLock(async()=>{
+    const data=await browserSessionRequest('login',body);
+    priorAdminAccess=null;markSignedOut(false);
+    acceptBrowserToken(data.access_token);
+    return data;
+  });
+}
+export async function restoreAdminBrowserAccess():Promise<string|null>{
+  if(!browserAdminAvailable()||signedOut())return null;
+  return browserLock(async()=>{
+    if(signedOut())return null;
+    const saved=sessionStorage.getItem(ADMIN_TOKEN_KEY);
+    if(saved)return saved;
+    try{
+      const data=await browserSessionRequest('refresh',{});
+      if(signedOut()||sessionStorage.getItem(ADMIN_TOKEN_KEY))return null;
+      return acceptBrowserToken(data.access_token);
+    }catch(e){
+      const status=(e as Error&{status?:number}).status;
+      if(status===401||status===403)return null;
+      throw e;
+    }
+  });
+}
+let cookieFlight:Promise<string|null>|null=null;
+let cookieFlightFor:string|null=null;
+async function renewCookieAdmin(failedToken:string):Promise<string|null>{
+  if(signedOut())return null;
+  if(cookieFlight&&cookieFlightFor===failedToken)return cookieFlight;
+  const job=browserLock(async()=>{
+    if(signedOut()||!browserSession()||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==failedToken)return null;
+    const sid=jwtSid(failedToken);
+    if(!sid)return null;
+    try{
+      const data=await browserSessionRequest('refresh',{sid});
+      if(signedOut()||!browserSession()||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==failedToken)return null;
+      if(jwtSid(data.access_token)!==sid)throw Object.assign(new Error('La sesión cambió'),{status:401});
+      priorAdminAccess=failedToken;
+      return acceptBrowserToken(data.access_token);
+    }catch(e){
+      const status=(e as Error&{status?:number}).status;
+      if(status===401||status===403){
+        if(sessionStorage.getItem(ADMIN_TOKEN_KEY)===failedToken)clearAdminSession();
+        return null;
+      }
+      throw e;
+    }
+  });
+  const flight=job.finally(()=>{if(cookieFlight===flight){cookieFlight=null;cookieFlightFor=null;}});
+  cookieFlight=flight;cookieFlightFor=failedToken;return flight;
+}
 export function setAdminRefreshToken(token: string | null) {
   adminRefresh = token;
   priorAdminAccess = null;
+  if(typeof sessionStorage!=='undefined')sessionStorage.removeItem(ADMIN_BROWSER_KEY);
 }
 /** Cierra la sesión en el navegador ANTES de esperar la red. El refresh
  * firmado puede revocar la sesión en D1 aun cuando el access haya caducado.
@@ -35,8 +126,14 @@ export function setAdminRefreshToken(token: string | null) {
 export async function logoutCurrentSession(kind: 'customer' | 'admin'): Promise<void> {
   const access = kind === 'admin' ? sessionStorage.getItem(ADMIN_TOKEN_KEY) : customerToken();
   const refresh = kind === 'admin' ? adminRefresh : customerRefresh;
+  const cookieMode=kind==='admin'&&browserAdminAvailable()&&browserSession();
+  if(cookieMode)markSignedOut(true);
   if (kind === 'admin') clearAdminSession();
   else setCustomerToken(null);
+  if(cookieMode){
+    await browserLock(()=>browserSessionRequest('logout',jwtSid(access)?{sid:jwtSid(access)}:{}));
+    return;
+  }
   if (!access && !refresh) return;
   const headers = new Headers({ 'Content-Type': 'application/json' });
   if (!refresh && access) headers.set('Authorization', `Bearer ${access}`);
@@ -51,13 +148,15 @@ export function clearAdminSession() {
   // Invalidar la memoria antes de cualquier petición de logout.
   adminRefresh = null;
   priorAdminAccess = null;
-  if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+  if (typeof sessionStorage !== 'undefined') {sessionStorage.removeItem(ADMIN_TOKEN_KEY);sessionStorage.removeItem(ADMIN_BROWSER_KEY);}
+  for(const listener of adminListeners)listener('');
 }
 async function renewAdminAccess(failedToken: string): Promise<string | null> {
   const existing = sessionStorage.getItem(ADMIN_TOKEN_KEY);
   // No reintentar una petición de la cuenta A con el token de la cuenta B.
   if (existing && existing !== failedToken)
-    return priorAdminAccess === failedToken && adminRefresh ? existing : null;
+    return priorAdminAccess === failedToken && (adminRefresh||browserSession()) ? existing : null;
+  if(browserSession())return renewCookieAdmin(failedToken);
   if (!adminRefresh) return null;
   const previous = adminRefresh;
   // Una renovación pendiente de otra cuenta/sesión no puede bloquear ésta.
@@ -166,9 +265,9 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
   // Nunca renovar login, logout, token externo ni permisos denegados (403).
   if (response.status === 401 && explicitToken && accessExpired(explicitToken) &&
       (sessionStorage.getItem(ADMIN_TOKEN_KEY) === explicitToken ||
-        (priorAdminAccess === explicitToken && Boolean(adminRefresh))) &&
+        (priorAdminAccess === explicitToken && Boolean(adminRefresh||browserSession()))) &&
       isRefreshableRoute(path)) {
-    const renewed = await renewAdminAccess(explicitToken).catch(() => null);
+    const renewed = browserSession()?await renewAdminAccess(explicitToken):await renewAdminAccess(explicitToken).catch(() => null);
     if (renewed) {
       const retryHeaders = new Headers(headers);
       retryHeaders.set('Authorization', `Bearer ${renewed}`);
