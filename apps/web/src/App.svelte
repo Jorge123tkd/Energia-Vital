@@ -24,12 +24,13 @@
   let currentRoute = $state(window.location.pathname || '/');
   let user: any = $state(null);
   let checking = $state(true);
+  let restoreGeneration=0;
   let assistantFullScreen = $derived(currentRoute === '/asistente' && Boolean(user) &&
     user.account_type !== 'admin' && user.role !== 'admin' && user.role !== 'operator');
 
   onMount(() => {
     const handler = () => { const wasAdmin=isAdminPath(currentRoute);currentRoute = window.location.pathname || '/';if(wasAdmin&&!isAdminPath(currentRoute))void restoreSession(); };
-    const signedOut=(event:StorageEvent)=>{if(event.key==='energia_vital_admin_signed_out'&&event.newValue==='1'){clearAdminSession();setCustomerToken(null);user=null;assistantSessionId.set(null);assistantMessages.set([]);isAssistantOpen.set(false);}};
+    const signedOut=(event:StorageEvent)=>{if(event.key==='energia_vital_admin_signed_out'&&event.newValue==='1'){restoreGeneration++;checking=false;clearAdminSession();setCustomerToken(null);user=null;assistantSessionId.set(null);assistantMessages.set([]);isAssistantOpen.set(false);}};
     window.addEventListener('popstate', handler);
     window.addEventListener('storage',signedOut);
     void restoreSession();
@@ -38,21 +39,22 @@
   async function restoreSession() {
     // AdminPage restores its own session: never rotate the same cookie twice.
     if(isAdminPath(window.location.pathname)){checking=false;return;}
+    const generation=++restoreGeneration;
     checking=true;user=null;
     try {
       const saved=await restorePublicBrowserAccess();
-      if(!saved)return;
+      if(!saved||generation!==restoreGeneration)return;
       try{
         if(saved.kind==='admin'){
           const result=await api.adminMe(saved.token);
-          user={...result.user,name:result.user.role==='operator'?'Moderador':'Administrador',account_type:'admin'};
-        }else{const result=await api.me();user=result.user;}
+          if(generation===restoreGeneration)user={...result.user,name:result.user.role==='operator'?'Moderador':'Administrador',account_type:'admin'};
+        }else{const result=await api.me();if(generation===restoreGeneration)user=result.user;}
       }catch(e){
         const status=(e as Error&{status?:number})?.status;
-        if(status===401||status===403){if(saved.kind==='admin')clearAdminSession();else setCustomerToken(null);}
+        if(generation===restoreGeneration&&(status===401||status===403)){if(saved.kind==='admin')clearAdminSession();else setCustomerToken(null);}
       }
     }catch{ /* No bloquear la navegación pública si el servicio temporalmente falla. */ }
-    finally{checking=false;}
+    finally{if(generation===restoreGeneration)checking=false;}
   }
 
   function navigate(path: string) {
@@ -81,6 +83,7 @@
   }
 
   function onAuthenticated(customer: any, token: string, refreshToken?: string, browserSession=false) {
+    restoreGeneration++;checking=false;
     // The cookie bridge already stored the matching access and isolated the roles.
     if (!browserSession && (customer.account_type === 'admin' || customer.role === 'admin' || customer.role === 'operator')) {
       sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
@@ -107,6 +110,7 @@
   }
 
   async function signOut() {
+    restoreGeneration++;checking=false;
     const admin = sessionStorage.getItem(ADMIN_TOKEN_KEY);
     // logoutCurrentSession elimina las credenciales locales sin esperar la red.
     try{await logoutCurrentSession(admin ? 'admin' : 'customer');}
