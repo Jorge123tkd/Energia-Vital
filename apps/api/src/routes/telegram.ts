@@ -38,7 +38,7 @@ export function secretMatches(supplied:string|null,expected:string):boolean{
   for(let i=0;i<supplied.length;i++)mismatches|=supplied.charCodeAt(i)^expected.charCodeAt(i);
   return mismatches===0;
 }
-export function extractTelegramMessage(payload:any):{updateId:string;chatId:string;text:string;firstName:string}|null{
+export function extractTelegramMessage(payload:any):{updateId:string;chatId:string;text:string;firstName:string;lastName:string;username:string|null}|null{
   if(!payload||!validUpdateId(payload.update_id))return null;
   const msg=payload.message;
   if(!msg||msg.chat?.type!=='private'||!validChatId(msg.chat.id)||
@@ -49,7 +49,9 @@ export function extractTelegramMessage(payload:any):{updateId:string;chatId:stri
   return {
     updateId:String(payload.update_id),chatId:String(msg.chat.id),
     text:text.slice(0,4000),
-    firstName:typeof msg.from.first_name==='string'?msg.from.first_name.slice(0,60):'cliente'
+    firstName:typeof msg.from.first_name==='string'?msg.from.first_name.slice(0,60):'',
+    lastName:typeof msg.from.last_name==='string'?msg.from.last_name.slice(0,60):'',
+    username:typeof msg.from.username==='string'&&/^[A-Za-z0-9_]{1,64}$/.test(msg.from.username)?msg.from.username:null
   };
 }
 export async function sendTelegramText(
@@ -212,7 +214,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
         'Puedo ayudarte a elegir un inversor, calcular baterías, consultar equipos del catálogo '+
         'y conocer nuestros servicios. También puedes tocar una de las opciones que aparecen abajo.\n\n'+
         (staff?'Como parte del equipo, también puedes preguntarme por la agenda de hoy, mañana o las solicitudes pendientes.':
-          'Si eres cliente, escribe «mi cuenta» para registrarte desde Telegram. Si trabajas en Bonaire, vincula tu cuenta de personal desde /admin.')};
+          'Puedes hacer consultas generales sin registrarte. Para medir la atención, Bonaire conserva tu ID de Telegram, nombre visible y usuario si existe; no recibe tu teléfono automáticamente. Para borrar el historial escribe «borrar historial». Si deseas consultar datos privados o registrar una solicitud, escribe «mi cuenta». Si trabajas en Bonaire, vincula tu cuenta de personal desde /admin.')};
     case 'help':
       return {reply:'Hablemos de forma natural, como con un asesor de Bonaire. 😊\n\n'+
         'Por ejemplo, puedes decirme «Necesito energía para mi nevera y dos aires acondicionados», '+
@@ -224,7 +226,10 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
       return {reply:'Empezamos otra conversación. ¿Qué te gustaría resolver hoy en Bonaire? ☀️',
         state:null,newThread:true,skipHistory:true};
     case 'erase-history':{
-      await env.DB.prepare('DELETE FROM telegram_bot_messages WHERE chat_id=?').bind(chatId).run();
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM telegram_bot_messages WHERE chat_id=?').bind(chatId),
+        env.DB.prepare('DELETE FROM telegram_visitor_profiles WHERE chat_id=?').bind(chatId)
+      ]);
       return {reply:'Eliminé los mensajes que Bonaire guardaba de este chat. '+
         'Los mensajes que aparecen en tu aplicación Telegram debes borrarlos desde Telegram. '+
         '¿Con qué empezamos ahora?',state:null,newThread:true,skipHistory:true};
@@ -415,6 +420,12 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
         "INSERT INTO telegram_bot_messages (id,chat_id,thread_id,role,content,created_at) VALUES (?,?,?,'assistant',?,?)"
       ).bind(crypto.randomUUID(),input.chatId,nextThread,renderedReply,time)
     ];
+    // Guardar únicamente datos visibles del remitente autenticado por el webhook.
+    // No guardar un perfil de visitante para el personal ni una cuenta vinculada.
+    if(!decision.skipHistory&&!currentStaff&&!currentCustomer){
+      audit.push(env.DB.prepare('INSERT INTO telegram_visitor_profiles(chat_id,display_name,username,updated_at) VALUES(?,?,?,?) ON CONFLICT(chat_id) DO UPDATE SET display_name=excluded.display_name,username=excluded.username,updated_at=excluded.updated_at')
+        .bind(input.chatId,[input.firstName,input.lastName].filter(Boolean).join(' ').trim(),input.username,time));
+    }
     await env.DB.batch([
       env.DB.prepare(
         'UPDATE telegram_bot_sessions SET thread_id=?,solar_context=?,window_start=?,window_count=?,updated_at=? WHERE chat_id=?'
