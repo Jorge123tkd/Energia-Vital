@@ -88,7 +88,7 @@ export async function cleanTelegramOnboarding(env:Env,at:Date){
  ]);
 }
 export async function notifyCustomerOnboarding(env:Env,chatId:string,text:string){
- if(!env.TELEGRAM_BOT_TOKEN)return;
+ if(!env.TELEGRAM_BOT_TOKEN||env.ENVIRONMENT==='qa')return;
  try{
   await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:chatId,text,link_preview_options:{is_disabled:true},reply_markup:{inline_keyboard:[[{text:'Entrar en Bonaire',url:SITE_URL+'/entrar'}]]}}),signal:AbortSignal.timeout(7000)});
  }catch{/* Account already saved; never log request or token. */}
