@@ -40,6 +40,11 @@ jobs:
       - name: Compilar frontend
         run: npm run build --workspace=apps/web
       - name: Probar protecciones de sesion
-        run: node apps/web/tests/auth-session.cjs
+        run: |
+          node apps/web/tests/auth-session.cjs
+          node apps/web/tests/admin-browser-session.cjs
+      - name: Compilar Pages Functions sin servidor
+        working-directory: apps/web
+        run: npx wrangler pages functions build functions --outfile /tmp/bonaire-session.js --output-routes-path /tmp/bonaire-routes.json
       - name: Ensayar migraciones en memoria con registros ficticios
         run: python3 apps/api/tests/migration-preservation.py
