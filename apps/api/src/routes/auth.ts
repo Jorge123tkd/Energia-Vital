@@ -99,12 +99,13 @@ authRoutes.post('/sign-in', async c => {
   if (!validEmail(email) || !password || password.length > 128)
     return c.json({ error: 'Credenciales inválidas' }, 401);
 
+  const ttl=b?.browser_session===true?(b.remember===true?7*86400:8*3600):REFRESH_TTL;
   // Admin antes que cliente solo cuando su contraseña ha sido verificada.
   const admin = await c.env.DB.prepare(`SELECT id, email, role, password_hash FROM admin_users
       WHERE LOWER(email) = ? AND is_active = 1 AND role IN ('admin','operator')`)
     .bind(email).first<any>();
   if (admin && await comparePassword(password, admin.password_hash)) {
-    const tokens = await issue(c.env, admin.id, 'admin', admin.role);
+    const tokens = await issue(c.env, admin.id, 'admin', admin.role,ttl);
     return c.json({
       user: { id: admin.id, email: admin.email, name: admin.role === 'admin' ? 'Administrador' : 'Moderador', role: admin.role, account_type: 'admin' },
       ...tokens,
@@ -115,7 +116,7 @@ authRoutes.post('/sign-in', async c => {
   ).bind(email).first<any>();
   if (!customer || !await comparePassword(password, customer.password_hash))
     return c.json({ error: 'Credenciales inválidas' }, 401);
-  const tokens = await issue(c.env, customer.id, 'customer', 'customer');
+  const tokens = await issue(c.env, customer.id, 'customer', 'customer',ttl);
   return c.json({ user: safeCustomer(customer), ...tokens });
 });
 
@@ -161,7 +162,8 @@ authRoutes.post('/register', async c => {
     const id = crypto.randomUUID();
     const sessionId = crypto.randomUUID();
     const now = new Date().toISOString();
-    const expires = new Date(Date.now() + REFRESH_TTL * 1000).toISOString();
+    const ttl=b.browser_session===true?8*3600:REFRESH_TTL;
+    const expires = new Date(Date.now() + ttl * 1000).toISOString();
     const hash = await hashPassword(b.password);
     const tokens = await generateTokenPair(c.env, id, 'customer', 'customer', sessionId);
     // D1.batch ejecuta ambas sentencias de forma transaccional:
