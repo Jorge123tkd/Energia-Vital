@@ -438,6 +438,9 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     }else if(startsRegistration(input.text)){
       if(currentCustomer)decision={reply:'Ya tienes una cuenta vinculada. Puedes entrar a Bonaire o seguir aquí.',skipHistory:true,replyMarkup:{inline_keyboard:[[{text:'Entrar en Bonaire',url:site+'/entrar'}]]}};
       else{const registration=await startRegistration(env,input.chatId,input.updateId);decision=registrationDecision(registration.stage,site);if(registration.stage==='name')decision.reply='Vamos a crear tu cuenta Bonaire. Usaremos estos datos para tu cuenta y tus servicios. Puedes escribir Cancelar registro en cualquier momento. Nunca envíes tu contraseña por chat.\n\n'+decision.reply;}
+    }else if(draft&&/^(?:vincular cuenta|vincular cuenta existente|vincular cuenta de cliente)$/i.test(input.text)){
+      await cancelRegistration(env,input.chatId);
+      decision={reply:'Registro cancelado. Inicia sesión en Bonaire, abre Mi perfil → Vincular Telegram y envíame el código de un solo uso.',skipHistory:true,state:null,commercial:null,replyMarkup:{inline_keyboard:[[{text:'Abrir mi perfil',url:site+'/perfil'}]]}};
     }else if(draft){
       if(currentCustomer){await cancelRegistration(env,input.chatId);decision={reply:'Tu cuenta ya está creada y vinculada. Escribe «mi cuenta» o continúa con tus consultas.',skipHistory:true};}
       else if(cancelsRegistration(input.text)){
