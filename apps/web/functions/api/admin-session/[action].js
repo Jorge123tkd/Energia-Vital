@@ -60,7 +60,7 @@ export async function onRequest({request,params,env}){
   if(action==='logout'&&!current)return json({message:'Sesión cerrada'},200,[expire(normal),expire(remembered)]);
   const upstream=await call(action,payload);
   if(action==='logout'){
-   if(!upstream.ok&&upstream.status!==401)return json({error:'No se pudo confirmar el cierre remoto'},503);
+   if(!upstream.ok&&upstream.status!==401)return json({error:'No se pudo confirmar el cierre remoto'},503,[expire(normal),expire(remembered)]);
    return json({message:'Sesión cerrada'},200,[expire(normal),expire(remembered)]);
   }
   if(!upstream.ok)return json({error:upstream.status===401?'Credenciales o sesión inválidas':upstream.status===429?'Demasiados intentos. Intenta más tarde.':'No se pudo comprobar la sesión'},upstream.status);
@@ -74,5 +74,5 @@ export async function onRequest({request,params,env}){
    if(!revoked.ok&&revoked.status!==401)return json({error:'No se pudo cerrar la sesión anterior. Intenta de nuevo.'},503);
   }
   return json({access_token:result.access_token,...(action==='login'?{user:result.user}:{})},200,setCookie(result.refresh_token,action==='login'?body.remember===true:!!b));
- }catch{return json({error:'Servicio de sesión temporalmente no disponible'},503);}
+ }catch{return json({error:'Servicio de sesión temporalmente no disponible'},503,action==='logout'?[expire(normal),expire(remembered)]:[]);} 
 }
