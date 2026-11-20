@@ -14,7 +14,7 @@ let customerRefresh: string | null = null;
 let refreshing: Promise<string | null> | null = null;
 let refreshingFor: string | null = null;
 let priorCustomerAccess: string | null = null;
-// Sesión de personal: también solo en memoria, separada de la del cliente.
+// Sesión legacy/QA de personal en memoria; panel de producción usa cookie HttpOnly.
 let adminRefresh: string | null = null;
 let adminRefreshing: Promise<string | null> | null = null;
 let adminRefreshingFor: string | null = null;
@@ -72,7 +72,10 @@ export async function loginAdminBrowser(body:{email:string;password:string;remem
   });
 }
 export async function restoreAdminBrowserAccess():Promise<string|null>{
-  if(!browserAdminAvailable()||signedOut())return null;
+  const existing=sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  if(!browserAdminAvailable())return existing;
+  if(signedOut()){if(browserSession())clearAdminSession();return browserSession()?null:sessionStorage.getItem(ADMIN_TOKEN_KEY);}
+  if(existing)return existing;
   return browserLock(async()=>{
     if(signedOut())return null;
     const saved=sessionStorage.getItem(ADMIN_TOKEN_KEY);
