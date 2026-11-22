@@ -547,7 +547,7 @@
     {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
     {#if tab === 'studio'}
-      {#key ownId}<StudioEntrance {token} />{/key}
+      {#key ownId}<StudioEntrance {token} canBootstrap={staffRole === 'admin'}/>{/key}
     {:else if tab === 'customers'}
       <AdminCustomers {token} {customers} canManage={staffRole === 'admin'}
         onOpenDossier={(id:string)=>openDossier(id)} onRefresh={async () => { await reload(); }} />
