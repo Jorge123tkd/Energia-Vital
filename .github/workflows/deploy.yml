@@ -161,11 +161,38 @@ jobs:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
       - name: Probar los puentes protegidos y bindings Studio antes de publicar
         run: node apps/web/tests/studio-bridge.test.mjs
+      - name: Verificar rama real de producción de Cloudflare Pages (solo lectura)
+        id: pages-production
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --max-time 20 \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/energia-vital-web")"
+          branch="$(printf '%s' "$response" | node -e '
+            let raw="";
+            process.stdin.on("data",x=>raw+=x).on("end",()=>{
+              try {
+                const p=JSON.parse(raw);
+                const b=p?.result?.production_branch;
+                if(p.success!==true||typeof b!=="string"||!/^[A-Za-z0-9._/-]{1,100}$/.test(b))process.exit(1);
+                process.stdout.write(b);
+              } catch {process.exit(1);}
+            });
+          ')"
+          if [[ "$branch" != "$GITHUB_REF_NAME" ]]; then
+            echo "Bloqueado: la rama de producción de Pages no coincide con la rama aprobada en GitHub." >&2
+            exit 1
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
       # Ejecutar Wrangler desde apps/web para que Pages lea su wrangler.toml
       # con los bindings de producción, nunca desde la raíz del monorepo.
       - name: Publicar Cloudflare Pages
         working-directory: apps/web
-        run: npx wrangler pages deploy dist --project-name energia-vital-web
+        run: npx wrangler pages deploy dist --project-name energia-vital-web --branch "${{ steps.pages-production.outputs.branch }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
