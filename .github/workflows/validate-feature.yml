@@ -34,6 +34,11 @@ jobs:
       - name: Auditar dependencias npm (solo resumen; no publica)
         run: node scripts/dependency-audit.cjs
 
+      - name: Probar puente Studio y navegación administrativa
+        run: |
+          node --test apps/web/tests/studio-bridge.test.mjs
+          node apps/web/tests/admin-browser-session.cjs
+
       - name: Validar TypeScript API
         run: npm run typecheck --workspace=apps/api
 

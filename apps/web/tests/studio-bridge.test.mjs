@@ -1,0 +1,23 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {onRequest} from '../functions/api/studio/[[path]].js';
+const origin='https://bnergiv.com';
+const auth='Bearer fake.header.signature';
+test('Studio bridge read-only and fail closed',async()=>{
+ let calls=[];
+ const env={ADMIN_SESSION_API:{fetch:async req=>{calls.push(req);return Response.json({user:{id:'staff-1',role:'operator'}})}},STUDIO_API:{fetch:async req=>{calls.push(req);return Response.json({error:'Studio aún no habilitado'},{status:503,headers:{'Set-Cookie':'bad=1','Cache-Control':'public'}})}}};
+ const call=(path='/api/studio/v1/me',opts={})=>onRequest({request:new Request((opts.origin||origin)+path,{method:opts.method||'GET',headers:{...(opts.auth===false?{}:{Authorization:auth}),...(opts.headers||{})}}),env:opts.env??env});
+ assert.equal((await call(undefined,{auth:false})).status,401);assert.equal(calls.length,0);
+ assert.equal((await call(undefined,{method:'POST'})).status,405);
+ assert.equal((await call(undefined,{origin:'https://preview.example'})).status,403);
+ assert.equal((await call(undefined,{headers:{'Sec-Fetch-Site':'cross-site'}})).status,403);
+ assert.equal((await call('/api/studio/v1/devices')).status,404);
+ assert.equal((await call(undefined,{env:{}})).status,503);
+ assert.equal(calls.length,0);
+ let res=await call('/api/studio/v1/catalog?search=panel',{headers:{Cookie:'private=secret'}});
+ assert.equal(res.status,503);assert.equal(res.headers.get('set-cookie'),null);assert.equal(res.headers.get('cache-control'),'private, no-store');
+ assert.equal(calls.length,2);assert.equal(new URL(calls[1].url).pathname,'/v1/catalog');assert.equal(calls[1].headers.get('Cookie'),null);assert.equal(calls[1].headers.get('Authorization'),auth);assert.equal(calls[1].redirect,'manual');
+ env.ADMIN_SESSION_API.fetch=async()=>new Response(null,{status:401});assert.equal((await call()).status,401);assert.equal(calls.length,2);
+ env.ADMIN_SESSION_API.fetch=async()=>Response.json({user:{role:'customer'}});assert.equal((await call()).status,403);
+ env.ADMIN_SESSION_API.fetch=async()=>Response.json({user:{role:'admin'}});env.STUDIO_API.fetch=async()=>Response.redirect('https://evil.invalid');assert.equal((await call()).status,502);
+});

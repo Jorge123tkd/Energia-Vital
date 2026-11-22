@@ -13,6 +13,7 @@
   import AdminRequestCategories from './components/AdminRequestCategories.svelte';
   import RequestPhotoGallery from './components/RequestPhotoGallery.svelte';
   import StaffCalendar from './components/StaffCalendar.svelte';
+  import StudioEntrance from './components/StudioEntrance.svelte';
   let token = $state('');
   let staffRole = $state<'admin' | 'operator'>('admin');
   let ownId = $state('');
@@ -461,6 +462,7 @@
                 <a href="/perfil" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Mi perfil</a>
                  <button type="button" onclick={() => {calendarOpen=true;accountMenu=false;}}
                    class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">🗓️ Calendario del equipo</button>
+                <button type="button" onclick={() => chooseTab('studio')} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold text-teal-800 hover:bg-teal-50">EV Pro Studio</button>
                 <a href="/" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Ver sitio público</a>
                 <button type="button" onclick={()=>{accountMenu=false;void openTelegramLink();}}
                   class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">Vincular Telegram de equipo</button>
@@ -494,6 +496,7 @@
           <a href="/perfil" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Mi perfil</a>
            <button type="button" onclick={() => {calendarOpen=true;mobileMenu=false;}}
              class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-semibold text-teal-800">🗓️ Calendario</button>
+          <button type="button" onclick={() => chooseTab('studio')} class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-bold text-teal-800">EV Pro Studio</button>
           <a href="/" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Ver sitio público</a>
           <button type="button" onclick={()=>{mobileMenu=false;void openTelegramLink();}}
             class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-semibold text-teal-800">Vincular Telegram</button>
@@ -525,7 +528,7 @@
     <div class="mb-5 flex items-center gap-3 justify-between">
       <div>
         <p class="text-xs font-extrabold uppercase tracking-wider text-teal-700">Centro de operaciones</p>
-        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">{menuItems.find(item => item.id === tab)?.title || 'Panel de gestión'}</h1>
+        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">{tab === 'studio' ? 'EV Pro Studio' : menuItems.find(item => item.id === tab)?.title || 'Panel de gestión'}</h1>
       </div>
       <button type="button" disabled={syncBusy} onclick={syncNow}
         class="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-600 hover:text-teal-700 hover:border-teal-300 disabled:opacity-50">
@@ -543,7 +546,9 @@
     </section>
     {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
-    {#if tab === 'customers'}
+    {#if tab === 'studio'}
+      {#key ownId}<StudioEntrance {token} />{/key}
+    {:else if tab === 'customers'}
       <AdminCustomers {token} {customers} canManage={staffRole === 'admin'}
         onOpenDossier={(id:string)=>openDossier(id)} onRefresh={async () => { await reload(); }} />
     {:else if tab === 'requests'}

@@ -346,7 +346,9 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
   const explicitToken = suppliedAuth ? headers.get('Authorization')?.replace(/^Bearer /, '') || null : null;
   const token = suppliedAuth ? null : customerToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  let response = await fetch(`${API_BASE}${path}`, { credentials: QA_CREDENTIALS, ...options, headers });
+  // Studio always uses the same-origin Pages service binding, not the public API base.
+  const target = path.startsWith('/api/studio/v1/') ? path : `${API_BASE}${path}`;
+  let response = await fetch(target, { credentials: QA_CREDENTIALS, ...options, headers });
   // Renovar admin únicamente si el Bearer explícito corresponde a esta sesión.
   // Nunca renovar login, logout, token externo ni permisos denegados (403).
   if (response.status === 401 && explicitToken && accessExpired(explicitToken) &&
@@ -357,7 +359,7 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
     if (renewed) {
       const retryHeaders = new Headers(headers);
       retryHeaders.set('Authorization', `Bearer ${renewed}`);
-      response = await fetch(`${API_BASE}${path}`, { credentials: QA_CREDENTIALS, ...options, headers: retryHeaders });
+      response = await fetch(target, { credentials: QA_CREDENTIALS, ...options, headers: retryHeaders });
     }
   }
   // Nunca renovar por errores de permisos ni en rutas de login/logout.
@@ -367,7 +369,7 @@ export async function apiRequest(path: string, options: RequestInit = {}): Promi
     if (renewed) {
       const retryHeaders = new Headers(headers);
       retryHeaders.set('Authorization', `Bearer ${renewed}`);
-      response = await fetch(`${API_BASE}${path}`, { credentials: QA_CREDENTIALS, ...options, headers: retryHeaders });
+      response = await fetch(target, { credentials: QA_CREDENTIALS, ...options, headers: retryHeaders });
     }
   }
   const data = await response.json().catch(() => ({}));
