@@ -169,3 +169,15 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Comprobar rutas Studio públicas sin credenciales después de publicar
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /api/studio/v1/me /api/studio/native/v1/me; do
+            status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "https://bnergiv.com$path")"
+            if [ "$status" != "401" ]; then
+              echo "La ruta $path devolvió $status; se esperaba 401 sin sesión. Revisar Pages/Functions." >&2
+              exit 1
+            fi
+            echo "$path: función alcanzable y protegida (401 anónimo)."
+          done
