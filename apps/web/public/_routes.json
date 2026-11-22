@@ -1,5 +1,8 @@
 {
   "version": 1,
-  "include": ["/api/admin-session/*"],
+  "include": [
+    "/api/admin-session/*",
+    "/api/studio/*"
+  ],
   "exclude": []
 }
