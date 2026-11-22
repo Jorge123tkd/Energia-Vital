@@ -3,6 +3,7 @@
   import { apiRequest } from '../lib/api';
   import StudioOperations from './StudioOperations.svelte';
   import StudioManagement from './StudioManagement.svelte';
+  import StudioProjectReader from './StudioProjectReader.svelte';
   let {token}: {token:string} = $props();
   type Project = {id:string;name:string};
   type Product = {id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null};
@@ -10,9 +11,10 @@
   let search=$state(''),nextProject=$state<string|null>(null),catalogPage=$state(1),catalogMore=$state(false);
   let generation=0;
   let isAdministrator=$state(false);
+  let selectedProject=$state<Project|null>(null);
   const query=(path:string)=>apiRequest('/api/studio/v1/'+path,{headers:{Authorization:'Bearer '+token}});
   async function load(){
-    const run=++generation;busy=true;ready=false;error='';status='';projects=[];products=[];nextProject=null;catalogMore=false;
+    const run=++generation;busy=true;ready=false;error='';status='';projects=[];products=[];nextProject=null;catalogMore=false;selectedProject=null;
     try{
       const me=await query('me');
       if(run!==generation)return;
@@ -60,7 +62,7 @@
     <div class="grid gap-4 lg:grid-cols-2">
       <section class="rounded-2xl border bg-white p-4 space-y-3 min-w-0"><h3 class="font-extrabold">Proyectos autorizados</h3>
         {#if projects.length===0}<p class="text-sm text-slate-500">No tienes proyectos disponibles.</p>{/if}
-        {#each projects as p (p.id)}<div class="border-t py-3 break-words"><p class="font-semibold">{p.name}</p><p class="text-xs text-slate-500 break-all">Ref. {p.id}</p></div>{/each}
+        {#each projects as p (p.id)}<div class="border-t py-3 break-words"><p class="font-semibold">{p.name}</p><p class="text-xs text-slate-500 break-all">Ref. {p.id}</p><button type="button" class="mt-2 rounded-lg border border-teal-200 px-3 py-2 text-sm font-semibold text-teal-800" onclick={()=>selectedProject=p}>Abrir secciones del proyecto</button></div>{/each}
         {#if nextProject}<button type="button" disabled={busy} onclick={moreProjects} class="text-sm text-teal-800 underline">Cargar más proyectos</button>{/if}
       </section>
       <section class="rounded-2xl border bg-white p-4 space-y-3 min-w-0"><h3 class="font-extrabold">Catálogo de Bonaire</h3>
@@ -74,6 +76,7 @@
         <div class="flex gap-3 text-sm"><button type="button" disabled={busy||catalogPage===1} onclick={()=>find(catalogPage-1)} class="text-teal-800 disabled:opacity-40">Anterior</button><span>Página {catalogPage}</span><button type="button" disabled={busy||!catalogMore} onclick={()=>find(catalogPage+1)} class="text-teal-800 disabled:opacity-40">Siguiente</button></div>
       </section>
     </div>
+    {#if selectedProject}{#key selectedProject.id}<StudioProjectReader {token} project={selectedProject}/>{/key}{/if}
     {#if isAdministrator}<StudioManagement {token} {projects} onRefresh={load}/><StudioOperations {token} {projects}/>{/if}
   {:else if !busy}
     <section class="rounded-xl bg-white border p-5 text-sm text-slate-600">La versión completa de ingeniería, sincronización y respaldos se habilitará tras las pruebas de seguridad. No se crean cuentas nuevas desde aquí.</section>
