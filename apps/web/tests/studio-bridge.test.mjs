@@ -113,3 +113,14 @@ test('assigned staff may submit only validated task/material row routes through 
  assert.equal((await call('/v1/projects/p/sections/task-one','DELETE')).status,405);
  assert.equal((await call('/v1/projects/p/sections/task-one','POST',{})).status,405);
 });
+
+test('first administrator bootstrap requires an existing central admin session',async()=>{
+ let role='operator';const upstream=[];
+ const env={ADMIN_SESSION_API:{fetch:async()=>Response.json({user:{id:'operator',role}})},
+ STUDIO_API:{fetch:async req=>{upstream.push(req);return Response.json({member:{user_id:'operator',role:'admin'}})}}};
+ const request=()=>onRequest({request:new Request(origin+'/api/studio/v1/bootstrap/initial-admin',{method:'POST',headers:{Authorization:auth,'Content-Type':'application/json'},body:'{}'}),env});
+ assert.equal((await request()).status,403);assert.equal(upstream.length,0);
+ role='admin';assert.equal((await request()).status,200);
+ assert.equal(upstream[0].method,'POST');
+ assert.equal(new URL(upstream[0].url).pathname,'/v1/bootstrap/initial-admin');
+});
