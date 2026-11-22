@@ -85,3 +85,18 @@ test('project and member administration uses exact allowed methods and role',asy
  assert.equal((await call('/v1/projects/p/assignments/a','DELETE')).status,200);
  assert.equal((await call('/v1/projects/p/sections/budget','PUT',{})).status,405);
 });
+
+test('internal publication suggestions never publish directly and review requires central admin',async()=>{
+ let role='operator';const seen=[];
+ const env={ADMIN_SESSION_API:{fetch:async()=>Response.json({user:{id:'staff',role}})},
+ STUDIO_API:{fetch:async req=>{seen.push(req);return Response.json({automaticPublishing:false})}}};
+ const call=(route,method='GET',data)=>onRequest({request:new Request(origin+'/api/studio'+route,{method,headers:{Authorization:auth,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)}),env});
+ assert.equal((await call('/v1/publication-proposals')).status,200);
+ assert.equal((await call('/v1/publication-proposals','POST',{kind:'catalog'})).status,200);
+ assert.equal(seen.at(-1).method,'POST');
+ assert.equal((await call('/v1/admin/publication-proposals/abc/decision','POST',{decision:'accept'})).status,403);
+ role='admin';
+ assert.equal((await call('/v1/admin/publication-proposals/abc/decision','POST',{decision:'reject'})).status,200);
+ assert.equal((await call('/v1/publication-proposals/abc','DELETE')).status,405);
+ assert.equal((await call('/v1/products','POST',{})).status,405);
+});
