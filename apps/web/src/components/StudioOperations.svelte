@@ -1,12 +1,13 @@
 <script lang="ts">
  import { onMount } from 'svelte';
  import { apiRequest } from '../lib/api';
+ import StudioPublication from './StudioPublication.svelte';
  let {token,projects}: {token:string;projects:{id:string;name:string}[]}=$props();
- type Mode='inventory'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup';
+ type Mode='inventory'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication';
  let mode=$state<Mode>('inventory'),project=$state(''),busy=$state(false),error=$state(''),rows=$state<Record<string,any>[]>([]),cursor=$state<string|null>(null),loaded=$state(false),backupId=$state(''),receipt=$state<any>(null);
  let generation=0;
  let reviewSeq=$state<number|null>(null),reviewRevision=$state<number|null>(null),central=$state<any>(null),merged=$state('');
- const tabs:{key:Mode;name:string}[]=[{key:'inventory',name:'Almacén'},{key:'orders',name:'Compras'},{key:'suppliers',name:'Proveedores'},{key:'finance',name:'Economía'},{key:'shortages',name:'Faltantes'},{key:'conflicts',name:'Conflictos'},{key:'backup',name:'Respaldos'}];
+ const tabs:{key:Mode;name:string}[]=[{key:'inventory',name:'Almacén'},{key:'orders',name:'Compras'},{key:'suppliers',name:'Proveedores'},{key:'finance',name:'Economía'},{key:'shortages',name:'Faltantes'},{key:'conflicts',name:'Conflictos'},{key:'backup',name:'Respaldos'},{key:'publication',name:'Publicaciones'}];
  const query=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
  const money=(v:unknown,c:string)=>typeof v==='number'?new Intl.NumberFormat('es',{style:'currency',currency:c}).format(v/100):'—';
  const qty=(v:unknown)=>typeof v==='number'?new Intl.NumberFormat('es',{maximumFractionDigits:3}).format(v/1000):'—';
@@ -39,7 +40,7 @@
   const run=++generation;busy=true;error='';
   try{const data=choice==='merge'?JSON.parse(merged):undefined;await query('/api/studio/v1/admin/conflicts/'+reviewSeq+'/resolve',{choice,expectedRevision:reviewRevision,operationId:crypto.randomUUID(),...(data===undefined?{}:{data})});if(run===generation){reviewSeq=null;central=null;reviewRevision=null;await load()}}catch(e){if(run===generation){error=(e as Error).message||'Decisión no confirmada. Vuelve a consultar.';reviewSeq=null;central=null;reviewRevision=null}}finally{if(run===generation)busy=false}
  }
- function select(m:Mode){reviewSeq=null;central=null;reviewRevision=null;generation++;busy=false;mode=m;rows=[];cursor=null;receipt=null;error='';loaded=false;if(!['finance','shortages','backup'].includes(m))void load()}
+ function select(m:Mode){reviewSeq=null;central=null;reviewRevision=null;generation++;busy=false;mode=m;rows=[];cursor=null;receipt=null;error='';loaded=false;if(!['finance','shortages','backup','publication'].includes(m))void load()}
  function selectProject(p:string){generation++;busy=false;project=p;rows=[];receipt=null;cursor=null;loaded=false;error=''}
  async function backup(create:boolean){
   if(!project||busy)return;
@@ -59,6 +60,9 @@
 <section class="rounded-2xl border bg-white p-4 sm:p-6 space-y-4" aria-label="Operaciones empresariales">
  <header><p class="uppercase tracking-widest text-xs text-teal-700 font-bold">Administración autorizada</p><h3 class="text-xl font-extrabold">Operaciones empresariales</h3><p class="text-sm text-slate-500">Consultas en línea. Cada módulo se habilita independientemente tras su validación.</p></header>
  <div class="flex gap-2 flex-wrap">{#each tabs as t}<button type="button" aria-pressed={mode===t.key} class={mode===t.key?'rounded-lg bg-teal-800 text-white px-3 py-2 text-sm font-semibold':'rounded-lg border px-3 py-2 text-sm'} onclick={()=>select(t.key)}>{t.name}</button>{/each}</div>
+ {#if mode==='publication'}
+  <StudioPublication {token} {projects}/>
+ {:else}
  {#if ['finance','shortages','backup'].includes(mode)}
   <label class="block text-sm font-bold">Proyecto<select class="mt-2 w-full rounded-lg border p-2 font-normal" value={project} onchange={e=>selectProject(e.currentTarget.value)}><option value="">Seleccionar proyecto</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}</select></label>
  {/if}
@@ -87,4 +91,5 @@
   <h4 class="font-bold">Compromisos sin factura</h4>{#each receipt.uninvoicedCommitments||[] as o}<p class="text-sm">{money(o.uninvoiced_committed_minor,o.currency)}</p>{/each}<p class="text-xs text-slate-500">Monedas separadas. No constituye conciliación bancaria ni utilidad contable.</p>
  {:else if receipt&&mode==='backup'}<p role="status" class="rounded-lg bg-teal-50 text-teal-900 p-3">Respaldo {receipt.backup} · {receipt.sections} secciones · {receipt.assetReferences} referencias de archivos.</p>{#each receipt.differences||[] as d}<p class="border-t py-2 text-sm">{d.section} · {d.state} · respaldo {d.backupRevision??'—'} / central {d.centralRevision??'—'}</p>{/each}
  {/if}
-</section>
+{/if}
+ </section>
