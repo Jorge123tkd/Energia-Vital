@@ -159,8 +159,13 @@ jobs:
         run: npm run build --workspace=apps/web
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+      - name: Probar los puentes protegidos y bindings Studio antes de publicar
+        run: node apps/web/tests/studio-bridge.test.mjs
+      # Ejecutar Wrangler desde apps/web para que Pages lea su wrangler.toml
+      # con los bindings de producción, nunca desde la raíz del monorepo.
       - name: Publicar Cloudflare Pages
-        run: npx wrangler pages deploy apps/web/dist --project-name energia-vital-web
+        working-directory: apps/web
+        run: npx wrangler pages deploy dist --project-name energia-vital-web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
