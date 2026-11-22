@@ -207,6 +207,8 @@ export interface Env {
   ENVIRONMENT: string;
   /** Gate del almacén empresarial: desactivado si no es true. */
   WAREHOUSE_ENABLED?: string;
+  /** Enlace interno a Studio, configurar solo al aprobar la entrega. */
+  STUDIO_API?: Fetcher;
   BUSINESS_FINANCE_ENABLED?: string;
   /** Solo QA: dominio de equipo Cloudflare Access, sin https:// */
   QA_ACCESS_TEAM_DOMAIN?: string;

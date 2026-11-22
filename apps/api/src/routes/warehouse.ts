@@ -187,3 +187,43 @@ warehouseRoutes.get('/procurement/shortages/:project',async c=>{
  const rows=r.results||[],page=rows.slice(0,50);
  return c.json({requirements:page,next:rows.length>50?page.at(-1)!.item_id:null,sharedAvailabilityIsReservation:false});
 });
+
+// Verified cross-service link. No client-supplied project name or membership
+// accepted as proof. Missing binding leaves this endpoint closed.
+warehouseRoutes.post('/projects/:id/link',async c=>{
+ const project=c.req.param('id'),actor=c.var.user!.user_id,db=c.env.DB;
+ const b=await smallBody(c.req.raw);
+ if(!id(project)||!b||Object.keys(b).join(',')!=='requestId'||!id(b.requestId))return c.json({error:'Vinculación inválida'},400);
+ if(!c.env.STUDIO_API)return c.json({error:'Verificación de Studio no configurada'},503);
+ let proof:unknown;
+ try{
+  const auth=c.req.header('authorization')||'';
+  const response=await c.env.STUDIO_API.fetch(new Request('https://studio.internal/v1/projects/'+project+'/warehouse-link-proof',{headers:{Authorization:auth,Accept:'application/json'},redirect:'manual'}));
+  if([401,403,404].includes(response.status))return c.json({error:'Proyecto no autorizado'},403);
+  if(!response.ok)return c.json({error:'Studio no pudo verificar el proyecto'},503);
+  proof=await response.json();
+ }catch{return c.json({error:'Studio no pudo verificar el proyecto'},503)}
+ if(!isObject(proof)||proof.actor!==actor||proof.purpose!=='warehouse-link-v1'||!isObject(proof.project)||proof.project.id!==project)return c.json({error:'Verificación incompatible'},503);
+ const lookup=()=>db.prepare('SELECT project_id,request_id,linked_by FROM warehouse_project_links WHERE project_id=? AND '+actorGuard).bind(project,actor).first();
+ const previous=await lookup();
+ if(previous)return previous.request_id===b.requestId?c.json({link:previous,replayed:true}):c.json({error:'Proyecto ya vinculado a otra solicitud'},409);
+ try{
+  const result=await db.prepare("INSERT INTO warehouse_project_links(project_id,request_id,linked_by) SELECT ?,r.id,? FROM requests r WHERE r.id=? AND r.status<>'cancelled' AND "+actorGuard+" ON CONFLICT(project_id) DO NOTHING").bind(project,actor,b.requestId,actor).run();
+  const row=await lookup();
+  return row?.request_id===b.requestId?c.json({link:row,replayed:result.meta.changes!==1},result.meta.changes===1?201:200):c.json({error:'Solicitud no disponible o vínculo incompatible'},409);
+ }catch(e){if(knownConstraint(e))return c.json({error:'La solicitud ya pertenece a otro proyecto'},409);throw e}
+});
+// Explicit material requirement approval. Unlike stock reservation, this is
+// a demand baseline, immutable until revision workflow is implemented.
+warehouseRoutes.post('/projects/:id/requirements',async c=>{
+ const project=c.req.param('id'),actor=c.var.user!.user_id,db=c.env.DB,b=await smallBody(c.req.raw);
+ if(!id(project)||!b||Object.keys(b).sort().join(',')!=='itemId,quantityMilli'||!id(b.itemId)||!integer(b.quantityMilli,1,1000000000))return c.json({error:'Necesidad inválida'},400);
+ const lookup=()=>db.prepare('SELECT project_id,item_id,quantity_milli,approved_by FROM warehouse_project_requirements WHERE project_id=? AND item_id=? AND '+actorGuard).bind(project,b.itemId,actor).first();
+ const previous=await lookup();
+ if(previous)return previous.quantity_milli===b.quantityMilli?c.json({requirement:previous,replayed:true}):c.json({error:'Necesidad ya aprobada; requiere revisión formal'},409);
+ try{
+  const result=await db.prepare("INSERT INTO warehouse_project_requirements(project_id,item_id,quantity_milli,approved_by) SELECT ?,?,?,? WHERE "+actorGuard+" ON CONFLICT(project_id,item_id) DO NOTHING").bind(project,b.itemId,b.quantityMilli,actor,actor).run();
+  const row=await lookup();
+  return row?.quantity_milli===b.quantityMilli?c.json({requirement:row,replayed:result.meta.changes!==1},result.meta.changes===1?201:200):c.json({error:'Necesidad no confirmada'},409);
+ }catch(e){if(knownConstraint(e))return c.json({error:'Proyecto, artículo o cantidad incompatible'},409);throw e}
+});
