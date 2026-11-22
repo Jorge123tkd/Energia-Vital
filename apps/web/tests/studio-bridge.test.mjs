@@ -21,3 +21,37 @@ test('Studio bridge read-only and fail closed',async()=>{
  env.ADMIN_SESSION_API.fetch=async()=>Response.json({user:{role:'customer'}});assert.equal((await call()).status,403);
  env.ADMIN_SESSION_API.fetch=async()=>Response.json({user:{role:'admin'}});env.STUDIO_API.fetch=async()=>Response.redirect('https://evil.invalid');assert.equal((await call()).status,502);
 });
+
+test('native activation bridge: existing staff only, no cookies or refresh token, gate closed, limited routes',async()=>{
+ const calls=[];
+ let enabled=false,allowed=true,centralRole='operator';
+ const env={ADMIN_SESSION_API:{fetch:async req=>{
+   calls.push({service:'central',req});
+   const p=new URL(req.url).pathname;
+   if(p.endsWith('/login'))return Response.json({access_token:'fake.header.signature',refresh_token:'never-forward',user:{id:'staff-1',email:'staff@invalid.test',role:centralRole}});
+   if(p.endsWith('/logout'))return Response.json({ok:true});
+   return Response.json({user:{id:'staff-1',role:centralRole}});
+ }},STUDIO_API:{fetch:async req=>{
+   calls.push({service:'studio',req});
+   const p=new URL(req.url).pathname;
+   if(!enabled)return Response.json({error:'disabled'},{status:503});
+   if(p==='/v1/me')return req.headers.get('Authorization')===auth&&allowed?Response.json({user:{id:'staff-1',email:'staff@invalid.test',role:'worker'}}):Response.json({error:'denied'},{status:403});
+   return Response.json({ok:true});
+ }}};
+ const call=(p,method='GET',data,extra={})=>onRequest({request:new Request(origin+'/api/studio/native'+p,{method,headers:{'Content-Type':'application/json','CF-Connecting-IP':'192.0.2.5',...(p==='/login'?{}:{Authorization:auth}),...extra},body:data===undefined?undefined:JSON.stringify(data)}),env});
+ const credentials={email:'staff@invalid.test',password:'not-a-real-password'};
+ assert.equal((await call('/login','POST',credentials)).status,503);assert.equal(calls.filter(c=>c.service==='central').length,0);
+ enabled=true;
+ assert.equal((await call('/login','POST',credentials,{Origin:origin})).status,403);
+ assert.equal((await call('/login','POST',credentials,{Cookie:'secret=x'})).status,403);
+ let res=await call('/login','POST',credentials);assert.equal(res.status,200);
+ const result=await res.json();assert.equal(result.access_token,'fake.header.signature');assert.equal(result.refresh_token,undefined);assert.equal(result.user.role,'worker');
+ const centralLogin=calls.find(c=>new URL(c.req.url).pathname.endsWith('/login'));assert.equal(centralLogin.req.headers.get('CF-Connecting-IP'),'192.0.2.5');assert.deepEqual(await centralLogin.req.json(),credentials);
+ allowed=false;assert.equal((await call('/login','POST',credentials)).status,403);assert.ok(new URL(calls.at(-1).req.url).pathname.endsWith('/logout'));
+ allowed=true;centralRole='customer';assert.equal((await call('/login','POST',credentials)).status,403);assert.ok(new URL(calls.at(-1).req.url).pathname.endsWith('/logout'));centralRole='operator';
+ assert.equal((await call('/v1/activation/challenge','POST',{deviceId:'pc'})).status,200);
+ assert.equal((await call('/v1/devices/pc/projects/p/changes?after=2')).status,200);
+ assert.equal((await call('/v1/projects/p/sections/task-1','PUT',{})).status,404);
+ assert.equal((await call('/v1/admin/members/a/devices/pc','DELETE')).status,404);
+ assert.equal((await call('/logout','POST',{})).status,200);
+});
