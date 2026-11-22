@@ -100,3 +100,16 @@ test('internal publication suggestions never publish directly and review require
  assert.equal((await call('/v1/publication-proposals/abc','DELETE')).status,405);
  assert.equal((await call('/v1/products','POST',{})).status,405);
 });
+
+test('assigned staff may submit only validated task/material row routes through bridge',async()=>{
+ const requests=[];const env={ADMIN_SESSION_API:{fetch:async()=>Response.json({user:{id:'staff',role:'operator'}})},
+ STUDIO_API:{fetch:async req=>{requests.push(req);return Response.json({revision:2})}}};
+ const call=(path,method='GET',data)=>onRequest({request:new Request(origin+'/api/studio'+path,{method,headers:{Authorization:auth,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)}),env});
+ assert.equal((await call('/v1/projects/p/sections/task-one','PUT',{baseRevision:1,operationId:'op',data:{title:'One',status:'pending',dueDate:''}})).status,200);
+ assert.equal(requests.at(-1).method,'PUT');
+ assert.equal((await call('/v1/projects/p/sections/material-one','PUT',{baseRevision:1,operationId:'op'})).status,200);
+ assert.equal((await call('/v1/projects/p/sections/budget','PUT',{})).status,405);
+ assert.equal((await call('/v1/projects/p/sections/engineering','PUT',{})).status,405);
+ assert.equal((await call('/v1/projects/p/sections/task-one','DELETE')).status,405);
+ assert.equal((await call('/v1/projects/p/sections/task-one','POST',{})).status,405);
+});
