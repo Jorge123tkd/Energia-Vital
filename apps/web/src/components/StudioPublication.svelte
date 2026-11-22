@@ -59,7 +59,7 @@
   <label class="block text-sm font-semibold">Tipo<select class="block w-full border rounded-lg p-2 mt-1" bind:value={kind} onchange={()=>{pendingId=''}}><option value="catalog">Artículo para catálogo</option><option value="gallery">Proyecto para galería</option></select></label>
   <label class="block text-sm font-semibold">Título<input required minlength="3" maxlength="160" class="block w-full border rounded-lg p-2 mt-1" bind:value={title}/></label>
   <label class="block text-sm font-semibold">Descripción interna<textarea maxlength="600" rows="3" class="block w-full border rounded-lg p-2 mt-1" bind:value={summary}></textarea></label>
-  {#if kind==='catalog'}<label class="block text-sm font-semibold">Fila de material sin producto publicado<input required pattern="material-[A-Za-z0-9_-]{1,75}" placeholder="material-..." class="block w-full border rounded-lg p-2 mt-1" bind:value={source}/></label>
+  {#if kind==='catalog'}<label class="block text-sm font-semibold">Fila de material sin producto publicado<input required pattern={'material-[A-Za-z0-9_-]{1,75}'} placeholder="material-..." class="block w-full border rounded-lg p-2 mt-1" bind:value={source}/></label>
   {:else}<label class="block text-sm font-semibold">Referencia del consentimiento documentado<input required minlength="12" maxlength="200" placeholder="Documento firmado o autorización verificable" class="block w-full border rounded-lg p-2 mt-1" bind:value={consent}/></label>{/if}
   <button type="submit" disabled={busy||!project} class="rounded-lg bg-teal-800 text-white font-semibold px-4 py-2">Guardar sugerencia interna</button>
  </form>
