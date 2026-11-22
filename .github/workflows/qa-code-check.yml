@@ -43,6 +43,7 @@ jobs:
         run: |
           node apps/web/tests/auth-session.cjs
           node apps/web/tests/admin-browser-session.cjs
+          node apps/web/tests/studio-bridge.test.mjs
       - name: Compilar Pages Functions sin servidor
         working-directory: apps/web
         run: npx wrangler pages functions build functions --outfile /tmp/bonaire-session.js --output-routes-path /tmp/bonaire-routes.json
