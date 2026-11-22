@@ -40,7 +40,9 @@ jobs:
           node apps/web/tests/admin-browser-session.cjs
 
       - name: Verificar libro de movimientos de almacén (SQLite ficticio)
-        run: python3 apps/api/tests/warehouse-ledger.py
+        run: |
+          python3 apps/api/tests/warehouse-ledger.py
+          python3 apps/api/tests/warehouse-brigade-links.py
 
       - name: Validar TypeScript API
         run: npm run typecheck --workspace=apps/api
