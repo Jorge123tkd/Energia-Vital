@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { apiRequest } from '../lib/api';
   import StudioOperations from './StudioOperations.svelte';
+  import StudioManagement from './StudioManagement.svelte';
   let {token}: {token:string} = $props();
   type Project = {id:string;name:string};
   type Product = {id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null};
@@ -73,7 +74,7 @@
         <div class="flex gap-3 text-sm"><button type="button" disabled={busy||catalogPage===1} onclick={()=>find(catalogPage-1)} class="text-teal-800 disabled:opacity-40">Anterior</button><span>Página {catalogPage}</span><button type="button" disabled={busy||!catalogMore} onclick={()=>find(catalogPage+1)} class="text-teal-800 disabled:opacity-40">Siguiente</button></div>
       </section>
     </div>
-    {#if isAdministrator}<StudioOperations {token} {projects}/>{/if}
+    {#if isAdministrator}<StudioManagement {token} {projects} onRefresh={load}/><StudioOperations {token} {projects}/>{/if}
   {:else if !busy}
     <section class="rounded-xl bg-white border p-5 text-sm text-slate-600">La versión completa de ingeniería, sincronización y respaldos se habilitará tras las pruebas de seguridad. No se crean cuentas nuevas desde aquí.</section>
   {/if}

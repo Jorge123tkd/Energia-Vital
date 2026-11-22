@@ -70,3 +70,18 @@ test('enterprise bridge confines backups and conflict reviews to central admin',
  assert.equal((await call('/v1/admin/conflicts/1/resolve','POST',{choice:'remote'})).status,200);
  assert.equal((await call('/v1/projects/p/sections/task-1','PUT',{})).status,405);
 });
+
+test('project and member administration uses exact allowed methods and role',async()=>{
+ let role='operator';const seen=[];
+ const env={ADMIN_SESSION_API:{fetch:async()=>Response.json({user:{id:'a',role}})},STUDIO_API:{fetch:async req=>{seen.push(req);return Response.json({ok:true})}}};
+ const call=(path,method='GET',body)=>onRequest({request:new Request(origin+'/api/studio'+path,{method,headers:{Authorization:auth,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}),env});
+ assert.equal((await call('/v1/projects','POST',{id:'p',name:'Proyecto'})).status,403);
+ role='admin';
+ assert.equal((await call('/v1/projects','POST',{id:'p',name:'Proyecto'})).status,200);
+ assert.equal((await call('/v1/admin/members')).status,200);
+ assert.equal((await call('/v1/admin/members/a','PUT',{role:'worker',active:true})).status,200);
+ assert.equal((await call('/v1/projects/p/assignments')).status,200);
+ assert.equal((await call('/v1/projects/p/assignments/a','PUT',{})).status,200);
+ assert.equal((await call('/v1/projects/p/assignments/a','DELETE')).status,200);
+ assert.equal((await call('/v1/projects/p/sections/budget','PUT',{})).status,405);
+});

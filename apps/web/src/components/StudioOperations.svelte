@@ -5,6 +5,7 @@
  type Mode='inventory'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup';
  let mode=$state<Mode>('inventory'),project=$state(''),busy=$state(false),error=$state(''),rows=$state<Record<string,any>[]>([]),cursor=$state<string|null>(null),loaded=$state(false),backupId=$state(''),receipt=$state<any>(null);
  let generation=0;
+ let reviewSeq=$state<number|null>(null),reviewRevision=$state<number|null>(null),central=$state<any>(null),merged=$state('');
  const tabs:{key:Mode;name:string}[]=[{key:'inventory',name:'Almacén'},{key:'orders',name:'Compras'},{key:'suppliers',name:'Proveedores'},{key:'finance',name:'Economía'},{key:'shortages',name:'Faltantes'},{key:'conflicts',name:'Conflictos'},{key:'backup',name:'Respaldos'}];
  const query=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
  const money=(v:unknown,c:string)=>typeof v==='number'?new Intl.NumberFormat('es',{style:'currency',currency:c}).format(v/100):'—';
@@ -29,7 +30,16 @@
   }catch(e){if(run===generation){rows=[];receipt=null;cursor=null;error=(e as Error&{status?:number}).status===503?'Módulo aún no habilitado o temporalmente desconectado.':(e as Error).message||'No se pudo consultar.'}}
   finally{if(run===generation)busy=false}
  }
- function select(m:Mode){generation++;busy=false;mode=m;rows=[];cursor=null;receipt=null;error='';loaded=false;if(!['finance','shortages','backup'].includes(m))void load()}
+ async function inspect(r:any){
+  const run=++generation;busy=true;error='';reviewSeq=null;central=null;reviewRevision=null;merged='';
+  try{const live=await query('/api/studio/v1/projects/'+encodeURIComponent(r.project_id)+'/sections/'+encodeURIComponent(r.section_id));if(run!==generation)return;reviewSeq=r.seq;reviewRevision=live.revision;central=live.body;merged=JSON.stringify(live.body,null,2)}catch(e){if(run===generation)error=(e as Error).message||'No se pudo consultar la versión vigente.'}finally{if(run===generation)busy=false}
+ }
+ async function decide(choice:'remote'|'local'|'merge'){
+  if(busy||reviewSeq==null||reviewRevision==null)return;
+  const run=++generation;busy=true;error='';
+  try{const data=choice==='merge'?JSON.parse(merged):undefined;await query('/api/studio/v1/admin/conflicts/'+reviewSeq+'/resolve',{choice,expectedRevision:reviewRevision,operationId:crypto.randomUUID(),...(data===undefined?{}:{data})});if(run===generation){reviewSeq=null;central=null;reviewRevision=null;await load()}}catch(e){if(run===generation){error=(e as Error).message||'Decisión no confirmada. Vuelve a consultar.';reviewSeq=null;central=null;reviewRevision=null}}finally{if(run===generation)busy=false}
+ }
+ function select(m:Mode){reviewSeq=null;central=null;reviewRevision=null;generation++;busy=false;mode=m;rows=[];cursor=null;receipt=null;error='';loaded=false;if(!['finance','shortages','backup'].includes(m))void load()}
  function selectProject(p:string){generation++;busy=false;project=p;rows=[];receipt=null;cursor=null;loaded=false;error=''}
  async function backup(create:boolean){
   if(!project||busy)return;
@@ -67,7 +77,7 @@
    {:else if mode==='orders'}<p class="font-bold">{r.reference} · {r.supplier_name}</p><p>{r.status} · {r.incoterm} · {money(r.total_minor,r.currency)}</p>
    {:else if mode==='suppliers'}<p class="font-bold">{r.name}</p><p>{r.country} · {r.active?'Activo':'Inactivo'}</p><p>{r.contact||'Sin contacto registrado'}</p>
    {:else if mode==='shortages'}<p class="font-bold">{r.name}</p><p>Necesidad: {qty(r.required_milli)} · Sin cubrir: {qty(r.uncovered_milli)} · Disponible compartido: {qty(r.shared_available_milli)} · Por recibir: {qty(r.ordered_not_received_milli)} {r.unit}</p>
-   {:else if mode==='conflicts'}<p class="font-bold">{r.project_id} · {r.section_id}</p><p>Revisión base {r.base_revision} / central {r.remote_revision}</p><div class="grid gap-2 md:grid-cols-2"><div><p class="font-semibold">Propuesta</p><pre class="text-xs whitespace-pre-wrap break-all">{JSON.stringify(r.proposed,null,2)}</pre></div><div><p class="font-semibold">Versión al detectar conflicto</p><pre class="text-xs whitespace-pre-wrap break-all">{JSON.stringify(r.remote_body,null,2)}</pre></div></div><p class="text-slate-500 text-xs">La decisión necesita consultar la revisión vigente; esta vista no la aplica.</p>
+   {:else if mode==='conflicts'}<p class="font-bold">{r.project_id} · {r.section_id}</p><p>Revisión base {r.base_revision} / central {r.remote_revision}</p><div class="grid gap-2 md:grid-cols-2"><div><p class="font-semibold">Propuesta</p><pre class="text-xs whitespace-pre-wrap break-all">{JSON.stringify(r.proposed,null,2)}</pre></div><div><p class="font-semibold">Versión al detectar conflicto</p><pre class="text-xs whitespace-pre-wrap break-all">{JSON.stringify(r.remote_body,null,2)}</pre></div></div><button type="button" class="rounded-lg border px-3 py-2" disabled={busy} onclick={()=>inspect(r)}>Consultar versión vigente y revisar</button>{#if reviewSeq===r.seq}<div class="border-t space-y-2 pt-3"><p class="font-semibold">Versión vigente · revisión {reviewRevision}</p><pre class="text-xs whitespace-pre-wrap break-all">{JSON.stringify(central,null,2)}</pre><label class="block">Contenido combinado<textarea class="block w-full rounded-lg border p-2 font-mono text-xs" rows="5" bind:value={merged}></textarea></label><div class="flex flex-wrap gap-2"><button type="button" disabled={busy} onclick={()=>decide('remote')} class="rounded-lg border px-3 py-2">Conservar central</button><button type="button" disabled={busy} onclick={()=>decide('local')} class="rounded-lg border px-3 py-2">Aceptar propuesta</button><button type="button" disabled={busy} onclick={()=>decide('merge')} class="rounded-lg bg-teal-800 text-white px-3 py-2">Confirmar combinación</button></div></div>{/if}
    {/if}</article>
  {/each}
  {#if cursor}<button type="button" disabled={busy} class="text-teal-800 underline text-sm" onclick={()=>load(true)}>Cargar más</button>{/if}

@@ -8,7 +8,10 @@ const fail=(status,error)=>new Response(JSON.stringify({error}),{status,headers}
 // Native pilot: no browser cookies, no new accounts, no public writes to projects.
 const nativeRead = new RegExp('^/v1/(?:me|devices/'+safeId+'/projects(?:/'+safeId+'/changes)?)$');
 const nativeOperation = new RegExp('^/v1/devices/'+safeId+'/operations$');
-const adminRead = new RegExp('^/v1/admin/(?:conflicts|projects/'+safeId+'/backups/'+safeId+'/preview)$');
+const adminRead = new RegExp('^/v1/(?:admin/(?:members|conflicts|projects/'+safeId+'/backups/'+safeId+'/preview)|projects/'+safeId+'/assignments)$');
+const projectCreate = '/v1/projects';
+const adminPut = new RegExp('^/v1/(?:admin/members/'+safeId+'|projects/'+safeId+'/assignments/'+safeId+')$');
+const adminDelete = new RegExp('^/v1/projects/'+safeId+'/assignments/'+safeId+'$');
 const adminPost = new RegExp('^/v1/admin/(?:conflicts/[1-9][0-9]{0,15}/resolve|projects/'+safeId+'/backups/'+safeId+')$');
 const nativeWrite = new Set(['/v1/devices','/v1/activation/challenge','/v1/activation/complete']);
 const bearer = token=>typeof token==='string'&&token.length<=4103&&/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
@@ -85,9 +88,10 @@ export async function onRequest({request,env}){
   const origin=request.headers.get('Origin');
   if(origin&&origin!==url.origin)return fail(403,'Origen no autorizado');
   const path=url.pathname.slice('/api/studio'.length);
-  const adminOnly=adminRead.test(path)||adminPost.test(path);
-  if(request.method!=='GET'&&!(request.method==='POST'&&adminPost.test(path)&&!url.search))return fail(405,'Método no habilitado');
-  if(!url.pathname.startsWith('/api/studio/')||!(request.method==='GET'&&(permitted.test(path)||adminRead.test(path))||request.method==='POST'&&adminPost.test(path))||url.search.length>1024)return fail(404,'Ruta no disponible');
+  const adminMutation=!url.search&&(request.method==='POST'&&(adminPost.test(path)||path===projectCreate)||request.method==='PUT'&&adminPut.test(path)||request.method==='DELETE'&&adminDelete.test(path));
+  const adminOnly=adminRead.test(path)||adminMutation;
+  if(request.method!=='GET'&&!adminMutation)return fail(405,'Método no habilitado');
+  if(!url.pathname.startsWith('/api/studio/')||!(request.method==='GET'&&(permitted.test(path)||adminRead.test(path))||adminMutation)||url.search.length>1024)return fail(404,'Ruta no disponible');
   const authorization=request.headers.get('Authorization')||'';
   if(!/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(authorization)||authorization.length>4103)return fail(401,'Debes iniciar sesión');
   if(!env?.STUDIO_API||!env?.ADMIN_SESSION_API)return fail(503,'Servicio Studio no configurado');
@@ -99,7 +103,7 @@ export async function onRequest({request,env}){
     if(!staff||!['admin','operator'].includes(staff.role))return fail(403,'Acceso de personal no autorizado');
     if(adminOnly&&staff.role!=='admin')return fail(403,'Solo administrador');
     let payload;
-    if(request.method==='POST'){try{payload=await smallJson(request)}catch{return fail(400,'Solicitud inválida')}}
+    if(['POST','PUT'].includes(request.method)){try{payload=await smallJson(request)}catch{return fail(400,'Solicitud inválida')}}
     const upstream=await env.STUDIO_API.fetch(new Request('https://studio.internal'+path+url.search,{method:request.method,headers:{Authorization:authorization,Accept:'application/json','Content-Type':'application/json'},body:payload===undefined?undefined:JSON.stringify(payload),redirect:'manual'}));
     if(upstream.status>=300&&upstream.status<400)return fail(502,'Respuesta de Studio inválida');
     if(!upstream.headers.get('content-type')?.includes('application/json'))return fail(502,'Respuesta de Studio inválida');
