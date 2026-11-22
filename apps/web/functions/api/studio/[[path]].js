@@ -10,9 +10,10 @@ const nativeRead = new RegExp('^/v1/(?:me|devices/'+safeId+'/projects(?:/'+safeI
 const nativeOperation = new RegExp('^/v1/devices/'+safeId+'/operations$');
 const adminRead = new RegExp('^/v1/(?:admin/(?:members|conflicts|projects/'+safeId+'/backups/'+safeId+'/preview)|projects/'+safeId+'/assignments)$');
 const projectCreate = '/v1/projects';
+const publicationList = '/v1/publication-proposals';
 const adminPut = new RegExp('^/v1/(?:admin/members/'+safeId+'|projects/'+safeId+'/assignments/'+safeId+')$');
 const adminDelete = new RegExp('^/v1/projects/'+safeId+'/assignments/'+safeId+'$');
-const adminPost = new RegExp('^/v1/admin/(?:conflicts/[1-9][0-9]{0,15}/resolve|projects/'+safeId+'/backups/'+safeId+')$');
+const adminPost = new RegExp('^/v1/admin/(?:conflicts/[1-9][0-9]{0,15}/resolve|projects/'+safeId+'/backups/'+safeId+'|publication-proposals/'+safeId+'/decision)$');
 const nativeWrite = new Set(['/v1/devices','/v1/activation/challenge','/v1/activation/complete']);
 const bearer = token=>typeof token==='string'&&token.length<=4103&&/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
 async function smallJson(request){
@@ -88,10 +89,10 @@ export async function onRequest({request,env}){
   const origin=request.headers.get('Origin');
   if(origin&&origin!==url.origin)return fail(403,'Origen no autorizado');
   const path=url.pathname.slice('/api/studio'.length);
-  const adminMutation=!url.search&&(request.method==='POST'&&(adminPost.test(path)||path===projectCreate)||request.method==='PUT'&&adminPut.test(path)||request.method==='DELETE'&&adminDelete.test(path));
-  const adminOnly=adminRead.test(path)||adminMutation;
+  const adminMutation=!url.search&&(request.method==='POST'&&(adminPost.test(path)||path===projectCreate||path===publicationList)||request.method==='PUT'&&adminPut.test(path)||request.method==='DELETE'&&adminDelete.test(path));
+  const adminOnly=adminRead.test(path)||(adminMutation&&path!==publicationList);
   if(request.method!=='GET'&&!adminMutation)return fail(405,'Método no habilitado');
-  if(!url.pathname.startsWith('/api/studio/')||!(request.method==='GET'&&(permitted.test(path)||adminRead.test(path))||adminMutation)||url.search.length>1024)return fail(404,'Ruta no disponible');
+  if(!url.pathname.startsWith('/api/studio/')||!(request.method==='GET'&&(permitted.test(path)||adminRead.test(path)||path===publicationList)||adminMutation)||url.search.length>1024)return fail(404,'Ruta no disponible');
   const authorization=request.headers.get('Authorization')||'';
   if(!/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(authorization)||authorization.length>4103)return fail(401,'Debes iniciar sesión');
   if(!env?.STUDIO_API||!env?.ADMIN_SESSION_API)return fail(503,'Servicio Studio no configurado');
