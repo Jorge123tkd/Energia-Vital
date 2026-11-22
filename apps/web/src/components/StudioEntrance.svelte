@@ -1,17 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { apiRequest } from '../lib/api';
+  import StudioOperations from './StudioOperations.svelte';
   let {token}: {token:string} = $props();
   type Project = {id:string;name:string};
   type Product = {id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null};
   let busy=$state(false),ready=$state(false),error=$state(''),status=$state(''),projects=$state<Project[]>([]),products=$state<Product[]>([]);
   let search=$state(''),nextProject=$state<string|null>(null),catalogPage=$state(1),catalogMore=$state(false);
   let generation=0;
+  let isAdministrator=$state(false);
   const query=(path:string)=>apiRequest('/api/studio/v1/'+path,{headers:{Authorization:'Bearer '+token}});
   async function load(){
     const run=++generation;busy=true;ready=false;error='';status='';projects=[];products=[];nextProject=null;catalogMore=false;
     try{
-      await query('me');
+      const me=await query('me');
+      if(run!==generation)return;
+      isAdministrator=me.user?.role==='admin';
       const [p,c]=await Promise.all([query('projects'),query('catalog?page=1')]);
       if(run!==generation)return;
       projects=Array.isArray(p.projects)?p.projects:[];nextProject=p.next||null;
@@ -69,6 +73,7 @@
         <div class="flex gap-3 text-sm"><button type="button" disabled={busy||catalogPage===1} onclick={()=>find(catalogPage-1)} class="text-teal-800 disabled:opacity-40">Anterior</button><span>Página {catalogPage}</span><button type="button" disabled={busy||!catalogMore} onclick={()=>find(catalogPage+1)} class="text-teal-800 disabled:opacity-40">Siguiente</button></div>
       </section>
     </div>
+    {#if isAdministrator}<StudioOperations {token} {projects}/>{/if}
   {:else if !busy}
     <section class="rounded-xl bg-white border p-5 text-sm text-slate-600">La versión completa de ingeniería, sincronización y respaldos se habilitará tras las pruebas de seguridad. No se crean cuentas nuevas desde aquí.</section>
   {/if}
