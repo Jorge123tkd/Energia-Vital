@@ -68,7 +68,7 @@ test('enterprise bridge confines backups and conflict reviews to central admin',
  assert.equal(seen.at(-1).method,'POST');
  assert.equal((await call('/v1/admin/projects/p/backups/b/preview')).status,200);
  assert.equal((await call('/v1/admin/conflicts/1/resolve','POST',{choice:'remote'})).status,200);
- assert.equal((await call('/v1/projects/p/sections/task-1','PUT',{})).status,405);
+ assert.equal((await call('/v1/projects/p/sections/task-1','PUT',{})).status,200); // Bridge permits typed row; Studio independently validates its payload and gate.
 });
 
 test('project and member administration uses exact allowed methods and role',async()=>{
