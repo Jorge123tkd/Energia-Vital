@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {onRequest} from '../functions/api/studio/[[path]].js';
+test('Pages routes include only the supported Studio and session bridges', () => {
+ const config=JSON.parse(readFileSync(new URL('../public/_routes.json',import.meta.url),'utf8'));
+ assert.equal(config.version,1);
+ assert.deepEqual(config.include.sort(),['/api/admin-session/*','/api/studio/*'].sort());
+ assert.deepEqual(config.exclude,[]);
+});
 const origin='https://bnergiv.com';
 const auth='Bearer fake.header.signature';
 test('Studio bridge read-only and fail closed',async()=>{
