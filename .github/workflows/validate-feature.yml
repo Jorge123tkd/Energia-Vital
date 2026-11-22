@@ -44,6 +44,7 @@ jobs:
           python3 apps/api/tests/warehouse-ledger.py
           python3 apps/api/tests/warehouse-brigade-links.py
           python3 apps/api/tests/procurement.py
+          python3 apps/api/tests/business-finance.py
 
       - name: Validar TypeScript API
         run: npm run typecheck --workspace=apps/api

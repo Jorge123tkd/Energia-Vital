@@ -1,0 +1,8 @@
+# Economía empresarial Bonaire — piloto operativo, no contabilidad oficial
+La migración 028 (aditiva, no desplegada) separa:
+- Contrato aceptado y comprobado manualmente, referencia a una cotización interna aprobada y vigente en la fecha de aceptación. No genera un contrato automáticamente; piloto sin revisiones posteriores.
+- Cobros de referencia USD: reutiliza exclusivamente request_payment_reports; distingue informado de verified_manual, calcula pendiente y exceso. No contabiliza anticipos propuestos, fondos declarados ni duplica cobros. No constituye conciliación bancaria.
+- Compromisos de compra pendientes de factura: pedidos aprobados, agregados por moneda. Factura/obligación documentada cancela su compromiso en la vista, no se suman ambos.
+- Obligaciones a proveedores: bienes, flete, aduana, seguro, instalación, mano de obra y otros. Monedas originales separadas; piloto admite una factura de bienes por pedido, importe exacto y moneda del pedido, y demás gastos asociados explícitamente al proyecto. Facturas parciales, pagos anticipados sin factura, notas de crédito, anulaciones y distribución de costos requieren ampliación.
+- Pagos manualmente documentados a proveedores en moneda de la obligación: no superar saldo, referencia única, historial inmutable. No autoriza transferencias ni verifica bancos.
+No es un cálculo completo de utilidad: inventario sin consumir no es costo de venta y falta costeo por lote/consumo, FX documentado, impuestos, gastos generales e ingresos devengados. No sumar monedas ni tratar pagos como gastos nuevamente. Mantener privado y gate cerrado hasta integración. Las pruebas son SQLite ficticio y no afectan D1 remota. Los permisos del seguimiento comercial existente no se amplían a los módulos empresariales.
