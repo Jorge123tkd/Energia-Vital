@@ -12,6 +12,7 @@ import { adminRoutes } from './routes/admin';
 import { adminCustomersRoutes } from './routes/admin-customers';
 import { brigadeRoutes } from './routes/brigades';
 import { brigadeWorkRoutes } from './routes/brigade-work';
+import { warehouseRoutes } from './routes/warehouse';
 import { dossierRoutes } from './routes/dossiers';
 import { quoteRoutes } from './routes/quotes';
 import { financeRoutes } from './routes/finance';
@@ -84,6 +85,7 @@ export default {
     app.route('/api/admin-customers', adminCustomersRoutes);
     app.route('/api/brigades', brigadeRoutes);
     app.route('/api/brigade-work', brigadeWorkRoutes);
+    app.route('/api/warehouse', warehouseRoutes);
     app.route('/api/dossiers', dossierRoutes);
     app.route('/api/quotes', quoteRoutes);
     app.route('/api/finance', financeRoutes);

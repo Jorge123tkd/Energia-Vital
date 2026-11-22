@@ -205,6 +205,8 @@ export interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   ENVIRONMENT: string;
+  /** Gate del almacén empresarial: desactivado si no es true. */
+  WAREHOUSE_ENABLED?: string;
   /** Solo QA: dominio de equipo Cloudflare Access, sin https:// */
   QA_ACCESS_TEAM_DOMAIN?: string;
   /** Solo QA: Audience Tag de la aplicación Access del Worker. */
