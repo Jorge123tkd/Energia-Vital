@@ -91,6 +91,11 @@ $loginProbe=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/a
 if($LASTEXITCODE -ne 0 -or "$loginProbe".Trim() -ne '401'){throw "Pages desplegado pero login sin credenciales devolvio $loginProbe, se esperaba 401. Revisar llamada al Worker; no considerar publicacion validada."}
 $publicLoginProbe=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/api/admin-session/sign-in" -H "Origin: $site" -H "Content-Type: application/json" --data '{}'
 if($LASTEXITCODE -ne 0 -or "$publicLoginProbe".Trim() -ne '401'){throw "Pages desplegado pero login publico sin credenciales devolvio $publicLoginProbe, se esperaba 401. Revisar llamada al Worker."}
+# Pages debe ejecutar ambas Functions de Studio; sin token devuelven 401, no HTML de la SPA.
+$studioAnon=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/api/studio/v1/me"
+if($LASTEXITCODE -ne 0 -or "$studioAnon".Trim() -ne '401'){throw "Puente Studio web devolvió $studioAnon sin token, se esperaba 401. Comprobar _routes.json y Pages Functions."}
+$studioNativeAnon=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/api/studio/native/v1/me"
+if($LASTEXITCODE -ne 0 -or "$studioNativeAnon".Trim() -ne '401'){throw "Puente Studio nativo devolvió $studioNativeAnon sin token, se esperaba 401. Comprobar _routes.json."}
 $foreign=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/api/admin-session/refresh" -H 'Origin: https://invalid.example' -H 'Content-Type: application/json' --data '{}'
 if($LASTEXITCODE -ne 0 -or "$foreign".Trim() -ne '403'){throw "Pages desplegado pero control de origen devolvio $foreign, se esperaba 403."}
 $deepLink=curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/admin/citas"
