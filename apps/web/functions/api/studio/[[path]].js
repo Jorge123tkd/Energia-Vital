@@ -76,6 +76,7 @@ async function nativeRequest(request,env,url,path){
 export async function onRequest({request,env}){
   const url=new URL(request.url);
   if(!allowedHosts.has(url.origin))return fail(403,'Origen no autorizado');
+  if(url.pathname.startsWith('/api/studio/native/'))return nativeRequest(request,env,url,url.pathname.slice('/api/studio/native'.length));
   if(request.method!=='GET')return fail(405,'Método no habilitado');
   const site=request.headers.get('Sec-Fetch-Site');
   if(site&&site!=='same-origin'&&site!=='none')return fail(403,'Origen no autorizado');
