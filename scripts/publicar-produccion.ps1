@@ -46,6 +46,8 @@ node apps/web/tests/auth-session.cjs
 if($LASTEXITCODE -ne 0){throw 'Pruebas de sesiones fallaron. NO desplegar.'}
 node apps/web/tests/admin-browser-session.cjs
 if($LASTEXITCODE -ne 0){throw 'Pruebas de navegacion y cookie fallaron. NO desplegar.'}
+node apps/web/tests/studio-bridge.test.mjs
+if($LASTEXITCODE -ne 0){throw 'Prueba del puente Studio o _routes.json falló. NO desplegar.'}
 # Variables del build solo en este proceso PowerShell; no escribir secretos ni .env.
 $env:VITE_API_URL=$apiUrl
 $env:VITE_QA_MODE='false'
