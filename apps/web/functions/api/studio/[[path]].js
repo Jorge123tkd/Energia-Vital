@@ -11,6 +11,7 @@ const nativeOperation = new RegExp('^/v1/devices/'+safeId+'/operations$');
 const adminRead = new RegExp('^/v1/(?:admin/(?:members|conflicts|projects/'+safeId+'/backups/'+safeId+'/preview)|projects/'+safeId+'/assignments)$');
 const projectCreate = '/v1/projects';
 const publicationList = '/v1/publication-proposals';
+const initialAdmin = '/v1/bootstrap/initial-admin';
 const adminPut = new RegExp('^/v1/(?:admin/members/'+safeId+'|projects/'+safeId+'/assignments/'+safeId+')$');
 const adminDelete = new RegExp('^/v1/projects/'+safeId+'/assignments/'+safeId+'$');
 const typedRowPut = new RegExp('^/v1/projects/'+safeId+'/sections/(?:task-[A-Za-z0-9_-]{1,80}|material-[A-Za-z0-9_-]{1,75})$');
@@ -90,7 +91,7 @@ export async function onRequest({request,env}){
   const origin=request.headers.get('Origin');
   if(origin&&origin!==url.origin)return fail(403,'Origen no autorizado');
   const path=url.pathname.slice('/api/studio'.length);
-  const adminMutation=!url.search&&(request.method==='POST'&&(adminPost.test(path)||path===projectCreate||path===publicationList)||request.method==='PUT'&&adminPut.test(path)||request.method==='DELETE'&&adminDelete.test(path));
+  const adminMutation=!url.search&&(request.method==='POST'&&(adminPost.test(path)||path===projectCreate||path===publicationList||path===initialAdmin)||request.method==='PUT'&&adminPut.test(path)||request.method==='DELETE'&&adminDelete.test(path));
   const staffRowMutation=!url.search&&request.method==='PUT'&&typedRowPut.test(path);
   const adminOnly=adminRead.test(path)||(adminMutation&&path!==publicationList);
   if(request.method!=='GET'&&!adminMutation&&!staffRowMutation)return fail(405,'Método no habilitado');
