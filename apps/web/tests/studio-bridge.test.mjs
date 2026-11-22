@@ -14,6 +14,15 @@ test('Studio service bindings exist only in Pages production configuration', () 
  assert.match(config,/\[\[env\.production\.services\]\]\s*binding\s*=\s*"STUDIO_API"\s*service\s*=\s*"evpro-sync-api"/);
  assert.doesNotMatch(config,/\[\[env\.preview\.services\]\]/);
 });
+test('release refuses Pages preview deployment and verifies actual production branch',()=>{
+ const workflow=readFileSync(new URL('../../../.github/workflows/deploy.yml',import.meta.url),'utf8');
+ assert.ok(workflow.includes('id: pages-production'));
+ assert.ok(workflow.includes('/pages/projects/energia-vital-web'));
+ assert.ok(workflow.includes('production_branch'));
+ assert.ok(workflow.includes('"$branch" != "$GITHUB_REF_NAME"'));
+ assert.ok(workflow.includes('--branch "${{ steps.pages-production.outputs.branch }}"'));
+ assert.ok(workflow.includes("github.ref == 'refs/heads/main'"));
+});
 const origin='https://bnergiv.com';
 const auth='Bearer fake.header.signature';
 test('Studio bridge read-only and fail closed',async()=>{
