@@ -8,6 +8,12 @@ test('Pages routes include only the supported Studio and session bridges', () =>
  assert.deepEqual(config.include.sort(),['/api/admin-session/*','/api/studio/*'].sort());
  assert.deepEqual(config.exclude,[]);
 });
+test('Studio service bindings exist only in Pages production configuration', () => {
+ const config=readFileSync(new URL('../wrangler.toml',import.meta.url),'utf8');
+ assert.match(config,/\[\[env\.production\.services\]\]\s*binding\s*=\s*"ADMIN_SESSION_API"\s*service\s*=\s*"energia-vital-api"/);
+ assert.match(config,/\[\[env\.production\.services\]\]\s*binding\s*=\s*"STUDIO_API"\s*service\s*=\s*"evpro-sync-api"/);
+ assert.doesNotMatch(config,/\[\[env\.preview\.services\]\]/);
+});
 const origin='https://bnergiv.com';
 const auth='Bearer fake.header.signature';
 test('Studio bridge read-only and fail closed',async()=>{
