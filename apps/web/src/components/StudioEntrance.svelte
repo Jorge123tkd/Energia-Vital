@@ -4,17 +4,18 @@
   import StudioOperations from './StudioOperations.svelte';
   import StudioManagement from './StudioManagement.svelte';
   import StudioProjectReader from './StudioProjectReader.svelte';
-  let {token}: {token:string} = $props();
+  let {token,canBootstrap=false}: {token:string;canBootstrap?:boolean} = $props();
   type Project = {id:string;name:string};
   type Product = {id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null};
   let busy=$state(false),ready=$state(false),error=$state(''),status=$state(''),projects=$state<Project[]>([]),products=$state<Product[]>([]);
   let search=$state(''),nextProject=$state<string|null>(null),catalogPage=$state(1),catalogMore=$state(false);
   let generation=0;
   let isAdministrator=$state(false);
+  let errorCode=$state(0);
   let selectedProject=$state<Project|null>(null);
   const query=(path:string)=>apiRequest('/api/studio/v1/'+path,{headers:{Authorization:'Bearer '+token}});
   async function load(){
-    const run=++generation;busy=true;ready=false;error='';status='';projects=[];products=[];nextProject=null;catalogMore=false;selectedProject=null;
+    const run=++generation;busy=true;ready=false;error='';errorCode=0;status='';projects=[];products=[];nextProject=null;catalogMore=false;selectedProject=null;
     try{
       const me=await query('me');
       if(run!==generation)return;
@@ -27,8 +28,20 @@
     }catch(e){
       if(run!==generation)return;
       const code=(e as Error&{status?:number}).status;
+      errorCode=code||0;
       error=code===503?'Studio está en preparación o temporalmente desconectado.':code===403?'Tu cuenta aún no tiene autorización para EV Pro Studio.':code===401?'Tu sesión ha vencido. Vuelve a iniciar sesión.':'No se pudo verificar Studio.';
     }finally{if(run===generation)busy=false;}
+  }
+  async function initialAdmin(){
+    if(!canBootstrap||busy)return;
+    busy=true;error='';
+    try{
+      await apiRequest('/api/studio/v1/bootstrap/initial-admin',{method:'POST',body:'{}',headers:{Authorization:'Bearer '+token}});
+      await load();
+    }catch(e){
+      const code=(e as Error&{status?:number}).status;
+      error=code===503?'El alta inicial de Studio todavía no ha sido habilitada por la administración de infraestructura.':code===409?'Ya existe un administrador inicial; solicita acceso a la administración actual.':'No fue posible registrar el primer administrador con esta sesión.';
+    }finally{busy=false}
   }
   async function find(page=1){
     if(!ready||busy)return;
@@ -57,6 +70,7 @@
     <button type="button" onclick={load} disabled={busy} class="rounded-xl bg-teal-700 text-white font-semibold px-4 py-3 disabled:opacity-50">{busy?'Verificando…':'Verificar conexión'}</button>
   </header>
   {#if error}<p role="alert" class="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 p-4 text-sm">{error}</p>{/if}
+  {#if errorCode===403&&canBootstrap}<button type="button" disabled={busy} onclick={initialAdmin} class="rounded-lg border border-teal-300 p-3 text-sm font-semibold text-teal-800">Registrar primer administrador de Studio</button><p class="text-xs text-slate-500">Disponible únicamente durante el aprovisionamiento autorizado, no crea otra cuenta.</p>{/if}
   {#if ready}
     <p role="status" class="text-sm text-teal-800 font-semibold">{status}</p>
     <div class="grid gap-4 lg:grid-cols-2">
