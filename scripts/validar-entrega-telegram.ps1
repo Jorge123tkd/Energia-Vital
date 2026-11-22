@@ -22,6 +22,7 @@ Test-Step 'Typecheck API' {npm run typecheck --workspace=apps/api}
 Test-Step 'Typecheck frontend' {npm run typecheck --workspace=apps/web}
 Test-Step 'Sesiones autenticadas' {node apps/web/tests/auth-session.cjs}
 Test-Step 'Rutas y cookies administrativas' {node apps/web/tests/admin-browser-session.cjs}
+Test-Step 'Puente Studio y rutas de Pages' {node apps/web/tests/studio-bridge.test.mjs}
 if (Get-Command python -ErrorAction SilentlyContinue) {
   Test-Step 'Migraciones con datos ficticios en memoria' {python apps/api/tests/migration-preservation.py}
 } elseif (Get-Command py -ErrorAction SilentlyContinue) {
