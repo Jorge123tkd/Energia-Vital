@@ -94,6 +94,34 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      # Enforce Pages production branch BEFORE touching the production API Worker.
+      - name: Verificar rama real de producción de Cloudflare Pages (solo lectura)
+        id: check-pages-production
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --max-time 20 \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/energia-vital-web")"
+          branch="$(printf '%s' "$response" | node -e '
+            let raw="";
+            process.stdin.on("data",x=>raw+=x).on("end",()=>{
+              try {
+                const p=JSON.parse(raw);
+                const b=p?.result?.production_branch;
+                if(p.success!==true||typeof b!=="string"||!/^[A-Za-z0-9._/-]{1,100}$/.test(b))process.exit(1);
+                process.stdout.write(b);
+              } catch {process.exit(1);}
+            });
+          ')"
+          if [[ "$branch" != "$GITHUB_REF_NAME" ]]; then
+            echo "Bloqueado: la rama de producción de Pages no coincide con la rama aprobada en GitHub." >&2
+            exit 1
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
       - name: Confirmar esquema D1 remoto antes de publicar (solo SELECT)
         working-directory: apps/api
         shell: bash
