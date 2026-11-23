@@ -3,8 +3,7 @@ import {createHash} from 'node:crypto'
 import assert from 'node:assert/strict'
 import {readFileSync,writeFileSync,statSync} from 'node:fs'
 import {resolve} from 'node:path'
-import {fileURLToPath} from 'node:url'
-const root=fileURLToPath(new URL('../',import.meta.url))
+import {fileURLToPath,pathToFileURL} from 'node:url'
 function verify(file){
  const stats=statSync(file)
  assert(stats.isFile()&&stats.size>0&&stats.size<100*1024*1024,'Artefacto vacío o demasiado grande')
@@ -28,6 +27,7 @@ function main(){
  const built=verify(bundle)
  assert(built.bytes>1000,'Pages Functions no se compilaron correctamente')
  const generated=verify(compiledRoutes)
+ if(process.env.GITHUB_ACTIONS==='true')assert.equal(process.env.GITHUB_REF_NAME,'feat/cloudflare-customer-accounts-hardening','La CI de preparación solo puede usar la rama de desarrollo autorizada')
  const gitSha=process.env.GITHUB_SHA||'no-identificado'
  assert(gitSha==='no-identificado'||/^[a-f0-9]{40}$/i.test(gitSha),'Commit CI inválido')
  const manifest={
@@ -53,6 +53,6 @@ function main(){
  console.log('[OK] Manifiesto de paquete Pages generado sin datos personales ni secretos.')
  console.log('[SIN PUBLICAR] Commit '+gitSha+'; Functions y _routes.json comprobados; producción sin cambios.')
 }
-if(process.argv[1]&&import.meta.url===new URL('file://'+resolve(process.argv[1])).href){
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
  try{main()}catch{console.error('[BLOQUEADO] No se generó manifiesto de Pages. Revisar artefactos de CI.');process.exitCode=1}
 }
