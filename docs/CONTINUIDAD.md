@@ -1,5 +1,9 @@
 # Continuidad de Bonaire
 
+## 23/11/2026 — preflight Pages obligatorio antes de tocar producción
+Corrección del flujo `.github/workflows/deploy.yml`: la verificación de la rama real de producción de Cloudflare Pages se ejecuta **antes de publicar el Worker API** y se repite antes de publicar Pages. Previamente el chequeo solo se hacía en `deploy-web` después de desplegar `deploy-api`, con riesgo de despliegue parcial si la rama de Pages era distinta. Ahora ambas etapas fallan cerradas ante respuesta errónea de la API, token sin permiso o rama distinta de la de la ejecución manual. `apps/web/tests/studio-bridge.test.mjs` verifica el orden de los pasos en el YAML. No se ha llamado a Cloudflare ni se ha desplegado nada en producción. El despliegue sigue siendo explícitamente manual, condicionado a revisión de migraciones y respaldo real.
+
+
 ## 22/11/2026 — comprobación de Production Branch antes de publicar Pages
 El flujo de publicación manual `.github/workflows/deploy.yml` incorpora una consulta **GET de solo lectura** a la API de Cloudflare Pages para obtener `result.production_branch` del proyecto `energia-vital-web`. Comprueba que esa rama coincide con `GITHUB_REF_NAME` (rama aprobada de la ejecución) y entrega el nombre verificado al comando `wrangler pages deploy dist --project-name energia-vital-web --branch ...`. Si hay error de permisos, resultado inválido o diferencia de ramas, el job se detiene antes de publicar Pages. No usar una rama supuesta ni una vista previa como producción. Es posible que el token necesite permiso `Pages Read` para esta consulta; no compartirlo en texto, archivo ni incidencia.
 La prueba `apps/web/tests/studio-bridge.test.mjs` impide que desaparezca este control. El script PowerShell independiente sigue exigiendo que un operador escriba la rama real de producción y la confirmación de publicación. Este cambio de GitHub no publicó la web, no activó Studio ni aplicó migraciones.
