@@ -54,5 +54,5 @@ function main(){
  console.log('[SIN PUBLICAR] Commit '+gitSha+'; Functions y _routes.json comprobados; producción sin cambios.')
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
- try{main()}catch{console.error('[BLOQUEADO] No se generó manifiesto de Pages. Revisar artefactos de CI.');process.exitCode=1}
+ try{main()}catch(error){const detail=error instanceof Error ? error.message : 'Excepción no identificada';console.error('[BLOQUEADO] Manifiesto Pages: '+String(detail).slice(0,350));process.exitCode=1}
 }
