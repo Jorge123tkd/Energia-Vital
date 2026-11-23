@@ -53,6 +53,8 @@ $env:VITE_API_URL=$apiUrl
 $env:VITE_QA_MODE='false'
 npm run build --workspace=apps/web
 if($LASTEXITCODE -ne 0){throw 'Build frontend falló. NO desplegar.'}
+node apps/web/tests/pages-build-output.mjs
+if($LASTEXITCODE -ne 0){throw 'Artefacto Pages sin puente Studio o _routes.json. NO desplegar.'}
 if(!(Test-Path (Join-Path $webDir 'dist/index.html'))){throw 'Falta dist/index.html.'}
 if(!(Test-Path (Join-Path $webDir 'dist/telegram-registro.html'))){throw 'Falta formulario Telegram compilado. NO desplegar.'}
 $mainConfig=Get-Content (Join-Path $webDir 'wrangler.toml') -Raw
