@@ -1,3 +1,29 @@
+## 23/11/2026 — auditoría real Studio + prevención de fallback HTML en Pages
+La auditoría autenticada de Studio/Bonaire informó **17 OK, 3 REVISAR, 5 PENDIENTE, 2 ERROR**.
+Los dos errores son `/api/studio/v1/me` y `/api/studio/native/v1/me`,
+que devuelven **200 HTML** en lugar de **401 JSON** sin credenciales.
+Eso es compatible con el fallback de la SPA por Functions ausentes o no enrutadas
+en el despliegue actual; no demuestra acceso a datos ni identifica por sí mismo
+si el problema es de artefactos o de despliegue.
+
+El código existente ya define `functions/api/studio/[[path]].js`, los bindings
+solo de producción y `public/_routes.json` con `/api/studio/*`.
+Se agregó `apps/web/tests/pages-build-output.mjs` que valida el manifiesto
+**real compilado** `dist/_routes.json`, `dist/index.html`, función y configuración.
+Este guard se integra en QA, checks del workflow manual, etapa de Pages previa a
+publicar y script PowerShell. El job manual de Pages además compila las
+Functions a un artefacto temporal **sin publicar**. No se cambió Cloudflare.
+
+**Bloqueos de producción:** confirmar primero respaldos cifrados independientes
+de D1/R2 con restauración y políticas de retención; comprobar rama real de Pages
+y condiciones de despliegue. `deploy.yml` solo publica mediante ejecución
+manual en `main` y exige concordancia con la rama real de Pages; esta mejora
+de código está en `feat/cloudflare-customer-accounts-hardening` y no supone
+autorización para saltarse esa restricción. Cuando un cambio sea aprobado y
+publicado mediante el flujo vigente, ambos endpoints anónimos deben responder
+`401` con JSON, sin HTML. No habilitar Studio ni migrar D1 productiva por
+esta auditoría.
+
 # Continuidad de Bonaire
 
 ## 23/11/2026 — preflight Pages obligatorio antes de tocar producción
