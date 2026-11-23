@@ -55,6 +55,8 @@ jobs:
         run: npm run typecheck --workspace=apps/web
       - name: Construir frontend
         run: npm run build --workspace=apps/web
+      - name: Verificar artefacto Pages generado y rutas protegidas
+        run: node apps/web/tests/pages-build-output.mjs
       - name: Probar renovación y cierre de sesiones en navegador simulado
         run: node apps/web/tests/auth-session.cjs
       - name: Ensayo de preservación de datos históricos ficticios (sin Cloudflare real)
@@ -187,6 +189,11 @@ jobs:
         run: npm run build --workspace=apps/web
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+      - name: Rechazar build Pages sin _routes.json de Studio
+        run: node apps/web/tests/pages-build-output.mjs
+      - name: Compilar Pages Functions sin publicar
+        working-directory: apps/web
+        run: npx wrangler pages functions build functions --outfile "$RUNNER_TEMP/bonaire-pages-functions.js" --output-routes-path "$RUNNER_TEMP/bonaire-pages-routes.json"
       - name: Probar los puentes protegidos y bindings Studio antes de publicar
         run: node apps/web/tests/studio-bridge.test.mjs
       - name: Verificar rama real de producción de Cloudflare Pages (solo lectura)
