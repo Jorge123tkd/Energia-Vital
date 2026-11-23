@@ -18,7 +18,7 @@ export function verifySourceRoutes(raw){
 }
 function main(){
  assert.equal(process.argv.length,5,'Uso: node apps/web/tests/pages-package-preflight.mjs RUTA_BUNDLE RUTA_ROUTING_GENERADO SALIDA_JSON')
- const [bundle,compiledRoutes,output]=process.argv.slice(2).map(resolve)
+ const [bundle,compiledRoutes,output]=process.argv.slice(2).map(value=>resolve(value))
  const compiled=JSON.parse(readFileSync(compiledRoutes,'utf8'))
  assert(compiled&&typeof compiled==='object'&&!Array.isArray(compiled),'Wrangler no generó rutas válidas')
  const sourceRouteFile=new URL('../dist/_routes.json',import.meta.url)
