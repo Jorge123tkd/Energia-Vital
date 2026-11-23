@@ -21,6 +21,12 @@ test('release refuses Pages preview deployment and verifies actual production br
  assert.ok(workflow.includes('production_branch'));
  assert.ok(workflow.includes('"$branch" != "$GITHUB_REF_NAME"'));
  assert.ok(workflow.includes('--branch "${{ steps.pages-production.outputs.branch }}"'));
+ const api=workflow.slice(workflow.indexOf('  deploy-api:'),workflow.indexOf('  deploy-web:'));
+ const web=workflow.slice(workflow.indexOf('  deploy-web:'));
+ assert.ok(api.includes('id: check-pages-production'),'La validación previa debe estar en deploy-api');
+ assert.ok(api.indexOf('id: check-pages-production') < api.indexOf('run: npx wrangler deploy'),'No desplegar Worker antes de comprobar Pages');
+ assert.ok(web.includes('id: pages-production'),'Comprobar de nuevo la rama antes de desplegar Pages');
+ assert.ok(web.indexOf('id: pages-production') < web.indexOf('run: npx wrangler pages deploy'),'Comprobar Pages antes de publicarlo');
  assert.ok(workflow.includes("github.ref == 'refs/heads/main'"));
 });
 const origin='https://bnergiv.com';
