@@ -39,6 +39,8 @@ jobs:
           npm run typecheck --workspace=apps/web
       - name: Compilar frontend
         run: npm run build --workspace=apps/web
+      - name: Revisar _routes.json en dist para Studio y sesiones
+        run: node apps/web/tests/pages-build-output.mjs
       - name: Probar protecciones de sesion
         run: |
           node apps/web/tests/auth-session.cjs
