@@ -48,6 +48,15 @@ jobs:
           node apps/web/tests/studio-bridge.test.mjs
       - name: Compilar Pages Functions sin servidor
         working-directory: apps/web
-        run: npx wrangler pages functions build functions --outfile /tmp/bonaire-session.js --output-routes-path /tmp/bonaire-routes.json
+        run: npx wrangler pages functions build functions --outfile "$RUNNER_TEMP/bonaire-session.js" --output-routes-path "$RUNNER_TEMP/bonaire-routes.json"
+      - name: Verificar y registrar paquete Pages, sin publicación
+        run: node apps/web/tests/pages-package-preflight.mjs "$RUNNER_TEMP/bonaire-session.js" "$RUNNER_TEMP/bonaire-routes.json" "$RUNNER_TEMP/bonaire-pages-preflight.json"
+      - name: Conservar manifiesto de prepublicación (solo hashes, sin binarios ni secretos)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bonaire-pages-preflight-${{ github.sha }}
+          path: ${{ runner.temp }}/bonaire-pages-preflight.json
+          retention-days: 14
+          if-no-files-found: error
       - name: Ensayar migraciones en memoria con registros ficticios
         run: python3 apps/api/tests/migration-preservation.py
