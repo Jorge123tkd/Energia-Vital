@@ -1,0 +1,13 @@
+{
+  "repository": "Jorge123tkd/EV-Pro-Estudio",
+  "commit": "5ef685c119f45e418d904ad8a1fd4f60d3cd1587",
+  "files": {
+    "app.js": "2b19fd50541d529419af71dda741a81064be985d",
+    "engine.js": "c43ee1289b7af2095f4c9b160196077ebf0cd33c",
+    "library.js": "1ad12efb40dfb8799849e1685404466679437995",
+    "style.css": "daac322e32440f2f7a15bc869f21fe262fbc231a",
+    "favicon.svg": "ce6452ae86f4d2c1fd5042079ea4c98df2005651",
+    "updater.js": "e9bc2ae84010b32032ed4510dafea3b2fe3f88e0",
+    "index.html": "0d3fb7b6b1d40affe37655322c1b9ffe524c9639"
+  }
+}
