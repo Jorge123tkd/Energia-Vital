@@ -91,11 +91,12 @@ export async function onRequest({request,env}){
   const origin=request.headers.get('Origin');
   if(origin&&origin!==url.origin)return fail(403,'Origen no autorizado');
   const path=url.pathname.slice('/api/studio'.length);
+  const engineeringWorkspace=path==='/v1/engineering/workspace'&&!url.search&&['GET','PUT'].includes(request.method);
   const adminMutation=!url.search&&(request.method==='POST'&&(adminPost.test(path)||path===projectCreate||path===publicationList||path===initialAdmin)||request.method==='PUT'&&adminPut.test(path)||request.method==='DELETE'&&adminDelete.test(path));
   const staffRowMutation=!url.search&&request.method==='PUT'&&typedRowPut.test(path);
-  const adminOnly=adminRead.test(path)||(adminMutation&&path!==publicationList);
-  if(request.method!=='GET'&&!adminMutation&&!staffRowMutation)return fail(405,'Método no habilitado');
-  if(!url.pathname.startsWith('/api/studio/')||!(request.method==='GET'&&(permitted.test(path)||adminRead.test(path)||path===publicationList)||adminMutation||staffRowMutation)||url.search.length>1024)return fail(404,'Ruta no disponible');
+  const adminOnly=engineeringWorkspace||adminRead.test(path)||(adminMutation&&path!==publicationList);
+  if(request.method!=='GET'&&!adminMutation&&!staffRowMutation&&!engineeringWorkspace)return fail(405,'Método no habilitado');
+  if(!url.pathname.startsWith('/api/studio/')||!(request.method==='GET'&&(permitted.test(path)||adminRead.test(path)||path===publicationList)||adminMutation||staffRowMutation||engineeringWorkspace)||url.search.length>1024)return fail(404,'Ruta no disponible');
   const authorization=request.headers.get('Authorization')||'';
   if(!/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(authorization)||authorization.length>4103)return fail(401,'Debes iniciar sesión');
   if(!env?.STUDIO_API||!env?.ADMIN_SESSION_API)return fail(503,'Servicio Studio no configurado');
@@ -106,6 +107,16 @@ export async function onRequest({request,env}){
     const staff=(await auth.json()).user;
     if(!staff||!['admin','operator'].includes(staff.role))return fail(403,'Acceso de personal no autorizado');
     if(adminOnly&&staff.role!=='admin')return fail(403,'Solo administrador');
+    if(engineeringWorkspace){
+      // The Worker independently checks membership, account scope and revisions.
+      if(request.method==='PUT'&&!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json'))return fail(400,'Formato inválido');
+      if(Number(request.headers.get('Content-Length')||0)>8*1024*1024)return fail(413,'Espacio demasiado grande');
+      const upstream=await env.STUDIO_API.fetch(new Request('https://studio.internal'+path,{
+        method:request.method,headers:{Authorization:authorization,Accept:'application/json','Content-Type':'application/json'},
+        body:request.method==='PUT'?request.body:undefined,redirect:'manual'}));
+      if(upstream.status>=300&&upstream.status<400||!upstream.headers.get('content-type')?.includes('application/json'))return fail(502,'Respuesta de Studio inválida');
+      return new Response(upstream.body,{status:upstream.status,headers});
+    }
     let payload;
     if(['POST','PUT'].includes(request.method)){try{payload=await smallJson(request)}catch{return fail(400,'Solicitud inválida')}}
     const upstream=await env.STUDIO_API.fetch(new Request('https://studio.internal'+path+url.search,{method:request.method,headers:{Authorization:authorization,Accept:'application/json','Content-Type':'application/json'},body:payload===undefined?undefined:JSON.stringify(payload),redirect:'manual'}));
