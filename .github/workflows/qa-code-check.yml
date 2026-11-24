@@ -69,7 +69,7 @@ jobs:
           if ($parseErrors.Count -ne 0) { throw "Error de sintaxis en publicador Pages" }
           $src=Get-Content scripts/pages-publicacion-controlada.ps1 -Raw
           if ($src -match '[^\x00-\x7F]') { throw "El publicador para Windows PowerShell 5.1 debe usar solo caracteres ASCII" }
-          foreach($expected in @('RespaldoExternoVerificado','PUBLICAR_SOLO_PAGES_BONAIRE','migrations','pages deploy dist','--branch main','/api/studio/v1/me','/api/studio/native/v1/me','--environment production --json', 'ConvertFrom-Json','VITE_STUDIO_UI_ENABLED'))){
+          foreach($expected in @('RespaldoExternoVerificado','PUBLICAR_SOLO_PAGES_BONAIRE','migrations','pages deploy dist','--branch main','/api/studio/v1/me','/api/studio/native/v1/me','--environment production --json', 'ConvertFrom-Json','VITE_STUDIO_UI_ENABLED')){
             if (!$src.Contains($expected)) { throw "Falta control del release Pages: $expected" }
           }
           if ($src -match 'wrangler deploy|d1 migrations apply|r2 object put|r2 object delete'){ throw 'Script Pages no debe mutar Worker, D1 o R2' }
