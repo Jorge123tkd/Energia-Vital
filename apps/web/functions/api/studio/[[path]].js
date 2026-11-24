@@ -113,7 +113,7 @@ export async function onRequest({request,env}){
       if(Number(request.headers.get('Content-Length')||0)>8*1024*1024)return fail(413,'Espacio demasiado grande');
       const upstream=await env.STUDIO_API.fetch(new Request('https://studio.internal'+path,{
         method:request.method,headers:{Authorization:authorization,Accept:'application/json','Content-Type':'application/json'},
-        body:request.method==='PUT'?request.body:undefined,redirect:'manual'}));
+        body:request.method==='PUT'?request.body:undefined,duplex:'half',redirect:'manual'}));
       if(upstream.status>=300&&upstream.status<400||!upstream.headers.get('content-type')?.includes('application/json'))return fail(502,'Respuesta de Studio inválida');
       return new Response(upstream.body,{status:upstream.status,headers});
     }
