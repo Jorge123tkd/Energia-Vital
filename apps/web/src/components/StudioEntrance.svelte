@@ -4,6 +4,7 @@
   import StudioOperations from './StudioOperations.svelte';
   import StudioEngineeringFrame from './StudioEngineeringFrame.svelte';
   import StudioManagement from './StudioManagement.svelte';
+  import StudioTechnicalShare from './StudioTechnicalShare.svelte';
   import StudioProjectReader from './StudioProjectReader.svelte';
   let {token,canBootstrap=false}: {token:string;canBootstrap?:boolean} = $props();
   type Project = {id:string;name:string};
@@ -93,7 +94,7 @@
       </section>
     </div>
     {#if selectedProject}{#key selectedProject.id}<StudioProjectReader {token} project={selectedProject}/>{/key}{/if}
-    {#if isAdministrator}<StudioManagement {token} {projects} onRefresh={load}/><StudioOperations {token} {projects}/>{/if}
+    {#if isAdministrator}<StudioTechnicalShare {token} {projects} onRefresh={load}/><StudioManagement {token} {projects} onRefresh={load}/><StudioOperations {token} {projects}/>{/if}
   {:else if !busy}
     <section class="rounded-xl bg-white border p-5 text-sm text-slate-600">La versión completa de ingeniería, sincronización y respaldos se habilitará tras las pruebas de seguridad. No se crean cuentas nuevas desde aquí.</section>
   {/if}
