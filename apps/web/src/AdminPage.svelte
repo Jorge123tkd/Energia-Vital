@@ -14,6 +14,13 @@
   import RequestPhotoGallery from './components/RequestPhotoGallery.svelte';
   import StaffCalendar from './components/StaffCalendar.svelte';
   import StudioEntrance from './components/StudioEntrance.svelte';
+  // Studio UI remains dark unless deliberately enabled at build time.
+  // Pages bridge can be deployed separately without opening unfinished admin flows.
+  const studioUiEnabled = import.meta.env.VITE_STUDIO_UI_ENABLED === 'true';
+  function safeAdminTab(path:string,role:'admin'|'operator'='admin'):AdminTab{
+    const wanted=adminTabForPath(path,role);
+    return !studioUiEnabled&&wanted==='studio'?'requests':wanted;
+  }
   let token = $state('');
   let staffRole = $state<'admin' | 'operator'>('admin');
   let ownId = $state('');
@@ -24,7 +31,7 @@
   let checking = $state(true);
   let error = $state('');
   let message = $state('');
-  let tab = $state<AdminTab>(adminTabForPath(window.location.pathname));
+  let tab = $state<AdminTab>(safeAdminTab(window.location.pathname));
   let mobileMenu = $state(false);
   let accountMenu = $state(false);
   let calendarOpen = $state(false);
@@ -249,7 +256,7 @@
     ...(staffRole === 'admin' ? [{ id: 'notifications', title: 'Notificaciones a clientes' }] : [])
   ]);
   function chooseTab(next: AdminTab,mode:'push'|'replace'|'none'='push') {
-    next=adminTabForPath(adminPaths[next],staffRole);
+    next=safeAdminTab(adminPaths[next],staffRole);
     tab = next;
     const path=adminPaths[next];
     if(window.location.pathname!==path){
@@ -289,7 +296,7 @@
   }
   onMount(() => {
     const unsubscribe = onAdminTokenUpdated(value => { token = value; if(!value)resetPrivateView(); });
-    const pop=()=>{if(window.location.pathname==='/admin'||window.location.pathname.startsWith('/admin/'))chooseTab(adminTabForPath(window.location.pathname,staffRole),'none');};
+    const pop=()=>{if(window.location.pathname==='/admin'||window.location.pathname.startsWith('/admin/'))chooseTab(safeAdminTab(window.location.pathname,staffRole),'none');};
     const visible=()=>{if(document.visibilityState==='visible'&&token)void refreshPendingCount();};
     const signedOut=(e:StorageEvent)=>{if(e.key==='energia_vital_admin_signed_out'&&e.newValue==='1'){clearAdminSession();resetPrivateView();}};
     window.addEventListener('popstate',pop);window.addEventListener('storage',signedOut);document.addEventListener('visibilitychange',visible);
@@ -304,7 +311,7 @@
       if(saved){
         const info=await api.adminMe(saved);staffRole=info.user.role;ownId=info.user.id;
         token=sessionStorage.getItem(ADMIN_TOKEN_KEY)||saved;
-        chooseTab(adminTabForPath(window.location.pathname,staffRole),'replace');
+        chooseTab(safeAdminTab(window.location.pathname,staffRole),'replace');
         try{await reload(token);}catch(e){error=e instanceof Error?e.message:'No se pudieron cargar los datos.';}
       }
     }catch(e){
@@ -462,7 +469,7 @@
                 <a href="/perfil" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Mi perfil</a>
                  <button type="button" onclick={() => {calendarOpen=true;accountMenu=false;}}
                    class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">🗓️ Calendario del equipo</button>
-                <button type="button" onclick={() => chooseTab('studio')} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold text-teal-800 hover:bg-teal-50">EV Pro Studio</button>
+                {#if studioUiEnabled}<button type="button" onclick={() => chooseTab('studio')} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold text-teal-800 hover:bg-teal-50">EV Pro Studio</button>{/if}
                 <a href="/" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Ver sitio público</a>
                 <button type="button" onclick={()=>{accountMenu=false;void openTelegramLink();}}
                   class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">Vincular Telegram de equipo</button>
@@ -496,7 +503,7 @@
           <a href="/perfil" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Mi perfil</a>
            <button type="button" onclick={() => {calendarOpen=true;mobileMenu=false;}}
              class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-semibold text-teal-800">🗓️ Calendario</button>
-          <button type="button" onclick={() => chooseTab('studio')} class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-bold text-teal-800">EV Pro Studio</button>
+          {#if studioUiEnabled}<button type="button" onclick={() => chooseTab('studio')} class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-bold text-teal-800">EV Pro Studio</button>{/if}
           <a href="/" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Ver sitio público</a>
           <button type="button" onclick={()=>{mobileMenu=false;void openTelegramLink();}}
             class="rounded-xl border border-teal-200 px-3 py-3 text-sm font-semibold text-teal-800">Vincular Telegram</button>
@@ -546,7 +553,7 @@
     </section>
     {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
-    {#if tab === 'studio'}
+    {#if tab === 'studio' && studioUiEnabled}
       {#key ownId}<StudioEntrance {token} canBootstrap={staffRole === 'admin'}/>{/key}
     {:else if tab === 'customers'}
       <AdminCustomers {token} {customers} canManage={staffRole === 'admin'}
