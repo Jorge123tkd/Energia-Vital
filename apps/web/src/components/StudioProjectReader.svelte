@@ -6,7 +6,7 @@
  type RecordData={section_id:string;revision:number;body:Record<string,any>;updated_at:string};
  let sections=$state<Section[]>([]),selected=$state<RecordData|null>(null),latest=$state<RecordData|null>(null),title=$state(''),status=$state(''),dueDate=$state(''),name=$state(''),quantity=$state(1),unit=$state('unit'),busy=$state(false),error=$state(''),message=$state(''),pendingOperation=$state('');
  let generation=0;
- const base='/api/studio/v1/projects/'+encodeURIComponent(project.id)+'/sections';
+ const base=()=>'/api/studio/v1/projects/'+encodeURIComponent(project.id)+'/sections';
  const query=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'PUT',body:JSON.stringify(body)})});
  const isTask=(id:string)=>/^task-[A-Za-z0-9_-]{1,80}$/.test(id);
  const isMaterial=(id:string)=>/^material-[A-Za-z0-9_-]{1,75}$/.test(id);
@@ -21,13 +21,13 @@
  }
  async function load(){
   const run=++generation;busy=true;error='';message='';sections=[];selected=null;latest=null;
-  try{const r=await query(base);if(run===generation)sections=r.sections||[]}
+  try{const r=await query(base());if(run===generation)sections=r.sections||[]}
   catch(e){if(run===generation)error=(e as Error).message||'No se pudieron cargar las secciones.'}
   finally{if(run===generation)busy=false}
  }
  async function open(id:string){
   const run=++generation;busy=true;error='';message='';
-  try{const r=await query(base+'/'+encodeURIComponent(id));if(run===generation)useRecord(r)}
+  try{const r=await query(base()+'/'+encodeURIComponent(id));if(run===generation)useRecord(r)}
   catch(e){if(run===generation)error=(e as Error).message||'Sección no disponible.'}
   finally{if(run===generation)busy=false}
  }
@@ -37,7 +37,7 @@
   try{
    const data=isTask(selected.section_id)?{title:title.trim(),status,dueDate}:{name:name.trim(),productId:selected.body.productId??null,quantity:Number(quantity),unit};
    if(!pendingOperation)pendingOperation=crypto.randomUUID();
-   const r=await query(base+'/'+encodeURIComponent(selected.section_id),{operationId:pendingOperation,baseRevision:selected.revision,data});
+   const r=await query(base()+'/'+encodeURIComponent(selected.section_id),{operationId:pendingOperation,baseRevision:selected.revision,data});
    const next={...selected,revision:r.revision,body:data};
    useRecord(next);message='Cambio confirmado por el servidor (revisión '+r.revision+').';
    sections=sections.map(s=>s.section_id===next.section_id?{...s,revision:next.revision}:s);
@@ -45,7 +45,7 @@
    const code=(e as Error&{status?:number}).status;
    if(code===409){
     error='Existe otra modificación. Tu propuesta permanece en el formulario; compara antes de decidir.';
-    try{const r=await query(base+'/'+encodeURIComponent(selected.section_id));latest=r}catch{}
+    try{const r=await query(base()+'/'+encodeURIComponent(selected.section_id));latest=r}catch{}
    }else error=code===503?'Edición todavía no habilitada; el formulario conserva tus cambios.':(e as Error).message||'No se confirmó la modificación.';
   }finally{busy=false}
  }
