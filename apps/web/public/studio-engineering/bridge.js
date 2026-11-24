@@ -26,5 +26,5 @@
    port.postMessage({id,action,payload});
   });
  }
- Object.defineProperty(window,'EVEngineeringStore',{value:Object.freeze({read:()=>call('read'),write:payload=>call('write',payload)}),writable:false,configurable:false});
+ Object.defineProperty(window,'EVEngineeringStore',{value:Object.freeze({scope:'online',read:()=>call('read'),write:payload=>call('write',payload)}),writable:false,configurable:false});
 })();
