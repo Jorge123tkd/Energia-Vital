@@ -197,3 +197,24 @@ test('native Windows engineering uses identical workspace API without exposing s
  assert.ok(seen.every(x=>x.cookie===null&&x.auth===auth));
  assert.equal((await call('DELETE')).status,404);
 });
+
+test('engineering attachment routes are exact, private and administrator-only for browser and native clients',async()=>{
+ let role='operator',seen=[];
+ const env={ADMIN_SESSION_API:{fetch:async()=>Response.json({user:{id:'a',role}})},
+  STUDIO_API:{fetch:async req=>{seen.push({path:new URL(req.url).pathname,method:req.method,body:req.method==='GET'?null:await req.json()});return Response.json({ok:true})}}};
+ const hash='a'.repeat(64),payload={data:'data:application/pdf;base64,SGVsbG8='};
+ const call=(prefix,path,method='GET',body)=>onRequest({request:new Request(origin+prefix+path,{method,headers:{Authorization:auth,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}),env});
+ for(const prefix of ['/api/studio','/api/studio/native']){
+  assert.equal((await call(prefix,'/v1/engineering/manifest')).status,403);
+  assert.equal((await call(prefix,'/v1/engineering/assets/'+hash,'PUT',payload)).status,403);
+ }
+ assert.equal(seen.length,0);role='admin';
+ for(const prefix of ['/api/studio','/api/studio/native']){
+  assert.equal((await call(prefix,'/v1/engineering/manifest')).status,200);
+  assert.equal((await call(prefix,'/v1/engineering/assets/check','POST',{hashes:[hash]})).status,200);
+  assert.equal((await call(prefix,'/v1/engineering/assets/'+hash,'PUT',payload)).status,200);
+  assert.deepEqual(seen.at(-1).body,payload);
+  assert.ok([404,405].includes((await call(prefix,'/v1/engineering/assets/not-a-hash')).status));
+  assert.ok([404,405].includes((await call(prefix,'/v1/engineering/assets/'+hash,'DELETE')).status));
+ }
+});
