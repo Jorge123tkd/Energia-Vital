@@ -93,9 +93,9 @@ try{
  MustSucceed 'Fallo verificacion de sesion admin.'
  if("$withoutCookie".Trim() -ne '401'){throw 'Pages publicado pero session refresh no devuelve 401. Revisar binding ADMIN_SESSION_API y rollback.'}
  Write-Host '[OK] Refresh admin protegido: 401 sin cookie.'
- $home=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/"
+ $homeStatus=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/"
  MustSucceed 'Fallo verificacion de inicio.'
- if("$home".Trim() -ne '200'){throw 'Pages YA se publico; inicio no responde 200. Revisar rollback.'}
+ if("$homeStatus".Trim() -ne '200'){throw 'Pages YA se publico; inicio no responde 200. Revisar rollback.'}
  $adminDeep=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/admin/citas"
  MustSucceed 'Fallo verificacion de enlace directo admin.'
  if("$adminDeep".Trim() -ne '200'){throw 'Pages publicado pero /admin/citas no responde 200; revisar rollback.'}
