@@ -130,6 +130,20 @@ jobs:
           }
           if ($src -match 'wrangler deploy|pages deploy|r2 object put|d1 export') { throw "El script de migracion no debe desplegar ni crear nuevas copias" }
           Write-Host '[OK] Migraciones 025-028 preparadas sin ejecucion productiva.'
+      - name: Comprobar publicador Worker exclusivo sin ejecutar despliegue
+        shell: pwsh
+        run: |
+          $t=$null
+          $err=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/publicar-solo-worker-bonaire.ps1",[ref]$t,[ref]$err) | Out-Null
+          if ($err.Count -ne 0) { throw "Error de sintaxis publicador Worker" }
+          $src=Get-Content scripts/publicar-solo-worker-bonaire.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "Script PowerShell 5.1 debe usar ASCII" }
+          foreach($required in @('param([switch]$Publicar)','PUBLICAR_SOLO_WORKER_BONAIRE','wrangler@4.151.2 deploy --config wrangler.toml','r.total -ne 28','r.last_id -ne 28','/health')){
+            if (!$src.Contains($required)) { throw "Falta control de release Worker: $required" }
+          }
+          if ($src -match 'pages deploy|d1 migrations apply|d1 export|r2 object put') { throw "Worker-only no debe publicar Pages ni modificar D1" }
+          Write-Host '[OK] Publicador Worker sin mutaciones automaticas.'
       - name: Impedir publicar versión empresarial con esquema anterior a 028
         shell: pwsh
         run: |
