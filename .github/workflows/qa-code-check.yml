@@ -96,6 +96,22 @@ jobs:
           }
           if ($src -match 'migrations apply|pages deploy|wrangler deploy|r2 object put') { throw "Respaldo no debe mutar Cloudflare" }
           Write-Host '[OK] Respaldos de D1: script offline y sin migraciones.'
+      - name: Verificar flujo de copia a disco USB independiente sin ejecutarlo
+        shell: pwsh
+        run: |
+          $t=$null
+          $e=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/verificar-respaldo-usb.ps1",[ref]$t,[ref]$e) | Out-Null
+          if ($e.Count -ne 0) { throw "Error de sintaxis del verificador USB" }
+          $src=Get-Content scripts/verificar-respaldo-usb.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "Script USB PowerShell 5.1 debe ser ASCII" }
+          foreach($required in @('Get-Partition','Get-Disk','BusType','Get-FileHash','Copy-Item','--verificar')){
+            if (!$src.Contains($required)) { throw "Falta un control del respaldo externo: $required" }
+          }
+          if ($src -match 'wrangler|d1 migrations apply|pages deploy|r2 object put'){
+            throw "La copia externa no puede realizar operaciones Cloudflare"
+          }
+          Write-Host '[OK] Verificador USB parsea correctamente; no se copio nada en CI.'
       - name: Impedir publicar versión empresarial con esquema anterior a 028
         shell: pwsh
         run: |
