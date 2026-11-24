@@ -116,6 +116,20 @@ jobs:
             throw "La copia externa no puede realizar operaciones Cloudflare"
           }
           Write-Host '[OK] Verificador USB parsea correctamente; no se copio nada en CI.'
+      - name: Revisar migracion 025-028 sin aplicarla ni tocar Cloudflare
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/migrar-bonaire-025-028.ps1",[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw "Error en sintaxis de migracion productiva" }
+          $src=Get-Content scripts/migrar-bonaire-025-028.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "PowerShell 5.1 exige solo ASCII" }
+          foreach($required in @('param([switch]$Aplicar)','energia-vital-qa-db','energia-vital-db','MIGRAR_BONAIRE_025_028_CON_COPIA_LOCAL','Get-FileHash','025_warehouse_ledger.sql','028_business_finance.sql','d1 migrations apply')){
+            if (!$src.Contains($required)) { throw "Falta guarda de migracion: $required" }
+          }
+          if ($src -match 'wrangler deploy|pages deploy|r2 object put|d1 export') { throw "El script de migracion no debe desplegar ni crear nuevas copias" }
+          Write-Host '[OK] Migraciones 025-028 preparadas sin ejecucion productiva.'
       - name: Impedir publicar versión empresarial con esquema anterior a 028
         shell: pwsh
         run: |
