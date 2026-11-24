@@ -1,5 +1,5 @@
 # Pages only: no API Worker deploy, D1 migration, bucket writes or DNS changes.
-param([switch]$Publicar,[switch]$RespaldoExternoVerificado,[string]$Confirmacion='')
+param([switch]$Publicar,[string]$Confirmacion='')
 $ErrorActionPreference='Stop'
 $root=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $branch='feat/cloudflare-customer-accounts-hardening'
@@ -28,8 +28,10 @@ function CheckCloudflare {
   $total=[int]$r.total; $last=[int]$r.last_id
  }catch{throw 'Historial D1 con formato inesperado; no publicar.'}
  Write-Host "[LECTURA] D1 Bonaire: $total migraciones registradas; ultima ID $last."
- if($total -lt 28 -or $last -lt 28){throw 'Faltan migraciones comerciales 025-028; no publicar frontend actual.'}
- Write-Host '[OK] Historial D1 comercial al menos 028; ninguna migracion ejecutada.'
+ if(!(($total -eq 24 -and $last -eq 24) -or ($total -eq 28 -and $last -eq 28))){
+  throw 'D1 parcial o inesperado: solo se permite 24/24 o 28/28, no publicar.'
+ }
+ Write-Host '[OK] Esquema comercial compatible con Pages sin Studio UI: ningun dato ni migracion modificados.'
 }
 if((git branch --show-current).Trim() -cne $branch){throw 'No estas en la rama de trabajo autorizada.'}
 if(git status --porcelain){throw 'Hay cambios sin guardar; no publicar.'}
@@ -40,11 +42,12 @@ Write-Host "[OK] Git: $($head.Substring(0,8)) en rama $branch"
 CheckCloudflare
 if(!$Publicar){
  Write-Host '[PLAN] Comprobaciones remotas de solo lectura superadas. Nada desplegado.'
- Write-Host '[PENDIENTE] Copias externas cifradas verificadas y autorizacion de Pages antes de publicar.'
+ Write-Host '[PLAN] Solo Pages, sin migrar D1, sin Worker, con interfaz Studio inactiva.'
+ Write-Host '[PENDIENTE] Ejecutar -Publicar con confirmacion explicita para subir Pages.'
  exit 0
 }
-if(!$RespaldoExternoVerificado -or $Confirmacion -cne 'PUBLICAR_SOLO_PAGES_BONAIRE'){
- throw 'No existe declaracion aprobada de respaldo externo verificado; publicacion bloqueada.'
+if($Confirmacion -cne 'PUBLICAR_SOLO_PAGES_BONAIRE'){
+ throw 'Falta confirmacion explicita de Pages exclusivamente. No se publico.'
 }
 $tmp=Join-Path $env:TEMP ('bonaire-pages-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tmp | Out-Null
@@ -57,6 +60,8 @@ try{
  $env:VITE_QA_MODE='false'
  # This Pages-only release must not expose Studio enterprise screens.
  $env:VITE_STUDIO_UI_ENABLED='false'
+ # Never let the Pages-only release enable enterprise UI, even by build parameters.
+ if($env:VITE_STUDIO_UI_ENABLED -cne 'false'){throw 'Studio UI debe estar desactivada.'}
  & npm.cmd run build --workspace=apps/web
  MustSucceed 'Frontend no compilo.'
  & node apps/web/tests/pages-build-output.mjs
@@ -87,7 +92,7 @@ try{
  $home=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/"
  MustSucceed 'Fallo verificacion de inicio.'
  if("$home".Trim() -ne '200'){throw 'Pages YA se publico; inicio no responde 200. Revisar rollback.'}
- Write-Host '[OK] Pages desplegado; API Worker, D1, R2 y Studio sin cambios.'
+ Write-Host '[OK] SOLO Pages desplegado y revisado: Worker API y D1 sin cambios; Studio UI desactivada.'
 }finally{
  Remove-Item Env:VITE_API_URL -ErrorAction SilentlyContinue
  Remove-Item Env:VITE_QA_MODE -ErrorAction SilentlyContinue
