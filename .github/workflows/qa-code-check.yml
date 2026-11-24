@@ -80,6 +80,22 @@ jobs:
           python3 apps/api/tests/warehouse-brigade-links.py
           python3 apps/api/tests/procurement.py
           python3 apps/api/tests/business-finance.py
+      - name: Verificar respaldos D1 cifrados y restauracion SQLite sin datos reales
+        run: node --test scripts/tests/backup-bonaire-crypto.test.mjs
+      - name: Analizar sintaxis del exportador privado PowerShell sin usar Cloudflare
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $parseErrors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/respaldo-d1-025-028.ps1",[ref]$tokens,[ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "Error de sintaxis en respaldo PowerShell" }
+          $src=Get-Content scripts/respaldo-d1-025-028.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "El script para PowerShell 5.1 debe ser ASCII" }
+          foreach($required in @('param([switch]$Crear)','d1 export energia-vital-db --remote','backup-bonaire-crypto.mjs','d1_migrations','24')){
+            if (!$src.Contains($required)) { throw "Falta control del respaldo D1: $required" }
+          }
+          if ($src -match 'migrations apply|pages deploy|wrangler deploy|r2 object put') { throw "Respaldo no debe mutar Cloudflare" }
+          Write-Host '[OK] Respaldos de D1: script offline y sin migraciones.'
       - name: Impedir publicar versión empresarial con esquema anterior a 028
         shell: pwsh
         run: |
