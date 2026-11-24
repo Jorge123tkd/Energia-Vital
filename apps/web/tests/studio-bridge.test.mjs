@@ -180,3 +180,20 @@ test('original engineering frame does not expose session credentials or use same
  assert.match(bridge,/event\.source!==parent/);assert.match(bridge,/event\.origin!==expectedParentOrigin/);
  assert.doesNotMatch(bridge,/Authorization:|sessionStorage\.getItem\(/);
 });
+
+test('native Windows engineering uses identical workspace API without exposing session cookies',async()=>{
+ let role='operator',seen=[];
+ const env={ADMIN_SESSION_API:{fetch:async()=>Response.json({user:{id:'a',role}})},
+ STUDIO_API:{fetch:async req=>{seen.push({method:req.method,path:new URL(req.url).pathname,cookie:req.headers.get('Cookie'),auth:req.headers.get('Authorization')});return Response.json({snapshot:null,rev:''})}}};
+ const path='/api/studio/native/v1/engineering/workspace';
+ const call=(method='GET',body,headers={})=>onRequest({request:new Request(origin+path,{method,headers:{Authorization:auth,'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)}),env});
+ assert.equal((await call()).status,403);assert.equal(seen.length,0);
+ role='admin';
+ assert.equal((await call('GET',undefined,{Origin:origin})).status,403);
+ assert.equal((await call('GET',undefined,{Cookie:'x=y'})).status,403);
+ assert.equal((await call()).status,200);
+ assert.equal((await call('PUT',{snapshot:{companies:[],projects:[],library:[],templates:[]},expected:'',rev:'test-1'})).status,200);
+ assert.deepEqual(seen.map(x=>x.path),['/v1/engineering/workspace','/v1/engineering/workspace']);
+ assert.ok(seen.every(x=>x.cookie===null&&x.auth===auth));
+ assert.equal((await call('DELETE')).status,404);
+});
