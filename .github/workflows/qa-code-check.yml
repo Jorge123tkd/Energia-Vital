@@ -168,6 +168,8 @@ jobs:
           }
           if ($src -match 'wrangler|d1 migrations apply|pages deploy|r2 object put') { throw "El comprobador no puede publicar ni cambiar la infraestructura" }
           Write-Host '[OK] Verificador Pages independiente validado; sin deploy.'
+      - name: Verificar Worker comercial publicado y compuertas empresariales cerradas
+        run: node --test scripts/tests/production-worker-gates.cjs
       - name: Comprobar HTTPS de Pages ya publicada sin datos privados
         shell: bash
         run: |
