@@ -66,6 +66,7 @@ jobs:
           [System.Management.Automation.Language.Parser]::ParseFile("scripts/pages-publicacion-controlada.ps1",[ref]$tokens,[ref]$parseErrors) | Out-Null
           if ($parseErrors.Count -ne 0) { throw "Error de sintaxis en publicador Pages" }
           $src=Get-Content scripts/pages-publicacion-controlada.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "El publicador para Windows PowerShell 5.1 debe usar solo caracteres ASCII" }
           foreach($expected in @('RespaldoExternoVerificado','PUBLICAR_SOLO_PAGES_BONAIRE','migrations','pages deploy dist','--branch main','/api/studio/v1/me','/api/studio/native/v1/me')){
             if (!$src.Contains($expected)) { throw "Falta control del release Pages: $expected" }
           }
