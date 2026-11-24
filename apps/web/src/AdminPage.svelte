@@ -327,7 +327,7 @@
       staffRole = data.user.role;
       ownId = data.user.id;
       password = '';
-      chooseTab(adminTabForPath(window.location.pathname,staffRole),'replace');
+      chooseTab(safeAdminTab(window.location.pathname,staffRole),'replace');
       await reload(token);
     } catch (e) { error = e instanceof Error ? e.message : 'Error al iniciar sesión'; }
     finally { loading = false; }
