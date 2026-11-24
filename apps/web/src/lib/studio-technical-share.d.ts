@@ -6,3 +6,7 @@ export interface EngineeringShareRow {
 export interface EngineeringShareSkip {site:string;kind:string;reason:string}
 export function savedProjects(manifest:unknown):EngineeringShareProject[];
 export function previewTechnicalRows(manifest:unknown,projectId:string):Promise<{rows:EngineeringShareRow[];skipped:EngineeringShareSkip[]}>;
+
+export interface TeamChange {id:string;kind:string;site:string;revision:number;before:Record<string,string|number>;incoming:Record<string,string|number>}
+export function reviewTeamChanges(manifest:unknown,projectId:string,records:unknown[]):Promise<{changes:TeamChange[];ignored:string[]}>;
+export function applyTeamChanges(manifest:unknown,projectId:string,approved:TeamChange[]):Promise<{snapshot:any;applied:string[]}>;
