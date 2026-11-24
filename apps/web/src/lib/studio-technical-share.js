@@ -48,3 +48,62 @@ export async function previewTechnicalRows(manifest,projectId){
  }
  return {rows,skipped};
 }
+
+// Review incoming team edits by the exact shared row identity. Preserve
+// every field not explicitly mapped; never change local catalog links or costs.
+export async function reviewTeamChanges(manifest,projectId,records){
+ const project=manifest?.projects?.find(p=>p.id===projectId);
+ if(!project||!Array.isArray(records))throw Error('Proyecto o filas inválidos');
+ const preview=await previewTechnicalRows(manifest,projectId);
+ const known=new Map(preview.rows.map(r=>[r.id,r]));
+ const changes=[],ignored=[];
+ for(const record of records){
+  const row=known.get(record?.section_id),b=record?.body;
+  if(!row||!b||typeof b!=='object'||!Number.isSafeInteger(record.revision)||record.revision<1){ignored.push(record?.section_id||'');continue}
+  let fields;
+  if(row.kind==='task'){
+   if(typeof b.title!=='string'||!b.title.trim()||b.title.length>160||!['pending','working','done'].includes(b.status)||typeof b.dueDate!=='string'||date(b.dueDate)===null){ignored.push(row.id);continue}
+   fields=['title','status','dueDate'];
+  }else{
+   if(typeof b.name!=='string'||!b.name.trim()||b.name.length>180||!Number.isFinite(b.quantity)||b.quantity<=0||b.quantity>1000000||!['unit','m','m2','kg','set','roll','box'].includes(b.unit)){ignored.push(row.id);continue}
+   fields=['name','quantity','unit'];
+  }
+  const incoming=Object.fromEntries(fields.map(k=>[k,b[k]]));
+  const before=Object.fromEntries(fields.map(k=>[k,row.body[k]]));
+  if(JSON.stringify(before)!==JSON.stringify(incoming))changes.push({id:row.id,kind:row.kind,site:row.site,revision:record.revision,before,incoming});
+ }
+ return {changes,ignored};
+}
+export async function applyTeamChanges(manifest,projectId,approved){
+ if(!Array.isArray(approved)||new Set(approved.map(c=>c.id)).size!==approved.length)throw Error('Selección duplicada o inválida');
+ const copy=JSON.parse(JSON.stringify(manifest)),p=copy.projects.find(x=>x.id===projectId);
+ if(!p)throw Error('Proyecto inexistente');
+ const wanted=new Map(approved.map(c=>[c.id,c])),applied=[];
+ const canonicalUnit={unit:'ud',m:'m',m2:'m²',kg:'kg',set:'juego',roll:'rollo',box:'caja'};
+ for(const site of p.sites){
+  for(const [i,t] of (site.tasks||[]).entries()){
+   const id='task-'+await digest([projectId,site.id,validId(t.id)?['id',t.id]:['legacy',i,String(t.name||'').trim()]]);
+   const edit=wanted.get(id);if(!edit)continue;
+   const b=edit.incoming;
+   // A legacy name is part of its shared identity: do not silently break it.
+   if(!validId(t.id)&&b.title!==edit.before.title)throw Error('La tarea heredada cambió de nombre; revisa ese cambio manualmente.');
+   t.name=b.title;t.end=b.dueDate;
+   if(b.status!==edit.before.status){
+    t.status={pending:'Pendiente',working:'En ejecución',done:'Completada'}[b.status];
+    t.progress=b.status==='done'?100:b.status==='pending'?0:Math.max(1,Math.min(99,Number(t.progress)||1));
+   }
+   wanted.delete(id);applied.push(id);
+  }
+  for(const m of site.materials||[]){
+   if(!validId(m.id))continue;
+   const id='material-'+await digest([projectId,site.id,['id',m.id]]);
+   const edit=wanted.get(id);if(!edit)continue;
+   const b=edit.incoming;
+   m.name=b.name;m.qty=b.quantity;if(b.unit!==edit.before.unit)m.unit=canonicalUnit[b.unit];
+   wanted.delete(id);applied.push(id);
+  }
+ }
+ if(wanted.size)throw Error('La fila original no coincide; no se aplicaron cambios');
+ if(applied.length)p.updated=new Date().toISOString();
+ return {snapshot:copy,applied};
+}
