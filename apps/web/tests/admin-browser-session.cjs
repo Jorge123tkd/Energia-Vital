@@ -4,7 +4,7 @@ const {pathToFileURL}=require('node:url');
 const source=fs.readFileSync(path.join(__dirname,'../src/lib/admin-navigation.ts'),'utf8');
 const nav={exports:{}};
 new Function('module','exports',ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(nav,nav.exports);
-const {adminPaths,adminTabForPath,isAdminPath}=nav.exports;
+const {adminPaths,adminTabForPath,studioGatedTabForPath,isAdminPath}=nav.exports;
 for(const [tab,url] of Object.entries(adminPaths)){
  assert.ok(isAdminPath(url));assert.equal(adminTabForPath(url),tab);assert.equal(adminTabForPath(url+'/'),tab);
 }
@@ -13,6 +13,17 @@ assert.equal(adminTabForPath('/admin/invalid'),'requests');
 assert.equal(adminTabForPath('/admin/citas','operator'),'appointments');
 assert.equal(adminTabForPath('/admin/personal','operator'),'requests');
 assert.equal(isAdminPath('/administracion'),false);
+assert.equal(studioGatedTabForPath('/admin/ev-pro-studio'),'requests');
+assert.equal(studioGatedTabForPath('/admin/ev-pro-studio','admin',false),'requests');
+assert.equal(studioGatedTabForPath('/admin/ev-pro-studio','operator',false),'requests');
+assert.equal(studioGatedTabForPath('/admin/ev-pro-studio','admin',true),'studio');
+assert.equal(studioGatedTabForPath('/admin/citas','operator',false),'appointments');
+const adminPage=fs.readFileSync(path.join(__dirname,'../src/AdminPage.svelte'),'utf8');
+assert.match(adminPage,/const studioUiEnabled\s*=\s*import\.meta\.env\.VITE_STUDIO_UI_ENABLED\s*===\s*'true'/);
+assert.match(adminPage,/\{#if tab === 'studio' && studioUiEnabled\}/);
+assert.equal((adminPage.match(/\{#if studioUiEnabled\}<button/g)||[]).length,2,
+ 'Desktop and mobile Studio buttons must both be gated');
+
 console.log('PASS admin navigation: deep links, reload, canonical fallback, operator restrictions');
 (async()=>{
  const {onRequest}=await import(pathToFileURL(path.join(__dirname,'../functions/api/admin-session/[action].js')).href);
