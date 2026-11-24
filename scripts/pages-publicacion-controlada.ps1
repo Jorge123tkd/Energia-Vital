@@ -89,10 +89,17 @@ try{
   }
   Write-Host "[OK] $path 401 JSON"
  }
+ $withoutCookie=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' -X POST "$site/api/admin-session/refresh" -H "Origin: $site" -H 'Content-Type: application/json' --data '{}'
+ MustSucceed 'Fallo verificacion de sesion admin.'
+ if("$withoutCookie".Trim() -ne '401'){throw 'Pages publicado pero session refresh no devuelve 401. Revisar binding ADMIN_SESSION_API y rollback.'}
+ Write-Host '[OK] Refresh admin protegido: 401 sin cookie.'
  $home=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/"
  MustSucceed 'Fallo verificacion de inicio.'
  if("$home".Trim() -ne '200'){throw 'Pages YA se publico; inicio no responde 200. Revisar rollback.'}
- Write-Host '[OK] SOLO Pages desplegado y revisado: Worker API y D1 sin cambios; Studio UI desactivada.'
+ $adminDeep=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/admin/citas"
+ MustSucceed 'Fallo verificacion de enlace directo admin.'
+ if("$adminDeep".Trim() -ne '200'){throw 'Pages publicado pero /admin/citas no responde 200; revisar rollback.'}
+ Write-Host '[OK] SOLO Pages desplegado y revisado: inicio y /admin/citas OK; Worker y D1 sin cambios; Studio UI apagada.'
 }finally{
  Remove-Item Env:VITE_API_URL -ErrorAction SilentlyContinue
  Remove-Item Env:VITE_QA_MODE -ErrorAction SilentlyContinue
