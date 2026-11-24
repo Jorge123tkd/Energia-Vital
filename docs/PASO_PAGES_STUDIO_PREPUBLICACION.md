@@ -30,3 +30,22 @@ Cuando se apruebe la fase, la subida deberá hacerse **desde apps/web con Wrangl
 - Studio continúa cerrado por flags del Worker hasta su habilitación explícita posterior.
 
 Documentación Cloudflare: https://developers.cloudflare.com/pages/get-started/direct-upload/ y https://developers.cloudflare.com/pages/functions/wrangler-configuration/
+
+
+## Ejecución desde CMD sin publicar mientras faltan bloqueos
+
+El script de publicación aislada es scripts/pages-publicacion-controlada.ps1. **Sin parámetros** únicamente verifica rama de Git, limpieza del árbol, último commit local contra origin, rama main de despliegues Pages y conteo/última migración de la base comercial D1; no compila, no crea secretos y no despliega. En Windows CMD:
+
+    cd /d "C:\Users\Taliety\Desktop\Energia-Vital"
+    git pull --ff-only origin feat/cloudflare-customer-accounts-hardening
+    powershell -NoProfile -File scripts\pages-publicacion-controlada.ps1
+
+El código actual trae las migraciones 025-028 para almacén/finanzas; si la base de producción no alcanza la 028, el script **bloquea** la publicación de este frontend. En ese caso no aplicar migraciones sin respaldos independientes y ensayo de restauración. La ausencia de datos privados en la salida facilita compartir solo las líneas de estado.
+
+**Publicación final, solo tras verificar de verdad los respaldos externos y las migraciones comerciales:**
+
+    powershell -NoProfile -File scripts\pages-publicacion-controlada.ps1 -Publicar -RespaldoExternoVerificado -Confirmacion PUBLICAR_SOLO_PAGES_BONAIRE
+
+Ese comando realiza la compilación y pruebas locales de empaquetado (sin iniciar ningún servidor) y, al final, despliega **solo** Pages desde apps/web con --branch main. Después verifica que ambas rutas anónimas de Studio devuelvan 401 JSON y que el inicio siga en 200. **No usar el segundo comando antes de cumplir los controles**: el parámetro de respaldo es una declaración humana, no una copia creada por el programa. Si la web ya fue publicada y falla una comprobación, el script indicará claramente que se requiere inspección y posible rollback; el despliegue no se revierte automáticamente.
+
+Este procedimiento no reemplaza el despliegue completo de API, las migraciones, la creación de claves oficiales ni las pruebas reales de Studio 3.9. Aun con Pages publicada, Studio sigue desactivado hasta su propia fase aprobada.
