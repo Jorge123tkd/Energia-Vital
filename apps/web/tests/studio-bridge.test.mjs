@@ -152,3 +152,31 @@ test('first administrator bootstrap requires an existing central admin session',
  assert.equal(upstream[0].method,'POST');
  assert.equal(new URL(upstream[0].url).pathname,'/v1/bootstrap/initial-admin');
 });
+
+test('online engineering gateway only permits admin GET and revisioned PUT on exact workspace route',async()=>{
+ let role='operator',forwarded=[];
+ const env={ADMIN_SESSION_API:{fetch:async()=>Response.json({user:{id:'a',role}})},
+  STUDIO_API:{fetch:async req=>{
+   forwarded.push({path:new URL(req.url).pathname,method:req.method,auth:req.headers.get('Authorization'),cookie:req.headers.get('Cookie'),body:req.method==='PUT'?await req.json():null});
+   return Response.json(req.method==='PUT'?{ok:true,rev:'test:1'}:{snapshot:null,rev:''});
+  }}};
+ const path='/api/studio/v1/engineering/workspace';
+ const call=(method='GET',body,headers={},route=path)=>onRequest({request:new Request(origin+route,{method,headers:{Authorization:auth,'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)}),env});
+ assert.equal((await call()).status,403);assert.equal(forwarded.length,0);
+ role='admin';
+ assert.equal((await call('GET',undefined,{'Sec-Fetch-Site':'cross-site'})).status,403);
+ assert.equal((await call('GET',undefined,{},path+'?account=other')).status,404);
+ assert.equal((await call('POST',{})).status,405);
+ const read=await call();assert.equal(read.status,200);assert.equal(read.headers.get('Cache-Control'),'private, no-store');
+ const payload={snapshot:{companies:[],projects:[],library:[],templates:[]},expected:'',rev:'test:1'};
+ assert.equal((await call('PUT',payload,{Cookie:'irrelevant=1'})).status,200);
+ assert.deepEqual(forwarded.at(-1),{path:'/v1/engineering/workspace',method:'PUT',auth,cookie:null,body:payload});
+});
+test('original engineering frame does not expose session credentials or use same-origin sandbox',()=>{
+ const frame=readFileSync(new URL('../src/components/StudioEngineeringFrame.svelte',import.meta.url),'utf8');
+ const bridge=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
+ assert.match(frame,/new MessageChannel/);assert.doesNotMatch(frame,/allow-same-origin/);
+ assert.match(frame,/sessionStorage\.getItem\(ADMIN_TOKEN_KEY\)!==token/);
+ assert.match(bridge,/event\.source!==parent/);assert.match(bridge,/event\.origin!==expectedParentOrigin/);
+ assert.doesNotMatch(bridge,/Authorization:|sessionStorage\.getItem\(/);
+});
