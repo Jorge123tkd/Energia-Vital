@@ -2,6 +2,19 @@
 
 Este documento distingue la **web pública (Pages)**, la **API comercial (Worker)**, la **D1 comercial** y **EV Pro Studio**. El código de la rama única es `feat/cloudflare-customer-accounts-hardening`; la rama productiva de **Cloudflare Pages Direct Upload** es `main`. No confundir ambas ni crear otra rama.
 
+## Producción comercial actualizada: 24 de noviembre de 2026
+
+**Fase 3 completada.** El operador ejecutó `scripts/publicar-solo-worker-bonaire.ps1 -Publicar`, confirmó `PUBLICAR_SOLO_WORKER_BONAIRE` y Wrangler desplegó `energia-vital-api` en el recurso existente, con versión **`bfbb388e-f0e4-4398-8d1b-7e6fc341f2b8`**. Antes de publicar, el script verificó dos veces la D1 comercial **28/28** y las tablas `warehouse_items`, `warehouse_project_links`, `procurement_orders`, `business_obligations`. Después del despliegue obtuvo `[OK] Worker API desplegado y /health responde 200 JSON`. El Worker publicó sus dos cron, y **no volvió a migrar D1, no publicó Pages ni modificó R2 desde el script**.
+
+**Separación entre desplegado y activado:** `WAREHOUSE_ENABLED` y `BUSINESS_FINANCE_ENABLED` no están configurados a `true` en el `apps/api/wrangler.toml` comercial, por lo que las rutas nuevas de almacén y finanzas rechazan su uso con 503 hasta habilitación posterior expresamente aprobada. Aun habilitadas, ambas rutas exigen JWT de administrador principal y validan permisos. No introducir registros ficticios en producción como prueba.
+
+**Estado operativo:** Pages y Worker actualizados, D1 comercial 28/28 y QA 28/28. Falta validar por separado la activación de cada módulo empresarial, los procedimientos reales de inventario/brigadas/compras, y EV Pro Studio 3.9. El puente web a Studio devuelve 401 anónimo, pero Studio **continúa sin habilitarse**. La copia cifrada local de la D1 anterior existe, pero no equivale a respaldo externo independiente. Verificar el comportamiento de las nuevas compuertas en producción mediante los GET de solo lectura de `scripts/tests/production-worker-gates.cjs`.
+
+### Próximo trabajo, sin nuevos despliegues
+1. Confirmar `GET /health` 200 JSON y compuertas de almacén y finanzas 503 JSON (sin sesión) en la CI, sin realizar POST ni escrituras.
+2. Revisar/planificar habilitación controlada de almacén y finanzas, con roles, datos reales y procedimientos de auditoría; mantener flags apagados mientras no haya decisión.
+3. Continuar EV Pro Studio por separado; no interpretar el despliegue del Worker comercial como despliegue del Worker Studio.
+
 ## Actualización verificada: 24 de noviembre de 2026
 
 **Fase 1 confirmada:** Cloudflare Pages publicó correctamente en el dominio bnergiv.com. La sesión administrativa y navegación a `/admin/citas` fueron comprobadas por el operador; GitHub Actions confirmó cinco rutas HTTPS esperadas. El puente Studio está protegido con 401 JSON y su interfaz continúa desactivada.
