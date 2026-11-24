@@ -152,3 +152,43 @@ jobs:
             if (!$src.Contains($required)) { throw "Falta el control de migraciones: $required" }
           }
           Write-Host '[OK] Release exige esquema empresarial 028, sin aplicar D1.'
+
+      - name: Revisar sintaxis del comprobador de Pages publicada sin ejecutarlo
+        shell: pwsh
+        run: |
+          $t=$null
+          $parseErrors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/verificar-pages-publicado.ps1",[ref]$t,[ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "Comprobador Pages con sintaxis incorrecta" }
+          $src=Get-Content scripts/verificar-pages-publicado.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "Comprobador Windows PowerShell 5.1 debe usar solo ASCII" }
+          if ($src -match '\$home\b') { throw "HOME es una variable reservada de PowerShell" }
+          foreach ($check in @('/api/studio/v1/me','/api/studio/native/v1/me','/api/admin-session/refresh','/admin/citas')) {
+            if (!$src.Contains($check)) { throw "Falta verificacion HTTPS: $check" }
+          }
+          if ($src -match 'wrangler|d1 migrations apply|pages deploy|r2 object put') { throw "El comprobador no puede publicar ni cambiar la infraestructura" }
+          Write-Host '[OK] Verificador Pages independiente validado; sin deploy.'
+      - name: Comprobar HTTPS de Pages ya publicada sin datos privados
+        shell: bash
+        run: |
+          set -euo pipefail
+          site='https://bnergiv.com'
+          check_url() {
+            local label="$1" route="$2" want_status="$3" want_type="$4"
+            shift 4
+            local result status ctype
+            result="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}|%{content_type}' "$@" "$site$route")"
+            status="$(printf '%s' "$result" | cut -d '|' -f 1)"
+            ctype="$(printf '%s' "$result" | cut -d '|' -f 2)"
+            if [[ "$status" != "$want_status" ]] || [[ "$want_type" != '*' && "$ctype" != "$want_type"* ]]; then
+              echo "::error::Pages $label devolvio $result; se esperaba $want_status / $want_type"
+              exit 1
+            fi
+            echo "[OK] Pages $label: $result"
+          }
+          check_url 'Studio web anonimo' '/api/studio/v1/me' '401' 'application/json'
+          check_url 'Studio nativo anonimo' '/api/studio/native/v1/me' '401' 'application/json'
+          check_url 'Refresh admin sin cookie' '/api/admin-session/refresh' '401' '*' -X POST -H "Origin: $site" -H 'Content-Type: application/json' --data '{}'
+          check_url 'Portada' '/' '200' 'text/html'
+          check_url 'Admin citas por URL directa' '/admin/citas' '200' 'text/html'
+          echo '[OK] Validaciones HTTP de Pages publicada concluidas. No se desplego nada.'
