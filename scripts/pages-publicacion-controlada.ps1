@@ -55,6 +55,8 @@ try{
  MustSucceed 'Puente Studio no paso pruebas.'
  $env:VITE_API_URL='https://energia-vital-api.astrustrus.workers.dev'
  $env:VITE_QA_MODE='false'
+ # This Pages-only release must not expose Studio enterprise screens.
+ $env:VITE_STUDIO_UI_ENABLED='false'
  & npm.cmd run build --workspace=apps/web
  MustSucceed 'Frontend no compilo.'
  & node apps/web/tests/pages-build-output.mjs
@@ -89,5 +91,6 @@ try{
 }finally{
  Remove-Item Env:VITE_API_URL -ErrorAction SilentlyContinue
  Remove-Item Env:VITE_QA_MODE -ErrorAction SilentlyContinue
+ Remove-Item Env:VITE_STUDIO_UI_ENABLED -ErrorAction SilentlyContinue
  Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
