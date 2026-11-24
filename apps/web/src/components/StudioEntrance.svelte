@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { apiRequest } from '../lib/api';
   import StudioOperations from './StudioOperations.svelte';
+  import StudioEngineeringFrame from './StudioEngineeringFrame.svelte';
   import StudioManagement from './StudioManagement.svelte';
   import StudioProjectReader from './StudioProjectReader.svelte';
   let {token,canBootstrap=false}: {token:string;canBootstrap?:boolean} = $props();
@@ -73,6 +74,7 @@
   {#if errorCode===403&&canBootstrap}<button type="button" disabled={busy} onclick={initialAdmin} class="rounded-lg border border-teal-300 p-3 text-sm font-semibold text-teal-800">Registrar primer administrador de Studio</button><p class="text-xs text-slate-500">Disponible únicamente durante el aprovisionamiento autorizado, no crea otra cuenta.</p>{/if}
   {#if ready}
     <p role="status" class="text-sm text-teal-800 font-semibold">{status}</p>
+    {#if isAdministrator}<StudioEngineeringFrame {token}/>{/if}
     <div class="grid gap-4 lg:grid-cols-2">
       <section class="rounded-2xl border bg-white p-4 space-y-3 min-w-0"><h3 class="font-extrabold">Proyectos autorizados</h3>
         {#if projects.length===0}<p class="text-sm text-slate-500">No tienes proyectos disponibles.</p>{/if}
