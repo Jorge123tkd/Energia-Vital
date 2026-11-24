@@ -2,6 +2,12 @@
 
 Este documento distingue la **web pública (Pages)**, la **API comercial (Worker)**, la **D1 comercial** y **EV Pro Studio**. El código de la rama única es `feat/cloudflare-customer-accounts-hardening`; la rama productiva de **Cloudflare Pages Direct Upload** es `main`. No confundir ambas ni crear otra rama.
 
+### Validación posterior al despliegue (sin escrituras)
+
+GitHub Actions **`45400804000`** (`670a5c39`) terminó **success**. Comprobó directamente por HTTPS el Worker comercial: `GET /health` respondió 200 JSON con `status: ok`, `GET /api/warehouse/items` respondió **503 JSON**, y `GET /api/business-finance/payables` respondió **503 JSON**; ambas compuertas siguen cerradas hasta aprobación de activación. También volvió a verificar Pages y las rutas protegidas. Las pruebas usaron únicamente peticiones **GET** y no cambiaron registros D1, Pages, Worker ni R2.
+
+**No ejecutar otro despliegue por la validación:** la versión de Worker publicada sigue siendo `bfbb388e-f0e4-4398-8d1b-7e6fc341f2b8`. Los commits posteriores son de pruebas y documentación, no están desplegados y no son necesarios para la operativa actual.
+
 ## Producción comercial actualizada: 24 de noviembre de 2026
 
 **Fase 3 completada.** El operador ejecutó `scripts/publicar-solo-worker-bonaire.ps1 -Publicar`, confirmó `PUBLICAR_SOLO_WORKER_BONAIRE` y Wrangler desplegó `energia-vital-api` en el recurso existente, con versión **`bfbb388e-f0e4-4398-8d1b-7e6fc341f2b8`**. Antes de publicar, el script verificó dos veces la D1 comercial **28/28** y las tablas `warehouse_items`, `warehouse_project_links`, `procurement_orders`, `business_obligations`. Después del despliegue obtuvo `[OK] Worker API desplegado y /health responde 200 JSON`. El Worker publicó sus dos cron, y **no volvió a migrar D1, no publicó Pages ni modificó R2 desde el script**.
