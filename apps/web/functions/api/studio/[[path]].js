@@ -32,9 +32,10 @@ async function nativeRequest(request,env,url,path){
   // authentication of a native binary; central Bearer validation is mandatory.
   if(url.origin!=='https://bnergiv.com'||request.headers.has('Origin')||request.headers.has('Sec-Fetch-Site')||request.headers.has('Cookie'))return fail(403,'Canal no autorizado');
   const method=request.method,auth=request.headers.get('Authorization')||'';
+  const engineering=path==='/v1/engineering/workspace'&&!url.search&&['GET','PUT'].includes(method);
   const login=path==='/login',logout=path==='/logout';
   if(login||logout){if(method!=='POST'||url.search)return fail(405,'Método no habilitado')}
-  else if(!(method==='GET'&&nativeRead.test(path))&&!(method==='POST'&&(nativeWrite.has(path)||nativeOperation.test(path))&&!url.search))return fail(404,'Ruta no disponible');
+  else if(!engineering&&!(method==='GET'&&nativeRead.test(path))&&!(method==='POST'&&(nativeWrite.has(path)||nativeOperation.test(path))&&!url.search))return fail(404,'Ruta no disponible');
   if(url.search.length>1024)return fail(400,'Consulta inválida');
   if(!login&&!bearer(auth))return fail(401,'Debes iniciar sesión');
   if(!env?.STUDIO_API||!env?.ADMIN_SESSION_API)return fail(503,'Servicio Studio no configurado');
@@ -75,7 +76,16 @@ async function nativeRequest(request,env,url,path){
     const staff=await central('admin/me',auth);
     if(staff.status===401||staff.status===403)return fail(staff.status,'Acceso de personal no autorizado');
     if(!staff.ok)return fail(503,'No se pudo verificar la sesión');
-    if(!['admin','operator'].includes((await staff.json()).user?.role))return fail(403,'Acceso de personal no autorizado');
+    const staffRole=(await staff.json()).user?.role;
+    if(!['admin','operator'].includes(staffRole))return fail(403,'Acceso de personal no autorizado');
+    if(engineering){
+      if(staffRole!=='admin')return fail(403,'Solo administrador');
+      if(method==='PUT'&&!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json'))return fail(400,'Formato inválido');
+      if(Number(request.headers.get('Content-Length')||0)>8*1024*1024)return fail(413,'Espacio demasiado grande');
+      return relay(await env.STUDIO_API.fetch(new Request('https://studio.internal'+path,{method,
+       headers:{Authorization:auth,Accept:'application/json','Content-Type':'application/json'},
+       body:method==='PUT'?request.body:undefined,duplex:'half',redirect:'manual'})));
+    }
     let b;if(method==='POST'){try{b=await smallJson(request)}catch{return fail(400,'Solicitud inválida')}}
     return relay(await studio(path+url.search,auth,b));
   }catch{return fail(503,'Servicio Studio temporalmente no disponible')}
