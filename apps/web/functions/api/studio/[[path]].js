@@ -27,12 +27,17 @@ async function smallJson(request){
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('invalid');
   return value;
 }
+function engineeringRoute(path,method){
+  if(path==='/v1/engineering/assets/check')return method==='POST';
+  return (path==='/v1/engineering/workspace'||path==='/v1/engineering/manifest'||/^\/v1\/engineering\/assets\/[a-f0-9]{64}$/.test(path))&&['GET','PUT'].includes(method);
+}
+function engineeringLimit(path){return path==='/v1/engineering/assets/check'?8192:path.startsWith('/v1/engineering/assets/')?21*1024*1024+1024:8*1024*1024;}
 async function nativeRequest(request,env,url,path){
   // Browser pages must use their existing browser session. This check is not
   // authentication of a native binary; central Bearer validation is mandatory.
   if(url.origin!=='https://bnergiv.com'||request.headers.has('Origin')||request.headers.has('Sec-Fetch-Site')||request.headers.has('Cookie'))return fail(403,'Canal no autorizado');
   const method=request.method,auth=request.headers.get('Authorization')||'';
-  const engineering=path==='/v1/engineering/workspace'&&!url.search&&['GET','PUT'].includes(method);
+  const engineering=!url.search&&engineeringRoute(path,method);
   const login=path==='/login',logout=path==='/logout';
   if(login||logout){if(method!=='POST'||url.search)return fail(405,'Método no habilitado')}
   else if(!engineering&&!(method==='GET'&&nativeRead.test(path))&&!(method==='POST'&&(nativeWrite.has(path)||nativeOperation.test(path))&&!url.search))return fail(404,'Ruta no disponible');
@@ -80,11 +85,11 @@ async function nativeRequest(request,env,url,path){
     if(!['admin','operator'].includes(staffRole))return fail(403,'Acceso de personal no autorizado');
     if(engineering){
       if(staffRole!=='admin')return fail(403,'Solo administrador');
-      if(method==='PUT'&&!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json'))return fail(400,'Formato inválido');
-      if(Number(request.headers.get('Content-Length')||0)>8*1024*1024)return fail(413,'Espacio demasiado grande');
+      if(method!=='GET'&&!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json'))return fail(400,'Formato inválido');
+      if(Number(request.headers.get('Content-Length')||0)>engineeringLimit(path))return fail(413,'Espacio demasiado grande');
       return relay(await env.STUDIO_API.fetch(new Request('https://studio.internal'+path,{method,
        headers:{Authorization:auth,Accept:'application/json','Content-Type':'application/json'},
-       body:method==='PUT'?request.body:undefined,duplex:'half',redirect:'manual'})));
+       body:method!=='GET'?request.body:undefined,duplex:'half',redirect:'manual'})));
     }
     let b;if(method==='POST'){try{b=await smallJson(request)}catch{return fail(400,'Solicitud inválida')}}
     return relay(await studio(path+url.search,auth,b));
@@ -101,7 +106,7 @@ export async function onRequest({request,env}){
   const origin=request.headers.get('Origin');
   if(origin&&origin!==url.origin)return fail(403,'Origen no autorizado');
   const path=url.pathname.slice('/api/studio'.length);
-  const engineeringWorkspace=path==='/v1/engineering/workspace'&&!url.search&&['GET','PUT'].includes(request.method);
+  const engineeringWorkspace=!url.search&&engineeringRoute(path,request.method);
   const adminMutation=!url.search&&(request.method==='POST'&&(adminPost.test(path)||path===projectCreate||path===publicationList||path===initialAdmin)||request.method==='PUT'&&adminPut.test(path)||request.method==='DELETE'&&adminDelete.test(path));
   const staffRowMutation=!url.search&&request.method==='PUT'&&typedRowPut.test(path);
   const adminOnly=engineeringWorkspace||adminRead.test(path)||(adminMutation&&path!==publicationList);
@@ -119,11 +124,11 @@ export async function onRequest({request,env}){
     if(adminOnly&&staff.role!=='admin')return fail(403,'Solo administrador');
     if(engineeringWorkspace){
       // The Worker independently checks membership, account scope and revisions.
-      if(request.method==='PUT'&&!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json'))return fail(400,'Formato inválido');
-      if(Number(request.headers.get('Content-Length')||0)>8*1024*1024)return fail(413,'Espacio demasiado grande');
+      if(request.method!=='GET'&&!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json'))return fail(400,'Formato inválido');
+      if(Number(request.headers.get('Content-Length')||0)>engineeringLimit(path))return fail(413,'Espacio demasiado grande');
       const upstream=await env.STUDIO_API.fetch(new Request('https://studio.internal'+path,{
         method:request.method,headers:{Authorization:authorization,Accept:'application/json','Content-Type':'application/json'},
-        body:request.method==='PUT'?request.body:undefined,duplex:'half',redirect:'manual'}));
+        body:request.method!=='GET'?request.body:undefined,duplex:'half',redirect:'manual'}));
       if(upstream.status>=300&&upstream.status<400||!upstream.headers.get('content-type')?.includes('application/json'))return fail(502,'Respuesta de Studio inválida');
       return new Response(upstream.body,{status:upstream.status,headers});
     }

@@ -1,15 +1,18 @@
 <script lang="ts">
  import {onDestroy} from 'svelte';
  import {apiRequest,ADMIN_TOKEN_KEY} from '../lib/api';
+ import '../lib/engineering-assets.js';
  let {token}:{token:string}=$props();
  let frame:HTMLIFrameElement|undefined=$state(), opened=$state(false),busy=$state(false),error=$state('');
  let port:MessagePort|null=null,epoch=0,loads=0;
- const route='/api/studio/v1/engineering/workspace';
+ const route='/api/studio/v1/engineering';
+ type EngineeringRequest=(method:string,suffix:string,payload?:unknown)=>Promise<any>;
+ const assets=(globalThis as typeof globalThis & {EVEngineeringAssets:{transport:(request:EngineeringRequest)=>(method:string,payload?:unknown)=>Promise<any>}}).EVEngineeringAssets;
  const auth=()=>({Authorization:'Bearer '+token});
  function close(){epoch++;port?.close();port=null;opened=false;loads=0}
  async function open(){
   if(busy)return;busy=true;error='';
-  try{await apiRequest(route,{headers:auth(),cache:'no-store'});loads=0;opened=true}
+  try{await apiRequest(route+'/manifest',{headers:auth(),cache:'no-store'});loads=0;opened=true}
   catch(e){error=(e as Error).message||'Ingeniería online todavía no disponible.'}
   finally{busy=false}
  }
@@ -25,13 +28,13 @@
    const reply=(v:Record<string,unknown>)=>{if(current===epoch&&opened)channel.port1.postMessage({id:data.id,...v})};
    try{
     if(!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token)throw Object.assign(new Error('Sesión de Bonaire cambiada. Cierra y abre Studio.'),{status:401});
-    let result;
-    if(data.action==='read')result=await apiRequest(route,{headers:auth(),cache:'no-store'});
-    else{
-     const payload=JSON.stringify(data.payload);
-     if(!payload||new TextEncoder().encode(payload).length>8*1024*1024)throw Object.assign(new Error('Espacio supera 8 MiB; exporta un respaldo antes de reducir adjuntos.'),{status:413});
-     result=await apiRequest(route,{method:'PUT',headers:auth(),body:payload,cache:'no-store'});
-    }
+    const request:EngineeringRequest=async(method,suffix,payload)=>{
+     if(current!==epoch||!opened||!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token)throw Object.assign(new Error('La sesión de Bonaire cambió'),{status:401});
+     if(!(['/manifest','/assets/check'].includes(suffix)||/^\/assets\/[a-f0-9]{64}$/.test(suffix)))throw Error('Ruta de ingeniería inválida');
+     return apiRequest(route+suffix,{method,headers:auth(),cache:'no-store',...(payload===undefined?{}:{body:JSON.stringify(payload)})});
+    };
+    const sync=assets.transport(request);
+    const result=await sync(data.action==='read'?'GET':'PUT',data.payload);
     reply({ok:true,result});
    }catch(e){const err=e as Error&{status?:number};reply({ok:false,error:err.message,status:err.status||0})}
   };
@@ -49,7 +52,7 @@
  </div>
  {#if error}<p role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{error}</p>{/if}
  {#if opened}
-  <p class="text-xs text-slate-500">Espacio privado, sin cambios de stock o publicaciones. Límite inicial 8 MiB; no es aún colaboración multiusuario por proyecto. Guarda y verifica antes de cerrar. Los PDF nativos están disponibles en Windows.</p>
+  <p class="text-xs text-slate-500">Espacio privado, sin cambios de stock o publicaciones. Adjuntos privados independientes y expedientes por revisión. Límite actual: 8 MiB de metadatos y 40 MiB de adjuntos reconstruidos; aún sin edición multiusuario por proyecto. Guarda y verifica antes de cerrar. Los PDF nativos están disponibles en Windows.</p>
   <iframe bind:this={frame} onload={connect} title="EV Pro Ingeniería original" src="/studio-engineering/index.html" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer" class="w-full min-h-[820px] border rounded-lg"></iframe>
  {/if}
 </section>
