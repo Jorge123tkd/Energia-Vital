@@ -36,8 +36,8 @@ test('Enterprise warehouse and finance remain closed until a separate activation
   assert.match(financeSource, /BUSINESS_FINANCE_ENABLED\s*!==\s*'true'/);
   assert.match(warehouseSource, /requireAdminAuth/);
   assert.match(financeSource, /requireAdminAuth/);
-  assert.doesNotMatch(config, /(?m)^WAREHOUSE_ENABLED\s*=\s*["']true["']/);
-  assert.doesNotMatch(config, /(?m)^BUSINESS_FINANCE_ENABLED\s*=\s*["']true["']/);
+  assert.doesNotMatch(config, /^WAREHOUSE_ENABLED\s*=\s*["']true["']/m);
+  assert.doesNotMatch(config, /^BUSINESS_FINANCE_ENABLED\s*=\s*["']true["']/m);
   const warehouse = await getJson('/api/warehouse/items', 503);
   assert.equal(typeof warehouse.error, 'string');
   const finance = await getJson('/api/business-finance/payables', 503);
