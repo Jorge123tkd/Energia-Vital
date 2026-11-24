@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, apiRequest, ADMIN_TOKEN_KEY, clearAdminSession, logoutCurrentSession, onAdminTokenUpdated, loginAdminBrowser, restoreAdminBrowserAccess, browserAdminAvailable } from './lib/api';
-  import {adminPaths,adminTabForPath,type AdminTab} from './lib/admin-navigation';
+  import {adminPaths,studioGatedTabForPath,type AdminTab} from './lib/admin-navigation';
   import AdminContent from './components/AdminContent.svelte';
   import Pagination from './components/Pagination.svelte';
   import AdminCustomers from './components/AdminCustomers.svelte';
@@ -18,8 +18,7 @@
   // Pages bridge can be deployed separately without opening unfinished admin flows.
   const studioUiEnabled = import.meta.env.VITE_STUDIO_UI_ENABLED === 'true';
   function safeAdminTab(path:string,role:'admin'|'operator'='admin'):AdminTab{
-    const wanted=adminTabForPath(path,role);
-    return !studioUiEnabled&&wanted==='studio'?'requests':wanted;
+    return studioGatedTabForPath(path,role,studioUiEnabled);
   }
   let token = $state('');
   let staffRole = $state<'admin' | 'operator'>('admin');
