@@ -10,3 +10,11 @@ export function adminTabForPath(path:string,role:'admin'|'operator'='admin'):Adm
  const found=(Object.keys(adminPaths) as AdminTab[]).find(key=>adminPaths[key]===normalized)||'requests';
  return role==='operator'&&!['requests','appointments','brigades','customers','studio'].includes(found)?'requests':found;
 }
+
+/** The Studio admin screen must stay hidden until a release explicitly enables it.
+ * Direct navigation to /admin/ev-pro-studio cannot bypass the release gate.
+ */
+export function studioGatedTabForPath(path:string,role:'admin'|'operator'='admin',studioUiEnabled=false):AdminTab{
+ const tab=adminTabForPath(path,role);
+ return !studioUiEnabled&&tab==='studio'?'requests':tab;
+}
