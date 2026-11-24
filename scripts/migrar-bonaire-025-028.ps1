@@ -1,5 +1,5 @@
 # Bonaire: apply ONLY migrations 025-028 to existing production D1 on explicit approval.
-# Default is read-only. No backup creation, Worker deploy or Pages deploy.
+# Default is read-only. No additional infrastructure writes.
 # Windows PowerShell 5.1 ASCII only.
 param([switch]$Aplicar)
 $ErrorActionPreference='Stop'
