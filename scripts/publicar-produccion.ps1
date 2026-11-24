@@ -51,6 +51,8 @@ if($LASTEXITCODE -ne 0){throw 'Prueba del puente Studio o _routes.json falló. N
 # Variables del build solo en este proceso PowerShell; no escribir secretos ni .env.
 $env:VITE_API_URL=$apiUrl
 $env:VITE_QA_MODE='false'
+# El despliegue comercial no puede encender Studio sin su propia validacion.
+$env:VITE_STUDIO_UI_ENABLED='false'
 npm run build --workspace=apps/web
 if($LASTEXITCODE -ne 0){throw 'Build frontend falló. NO desplegar.'}
 node apps/web/tests/pages-build-output.mjs
@@ -106,4 +108,4 @@ $miniApp=Invoke-WebRequest -Uri "$site/telegram-registro.html?mode=finish" -UseB
 if($miniApp.StatusCode -ne 200 -or $miniApp.Content -notmatch 'registration-draft'){throw 'Mini App no publicada correctamente. Revisar Pages.'}
 Write-Host 'PUBLICACION TERMINADA: API health OK, Pages desplegado, rutas, login y Mini App OK.' -ForegroundColor Green
 Write-Host "Comprobar manualmente https://bnergiv.com/admin/citas (login, recarga, recordar, logout)."
-Write-Host 'Telegram: volver a pulsar Configurar webhook desde admin para habilitar callback_query; comprobar Crear cuenta, Vincular cuenta y el codigo de cliente.' -ForegroundColor Yellow -ForegroundColor Yellow
+Write-Host 'Telegram: volver a pulsar Configurar webhook desde admin para habilitar callback_query; comprobar Crear cuenta, Vincular cuenta y el codigo de cliente.' -ForegroundColor Yellow
