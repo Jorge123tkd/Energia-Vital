@@ -7,11 +7,19 @@ $site='https://bnergiv.com'
 Set-Location $root
 function MustSucceed([string]$message){if($LASTEXITCODE -ne 0){throw $message}}
 function CheckCloudflare {
- $d=& npx.cmd --yes wrangler@4.151.2 pages deployment list --project-name energia-vital-web --environment production
+ # Wrangler human-readable tables are not a stable interface: read the official JSON instead.
+ $d=& npx.cmd --yes wrangler@4.151.2 pages deployment list --project-name energia-vital-web --environment production --json
  MustSucceed 'Pages inaccesible: no se publico.'
- if(($d -join [Environment]::NewLine) -notmatch 'Production[^\w\r\n]*main\b'){
-  throw 'Produccion Pages no confirma rama main: no publicar.'
+ try{
+  $deployments=($d -join [Environment]::NewLine) | ConvertFrom-Json
+ }catch{
+  throw 'Pages no devolvio JSON valido: no publicar.'
  }
+ $production=@($deployments | Where-Object { $_.Environment -eq 'Production' -and $_.Branch -eq 'main' })
+ if($production.Count -lt 1){
+  throw 'Pages no confirma un despliegue de produccion con rama main: no publicar.'
+ }
+ Write-Host '[OK] Cloudflare Pages: produccion main comprobada con JSON.'
  $raw=& npx.cmd --yes wrangler@4.151.2 d1 execute energia-vital-db --remote --config apps/api/wrangler.toml --json --command "SELECT COUNT(*) AS total, COALESCE(MAX(id),0) AS last_id FROM d1_migrations"
  MustSucceed 'No se pudo leer historial D1 comercial.'
  try{
