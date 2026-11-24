@@ -757,3 +757,16 @@ El proyecto sigue con D1 productiva **24/24** (última comprobación del operado
 **Fase 2 preparada y SIN ejecutar:** `scripts/migrar-bonaire-025-028.ps1` consulta QA 28/28 y D1 productiva 24/24, verifica el hash conocido del archivo cifrado local y exige `-Aplicar` más la frase de consentimiento `MIGRAR_BONAIRE_025_028_CON_COPIA_LOCAL`. No genera copias nuevas, pero expone la limitación del único disco físico. Si el esquema queda parcial, se bloquea. Después, `scripts/publicar-solo-worker-bonaire.ps1` exige D1 28/28 y tablas reales, y publica únicamente Worker bajo `-Publicar` y confirmación `PUBLICAR_SOLO_WORKER_BONAIRE`, sin volver a subir Pages. El antiguo publicador general se conserva, con `VITE_STUDIO_UI_ENABLED=false`, pero no es necesario para estas fases.
 
 **Studio completo es una tercera activación independiente:** D1 del Studio, secretos y pruebas nativas pendientes según `EV-Pro-Estudio/docs/CIERRE_EMPRESARIAL_3_9.md`. No confundir un puente Pages que devuelve 401 con un Studio ya operativo.
+
+
+## 24/11/2026 — FASE 1 PAGES PUBLICADA, verificación pública 5/5 OK
+El operador ejecutó en Windows `scripts/pages-publicacion-controlada.ps1 -Publicar -Confirmacion PUBLICAR_SOLO_PAGES_BONAIRE` tras `git pull` a `0fa46deb`. Wrangler terminó **Deployment complete**, URL de despliegue `https://c021e6e2.energia-vital-web.pages.dev`, con `_redirects`, bundle Functions y `_routes.json` publicados. El script comprobó `GET /api/studio/v1/me` **401 application/json**, `GET /api/studio/native/v1/me` **401 application/json** y `POST /api/admin-session/refresh` sin cookie **401**. Luego terminó con `VariableNotWritable` porque usó `$home`, que PowerShell considera el alias insensible a mayúsculas de su variable reservada `$HOME`. **El error ocurrió DESPUÉS de desplegar Pages, no revirtió ni impidió el despliegue. No volver a ejecutar -Publicar por ese fallo.**
+
+La rama se corrigió renombrando `$home` a `$homeStatus` (commit `4d96f95`), se añadió `scripts/verificar-pages-publicado.ps1` (solo comprobaciones HTTPS, sin redeploy), y pruebas de regresión para la variable HOME. GitHub Actions `45385496791` (commit `04a4e70b`) finalizó **success** y verificó en tiempo real y desde fuera del PC las **cinco rutas del dominio oficial**:
+- Studio web anónimo: **401, application/json**
+- Studio nativo anónimo: **401, application/json**
+- Refresh de sesión admin sin cookie: **401, application/json**
+- Portada `/`: **200, text/html**
+- Enlace directo `/admin/citas`: **200, text/html**
+
+Este smoke no demuestra login autenticado, cookies persistentes ni bindings Studio con un token real: requieren comprobación de cuenta autorizada. `energia-vital-db` producción sigue en **24/24** a la última lectura del operador, QA en **28/28**; **no se migró D1 ni publicó Worker API** en la fase 1. El enlace Studio UI sigue compilado con `VITE_STUDIO_UI_ENABLED=false` por diseño. Quedan: probar login/cookies y navegación real; fase 2 migraciones 025–028 y Worker comercial mediante los scripts separados y consentimiento específico; fase independiente de EV Pro Studio 3.9. Se aplazó por indicación del usuario crear más respaldos: conservar el archivo cifrado local sin afirmar que sea una copia independiente.
