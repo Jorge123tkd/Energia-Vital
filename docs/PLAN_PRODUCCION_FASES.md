@@ -2,6 +2,24 @@
 
 Este documento distingue la **web pública (Pages)**, la **API comercial (Worker)**, la **D1 comercial** y **EV Pro Studio**. El código de la rama única es `feat/cloudflare-customer-accounts-hardening`; la rama productiva de **Cloudflare Pages Direct Upload** es `main`. No confundir ambas ni crear otra rama.
 
+## Actualización verificada: 24 de noviembre de 2026
+
+**Fase 1 confirmada:** Cloudflare Pages publicó correctamente en el dominio bnergiv.com. La sesión administrativa y navegación a `/admin/citas` fueron comprobadas por el operador; GitHub Actions confirmó cinco rutas HTTPS esperadas. El puente Studio está protegido con 401 JSON y su interfaz continúa desactivada.
+
+**Fase 2 completada:** El operador ejecutó `powershell -NoProfile -File scripts/migrar-bonaire-025-028.ps1 -Aplicar`, escribió la confirmación explícita y Wrangler aplicó exclusivamente `025_warehouse_ledger.sql`, `026_warehouse_brigade_links.sql`, `027_procurement.sql` y `028_business_finance.sql` sobre la D1 **producción `energia-vital-db`**. Las cuatro terminaron con marca de éxito y el script comprobó `[OK] D1 produccion 28/28`. QA ya estaba en 28/28. Esta ejecución **no desplegó Worker, Pages ni modificó R2**. No repetir la migración.
+
+**Siguiente fase 3:** Solo resta actualizar el Worker comercial `energia-vital-api` con el comando `scripts/publicar-solo-worker-bonaire.ps1 -Publicar`. El script vuelve a comprobar la D1 productiva 28/28 y las tablas nuevas, solicita confirmación y despliega solo Worker; verifica `/health` después. No volver a publicar Pages ni crear nuevos respaldos como requisito de esa fase. El respaldo cifrado local preexistente sigue siendo el único adicional comprobado; no es independiente del SSD.
+
+**Studio 3.9:** sigue como fase separada, no se activa automáticamente con la nueva D1 comercial ni con el despliegue del Worker comercial.
+
+### Orden posterior a esta actualización
+1. Ejecutar `git pull --ff-only origin feat/cloudflare-customer-accounts-hardening`.
+2. Ejecutar `powershell -NoProfile -File scripts/publicar-solo-worker-bonaire.ps1 -Publicar` y confirmar `PUBLICAR_SOLO_WORKER_BONAIRE` solo si el estado D1 28/28 y los recursos mostrados son correctos.
+3. Confirmar `[OK] Worker API desplegado y /health responde 200 JSON`; después probar los módulos empresariales desde una sesión administrativa autorizada.
+4. Mantener EV Pro Studio apagado hasta terminar sus pruebas y configuración propias.
+
+**Nota histórica:** Las secciones más abajo que hablan de D1 producción 24/24 documentan el estado *anterior* a la migración; no representan el estado vigente.
+
 ## Estado confirmado
 - **CI de Bonaire:** el commit `cea34e1` pasó todas las comprobaciones antes de preparar este plan. Los commits posteriores deben superar CI nuevamente.
 - **D1 Bonaire QA:** `energia-vital-qa-db` migrada de 021 a **028/028** por el operador; las migraciones 022-028 terminaron OK y se leyó 28/28.
