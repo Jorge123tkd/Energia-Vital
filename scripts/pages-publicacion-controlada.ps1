@@ -9,7 +9,7 @@ function MustSucceed([string]$message){if($LASTEXITCODE -ne 0){throw $message}}
 function CheckCloudflare {
  $d=& npx.cmd --yes wrangler@4.151.2 pages deployment list --project-name energia-vital-web --environment production
  MustSucceed 'Pages inaccesible: no se publico.'
- if(($d -join [Environment]::NewLine) -notmatch 'Production\s*[│|]\s*main\b'){
+ if(($d -join [Environment]::NewLine) -notmatch 'Production[^\w\r\n]*main\b'){
   throw 'Produccion Pages no confirma rama main: no publicar.'
  }
  $raw=& npx.cmd --yes wrangler@4.151.2 d1 execute energia-vital-db --remote --config apps/api/wrangler.toml --json --command "SELECT COUNT(*) AS total, COALESCE(MAX(id),0) AS last_id FROM d1_migrations"
@@ -64,7 +64,7 @@ try{
  Push-Location (Join-Path $root 'apps/web')
  try{
   & npx.cmd --yes wrangler@4.151.2 pages deploy dist --project-name energia-vital-web --branch main
-  MustSucceed 'Falló publicacion Pages. Revisar Cloudflare.'
+  MustSucceed 'Fallo publicacion Pages. Revisar Cloudflare.'
  }finally{Pop-Location}
  foreach($path in @('/api/studio/v1/me','/api/studio/native/v1/me')){
   $response=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}|%{content_type}' ($site+$path)
@@ -75,7 +75,7 @@ try{
   Write-Host "[OK] $path 401 JSON"
  }
  $home=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' "$site/"
- MustSucceed 'Falló verificacion de inicio.'
+ MustSucceed 'Fallo verificacion de inicio.'
  if("$home".Trim() -ne '200'){throw 'Pages YA se publico; inicio no responde 200. Revisar rollback.'}
  Write-Host '[OK] Pages desplegado; API Worker, D1, R2 y Studio sin cambios.'
 }finally{
