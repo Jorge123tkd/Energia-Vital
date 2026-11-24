@@ -74,3 +74,17 @@ jobs:
           Write-Host '[OK] PowerShell Pages listo, publicacion bloqueada por defecto.'
       - name: Ensayar migraciones en memoria con registros ficticios
         run: python3 apps/api/tests/migration-preservation.py
+      - name: Validar almacén, brigadas, compras y finanzas con registros ficticios
+        run: |
+          python3 apps/api/tests/warehouse-ledger.py
+          python3 apps/api/tests/warehouse-brigade-links.py
+          python3 apps/api/tests/procurement.py
+          python3 apps/api/tests/business-finance.py
+      - name: Impedir publicar versión empresarial con esquema anterior a 028
+        shell: pwsh
+        run: |
+          $src=Get-Content scripts/publicar-produccion.ps1 -Raw
+          foreach($required in @('row.total -ne 28','row.ultimo -ne 28','row.warehouse_items','row.warehouse_links','row.procurement_orders','row.business_obligations')){
+            if (!$src.Contains($required)) { throw "Falta el control de migraciones: $required" }
+          }
+          Write-Host '[OK] Release exige esquema empresarial 028, sin aplicar D1.'
