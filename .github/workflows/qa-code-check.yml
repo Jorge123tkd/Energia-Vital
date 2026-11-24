@@ -58,5 +58,18 @@ jobs:
           path: ${{ runner.temp }}/bonaire-pages-preflight.json
           retention-days: 14
           if-no-files-found: error
+      - name: Analizar sintaxis del publicador Pages sin ejecutarlo
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $parseErrors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/pages-publicacion-controlada.ps1",[ref]$tokens,[ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "Error de sintaxis en publicador Pages" }
+          $src=Get-Content scripts/pages-publicacion-controlada.ps1 -Raw
+          foreach($expected in @('RespaldoExternoVerificado','PUBLICAR_SOLO_PAGES_BONAIRE','migrations','pages deploy dist','--branch main','/api/studio/v1/me','/api/studio/native/v1/me')){
+            if (!$src.Contains($expected)) { throw "Falta control del release Pages: $expected" }
+          }
+          if ($src -match 'wrangler deploy|d1 migrations apply|r2 object put|r2 object delete'){ throw 'Script Pages no debe mutar Worker, D1 o R2' }
+          Write-Host '[OK] PowerShell Pages listo, publicacion bloqueada por defecto.'
       - name: Ensayar migraciones en memoria con registros ficticios
         run: python3 apps/api/tests/migration-preservation.py
