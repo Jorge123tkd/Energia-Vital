@@ -14,7 +14,26 @@
    if(response.ok)pending.resolve(response.result);
    else pending.reject(Object.assign(Error(response.error||'No se confirmó el guardado online'),{conflict:response.status===409,code:response.status}));
   };
-  port.start();resolveConnection();
+  port.start();resolveConnection();installMenu();
+ }
+ function installMenu(){
+  const menu=document.getElementById('nav');if(!menu)return;
+  const items=[['catalog','▥','Catálogo de Bonaire'],['assigned','▤','Proyectos asignados'],['team','♙','Equipo y permisos'],['inventory','▦','Almacén'],['orders','▧','Compras'],['suppliers','♙','Proveedores'],['finance','＄','Economía'],['shortages','◇','Faltantes'],['conflicts','⎇','Conflictos'],['backup','↧','Respaldos online'],['publication','↗','Publicaciones'],['exit','←','Volver a Bonaire']];
+  const send=section=>{if(port)port.postMessage({type:'studio-navigation',section})};
+  function decorate(){
+   if(!menu.querySelector('.brand')||menu.querySelector('#ev-business-nav'))return;
+   const group=document.createElement('div');group.id='ev-business-nav';
+   const label=document.createElement('div');label.className='navlabel';label.textContent='OPERACIONES BONAIRE';group.append(label);
+   for(const [section,glyph,name] of items){
+    const button=document.createElement('button');button.type='button';button.className='navitem';button.dataset.studioSection=section;
+    const icon=document.createElement('span');icon.textContent=glyph;button.append(icon,document.createTextNode(name));
+    button.addEventListener('click',()=>{menu.classList.remove('visible');send(section)});
+    group.append(button);
+   }
+   menu.append(group);
+  }
+  menu.addEventListener('click',e=>{const button=e.target.closest?.('button.navitem');if(button&&!button.dataset.studioSection)send('engineering')},true);
+  new MutationObserver(decorate).observe(menu,{childList:true});decorate();
  }
  window.addEventListener('message',receive);
  const signal=()=>{if(!port)parent.postMessage({type:'evpro-engineering-ready-v2'},expectedParentOrigin)};

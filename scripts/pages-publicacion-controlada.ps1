@@ -99,7 +99,7 @@ try{
   & node --test apps/web/tests/studio-technical-share.test.mjs
   MustSucceed 'Pruebas de colaboracion no superadas.'
   $bundles=Get-ChildItem (Join-Path $root 'apps/web/dist/assets') -Filter '*.js' -File
-  if(!($bundles | Select-String -SimpleMatch 'Abrir EV Pro Online' -List)){throw 'El build no contiene la interfaz Studio habilitada.'}
+  if(!($bundles | Select-String -SimpleMatch 'Volver a Bonaire' -List)){throw 'El build no contiene la interfaz Studio habilitada.'}
   if(!(Test-Path (Join-Path $root 'apps/web/dist/studio-engineering/index.html'))){throw 'Falta la interfaz original de ingenieria.'}
  }
  Push-Location (Join-Path $root 'apps/web')

@@ -6,52 +6,40 @@
   import StudioManagement from './StudioManagement.svelte';
   import StudioTechnicalShare from './StudioTechnicalShare.svelte';
   import StudioProjectReader from './StudioProjectReader.svelte';
-  let {token,canBootstrap=false}: {token:string;canBootstrap?:boolean} = $props();
+  let {token,onExit}: {token:string;onExit:()=>void} = $props();
   type Project = {id:string;name:string};
   type Product = {id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null};
-  let busy=$state(false),ready=$state(false),error=$state(''),status=$state(''),projects=$state<Project[]>([]),products=$state<Product[]>([]);
+  let busy=$state(false),ready=$state(false),error=$state(''),projects=$state<Project[]>([]),products=$state<Product[]>([]);
   let search=$state(''),nextProject=$state<string|null>(null),catalogPage=$state(1),catalogMore=$state(false);
   let generation=0;
   let isAdministrator=$state(false);
-  let errorCode=$state(0);
   let selectedProject=$state<Project|null>(null);
-  let section=$state<'projects'|'team'|'operations'>('projects');
+  let businessError=$state('');
   const query=(path:string)=>apiRequest('/api/studio/v1/'+path,{headers:{Authorization:'Bearer '+token}});
-  async function load(){
-    const run=++generation;busy=true;ready=false;error='';errorCode=0;status='';projects=[];products=[];nextProject=null;catalogMore=false;selectedProject=null;
+  async function refreshBusiness(){
     try{
-      const me=await query('me');
-      if(run!==generation)return;
-      isAdministrator=me.user?.role==='admin';
       const [p,c]=await Promise.all([query('projects'),query('catalog?page=1')]);
-      if(run!==generation)return;
       projects=Array.isArray(p.projects)?p.projects:[];nextProject=p.next||null;
       products=Array.isArray(c.products)?c.products:[];catalogPage=1;catalogMore=!!c.hasMore;
-      ready=true;status='Sesión de Studio verificada';
-    }catch(e){
-      if(run!==generation)return;
-      const code=(e as Error&{status?:number}).status;
-      errorCode=code||0;
-      error=code===503?'Studio está en preparación o temporalmente desconectado.':code===403?'Tu cuenta aún no tiene autorización para EV Pro Studio.':code===401?'Tu sesión ha vencido. Vuelve a iniciar sesión.':'No se pudo verificar Studio.';
-    }finally{if(run===generation)busy=false;}
+      businessError='';
+    }catch(e){businessError=(e as Error).message||'No se pudieron consultar los módulos empresariales.'}
   }
-  async function initialAdmin(){
-    if(!canBootstrap||busy)return;
-    busy=true;error='';
+  async function load(){
+    const run=++generation;busy=true;error='';
     try{
-      await apiRequest('/api/studio/v1/bootstrap/initial-admin',{method:'POST',body:'{}',headers:{Authorization:'Bearer '+token}});
-      await load();
-    }catch(e){
-      const code=(e as Error&{status?:number}).status;
-      error=code===503?'El alta inicial de Studio todavía no ha sido habilitada por la administración de infraestructura.':code===409?'Ya existe un administrador inicial; solicita acceso a la administración actual.':'No fue posible registrar el primer administrador con esta sesión.';
-    }finally{busy=false}
+      const me=await query('me');if(run!==generation)return;
+      isAdministrator=me.user?.role==='admin';ready=true;
+      // The original engineering program must not wait for optional commercial APIs.
+      void refreshBusiness();
+    }catch(e){if(run===generation){const code=(e as Error&{status?:number}).status;error=code===403?'Tu cuenta no tiene acceso a Studio.':(e as Error).message||'No se pudo verificar Studio.'}}
+    finally{if(run===generation)busy=false}
   }
   async function find(page=1){
     if(!ready||busy)return;
     const run=++generation;busy=true;error='';
     try{const d=await query('catalog?'+new URLSearchParams({page:String(page),search}));
       if(run===generation){products=d.products??[];catalogPage=page;catalogMore=!!d.hasMore;}
-    }catch{if(run===generation){products=[];catalogMore=false;ready=false;error='No se pudo confirmar el acceso o consultar el catálogo. Reintenta la conexión.';}}
+    }catch{if(run===generation){products=[];catalogMore=false;businessError='No se pudo consultar el catálogo.';}}
     finally{if(run===generation)busy=false;}
   }
   async function moreProjects(){
@@ -59,30 +47,15 @@
     const run=++generation;busy=true;error='';
     try{const d=await query('projects?'+new URLSearchParams({after:nextProject}));
       if(run===generation){projects=[...projects,...(d.projects??[])];nextProject=d.next||null;}
-    }catch{if(run===generation){projects=[];products=[];ready=false;error='No se pudo confirmar el acceso a los proyectos. Reintenta la conexión.';}}
+    }catch{if(run===generation){projects=[];products=[];businessError='No se pudieron consultar los proyectos.';}}
     finally{if(run===generation)busy=false;}
   }
   onMount(()=>{void load();return()=>{generation++;};});
 </script>
-<section class="space-y-5" aria-label="EV Pro Studio">
-  <header class="rounded-2xl bg-slate-900 text-white p-5 sm:p-7 flex flex-wrap items-center justify-between gap-4">
-    <div><p class="uppercase tracking-widest text-xs text-teal-300 font-bold">Bonaire · Ingeniería y operaciones</p>
-      <h2 class="text-2xl font-extrabold mt-2">EV Pro Studio</h2>
-      <p class="text-sm text-slate-300 mt-2">Acceso integrado a la plataforma empresarial. Ingeniería privada en pantalla completa y gestión empresarial en módulos separados.</p>
-    </div>
-    <button type="button" onclick={load} disabled={busy} class="rounded-xl bg-teal-700 text-white font-semibold px-4 py-3 disabled:opacity-50">{busy?'Verificando…':'Verificar conexión'}</button>
-  </header>
-  {#if error}<p role="alert" class="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 p-4 text-sm">{error}</p>{/if}
-  {#if errorCode===403&&canBootstrap}<button type="button" disabled={busy} onclick={initialAdmin} class="rounded-lg border border-teal-300 p-3 text-sm font-semibold text-teal-800">Registrar primer administrador de Studio</button><p class="text-xs text-slate-500">Disponible únicamente durante el aprovisionamiento autorizado, no crea otra cuenta.</p>{/if}
-  {#if ready}
-    <p role="status" class="text-sm text-teal-800 font-semibold">{status}</p>
-    {#if isAdministrator}<StudioEngineeringFrame {token}/>{/if}
-    <nav aria-label="Módulos empresariales" class="flex flex-wrap gap-2 border-b pb-2">
-      <button type="button" class="rounded-lg border px-4 py-2 font-semibold" class:bg-teal-50={section==='projects'} onclick={()=>section='projects'}>Proyectos y catálogo</button>
-      {#if isAdministrator}<button type="button" class="rounded-lg border px-4 py-2 font-semibold" class:bg-teal-50={section==='team'} onclick={()=>section='team'}>Equipo y permisos</button><button type="button" class="rounded-lg border px-4 py-2 font-semibold" class:bg-teal-50={section==='operations'} onclick={()=>section='operations'}>Operaciones empresariales</button>{/if}
-    </nav>
-    {#if section==='projects'}
-    <div class="grid gap-4 lg:grid-cols-2">
+{#snippet business(section:string)}
+  {#if businessError}<p role="alert" class="rounded-lg bg-amber-50 p-3 mb-3">{businessError}</p>{/if}
+  {#if section==='catalog'||section==='assigned'}
+        <div class="grid gap-4 lg:grid-cols-2">
       <section class="rounded-2xl border bg-white p-4 space-y-3 min-w-0"><h3 class="font-extrabold">Proyectos autorizados</h3>
         {#if projects.length===0}<p class="text-sm text-slate-500">No tienes proyectos disponibles.</p>{/if}
         {#each projects as p (p.id)}<div class="border-t py-3 break-words"><p class="font-semibold">{p.name}</p><p class="text-xs text-slate-500 break-all">Ref. {p.id}</p><button type="button" class="mt-2 rounded-lg border border-teal-200 px-3 py-2 text-sm font-semibold text-teal-800" onclick={()=>selectedProject=p}>Abrir secciones del proyecto</button></div>{/each}
@@ -100,9 +73,17 @@
       </section>
     </div>
     {#if selectedProject}{#key selectedProject.id}<StudioProjectReader {token} project={selectedProject}/>{/key}{/if}
-    {:else if isAdministrator&&section==='team'}<StudioTechnicalShare {token} {projects} onRefresh={load}/><StudioManagement {token} {projects} onRefresh={load}/>
-    {:else if isAdministrator&&section==='operations'}<StudioOperations {token} {projects}/>{/if}
-  {:else if !busy}
-    <section class="rounded-xl bg-white border p-5 text-sm text-slate-600">La versión completa de ingeniería, sincronización y respaldos se habilitará tras las pruebas de seguridad. No se crean cuentas nuevas desde aquí.</section>
+
+  {:else if section==='team'}
+    <div class="space-y-4"><StudioTechnicalShare {token} {projects} onRefresh={refreshBusiness}/><StudioManagement {token} {projects} onRefresh={refreshBusiness}/></div>
+  {:else if ['inventory','orders','suppliers','finance','shortages','conflicts','backup','publication'].includes(section)}
+    {#key section}<StudioOperations {token} {projects} initialMode={section as 'inventory'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication'} embedded={true}/>{/key}
   {/if}
-</section>
+{/snippet}
+{#if ready&&isAdministrator}
+  <StudioEngineeringFrame {token} {business} {onExit}/>
+{:else if ready}
+  <main class="min-h-screen bg-slate-50 p-5 space-y-4"><header class="flex justify-between items-center"><h1 class="text-2xl font-bold">EV Pro Studio · Proyectos asignados</h1><button type="button" class="border rounded-lg px-3 py-2" onclick={onExit}>Volver a Bonaire</button></header>{@render business('assigned')}</main>
+{:else}
+  <main class="fixed inset-0 bg-[#f1f6f5] grid place-items-center p-5"><section class="max-w-lg w-full rounded-xl bg-white border p-6 space-y-4"><h1 class="text-2xl font-bold">EV Pro Studio</h1>{#if error}<p role="alert">{error}</p><button type="button" class="rounded-lg border px-4 py-2" onclick={load}>Reintentar conexión</button>{:else}<p role="status">Verificando sesión de Bonaire…</p>{/if}<button type="button" class="rounded-lg border px-4 py-2" onclick={onExit}>Volver a Bonaire</button></section></main>
+{/if}

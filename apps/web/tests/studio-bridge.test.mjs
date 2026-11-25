@@ -228,7 +228,7 @@ test('web engineering uses an explicit module export and full viewport isolated 
  const frame=readFileSync(new URL('../src/components/StudioEngineeringFrame.svelte',import.meta.url),'utf8');
  const bridge=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
  assert.match(frame,/import \{transport\} from/);
- assert.match(frame,/dialog\?\.showModal\(\)/);
+ assert.match(frame,/position:fixed;inset:0/);
  assert.match(frame,/height:100dvh/);
  assert.match(frame,/event\.source!==frame\.contentWindow/);
  assert.match(frame,/event\.origin!=='null'/);
@@ -236,4 +236,17 @@ test('web engineering uses an explicit module export and full viewport isolated 
  assert.match(bridge,/evpro-engineering-ready-v2/);
  assert.match(bridge,/check-close/);
  assert.doesNotMatch(frame,/EVEngineeringAssets/);
+});
+
+test('Studio route is a dedicated app, not a nested commercial admin page',()=>{
+ const admin=readFileSync(new URL('../src/AdminPage.svelte',import.meta.url),'utf8');
+ const frame=readFileSync(new URL('../src/components/StudioEngineeringFrame.svelte',import.meta.url),'utf8');
+ const entry=readFileSync(new URL('../src/components/StudioEntrance.svelte',import.meta.url),'utf8');
+ const bridge=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
+ assert.match(admin,/\{#if token && ownId && tab === 'studio' && studioUiEnabled\}[\s\S]*?<StudioEntrance[\s\S]*?\{:else\}[\s\S]*?<header class="sticky/);
+ assert.doesNotMatch(frame,/Abrir EV Pro Online|showModal\(/);
+ assert.match(frame,/\{@render business\(section\)\}/);
+ assert.match(bridge,/OPERACIONES BONAIRE/);
+ assert.match(bridge,/studio-navigation/);
+ assert.match(entry,/StudioOperations[\s\S]*initialMode=/);
 });

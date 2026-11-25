@@ -425,6 +425,9 @@
 
 </script>
 
+{#if token && ownId && tab === 'studio' && studioUiEnabled}
+  {#key ownId}<StudioEntrance {token} onExit={()=>chooseTab('requests')}/>{/key}
+{:else}
 <div class="w-full min-w-0 max-w-none mx-auto px-3 sm:px-5 xl:px-8 py-5 xl:py-7 min-h-screen bg-slate-50">
   <header class="sticky top-0 z-[90] -mx-3 sm:-mx-5 xl:-mx-8 -mt-5 xl:-mt-7 mb-6 border-b border-slate-200 bg-white/95 backdrop-blur shadow-sm">
     <div class="w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-5 xl:px-8 py-2.5 min-w-0">
@@ -552,9 +555,7 @@
     </section>
     {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
-    {#if tab === 'studio' && studioUiEnabled}
-      {#key ownId}<StudioEntrance {token} canBootstrap={staffRole === 'admin'}/>{/key}
-    {:else if tab === 'customers'}
+    {#if tab === 'customers'}
       <AdminCustomers {token} {customers} canManage={staffRole === 'admin'}
         onOpenDossier={(id:string)=>openDossier(id)} onRefresh={async () => { await reload(); }} />
     {:else if tab === 'requests'}
@@ -978,4 +979,6 @@
       </form>
     </dialog>
   </div>
+{/if}
+
 {/if}

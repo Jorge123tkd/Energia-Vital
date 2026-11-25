@@ -1,21 +1,23 @@
 <script lang="ts">
- import {onMount,onDestroy,tick} from 'svelte';
+ import {onMount,onDestroy,type Snippet} from 'svelte';
  import {apiRequest,ADMIN_TOKEN_KEY} from '../lib/api';
  import {transport} from '../lib/engineering-assets.js';
- let {token,autoOpen=true}:{token:string;autoOpen?:boolean}=$props();
- let frame:HTMLIFrameElement|undefined=$state(),dialog:HTMLDialogElement|undefined=$state(),opened=$state(false),busy=$state(false),error=$state(''),workspaceError=$state('');
+ let {token,business,onExit}:{token:string;business:Snippet<[string]>;onExit:()=>void}=$props();
+ let frame:HTMLIFrameElement|undefined=$state(),opened=$state(false),busy=$state(false),error=$state(''),workspaceError=$state('');
  let port:MessagePort|null=null,epoch=0,loads=0,operations=$state(0),firstRead:any=null,connected=false,closePending=$state(false);
+ let section=$state('engineering');
+ const names:Record<string,string>={catalog:'Catálogo de Bonaire',assigned:'Proyectos asignados',team:'Equipo y permisos',inventory:'Almacén',orders:'Compras',suppliers:'Proveedores',finance:'Economía',shortages:'Faltantes',conflicts:'Conflictos',backup:'Respaldos online',publication:'Publicaciones'};
  const route='/api/studio/v1/engineering';
  type EngineeringRequest=(method:string,suffix:string,payload?:unknown)=>Promise<any>;
  const auth=()=>({Authorization:'Bearer '+token});
  function close(){
   epoch++;port?.close();port=null;connected=false;firstRead=null;opened=false;loads=0;operations=0;closePending=false;
-  if(dialog?.open)dialog.close();
+  section='engineering';
  }
  function requestClose(){
   if(operations){workspaceError='Hay una lectura o guardado en curso. Espera su confirmación antes de cerrar.';return}
   if(port){closePending=true;port.postMessage({type:'check-close'});return}
-  close();
+  close();onExit();
  }
  function requestFor(current:number,requireOpen:boolean):EngineeringRequest{
   return async(method,suffix,payload)=>{
@@ -33,7 +35,7 @@
    if(run!==epoch)return;
    if(!result||!Object.hasOwn(result,'snapshot')||typeof result.rev!=='string')throw Error('Respuesta de ingeniería online inválida');
    firstRead=result;loads=0;connected=false;opened=true;
-   await tick();if(run!==epoch)return;dialog?.showModal();
+
   }catch(e){if(run===epoch){opened=false;error=(e as Error).message||'Ingeniería online todavía no disponible.'}}
   finally{if(run===epoch)busy=false}
  }
@@ -52,8 +54,13 @@
    if(current!==epoch||!opened||!data)return;
    if(data.type==='close-state'&&closePending){
     closePending=false;
-    if(data.pending===false){close();return}
+    if(data.pending===false){close();onExit();return}
     workspaceError='Hay cambios sin confirmar. Guárdalos o descarga un respaldo antes de salir.';
+    return;
+   }
+   if(data.type==='studio-navigation'){
+    if(data.section==='exit'){requestClose();return}
+    if(data.section==='engineering'||Object.hasOwn(names,data.section)){section=data.section;workspaceError=''}
     return;
    }
    if(!Number.isSafeInteger(data.id)||!['read','write'].includes(data.action))return;
@@ -72,32 +79,30 @@
   channel.port1.start();
   frame.contentWindow.postMessage({type:'evpro-engineering-connect-v1'},'*',[channel.port2]);
  }
- onMount(()=>{window.addEventListener('message',connect);if(autoOpen)void open();return()=>window.removeEventListener('message',connect)});
+ onMount(()=>{window.addEventListener('message',connect);void open();return()=>window.removeEventListener('message',connect)});
  onDestroy(close);
 </script>
-<section class="rounded-2xl border bg-white p-4 space-y-3" aria-label="Ingeniería EV Pro original online">
- <div class="flex items-center justify-between flex-wrap gap-3">
-  <div><h3 class="text-xl font-extrabold">EV Pro · Ingeniería completa</h3>
-   <p class="text-sm text-slate-500">Abre el espacio de ingeniería original en pantalla completa. Guardado privado en línea.</p></div>
-  <button type="button" class="rounded-xl bg-teal-800 text-white px-4 py-3 font-semibold disabled:opacity-50" disabled={busy||opened} onclick={open}>{busy?'Abriendo ingeniería…':'Abrir EV Pro Online'}</button>
- </div>
- {#if error}<p role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{error}</p>{/if}
+<div class="ev-workspace" aria-label="EV Pro Studio">
  {#if opened}
-  <dialog bind:this={dialog} aria-label="EV Pro Studio a pantalla completa" class="ev-workspace" oncancel={e=>{e.preventDefault();requestClose()}}>
-   <div class="ev-layout">
-    <header class="flex items-center justify-between gap-3 bg-slate-900 text-white px-4 py-2 shrink-0">
-     <div class="flex items-center gap-3 min-w-0"><strong class="truncate">EV Pro Studio</strong><span class="hidden sm:inline text-xs text-teal-200">Ingeniería online · Bonaire</span></div>
-     <button type="button" class="shrink-0 rounded-lg bg-white/10 hover:bg-white/20 px-3 py-2 text-sm font-semibold disabled:opacity-50" disabled={operations>0||closePending} onclick={requestClose}>{closePending?'Verificando guardado…':'← Volver a Bonaire'}</button>
-    </header>
-    {#if workspaceError}<div role="alert" class="bg-amber-50 text-amber-900 px-4 py-2 text-sm flex items-center gap-3"><span class="flex-1">{workspaceError}</span><button type="button" onclick={()=>workspaceError=''}>Cerrar aviso</button></div>{/if}
-    <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer"></iframe>
-   </div>
-  </dialog>
+  <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer"></iframe>
+  {#if section!=='engineering'}
+    <section class="ev-business" aria-label={names[section]}>
+      <header class="ev-business-header"><span>Studio / {names[section]}</span><div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg border px-3 py-2 text-sm" onclick={()=>section='engineering'}>Volver a ingeniería</button><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={requestClose}>Volver a Bonaire</button></div></header>
+      <main class="ev-business-main"><h1 class="text-2xl sm:text-3xl font-bold mb-5">{names[section]}</h1>{@render business(section)}</main>
+    </section>
+  {/if}
+  {#if workspaceError}<div role="alert" class="ev-error bg-amber-50 text-amber-900 px-4 py-2 text-sm flex items-center gap-3"><span class="flex-1">{workspaceError}</span><button type="button" onclick={()=>workspaceError=''}>Cerrar aviso</button></div>{/if}
+  {#if closePending}<div role="status" class="ev-error bg-white p-3">Verificando guardado…</div>{/if}
+ {:else}
+  <div class="grid h-full place-items-center p-5"><section class="w-full max-w-lg border rounded-xl bg-white p-6 space-y-4"><h1 class="text-2xl font-bold">EV Pro Studio</h1>{#if error}<p role="alert" class="text-amber-900">{error}</p><button type="button" class="border rounded-lg px-3 py-2" disabled={busy} onclick={open}>Reintentar conexión</button>{:else}<p role="status">Cargando tu espacio de ingeniería…</p>{/if}<button type="button" class="border rounded-lg px-3 py-2" onclick={requestClose}>Volver a Bonaire</button></section></div>
  {/if}
-</section>
+</div>
 <style>
- .ev-workspace{position:fixed;inset:0;margin:0;padding:0;border:0;width:100vw;height:100dvh;max-width:none;max-height:none;overflow:hidden;background:#eff4f3}
- .ev-workspace::backdrop{background:#0f172a}
- .ev-layout{display:flex;flex-direction:column;width:100%;height:100%;overflow:hidden}
- .ev-layout iframe{display:block;width:100%;flex:1;min-height:0;border:0}
+ .ev-workspace{position:fixed;inset:0;width:100%;height:100dvh;overflow:hidden;background:#f1f6f5;color:#18323a;z-index:100}
+ .ev-workspace iframe{display:block;width:100%;height:100%;border:0}
+ .ev-business{position:absolute;inset:0 0 0 246px;overflow:auto;background:#f1f6f5}
+ .ev-business-header{position:sticky;top:0;z-index:2;background:white;border-bottom:1px solid #d9e5e4;min-height:65px;padding:13px 30px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;color:#62767b}
+ .ev-business-main{max-width:1540px;margin:auto;padding:30px 34px 60px}
+ .ev-error{position:absolute;bottom:12px;left:258px;right:12px;border:1px solid #e7c889;border-radius:9px;z-index:3}
+ @media(max-width:850px){.ev-business{left:0}.ev-business-header{padding:12px 14px}.ev-business-main{padding:18px 14px 36px}.ev-error{left:12px}}
 </style>
