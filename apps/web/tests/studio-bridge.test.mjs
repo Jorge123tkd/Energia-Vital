@@ -290,9 +290,9 @@ test('authenticated account is supplied to the top bar independently of the rend
  assert.match(bridge,/\['exit','←','Volver a Bonaire'\]/);
  assert.match(frame,/requestClose\(data.section\)/);
  assert.match(frame,/if\(data.pending===false\)\{finishClose\(\);return\}/);
- assert.match(frame,/index\.html\?v=cuenta-20261125-1/);
- assert.match(html,/bridge\.js\?v=cuenta-20261125-1/);
- assert.match(html,/app\.js\?v=cuenta-20261125-1/);
+ assert.match(frame,/index\.html\?v=capacidad-20261125-2/);
+ assert.match(html,/bridge\.js\?v=capacidad-20261125-2/);
+ assert.match(html,/app\.js\?v=capacidad-20261125-2/);
 });
 
 test('web account fallback renders once from trusted parent and sends logout, not back',async()=>{
@@ -331,4 +331,17 @@ test('web account fallback renders once from trusted parent and sends logout, no
  refreshTop();assert.equal(top.children.length,1);
  native=true;refreshTop();assert.equal(top.children.length,0,'No duplicar los controles del núcleo compartido');
  native=false;refreshTop();assert.equal(top.children.length,1,'Recuperar controles tras redibujar la cabecera');
+});
+
+test('web transport uses the expanded attachment capacity and batches checks',async()=>{
+ const {transport}=await import('../src/lib/engineering-assets.js');
+ const data='data:image/png;base64,'+Buffer.alloc(11*1024*1024,67).toString('base64');
+ const snapshot={companies:[],projects:[{images:Array.from({length:4},()=>({data}))},{images:Array.from({length:70},(_,i)=>({data:'data:image/png;base64,'+Buffer.from('image-'+i).toString('base64')}))}],library:[],templates:[]};
+ const batches=[];const sync=transport(async(method,path,payload)=>{
+  if(path==='/assets/check'){batches.push(payload.hashes.length);return {present:payload.hashes}}
+  if(path==='/manifest'&&method==='PUT')return {ok:true,rev:payload.rev};
+  throw Error('unexpected '+path);
+ });
+ assert.equal((await sync('PUT',{snapshot,expected:'',rev:'qa-large'})).ok,true);
+ assert.deepEqual(batches,[32,32,7]);
 });

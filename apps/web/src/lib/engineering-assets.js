@@ -1,7 +1,7 @@
 'use strict';
 // Shared by Windows and the authenticated web shell; renderer keeps the
 // original EV 3.8 data URLs. No credentials or public asset URLs here.
- const MAX_ASSET=21*1024*1024, MAX_TOTAL=40*1024*1024, MAX_REFS=64;
+ const MAX_ASSET=21*1024*1024, MAX_TOTAL=192*1024*1024, MAX_REFS=512;
  const digest=async value=>Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),b=>b.toString(16).padStart(2,'0')).join('');
  const dataURL=s=>typeof s==='string'&&/^data:[a-z0-9!#$&^_.+/-]+;base64,[A-Za-z0-9+/]+={0,2}$/i.test(s);
  const ref=v=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.hasOwn(v,'__evAsset');
@@ -12,7 +12,7 @@
    if(depth>20)throw Error('Estructura de expediente demasiado profunda');
    if(typeof v==='string'&&v.startsWith('data:')&&v.includes(';base64,')){
     if(!dataURL(v)||v.length>MAX_ASSET)throw Error('Adjunto inválido o demasiado grande');
-    expanded+=v.length;if(expanded>MAX_TOTAL)throw Error('Tamaño total de adjuntos excedido');
+    expanded+=v.length;if(expanded>MAX_TOTAL)throw Error('Tamaño total de adjuntos excedido (192 MiB codificados). Conserva tu respaldo.');
     let hash=seen.get(v);
     if(!hash){hash=await digest(v);seen.set(v,hash)}
     if(!assets.has(hash)){total+=v.length;assets.set(hash,v);if(total>MAX_TOTAL||assets.size>MAX_REFS)throw Error('Límite de adjuntos del espacio alcanzado; conserva un respaldo')}
@@ -62,9 +62,13 @@
    const {snapshot,assets}=await pack(payload.snapshot);
    if(assets.size){
     const hashes=[...assets.keys()];
-    const existing=await request('POST','/assets/check',{hashes});
-    if(!Array.isArray(existing.present)||existing.present.some(h=>!assets.has(h)))throw Error('Respuesta de adjuntos inválida');
-    const present=new Set(existing.present);
+    const present=new Set();
+    for(let i=0;i<hashes.length;i+=32){
+     const batch=hashes.slice(i,i+32);
+     const existing=await request('POST','/assets/check',{hashes:batch});
+     if(!Array.isArray(existing.present)||existing.present.some(h=>!batch.includes(h)))throw Error('Respuesta de adjuntos inválida');
+     for(const h of existing.present)present.add(h);
+    }
     for(const [hash,data] of assets)if(!present.has(hash)){
      const receipt=await request('PUT','/assets/'+hash,{data});
      if(receipt?.ok!==true||receipt.hash!==hash)throw Error('No se confirmó el adjunto');
