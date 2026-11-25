@@ -195,7 +195,8 @@ jobs:
         working-directory: apps/web
         run: npx wrangler pages functions build functions --outfile "$RUNNER_TEMP/bonaire-pages-functions.js" --output-routes-path "$RUNNER_TEMP/bonaire-pages-routes.json"
       - name: Probar los puentes protegidos y bindings Studio antes de publicar
-        run: node apps/web/tests/studio-bridge.test.mjs
+        run: |
+          node --test apps/web/tests/studio-bridge.test.mjs apps/web/tests/studio-action-audit.test.mjs apps/web/tests/studio-technical-share.test.mjs
       - name: Verificar rama real de producción de Cloudflare Pages (solo lectura)
         id: pages-production
         shell: bash

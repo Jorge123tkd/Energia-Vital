@@ -36,7 +36,7 @@ jobs:
 
       - name: Probar puente Studio y navegación administrativa
         run: |
-          node --test apps/web/tests/studio-bridge.test.mjs
+          node --test apps/web/tests/studio-bridge.test.mjs apps/web/tests/studio-action-audit.test.mjs apps/web/tests/studio-technical-share.test.mjs
           node apps/web/tests/admin-browser-session.cjs
 
       - name: Verificar libro de movimientos de almacén (SQLite ficticio)

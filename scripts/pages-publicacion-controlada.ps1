@@ -98,6 +98,8 @@ try{
  if($HabilitarStudio){
   & node --test apps/web/tests/studio-technical-share.test.mjs
   MustSucceed 'Pruebas de colaboracion no superadas.'
+  & node --test apps/web/tests/studio-action-audit.test.mjs
+  MustSucceed 'Auditoria de acciones de Studio no superada.'
   $bundles=Get-ChildItem (Join-Path $root 'apps/web/dist/assets') -Filter '*.js' -File
   if(!($bundles | Select-String -SimpleMatch 'Volver a Bonaire' -List)){throw 'El build no contiene la interfaz Studio habilitada.'}
   if(!(Test-Path (Join-Path $root 'apps/web/dist/studio-engineering/index.html'))){throw 'Falta la interfaz original de ingenieria.'}
