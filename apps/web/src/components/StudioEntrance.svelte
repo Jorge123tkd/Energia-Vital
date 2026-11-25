@@ -15,6 +15,7 @@
   let isAdministrator=$state(false);
   let errorCode=$state(0);
   let selectedProject=$state<Project|null>(null);
+  let section=$state<'projects'|'team'|'operations'>('projects');
   const query=(path:string)=>apiRequest('/api/studio/v1/'+path,{headers:{Authorization:'Bearer '+token}});
   async function load(){
     const run=++generation;busy=true;ready=false;error='';errorCode=0;status='';projects=[];products=[];nextProject=null;catalogMore=false;selectedProject=null;
@@ -67,7 +68,7 @@
   <header class="rounded-2xl bg-slate-900 text-white p-5 sm:p-7 flex flex-wrap items-center justify-between gap-4">
     <div><p class="uppercase tracking-widest text-xs text-teal-300 font-bold">Bonaire · Ingeniería y operaciones</p>
       <h2 class="text-2xl font-extrabold mt-2">EV Pro Studio</h2>
-      <p class="text-sm text-slate-300 mt-2">Acceso integrado a la plataforma empresarial. Primera etapa de conexión, solo lectura.</p>
+      <p class="text-sm text-slate-300 mt-2">Acceso integrado a la plataforma empresarial. Ingeniería privada en pantalla completa y gestión empresarial en módulos separados.</p>
     </div>
     <button type="button" onclick={load} disabled={busy} class="rounded-xl bg-teal-700 text-white font-semibold px-4 py-3 disabled:opacity-50">{busy?'Verificando…':'Verificar conexión'}</button>
   </header>
@@ -76,6 +77,11 @@
   {#if ready}
     <p role="status" class="text-sm text-teal-800 font-semibold">{status}</p>
     {#if isAdministrator}<StudioEngineeringFrame {token}/>{/if}
+    <nav aria-label="Módulos empresariales" class="flex flex-wrap gap-2 border-b pb-2">
+      <button type="button" class="rounded-lg border px-4 py-2 font-semibold" class:bg-teal-50={section==='projects'} onclick={()=>section='projects'}>Proyectos y catálogo</button>
+      {#if isAdministrator}<button type="button" class="rounded-lg border px-4 py-2 font-semibold" class:bg-teal-50={section==='team'} onclick={()=>section='team'}>Equipo y permisos</button><button type="button" class="rounded-lg border px-4 py-2 font-semibold" class:bg-teal-50={section==='operations'} onclick={()=>section='operations'}>Operaciones empresariales</button>{/if}
+    </nav>
+    {#if section==='projects'}
     <div class="grid gap-4 lg:grid-cols-2">
       <section class="rounded-2xl border bg-white p-4 space-y-3 min-w-0"><h3 class="font-extrabold">Proyectos autorizados</h3>
         {#if projects.length===0}<p class="text-sm text-slate-500">No tienes proyectos disponibles.</p>{/if}
@@ -94,7 +100,8 @@
       </section>
     </div>
     {#if selectedProject}{#key selectedProject.id}<StudioProjectReader {token} project={selectedProject}/>{/key}{/if}
-    {#if isAdministrator}<StudioTechnicalShare {token} {projects} onRefresh={load}/><StudioManagement {token} {projects} onRefresh={load}/><StudioOperations {token} {projects}/>{/if}
+    {:else if isAdministrator&&section==='team'}<StudioTechnicalShare {token} {projects} onRefresh={load}/><StudioManagement {token} {projects} onRefresh={load}/>
+    {:else if isAdministrator&&section==='operations'}<StudioOperations {token} {projects}/>{/if}
   {:else if !busy}
     <section class="rounded-xl bg-white border p-5 text-sm text-slate-600">La versión completa de ingeniería, sincronización y respaldos se habilitará tras las pruebas de seguridad. No se crean cuentas nuevas desde aquí.</section>
   {/if}

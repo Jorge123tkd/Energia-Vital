@@ -1,11 +1,6 @@
 'use strict';
 // Shared by Windows and the authenticated web shell; renderer keeps the
 // original EV 3.8 data URLs. No credentials or public asset URLs here.
-(function(root,factory){
- const api=factory();
- if(typeof module==='object'&&module.exports)module.exports=api;
- else root.EVEngineeringAssets=api;
-})(globalThis,function(){
  const MAX_ASSET=21*1024*1024, MAX_TOTAL=40*1024*1024, MAX_REFS=64;
  const digest=async value=>Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),b=>b.toString(16).padStart(2,'0')).join('');
  const dataURL=s=>typeof s==='string'&&/^data:[a-z0-9!#$&^_.+/-]+;base64,[A-Za-z0-9+/]+={0,2}$/i.test(s);
@@ -78,5 +73,4 @@
    return request('PUT','/manifest',{...payload,snapshot});
   };
  }
- return Object.freeze({pack,unpack,transport});
-});
+export {pack,unpack,transport};

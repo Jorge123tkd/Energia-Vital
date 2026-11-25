@@ -218,3 +218,22 @@ test('engineering attachment routes are exact, private and administrator-only fo
   assert.ok([404,405].includes((await call(prefix,'/v1/engineering/assets/'+hash,'DELETE')).status));
  }
 });
+
+test('web engineering uses an explicit module export and full viewport isolated dialog',async()=>{
+ const {transport}=await import('../src/lib/engineering-assets.js');
+ const calls=[];
+ const sync=transport(async(method,path)=>{calls.push([method,path]);return {snapshot:null,rev:''}});
+ assert.deepEqual(await sync('GET'),{snapshot:null,rev:''});
+ assert.deepEqual(calls,[['GET','/manifest']]);
+ const frame=readFileSync(new URL('../src/components/StudioEngineeringFrame.svelte',import.meta.url),'utf8');
+ const bridge=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
+ assert.match(frame,/import \{transport\} from/);
+ assert.match(frame,/dialog\?\.showModal\(\)/);
+ assert.match(frame,/height:100dvh/);
+ assert.match(frame,/event\.source!==frame\.contentWindow/);
+ assert.match(frame,/event\.origin!=='null'/);
+ assert.match(frame,/evpro-engineering-ready-v2/);
+ assert.match(bridge,/evpro-engineering-ready-v2/);
+ assert.match(bridge,/check-close/);
+ assert.doesNotMatch(frame,/EVEngineeringAssets/);
+});
