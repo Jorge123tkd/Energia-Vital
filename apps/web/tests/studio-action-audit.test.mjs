@@ -38,3 +38,12 @@ test('online settings describe actual central storage, not local SQLite or ZIP u
  assert.match(source,/function settings\(\)\{if\(globalThis\.EVEngineeringStore\)/);
  assert.match(source,/Actualizaciones|actualizaciones se publican desde Bonaire/);
 });
+
+test('managed sessions retain identity and preferences without local browser storage',()=>{
+ assert.match(source,/EVEngineeringAccount\.info\(\)/);
+ assert.match(source,/function engineeringCanLeave\(\).*pendingSave\(\)/);
+ assert.match(source,/centralAccountAction\('logout'\)/);
+ assert.match(source,/snap\.__evStudioPrefs=\{autoSaveEnabled,defaults:centralDefaults\}/);
+ assert.match(source,/centralDefaults=raw\?\.__evStudioPrefs/);
+ assert.match(source,/async function init\(\)\{if\(globalThis\.EVEngineeringStore\)/);
+});
