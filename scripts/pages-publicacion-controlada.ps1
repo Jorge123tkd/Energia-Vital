@@ -1,5 +1,5 @@
 # Pages only: no API Worker deploy, D1 migration, bucket writes or DNS changes.
-param([switch]$Publicar,[string]$Confirmacion='',[switch]$HabilitarStudio,[switch]$DependenciasYaInstaladas)
+param([switch]$Publicar,[string]$Confirmacion='',[switch]$HabilitarStudio,[switch]$DependenciasYaInstaladas,[switch]$CompiladorTemporal)
 $ErrorActionPreference='Stop'
 $root=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $branch='feat/cloudflare-customer-accounts-hardening'
@@ -77,8 +77,22 @@ try{
  # Explicit UI activation only; existing server-side authorization remains in force.
  $env:VITE_STUDIO_UI_ENABLED=if($HabilitarStudio){'true'}else{'false'}
  Write-Host "[BUILD] VITE_STUDIO_UI_ENABLED=$env:VITE_STUDIO_UI_ENABLED"
- & npm.cmd run build --workspace=apps/web
- MustSucceed 'Frontend no compilo.'
+ $previousEsbuild=$env:ESBUILD_BINARY_PATH
+ try{
+  if($CompiladorTemporal){
+   $binary=Join-Path $tmp 'esbuild-vite.exe'
+   & node scripts/preparar-esbuild-temporal.cjs $binary
+   MustSucceed 'No se pudo verificar el compilador temporal; no publicar.'
+   $env:ESBUILD_BINARY_PATH=$binary
+   Write-Host '[OK] Vite usara una copia temporal de su propia version de esbuild.'
+  }
+  & npm.cmd run build --workspace=apps/web
+  MustSucceed 'Frontend no compilo.'
+ }finally{
+  # Wrangler can use another esbuild version: do not pass Vite's override to it.
+  if($null -eq $previousEsbuild){Remove-Item Env:ESBUILD_BINARY_PATH -ErrorAction SilentlyContinue}
+  else{$env:ESBUILD_BINARY_PATH=$previousEsbuild}
+ }
  & node apps/web/tests/pages-build-output.mjs
  MustSucceed 'Rutas Pages no validas.'
  if($HabilitarStudio){
