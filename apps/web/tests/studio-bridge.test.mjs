@@ -250,3 +250,17 @@ test('Studio route is a dedicated app, not a nested commercial admin page',()=>{
  assert.match(bridge,/studio-navigation/);
  assert.match(entry,/StudioOperations[\s\S]*initialMode=/);
 });
+
+test('online Studio groups overlapping functions without a second project creation flow',()=>{
+ const bridge=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
+ const entry=readFileSync(new URL('../src/components/StudioEntrance.svelte',import.meta.url),'utf8');
+ const management=readFileSync(new URL('../src/components/StudioManagement.svelte',import.meta.url),'utf8');
+ assert.doesNotMatch(bridge,/\['assigned',|\['orders',|\['suppliers',|\['shortages',|\['conflicts',/);
+ assert.match(bridge,/'Colaboración y permisos','projects'/);
+ assert.match(bridge,/'Catálogo comercial','library'/);
+ assert.match(bridge,/'Copias de secciones compartidas','backups'/);
+ assert.match(bridge,/'Almacén y compras'/);
+ assert.match(entry,/procurementGroup=\{section==='inventory'\}/);
+ assert.match(entry,/section!=='catalog'/);
+ assert.doesNotMatch(management,/Crear proyecto|function create\(/);
+});

@@ -54,13 +54,16 @@
 </script>
 {#snippet business(section:string)}
   {#if businessError}<p role="alert" class="rounded-lg bg-amber-50 p-3 mb-3">{businessError}</p>{/if}
-  {#if section==='catalog'||section==='assigned'}
-        <div class="grid gap-4 lg:grid-cols-2">
-      <section class="rounded-2xl border bg-white p-4 space-y-3 min-w-0"><h3 class="font-extrabold">Proyectos autorizados</h3>
+  {#if section==='catalog'||section==='assigned'||section==='team'}
+        <div class="space-y-4">
+      {#if section!=='catalog'}
+      <section class="rounded-2xl border bg-white p-4 space-y-3 min-w-0"><h3 class="font-extrabold">Expedientes compartidos</h3><p class="text-xs text-slate-500">Son las secciones autorizadas del expediente original, no una segunda lista de proyectos de ingeniería.</p>
         {#if projects.length===0}<p class="text-sm text-slate-500">No tienes proyectos disponibles.</p>{/if}
         {#each projects as p (p.id)}<div class="border-t py-3 break-words"><p class="font-semibold">{p.name}</p><p class="text-xs text-slate-500 break-all">Ref. {p.id}</p><button type="button" class="mt-2 rounded-lg border border-teal-200 px-3 py-2 text-sm font-semibold text-teal-800" onclick={()=>selectedProject=p}>Abrir secciones del proyecto</button></div>{/each}
         {#if nextProject}<button type="button" disabled={busy} onclick={moreProjects} class="text-sm text-teal-800 underline">Cargar más proyectos</button>{/if}
       </section>
+      {/if}
+      {#if section!=='team'}
       <section class="rounded-2xl border bg-white p-4 space-y-3 min-w-0"><h3 class="font-extrabold">Catálogo de Bonaire</h3>
         <form onsubmit={(e)=>{e.preventDefault();void find(1);}} class="flex gap-2 flex-wrap">
           <input aria-label="Buscar productos" type="search" maxlength="100" bind:value={search} placeholder="Nombre, marca, modelo" class="flex-1 min-w-0 rounded-lg border p-2 text-sm"/>
@@ -71,13 +74,15 @@
         {#if !products.length}<p class="text-sm text-slate-500">No hay resultados.</p>{/if}
         <div class="flex gap-3 text-sm"><button type="button" disabled={busy||catalogPage===1} onclick={()=>find(catalogPage-1)} class="text-teal-800 disabled:opacity-40">Anterior</button><span>Página {catalogPage}</span><button type="button" disabled={busy||!catalogMore} onclick={()=>find(catalogPage+1)} class="text-teal-800 disabled:opacity-40">Siguiente</button></div>
       </section>
+      {/if}
     </div>
-    {#if selectedProject}{#key selectedProject.id}<StudioProjectReader {token} project={selectedProject}/>{/key}{/if}
+    {#if section!=='catalog'&&selectedProject}{#key selectedProject.id}<StudioProjectReader {token} project={selectedProject}/>{/key}{/if}
 
-  {:else if section==='team'}
-    <div class="space-y-4"><StudioTechnicalShare {token} {projects} onRefresh={refreshBusiness}/><StudioManagement {token} {projects} onRefresh={refreshBusiness}/></div>
-  {:else if ['inventory','orders','suppliers','finance','shortages','conflicts','backup','publication'].includes(section)}
-    {#key section}<StudioOperations {token} {projects} initialMode={section as 'inventory'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication'} embedded={true}/>{/key}
+    {#if section==='team'&&isAdministrator}
+      <div class="space-y-4 mt-4"><StudioTechnicalShare {token} {projects} onRefresh={refreshBusiness}/><StudioManagement {token} {projects} onRefresh={refreshBusiness}/><StudioOperations {token} {projects} initialMode="conflicts" embedded={true}/></div>
+    {/if}
+  {:else if ['inventory','finance','backup','publication'].includes(section)}
+    {#key section}<StudioOperations {token} {projects} initialMode={section as 'inventory'|'finance'|'backup'|'publication'} embedded={true} procurementGroup={section==='inventory'}/>{/key}
   {/if}
 {/snippet}
 {#if ready&&isAdministrator}

@@ -18,17 +18,20 @@
  }
  function installMenu(){
   const menu=document.getElementById('nav');if(!menu)return;
-  const items=[['catalog','▥','Catálogo de Bonaire'],['assigned','▤','Proyectos asignados'],['team','♙','Equipo y permisos'],['inventory','▦','Almacén'],['orders','▧','Compras'],['suppliers','♙','Proveedores'],['finance','＄','Economía'],['shortages','◇','Faltantes'],['conflicts','⎇','Conflictos'],['backup','↧','Respaldos online'],['publication','↗','Publicaciones'],['exit','←','Volver a Bonaire']];
+  const items=[['team','♙','Colaboración y permisos','projects'],['catalog','▥','Catálogo comercial','library'],['backup','↧','Copias de secciones compartidas','backups'],['inventory','▦','Almacén y compras'],['finance','＄','Finanzas y compromisos'],['publication','↗','Publicaciones comerciales'],['exit','←','Volver a Bonaire']];
   const send=section=>{if(port)port.postMessage({type:'studio-navigation',section})};
   function decorate(){
    if(!menu.querySelector('.brand')||menu.querySelector('#ev-business-nav'))return;
    const group=document.createElement('div');group.id='ev-business-nav';
    const label=document.createElement('div');label.className='navlabel';label.textContent='OPERACIONES BONAIRE';group.append(label);
-   for(const [section,glyph,name] of items){
+   for(const [section,glyph,name,under] of items){
     const button=document.createElement('button');button.type='button';button.className='navitem';button.dataset.studioSection=section;
     const icon=document.createElement('span');icon.textContent=glyph;button.append(icon,document.createTextNode(name));
     button.addEventListener('click',()=>{menu.classList.remove('visible');send(section)});
-    group.append(button);
+    const anchor=under&&Array.from(menu.querySelectorAll('button.navitem')).find(b=>b.getAttribute('onclick')==="nav('"+under+"')");
+    if(anchor){button.style.paddingLeft='27px';button.style.fontSize='12px';anchor.after(button)}
+    else if(!under||section==='team'){group.append(button)}
+   
    }
    menu.append(group);
   }

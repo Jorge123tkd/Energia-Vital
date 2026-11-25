@@ -89,8 +89,8 @@
     await call(path,'PUT',{operationId:crypto.randomUUID(),baseRevision:0,data:item.body});
     sent++;existing=[...existing,item.id];
    }
-   message='Filas nuevas compartidas: '+sent+' · Existentes conservadas: '+already+'. Asigna las cuentas del equipo en Proyectos y personal.';
-   checked=[];reviewed=false;
+   message='Filas nuevas compartidas: '+sent+' · Existentes conservadas: '+already+'. Asigna las cuentas del equipo en Personal y asignaciones.';
+   checked=[];reviewed=false;await onRefresh();
   }catch(e){error=(e as Error).message+' · Confirmadas en esta operación: '+sent+'. No se sobrescribieron filas existentes.'}
   finally{busy=false}
  }

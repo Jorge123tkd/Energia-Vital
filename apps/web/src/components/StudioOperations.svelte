@@ -2,7 +2,7 @@
  import { onMount } from 'svelte';
  import { apiRequest } from '../lib/api';
  import StudioPublication from './StudioPublication.svelte';
- let {token,projects,initialMode='inventory',embedded=false}: {token:string;projects:{id:string;name:string}[];initialMode?:Mode;embedded?:boolean}=$props();
+ let {token,projects,initialMode='inventory',embedded=false,procurementGroup=false}: {token:string;projects:{id:string;name:string}[];initialMode?:Mode;embedded?:boolean;procurementGroup?:boolean}=$props();
  type Mode='inventory'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication';
  let mode=$state<Mode>(initialMode),project=$state(''),busy=$state(false),error=$state(''),rows=$state<Record<string,any>[]>([]),cursor=$state<string|null>(null),loaded=$state(false),backupId=$state(''),receipt=$state<any>(null);
  let generation=0;
@@ -58,8 +58,8 @@
  onMount(()=>{void load();return()=>{generation++;};});
 </script>
 <section class="rounded-2xl border bg-white p-4 sm:p-6 space-y-4" aria-label="Operaciones empresariales">
- <header><p class="uppercase tracking-widest text-xs text-teal-700 font-bold">Administración autorizada</p><h3 class="text-xl font-extrabold">Operaciones empresariales</h3><p class="text-sm text-slate-500">Consultas en línea. Cada módulo se habilita independientemente tras su validación.</p></header>
- {#if !embedded}<div class="flex gap-2 flex-wrap">{#each tabs as t}<button type="button" aria-pressed={mode===t.key} class={mode===t.key?'rounded-lg bg-teal-800 text-white px-3 py-2 text-sm font-semibold':'rounded-lg border px-3 py-2 text-sm'} onclick={()=>select(t.key)}>{t.name}</button>{/each}</div>{/if}
+ <header><p class="uppercase tracking-widest text-xs text-teal-700 font-bold">Administración autorizada</p><h3 class="text-xl font-extrabold">{mode==='conflicts'?'Revisión de conflictos':mode==='backup'?'Copias de secciones compartidas':mode==='finance'?'Obligaciones y compromisos reales':tabs.find(t=>t.key===mode)?.name||'Operaciones empresariales'}</h3><p class="text-sm text-slate-500">{mode==='finance'?'Información comercial registrada, distinta del presupuesto estimado del expediente.':mode==='inventory'?'Existencias físicas y reservas, distintas del listado de materiales del diseño.':mode==='backup'?'Copias de secciones compartidas, no sustituyen el respaldo general de ingeniería.':'Consultas en línea sujetas a permisos y habilitación del servidor.'}</p></header>
+ {#if !embedded||procurementGroup}<div class="flex gap-2 flex-wrap">{#each (procurementGroup?tabs.filter(t=>['inventory','orders','suppliers','shortages'].includes(t.key)):tabs) as t}<button type="button" aria-pressed={mode===t.key} class={mode===t.key?'rounded-lg bg-teal-800 text-white px-3 py-2 text-sm font-semibold':'rounded-lg border px-3 py-2 text-sm'} onclick={()=>select(t.key)}>{t.name}</button>{/each}</div>{/if}
  {#if mode==='publication'}
   <StudioPublication {token} {projects}/>
  {:else}

@@ -6,7 +6,7 @@
  let frame:HTMLIFrameElement|undefined=$state(),opened=$state(false),busy=$state(false),error=$state(''),workspaceError=$state('');
  let port:MessagePort|null=null,epoch=0,loads=0,operations=$state(0),firstRead:any=null,connected=false,closePending=$state(false);
  let section=$state('engineering');
- const names:Record<string,string>={catalog:'Catálogo de Bonaire',assigned:'Proyectos asignados',team:'Equipo y permisos',inventory:'Almacén',orders:'Compras',suppliers:'Proveedores',finance:'Economía',shortages:'Faltantes',conflicts:'Conflictos',backup:'Respaldos online',publication:'Publicaciones'};
+ const names:Record<string,string>={catalog:'Catálogo comercial',team:'Colaboración y permisos',inventory:'Almacén y compras',finance:'Finanzas y compromisos',backup:'Copias de secciones compartidas',publication:'Publicaciones comerciales'};
  const route='/api/studio/v1/engineering';
  type EngineeringRequest=(method:string,suffix:string,payload?:unknown)=>Promise<any>;
  const auth=()=>({Authorization:'Bearer '+token});
