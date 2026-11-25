@@ -294,3 +294,41 @@ test('authenticated account is supplied to the top bar independently of the rend
  assert.match(html,/bridge\.js\?v=cuenta-20261125-1/);
  assert.match(html,/app\.js\?v=cuenta-20261125-1/);
 });
+
+test('web account fallback renders once from trusted parent and sends logout, not back',async()=>{
+ const {runInNewContext}=await import('node:vm');
+ const source=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
+ let receiver,refreshTop,native=false;
+ const sent=[];
+ class Node {
+  constructor(){this.children=[];this.events={};this.id='';this.className='';this.textContent=''}
+  append(...nodes){for(const node of nodes){node.parent=this;this.children.push(node)}}
+  remove(){if(this.parent)this.parent.children=this.parent.children.filter(x=>x!==this)}
+  setAttribute(){}
+  addEventListener(type,cb){this.events[type]=cb}
+  querySelector(selector){
+   if(selector==='#ev-web-account-fallback')return this.children.find(x=>x.id==='ev-web-account-fallback')||null;
+   if(selector.includes('.session-tools:not'))return native?{}:null;
+   return null;
+  }
+ }
+ const top=new Node(),parent={postMessage(){}},window={addEventListener(_type,cb){receiver=cb},removeEventListener(){}};
+ const port={postMessage(value){sent.push(value)},start(){}};
+ runInNewContext(source,{window,parent,location:{href:'https://bnergiv.com/studio-engineering/index.html'},URL,
+  document:{getElementById(id){return id==='top'?top:null},createElement(){return new Node()}},
+  MutationObserver:class{constructor(cb){refreshTop=cb}observe(){}},
+  setInterval(){return 1},clearInterval(){},setTimeout,clearTimeout});
+ const data={type:'evpro-engineering-connect-v1',account:{email:'qa@example.invalid',role:'admin'}};
+ receiver({source:parent,origin:'https://untrusted.invalid',data,ports:[port]});
+ assert.equal(top.children.length,0);
+ receiver({source:parent,origin:'https://bnergiv.com',data,ports:[port]});
+ assert.equal(top.children.length,1);
+ const group=top.children[0];
+ assert.equal(group.children[0].children[1].textContent,'qa@example.invalid');
+ assert.equal(group.children[1].textContent,'Cerrar sesión');
+ group.children[1].events.click();
+ assert.equal(sent[0].type,'studio-navigation');assert.equal(sent[0].section,'logout');
+ refreshTop();assert.equal(top.children.length,1);
+ native=true;refreshTop();assert.equal(top.children.length,0,'No duplicar los controles del núcleo compartido');
+ native=false;refreshTop();assert.equal(top.children.length,1,'Recuperar controles tras redibujar la cabecera');
+});
