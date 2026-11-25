@@ -264,3 +264,14 @@ test('online Studio groups overlapping functions without a second project creati
  assert.match(entry,/section!=='catalog'/);
  assert.doesNotMatch(management,/Crear proyecto|function create\(/);
 });
+
+test('Studio account actions use the real authenticated parent session and guard unsaved work',()=>{
+ const admin=readFileSync(new URL('../src/AdminPage.svelte',import.meta.url),'utf8');
+ const frame=readFileSync(new URL('../src/components/StudioEngineeringFrame.svelte',import.meta.url),'utf8');
+ const bridge=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
+ assert.match(admin,/onLogout=\{logout\}/);
+ assert.match(frame,/data\.action==='account'/);assert.match(frame,/email:account\.email/);
+ assert.match(frame,/if\(action==='logout'\)void onLogout\(\)/);
+ assert.match(bridge,/!engineeringCanLeave\(\)/);
+ assert.match(bridge,/section:'logout'/);
+});

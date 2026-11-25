@@ -6,7 +6,8 @@
   import StudioManagement from './StudioManagement.svelte';
   import StudioTechnicalShare from './StudioTechnicalShare.svelte';
   import StudioProjectReader from './StudioProjectReader.svelte';
-  let {token,onExit}: {token:string;onExit:()=>void} = $props();
+  let {token,onExit,onLogout}: {token:string;onExit:()=>void;onLogout:()=>Promise<void>} = $props();
+  let account=$state({email:'',role:'worker'});
   type Project = {id:string;name:string};
   type Product = {id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null};
   let busy=$state(false),ready=$state(false),error=$state(''),projects=$state<Project[]>([]),products=$state<Product[]>([]);
@@ -28,7 +29,8 @@
     const run=++generation;busy=true;error='';
     try{
       const me=await query('me');if(run!==generation)return;
-      isAdministrator=me.user?.role==='admin';ready=true;
+      if(typeof me.user?.email!=='string'||!['admin','worker'].includes(me.user?.role))throw Error('Identidad de Studio no confirmada');
+      account={email:me.user.email,role:me.user.role};isAdministrator=me.user.role==='admin';ready=true;
       // The original engineering program must not wait for optional commercial APIs.
       void refreshBusiness();
     }catch(e){if(run===generation){const code=(e as Error&{status?:number}).status;error=code===403?'Tu cuenta no tiene acceso a Studio.':(e as Error).message||'No se pudo verificar Studio.'}}
@@ -86,9 +88,9 @@
   {/if}
 {/snippet}
 {#if ready&&isAdministrator}
-  <StudioEngineeringFrame {token} {business} {onExit}/>
+  <StudioEngineeringFrame {token} {business} {onExit} {onLogout} {account}/>
 {:else if ready}
-  <main class="min-h-screen bg-slate-50 p-5 space-y-4"><header class="flex justify-between items-center"><h1 class="text-2xl font-bold">EV Pro Studio · Proyectos asignados</h1><button type="button" class="border rounded-lg px-3 py-2" onclick={onExit}>Volver a Bonaire</button></header>{@render business('assigned')}</main>
+  <main class="min-h-screen bg-slate-50 p-5 space-y-4"><header class="flex justify-between items-center"><h1 class="text-2xl font-bold">EV Pro Studio · Proyectos asignados</h1><div class="flex flex-wrap items-center gap-3"><span class="text-sm">{account.email}</span><button type="button" class="border rounded-lg px-3 py-2" onclick={onExit}>Volver a Bonaire</button><button type="button" class="border rounded-lg px-3 py-2" onclick={onLogout}>Cerrar sesión</button></div></header>{@render business('assigned')}</main>
 {:else}
   <main class="fixed inset-0 bg-[#f1f6f5] grid place-items-center p-5"><section class="max-w-lg w-full rounded-xl bg-white border p-6 space-y-4"><h1 class="text-2xl font-bold">EV Pro Studio</h1>{#if error}<p role="alert">{error}</p><button type="button" class="rounded-lg border px-4 py-2" onclick={load}>Reintentar conexión</button>{:else}<p role="status">Verificando sesión de Bonaire…</p>{/if}<button type="button" class="rounded-lg border px-4 py-2" onclick={onExit}>Volver a Bonaire</button></section></main>
 {/if}

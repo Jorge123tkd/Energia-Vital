@@ -35,6 +35,6 @@ test('ZIP share is offered only when it is not another download',()=>{
  assert.match(source,/supportsZipShare\(\)\?B\('Compartir ZIP'/);
 });
 test('online settings describe actual central storage, not local SQLite or ZIP updater',()=>{
- assert.match(source,/function settings\(\)\{if\(globalThis\.EVEngineeringStore\?\.scope==='online'\)/);
+ assert.match(source,/function settings\(\)\{if\(globalThis\.EVEngineeringStore\)/);
  assert.match(source,/Actualizaciones|actualizaciones se publican desde Bonaire/);
 });

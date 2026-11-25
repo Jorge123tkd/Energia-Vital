@@ -9,7 +9,7 @@
   port=event.ports[0];clearInterval(readyTimer);
   window.removeEventListener('message',receive);
   port.onmessage=event=>{
-   const response=event.data;if(response?.type==='check-close'){let pending=true;try{pending=typeof pendingSave!=='function'||pendingSave()||!!offlineRunning||!!manualSaveBusy}catch{};port.postMessage({type:'close-state',pending});return}const pending=waiting.get(response?.id);if(!pending)return;
+   const response=event.data;if(response?.type==='check-close'){let pending=true;try{pending=typeof engineeringCanLeave!=='function'||!engineeringCanLeave()}catch{};port.postMessage({type:'close-state',pending});return}const pending=waiting.get(response?.id);if(!pending)return;
    waiting.delete(response.id);clearTimeout(pending.timer);
    if(response.ok)pending.resolve(response.result);
    else pending.reject(Object.assign(Error(response.error||'No se confirmó el guardado online'),{conflict:response.status===409,code:response.status}));
@@ -50,5 +50,6 @@
    port.postMessage({id,action,payload});
   });
  }
+ Object.defineProperty(window,'EVEngineeringAccount',{value:Object.freeze({info:()=>call('account'),action:async action=>{if(action!=='logout')throw Error('Acción no disponible');if(!port)throw Error('Sesión no conectada');port.postMessage({type:'studio-navigation',section:'logout'})}}),writable:false,configurable:false});
  Object.defineProperty(window,'EVEngineeringStore',{value:Object.freeze({scope:'online',read:()=>call('read'),write:payload=>call('write',payload)}),writable:false,configurable:false});
 })();

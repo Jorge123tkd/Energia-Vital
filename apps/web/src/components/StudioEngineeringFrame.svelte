@@ -2,22 +2,25 @@
  import {onMount,onDestroy,type Snippet} from 'svelte';
  import {apiRequest,ADMIN_TOKEN_KEY} from '../lib/api';
  import {transport} from '../lib/engineering-assets.js';
- let {token,business,onExit}:{token:string;business:Snippet<[string]>;onExit:()=>void}=$props();
+ let {token,business,onExit,onLogout,account}:{token:string;business:Snippet<[string]>;onExit:()=>void;onLogout:()=>Promise<void>;account:{email:string;role:string}}=$props();
  let frame:HTMLIFrameElement|undefined=$state(),opened=$state(false),busy=$state(false),error=$state(''),workspaceError=$state('');
  let port:MessagePort|null=null,epoch=0,loads=0,operations=$state(0),firstRead:any=null,connected=false,closePending=$state(false);
  let section=$state('engineering');
+ let closeAction:'exit'|'logout'='exit',closeTimer:ReturnType<typeof setTimeout>|undefined;
+ function finishClose(){const action=closeAction;close();if(action==='logout')void onLogout();else onExit()}
  const names:Record<string,string>={catalog:'Catálogo comercial',team:'Colaboración y permisos',inventory:'Almacén y compras',finance:'Finanzas y compromisos',backup:'Copias de secciones compartidas',publication:'Publicaciones comerciales'};
  const route='/api/studio/v1/engineering';
  type EngineeringRequest=(method:string,suffix:string,payload?:unknown)=>Promise<any>;
  const auth=()=>({Authorization:'Bearer '+token});
  function close(){
-  epoch++;port?.close();port=null;connected=false;firstRead=null;opened=false;loads=0;operations=0;closePending=false;
+  clearTimeout(closeTimer);epoch++;port?.close();port=null;connected=false;firstRead=null;opened=false;loads=0;operations=0;closePending=false;
   section='engineering';
  }
- function requestClose(){
+ function requestClose(action:'exit'|'logout'='exit'){
+  if(closePending)return;closeAction=action;
   if(operations){workspaceError='Hay una lectura o guardado en curso. Espera su confirmación antes de cerrar.';return}
-  if(port){closePending=true;port.postMessage({type:'check-close'});return}
-  close();onExit();
+  if(port){closePending=true;port.postMessage({type:'check-close'});closeTimer=setTimeout(()=>{closePending=false;workspaceError='No se pudo verificar el guardado. Intenta de nuevo.'},8000);return}
+  finishClose();
  }
  function requestFor(current:number,requireOpen:boolean):EngineeringRequest{
   return async(method,suffix,payload)=>{
@@ -53,21 +56,22 @@
    const data=event.data;
    if(current!==epoch||!opened||!data)return;
    if(data.type==='close-state'&&closePending){
-    closePending=false;
-    if(data.pending===false){close();onExit();return}
+    clearTimeout(closeTimer);closePending=false;
+    if(data.pending===false){finishClose();return}
     workspaceError='Hay cambios sin confirmar. Guárdalos o descarga un respaldo antes de salir.';
     return;
    }
    if(data.type==='studio-navigation'){
-    if(data.section==='exit'){requestClose();return}
+    if(data.section==='exit'||data.section==='logout'){requestClose(data.section);return}
     if(data.section==='engineering'||Object.hasOwn(names,data.section)){section=data.section;workspaceError=''}
     return;
    }
-   if(!Number.isSafeInteger(data.id)||!['read','write'].includes(data.action))return;
+   if(!Number.isSafeInteger(data.id)||!['read','write','account'].includes(data.action))return;
    const reply=(v:Record<string,unknown>)=>{if(current===epoch&&opened)channel.port1.postMessage({id:data.id,...v})};
    operations++;workspaceError='';
    try{
     if(!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token)throw Object.assign(new Error('Sesión de Bonaire cambiada. Cierra y abre Studio.'),{status:401});
+    if(data.action==='account'){reply({ok:true,result:{email:account.email,role:account.role,mode:'online',platform:'web'}});return}
     const sync=transport(requestFor(current,true));
     let result;
     if(data.action==='read'&&firstRead!==null){result=firstRead;firstRead=null}
@@ -87,14 +91,14 @@
   <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer"></iframe>
   {#if section!=='engineering'}
     <section class="ev-business" aria-label={names[section]}>
-      <header class="ev-business-header"><span>Studio / {names[section]}</span><div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg border px-3 py-2 text-sm" onclick={()=>section='engineering'}>Volver a ingeniería</button><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={requestClose}>Volver a Bonaire</button></div></header>
+      <header class="ev-business-header"><span>Studio / {names[section]}</span><div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg border px-3 py-2 text-sm" onclick={()=>section='engineering'}>Volver a ingeniería</button><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('exit')}>Volver a Bonaire</button><span class="text-xs">{account.email}</span><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('logout')}>Cerrar sesión</button></div></header>
       <main class="ev-business-main"><h1 class="text-2xl sm:text-3xl font-bold mb-5">{names[section]}</h1>{@render business(section)}</main>
     </section>
   {/if}
   {#if workspaceError}<div role="alert" class="ev-error bg-amber-50 text-amber-900 px-4 py-2 text-sm flex items-center gap-3"><span class="flex-1">{workspaceError}</span><button type="button" onclick={()=>workspaceError=''}>Cerrar aviso</button></div>{/if}
   {#if closePending}<div role="status" class="ev-error bg-white p-3">Verificando guardado…</div>{/if}
  {:else}
-  <div class="grid h-full place-items-center p-5"><section class="w-full max-w-lg border rounded-xl bg-white p-6 space-y-4"><h1 class="text-2xl font-bold">EV Pro Studio</h1>{#if error}<p role="alert" class="text-amber-900">{error}</p><button type="button" class="border rounded-lg px-3 py-2" disabled={busy} onclick={open}>Reintentar conexión</button>{:else}<p role="status">Cargando tu espacio de ingeniería…</p>{/if}<button type="button" class="border rounded-lg px-3 py-2" onclick={requestClose}>Volver a Bonaire</button></section></div>
+  <div class="grid h-full place-items-center p-5"><section class="w-full max-w-lg border rounded-xl bg-white p-6 space-y-4"><h1 class="text-2xl font-bold">EV Pro Studio</h1>{#if error}<p role="alert" class="text-amber-900">{error}</p><button type="button" class="border rounded-lg px-3 py-2" disabled={busy} onclick={open}>Reintentar conexión</button>{:else}<p role="status">Cargando tu espacio de ingeniería…</p>{/if}<button type="button" class="border rounded-lg px-3 py-2" onclick={()=>requestClose('exit')}>Volver a Bonaire</button><button type="button" class="border rounded-lg px-3 py-2" onclick={()=>requestClose('logout')}>Cerrar sesión</button></section></div>
  {/if}
 </div>
 <style>

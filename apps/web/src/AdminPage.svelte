@@ -426,7 +426,7 @@
 </script>
 
 {#if token && ownId && tab === 'studio' && studioUiEnabled}
-  {#key ownId}<StudioEntrance {token} onExit={()=>chooseTab('requests')}/>{/key}
+  {#key ownId}<StudioEntrance {token} onExit={()=>chooseTab('requests')} onLogout={logout}/>{/key}
 {:else}
 <div class="w-full min-w-0 max-w-none mx-auto px-3 sm:px-5 xl:px-8 py-5 xl:py-7 min-h-screen bg-slate-50">
   <header class="sticky top-0 z-[90] -mx-3 sm:-mx-5 xl:-mx-8 -mt-5 xl:-mt-7 mb-6 border-b border-slate-200 bg-white/95 backdrop-blur shadow-sm">
