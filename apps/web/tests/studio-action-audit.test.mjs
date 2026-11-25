@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {createHash} from 'node:crypto';
 const source=readFileSync(new URL('../public/studio-engineering/app.js',import.meta.url),'utf8');
 const extract=(start,end)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)));
 test('project menu has one actual action per destination',()=>{
@@ -46,4 +47,21 @@ test('managed sessions retain identity and preferences without local browser sto
  assert.match(source,/snap\.__evStudioPrefs=\{autoSaveEnabled,defaults:centralDefaults\}/);
  assert.match(source,/centralDefaults=raw\?\.__evStudioPrefs/);
  assert.match(source,/async function init\(\)\{if\(globalThis\.EVEngineeringStore\)/);
+});
+
+// Compare vendored assets to the recorded Git blob IDs, not just file names.
+test('Bonaire ships the recorded EV Pro engineering assets without drift',()=>{
+ const dir=new URL('../public/studio-engineering/',import.meta.url);
+ const manifest=JSON.parse(readFileSync(new URL('source-version.json',dir),'utf8'));
+ assert.equal(manifest.repository,'Jorge123tkd/EV-Pro-Estudio');
+ assert.match(manifest.commit,/^[a-f0-9]{40}$/);
+ for(const file of ['app.js','engine.js','library.js','style.css','favicon.svg','updater.js']){
+  const bytes=readFileSync(new URL(file,dir));
+  const hash=createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');
+  assert.equal(hash,manifest.files[file], 'Engineering asset diverged: '+file);
+ }
+ // index.html is deliberately adapted to the sandboxed Bonaire bridge.
+ const html=readFileSync(new URL('index.html',dir),'utf8');
+ assert.match(html,/connect-src 'none'/);
+ assert.ok(html.indexOf('src="bridge.js"')>=0 && html.indexOf('src="bridge.js"')<html.indexOf('src="app.js"'));
 });
