@@ -1,0 +1,77 @@
+name: Bonaire - publicar solo Pages con Studio
+on:
+  push:
+    branches: [feat/cloudflare-customer-accounts-hardening]
+    paths: ['.github/workflows/studio-pages-release.yml']
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Escribe PUBLICAR_PAGES_STUDIO_PRIVADO'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: bonaire-pages-production-only
+  cancel-in-progress: false
+jobs:
+  pages-only:
+    # A one-time owner-authorized push from the already validated source.
+    # Future pushes never deploy automatically; subsequent releases need dispatch.
+    if: >-
+      github.ref == 'refs/heads/feat/cloudflare-customer-accounts-hardening' &&
+      ((github.event_name == 'push' && github.event.before == '7fcdd9630f4fae6715631df71c9c1f9e92d2b1a5') ||
+       (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'PUBLICAR_PAGES_STUDIO_PRIVADO'))
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/cloudflare-customer-accounts-hardening
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Comprobar revisión exacta y preparar dependencias sin secretos
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((git rev-parse HEAD).Trim() -cne $env:GITHUB_SHA) { throw 'La rama cambió; no publicar.' }
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci falló' }
+          node scripts/tests/pages-only-policy.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Política Pages-only no superada' }
+          node --test apps/web/tests/studio-bridge.test.mjs apps/web/tests/studio-action-audit.test.mjs apps/web/tests/studio-technical-share.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Pruebas Studio no superadas' }
+          npm run typecheck --workspace=apps/web
+          if ($LASTEXITCODE -ne 0) { throw 'Typecheck web no superado' }
+      - name: Validar destino y publicar exclusivamente Pages
+        shell: pwsh
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          $ErrorActionPreference='Stop'
+          if (!$env:CLOUDFLARE_API_TOKEN -or !$env:CLOUDFLARE_ACCOUNT_ID) { throw 'Credenciales Cloudflare no configuradas en GitHub; no se publicó nada.' }
+          if ($env:CLOUDFLARE_ACCOUNT_ID -ne '466af6f26fce494d6dc640128e200e24') { throw 'Cuenta Cloudflare distinta de la autorizada.' }
+          $response=Invoke-RestMethod -Uri ('https://api.cloudflare.com/client/v4/accounts/'+$env:CLOUDFLARE_ACCOUNT_ID+'/pages/projects/energia-vital-web') -Headers @{Authorization=('Bearer '+$env:CLOUDFLARE_API_TOKEN)} -TimeoutSec 30
+          if (!$response.success -or $response.result.name -ne 'energia-vital-web' -or $response.result.production_branch -ne 'main' -or !$response.result.canonical_deployment.id) { throw 'Proyecto, rama o retorno de Pages no confirmados.' }
+          $previous=$response.result.canonical_deployment.id
+          Write-Host ('[RETORNO] Despliegue previo: '+$previous)
+          # The reviewed publisher rechecks D1 28/28 and the active private
+          # Studio gates, builds Studio enabled and deploys ONLY Pages.
+          powershell -NoProfile -File scripts/pages-publicacion-controlada.ps1 -Publicar -HabilitarStudio -DependenciasYaInstaladas -Confirmacion PUBLICAR_PAGES_STUDIO_PRIVADO
+          if ($LASTEXITCODE -ne 0) { throw 'Publicador Pages no confirmó éxito; revisar su salida antes de reintentar.' }
+      - name: Comprobar archivos exactos servidos por bnergiv.com
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach ($asset in @('index.html','bridge.js','app.js','style.css')) {
+            $target=Join-Path $env:RUNNER_TEMP ('published-'+$asset)
+            curl.exe --fail --silent --show-error --max-time 30 -H 'Cache-Control: no-cache' -o $target ('https://bnergiv.com/studio-engineering/'+$asset+'?verify='+$env:GITHUB_SHA)
+            if ($LASTEXITCODE -ne 0) { throw ('No se pudo verificar '+$asset) }
+            $expected=(Get-FileHash -Algorithm SHA256 ('apps/web/public/studio-engineering/'+$asset)).Hash
+            if ((Get-FileHash -Algorithm SHA256 $target).Hash -ne $expected) { throw ('Pages publicado, pero hash no coincide: '+$asset) }
+            Write-Host ('[OK] Publicado y verificado: '+$asset)
+          }
