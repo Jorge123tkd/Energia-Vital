@@ -63,5 +63,5 @@ test('Bonaire ships the recorded EV Pro engineering assets without drift',()=>{
  // index.html is deliberately adapted to the sandboxed Bonaire bridge.
  const html=readFileSync(new URL('index.html',dir),'utf8');
  assert.match(html,/connect-src 'none'/);
- assert.ok(html.indexOf('src="bridge.js"')>=0 && html.indexOf('src="bridge.js"')<html.indexOf('src="app.js"'));
+ assert.ok(html.indexOf('src="bridge.js?')>=0 && html.indexOf('src="bridge.js?')<html.indexOf('src="app.js?'));
 });

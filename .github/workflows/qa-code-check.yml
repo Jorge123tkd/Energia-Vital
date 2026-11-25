@@ -48,6 +48,19 @@ jobs:
           node apps/web/tests/auth-session.cjs
           node apps/web/tests/admin-browser-session.cjs
           node --test apps/web/tests/studio-bridge.test.mjs apps/web/tests/studio-action-audit.test.mjs apps/web/tests/studio-technical-share.test.mjs
+      - name: Comparar interfaz Studio publicada con la revisión preparada (solo lectura)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for asset in index.html bridge.js app.js; do
+            expected="$(sha256sum "apps/web/public/studio-engineering/$asset" | cut -d ' ' -f 1)"
+            if curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "https://bnergiv.com/studio-engineering/$asset?check=${GITHUB_SHA}" -o "$RUNNER_TEMP/studio-$asset"; then
+              actual="$(sha256sum "$RUNNER_TEMP/studio-$asset" | cut -d ' ' -f 1)"
+              if [[ "$expected" == "$actual" ]]; then echo "[PUBLICADO] $asset coincide"; else echo "[PENDIENTE DE PUBLICAR] $asset no coincide"; fi
+            else
+              echo "[SIN VERIFICAR] $asset no accesible"
+            fi
+          done
       - name: Compilar Pages Functions sin servidor
         working-directory: apps/web
         run: npx wrangler pages functions build functions --outfile "$RUNNER_TEMP/bonaire-session.js" --output-routes-path "$RUNNER_TEMP/bonaire-routes.json"

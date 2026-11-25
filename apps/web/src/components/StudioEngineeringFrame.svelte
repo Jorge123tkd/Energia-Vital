@@ -48,6 +48,7 @@
  }
  function connect(event:MessageEvent){
   if(!opened||connected||!frame?.contentWindow||event.source!==frame.contentWindow||event.origin!=='null'||event.data?.type!=='evpro-engineering-ready-v2')return;
+  if(!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token||!account.email||!['admin','worker'].includes(account.role)){workspaceError='No se confirmó la identidad de Bonaire. Vuelve a iniciar sesión.';return}
   // Sandboxed opaque origin: source identity is mandatory; credentials never
   // leave this parent. The child explicitly signals its listener is ready.
   const current=epoch,channel=new MessageChannel();
@@ -81,14 +82,14 @@
    finally{if(current===epoch)operations--}
   };
   channel.port1.start();
-  frame.contentWindow.postMessage({type:'evpro-engineering-connect-v1'},'*',[channel.port2]);
+  frame.contentWindow.postMessage({type:'evpro-engineering-connect-v1',account:{email:account.email,role:account.role}},'*',[channel.port2]);
  }
  onMount(()=>{window.addEventListener('message',connect);void open();return()=>window.removeEventListener('message',connect)});
  onDestroy(close);
 </script>
 <div class="ev-workspace" aria-label="EV Pro Studio">
  {#if opened}
-  <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer"></iframe>
+  <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html?v=cuenta-20261125-1" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer"></iframe>
   {#if section!=='engineering'}
     <section class="ev-business" aria-label={names[section]}>
       <header class="ev-business-header"><span>Studio / {names[section]}</span><div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg border px-3 py-2 text-sm" onclick={()=>section='engineering'}>Volver a ingeniería</button><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('exit')}>Volver a Bonaire</button><span class="text-xs">{account.email}</span><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('logout')}>Cerrar sesión</button></div></header>

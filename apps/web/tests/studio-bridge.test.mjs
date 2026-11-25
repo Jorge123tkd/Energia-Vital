@@ -275,3 +275,22 @@ test('Studio account actions use the real authenticated parent session and guard
  assert.match(bridge,/!engineeringCanLeave\(\)/);
  assert.match(bridge,/section:'logout'/);
 });
+
+test('authenticated account is supplied to the top bar independently of the renderer RPC; back remains separate',()=>{
+ const frame=readFileSync(new URL('../src/components/StudioEngineeringFrame.svelte',import.meta.url),'utf8');
+ const bridge=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
+ const html=readFileSync(new URL('../public/studio-engineering/index.html',import.meta.url),'utf8');
+ assert.match(frame,/evpro-engineering-connect-v1',account:\{email:account.email,role:account.role\}/);
+ assert.match(bridge,/verifiedAccount=Object.freeze\(\{email:identity.email,role:identity.role/);
+ assert.match(bridge,/document.getElementById\('top'\)/);
+ assert.match(bridge,/email.textContent=verifiedAccount.email/);
+ assert.match(bridge,/logout.textContent='Cerrar sesión'/);
+ assert.match(bridge,/\.session-tools:not\(#ev-web-account-fallback\) \.logout-btn/);
+ assert.match(bridge,/section:'logout'/);
+ assert.match(bridge,/\['exit','←','Volver a Bonaire'\]/);
+ assert.match(frame,/requestClose\(data.section\)/);
+ assert.match(frame,/if\(data.pending===false\)\{finishClose\(\);return\}/);
+ assert.match(frame,/index\.html\?v=cuenta-20261125-1/);
+ assert.match(html,/bridge\.js\?v=cuenta-20261125-1/);
+ assert.match(html,/app\.js\?v=cuenta-20261125-1/);
+});

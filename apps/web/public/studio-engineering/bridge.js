@@ -1,11 +1,13 @@
 'use strict';
 // The shared EV renderer receives only a workspace capability, never JWTs.
 (()=>{
- const waiting=new Map();let nextId=0,port=null,resolveConnection,readyTimer;
+ const waiting=new Map();let nextId=0,port=null,resolveConnection,readyTimer,verifiedAccount=null;
  const connected=new Promise(resolve=>{resolveConnection=resolve});
  const expectedParentOrigin=new URL(location.href).origin;
  function receive(event){
   if(port||event.source!==parent||event.origin!==expectedParentOrigin||event.data?.type!=='evpro-engineering-connect-v1'||event.ports.length!==1)return;
+  const identity=event.data.account;
+  if(identity&&typeof identity.email==='string'&&identity.email.trim()&&['admin','worker'].includes(identity.role))verifiedAccount=Object.freeze({email:identity.email,role:identity.role,mode:'online',platform:'web'});
   port=event.ports[0];clearInterval(readyTimer);
   window.removeEventListener('message',receive);
   port.onmessage=event=>{
@@ -14,7 +16,29 @@
    if(response.ok)pending.resolve(response.result);
    else pending.reject(Object.assign(Error(response.error||'No se confirmó el guardado online'),{conflict:response.status===409,code:response.status}));
   };
-  port.start();resolveConnection();installMenu();
+  port.start();resolveConnection();installMenu();installAccountControls();
+ }
+ // The shared renderer normally draws this block. Keep an authenticated fallback
+ // in the SAME top bar if an older renderer or a failed account RPC omits it.
+ function installAccountControls(){
+  const top=document.getElementById('top');if(!top||!verifiedAccount)return;
+  function decorate(){
+   const fallback=top.querySelector('#ev-web-account-fallback');
+   const native=top.querySelector('.session-tools:not(#ev-web-account-fallback) .logout-btn');
+   if(native){if(fallback)fallback.remove();return}
+   if(fallback)return;
+   const group=document.createElement('div');group.id='ev-web-account-fallback';group.className='session-tools';
+   const identity=document.createElement('span');identity.className='session-account';
+   const role=document.createElement('small');role.textContent=verifiedAccount.role==='admin'?'Administrador · En línea':'Trabajador técnico · En línea';
+   const email=document.createElement('strong');email.textContent=verifiedAccount.email;
+   identity.append(role,email);
+   const logout=document.createElement('button');logout.type='button';logout.className='secondary logout-btn';logout.textContent='Cerrar sesión';
+   logout.setAttribute('aria-label','Cerrar sesión');
+   logout.addEventListener('click',()=>{if(port)port.postMessage({type:'studio-navigation',section:'logout'})});
+   group.append(identity,logout);
+   (top.querySelector('.row:last-child')||top).append(group);
+  }
+  new MutationObserver(decorate).observe(top,{childList:true,subtree:true});decorate();
  }
  function installMenu(){
   const menu=document.getElementById('nav');if(!menu)return;
