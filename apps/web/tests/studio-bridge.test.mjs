@@ -290,9 +290,9 @@ test('authenticated account is supplied to the top bar independently of the rend
  assert.match(bridge,/\['exit','←','Volver a Bonaire'\]/);
  assert.match(frame,/requestClose\(data.section\)/);
  assert.match(frame,/if\(data.pending===false\)\{finishClose\(\);return\}/);
- assert.match(frame,/index\.html\?v=capacidad-20261125-2/);
- assert.match(html,/bridge\.js\?v=capacidad-20261125-2/);
- assert.match(html,/app\.js\?v=capacidad-20261125-2/);
+ assert.match(frame,/index\.html\?v=respaldo-20261125-3/);
+ assert.match(html,/bridge\.js\?v=respaldo-20261125-3/);
+ assert.match(html,/app\.js\?v=respaldo-20261125-3/);
 });
 
 test('web account fallback renders once from trusted parent and sends logout, not back',async()=>{
@@ -344,4 +344,20 @@ test('web transport uses the expanded attachment capacity and batches checks',as
  });
  assert.equal((await sync('PUT',{snapshot,expected:'',rev:'qa-large'})).ok,true);
  assert.deepEqual(batches,[32,32,7]);
+});
+
+test('web uses same explicit confirmation for large backup downloads and restores',async()=>{
+ const {runInNewContext}=await import('node:vm');
+ const source=readFileSync(new URL('../public/studio-engineering/app.js',import.meta.url),'utf8');
+ const begin=source.indexOf('const recommendedBackupBytes='),end=source.indexOf('function backupProject(',begin);
+ let answer=false,calls=0;
+ const ctx={TextEncoder,confirm:()=>{calls++;return answer}};
+ runInNewContext(source.slice(begin,end),ctx);
+ assert.equal(ctx.confirmLargeBackup(40*1024*1024,'importar'),true);
+ assert.equal(calls,0);
+ assert.equal(ctx.confirmLargeBackup(48*1024*1024,'importar'),false);
+ answer=true;
+ assert.equal(ctx.confirmLargeBackup(48*1024*1024,'importar'),true);
+ assert.equal(calls,2);
+ assert.ok(source.includes("if(!approveImportedWorkspace(next))return false;state=next;"));
 });

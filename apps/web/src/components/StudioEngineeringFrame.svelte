@@ -89,7 +89,7 @@
 </script>
 <div class="ev-workspace" aria-label="EV Pro Studio">
  {#if opened}
-  <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html?v=capacidad-20261125-2" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer"></iframe>
+  <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html?v=respaldo-20261125-3" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer"></iframe>
   {#if section!=='engineering'}
     <section class="ev-business" aria-label={names[section]}>
       <header class="ev-business-header"><span>Studio / {names[section]}</span><div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg border px-3 py-2 text-sm" onclick={()=>section='engineering'}>Volver a ingeniería</button><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('exit')}>Volver a Bonaire</button><span class="text-xs">{account.email}</span><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('logout')}>Cerrar sesión</button></div></header>
