@@ -20,7 +20,7 @@ assert.equal(studioGatedTabForPath('/admin/ev-pro-studio','admin',true),'studio'
 assert.equal(studioGatedTabForPath('/admin/citas','operator',false),'appointments');
 const adminPage=fs.readFileSync(path.join(__dirname,'../src/AdminPage.svelte'),'utf8');
 assert.match(adminPage,/const studioUiEnabled\s*=\s*import\.meta\.env\.VITE_STUDIO_UI_ENABLED\s*===\s*'true'/);
-assert.match(adminPage,/\{#if tab === 'studio' && studioUiEnabled\}/);
+assert.match(adminPage,/\{#if token && ownId && tab === 'studio' && studioUiEnabled\}/);
 assert.equal((adminPage.match(/\{#if studioUiEnabled\}<button/g)||[]).length,2,
  'Desktop and mobile Studio buttons must both be gated');
 
