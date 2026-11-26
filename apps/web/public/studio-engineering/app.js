@@ -74,6 +74,11 @@ function syncModal(){
 function updateSyncModal(){const d=$('managedSyncDialog');if(!d?.open)return;$('managedSyncMessage').textContent=managedSyncMessage;$('managedSyncTime').textContent=managedSyncStarted?'Tiempo transcurrido: '+Math.floor((Date.now()-managedSyncStarted)/1000)+' s · consulta automática cada 15 s':'';const p=$('managedSyncProgress');if(managedSyncFlight)p.removeAttribute('value');else p.value=100}
 function syncPhase(message){managedSyncMessage=String(message);updateSyncModal()}
 function canRefreshManaged(){return !reportOutputBusy&&engineeringCanLeave()&&!$('dialog')?.open&&!document.activeElement?.matches('input:not([type=button]),textarea,select,[contenteditable=true]')}
+// Only the browser can defer installing a downloaded revision without changing
+// the native encrypted store. Never rebuild the web interface over active input.
+function canInstallOnlineRevision(manual,editVersion){
+ return offlineEditVersion===editVersion&&engineeringCanLeave()&&(manual||canRefreshManaged()&&document.visibilityState!=='hidden');
+}
 function installManagedSnapshot(loaded,editVersion){
  if(!loaded||typeof loaded.rev!=='string'||!loaded.snapshot)throw Error('La revisión recibida no contiene una base válida');
  if(!engineeringCanLeave()||offlineEditVersion!==editVersion)return false;
@@ -103,9 +108,9 @@ async function syncManaged(manual=false){
     if(typeof current?.rev!=='string')throw Error('Revisión online inválida');
     if(current.rev===offlineRev)result={state:'synced'};
     else{
-     if(!engineeringCanLeave()||offlineEditVersion!==editVersion)return syncPhase('Cambios locales pendientes; se aplazó la actualización.');
+     if(!canInstallOnlineRevision(manual,editVersion))return syncPhase('Edición activa; se aplazó la actualización.');
      syncPhase('Descargando la revisión nueva…');const loaded=await globalThis.EVEngineeringStore.read();
-     if(!installManagedSnapshot(loaded,editVersion))return syncPhase('Hay cambios locales pendientes. Se conservan sin sobrescribir.');
+     if(!canInstallOnlineRevision(manual,editVersion)||!installManagedSnapshot(loaded,editVersion))return syncPhase('Edición activa o cambios pendientes. Se conservan sin sobrescribir.');
      result={state:'downloaded'};
     }
    }else{
