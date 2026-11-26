@@ -37,7 +37,7 @@ export async function callAI(
       ];
       let timer:ReturnType<typeof setTimeout>|undefined;
       let result:any;
-      try{result=await Promise.race([env.AI.run(model,{messages,max_tokens:512}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tiempo de IA agotado')),7000)})]);}finally{clearTimeout(timer);}
+      try{result=await Promise.race([env.AI.run(model,{messages,max_tokens:512}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tiempo de IA agotado')),7000)})]);}finally{if(timer!==undefined)clearTimeout(timer);}
       const text = extractWorkersAIText(result);
       if (text) return { text, provider: 'workers-ai', model };
     } catch (e) {
