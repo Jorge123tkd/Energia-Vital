@@ -38,7 +38,7 @@ try{
  const brandedDocuments=await frame.evaluate(()=>{
   const c=state.companies[0],p=state.projects[0];
   const cfg=reportConfig(p);cfg.sections=['summary'];cfg.scenarios=['active'];
-  return [companyExportSummaryHTML(c,[p]),clientPage('Solicitud técnica de cotización','<section><h2>Materiales QA</h2></section>',false),reportHTML(p,c),clientPage('Identidad larga','<section>QA</section>',false,'',{name:'Bonaire Energía Vital · '+ 'Nombre empresarial muy largo '.repeat(3),division:'División de ingeniería y proyectos',footer:'Bonaire'})];
+  return [companyExportSummaryHTML(c,[p]),clientPage('Solicitud técnica de cotización','<section><h2>Materiales QA</h2></section>',false),reportHTML(p,cfg),clientPage('Identidad larga','<section>QA</section>',false,'',{name:'Bonaire Energía Vital · '+ 'Nombre empresarial muy largo '.repeat(3),division:'División de ingeniería y proyectos',footer:'Bonaire'})];
  });
  const corporatePage=await context.newPage();
  await corporatePage.route('**/*',r=>r.abort());

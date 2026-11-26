@@ -460,7 +460,7 @@ test('managed reports use an explicit user-controlled web output capability with
  const env={STUDIO_PDF_ENABLED:'true',STUDIO_PDF_TOKEN:'qa-only-token-not-a-real-secret'};
  assert.equal(pdfEnabled({}),false);
  let calls=0;const make=()=>new Request('https://bnergiv.com/api/studio/v1/engineering/pdf',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({html:'<html><head></head><body>QA</body></html>'})});
- const mock=async(url,options)=>{calls++;const b=JSON.parse(options.body);assert.ok(url.endsWith('/browser-rendering/pdf'));assert.equal(b.setJavaScriptEnabled,false);assert.equal(b.pdfOptions.preferCSSPageSize,true);assert.match(b.html,/Content-Security-Policy/);assert.ok(b.rejectRequestPattern.length);return new Response('%PDF-1.7 fake fixture')};
+ const mock=async(url,options)=>{calls++;const b=JSON.parse(options.body);assert.ok(url.endsWith('/browser-rendering/pdf?cacheTTL=0'));assert.equal(b.setJavaScriptEnabled,false);assert.equal(b.pdfOptions.preferCSSPageSize,true);assert.match(b.html,/Content-Security-Policy/);assert.ok(b.rejectRequestPattern.length);assert.ok(b.allowRequestPattern.length);return new Response('%PDF-1.7 fake fixture')};
  assert.equal((await renderStudioPdf(make(),{},mock)).status,503);assert.equal(calls,0);
  const result=await renderStudioPdf(make(),env,mock);assert.equal(result.status,200);assert.match((await result.json()).pdf,/^JVBER/);assert.equal(calls,1);
  const source=readFileSync(new URL('../functions/api/studio/[[path]].js',import.meta.url),'utf8');assert.match(source,/adminOnly=pdfRoute/);assert.match(source,/member.role!=='admin'/);
