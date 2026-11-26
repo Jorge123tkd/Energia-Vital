@@ -49,6 +49,49 @@ try{
  await page.reload();const fresh=await (await page.waitForSelector('iframe[title="EV Pro Ingeniería original"]')).contentFrame();await fresh.waitForFunction(()=>typeof offlineReady!=='undefined'&&offlineReady&&!!centralAccount,{},{timeout:30000});await fresh.evaluate(()=>openProject(state.projects[0].id,'export'));
  assert.equal(await fresh.evaluate(()=>project().reportHistory.length),1);
  await fresh.getByRole('button',{name:'Descargar copia',exact:true}).click();const save=page.getByRole('dialog',{name:'Guardar archivo'});await save.waitFor();const archivedPromise=page.waitForEvent('download');await save.getByRole('button',{name:'Descargar archivo',exact:true}).click();const archived=await archivedPromise;assert.match(await readFile(await archived.path(),'utf8'),/Proyecto QA/);
+
+ // Test direct print/PDF controls and the downloadable interactive delivery.
+ await fresh.locator('#reviewed').check();
+ for(const button of ['Imprimir resumen cliente','Guardar PDF']){
+  await fresh.getByRole('button',{name:button,exact:true}).click();await overlay.waitFor();
+  const printable=await (await page.waitForSelector('iframe[title="Documento de informe sin scripts"]')).contentFrame();
+  await printable.evaluate(()=>{window.print=()=>{window.__qaPrinted=true}});
+  await overlay.getByRole('button',{name:'Imprimir / guardar PDF'}).click();
+  assert.equal(await printable.evaluate(()=>window.__qaPrinted),true);
+  await overlay.getByRole('button',{name:'Confirmar revisión y volver'}).click();
+  await fresh.waitForFunction(()=>document.getElementById('reviewed').checked);
+ }
+ async function takeZip(button){
+  await fresh.getByRole('button',{name:button,exact:true}).click();
+  await save.waitFor();
+  const event=page.waitForEvent('download');await save.getByRole('button',{name:'Descargar archivo',exact:true}).click();
+  const file=await event;return readFile(await file.path());
+ }
+ const {inflateRawSync}=await import('node:zlib');
+ function zipEntries(bytes){
+  const entries=new Map();let eocd=-1;
+  for(let p=bytes.length-22;p>=Math.max(0,bytes.length-65557);p--)if(bytes.readUInt32LE(p)===0x06054b50){eocd=p;break}
+  assert.ok(eocd>=0,'ZIP without central directory');
+  let p=bytes.readUInt32LE(eocd+16),count=bytes.readUInt16LE(eocd+10);
+  for(let n=0;n<count;n++){
+   assert.equal(bytes.readUInt32LE(p),0x02014b50);
+   const method=bytes.readUInt16LE(p+10),size=bytes.readUInt32LE(p+20),nameLen=bytes.readUInt16LE(p+28),extra=bytes.readUInt16LE(p+30),comment=bytes.readUInt16LE(p+32),offset=bytes.readUInt32LE(p+42);
+   const name=bytes.subarray(p+46,p+46+nameLen).toString('utf8');
+   assert.equal(bytes.readUInt32LE(offset),0x04034b50);
+   const start=offset+30+bytes.readUInt16LE(offset+26)+bytes.readUInt16LE(offset+28),raw=bytes.subarray(start,start+size);
+   assert.ok([0,8].includes(method));entries.set(name,method===8?inflateRawSync(raw):raw);p+=46+nameLen+extra+comment;
+  }return entries;
+ }
+ const delivery=zipEntries(await takeZip('Descargar ZIP'));
+ assert.ok(delivery.has('index.html'));assert.ok(delivery.has('Informe_ejecutivo.html'));
+ const simulator=[...delivery.keys()].find(n=>n.endsWith('_simulador.html'));assert.ok(simulator);
+ const exported=await context.newPage();const exportErrors=[];exported.on('pageerror',e=>exportErrors.push(e.message));
+ await exported.route('**/*',r=>r.abort());await exported.setContent(delivery.get(simulator).toString('utf8'));
+ await exported.locator('#results').getByRole('heading',{name:/Resultados de simulación/}).waitFor();
+ await exported.getByRole('button',{name:'48 h',exact:true}).click();
+ await exported.locator('#results').getByRole('heading',{name:/48 h/}).waitFor();
+ assert.deepEqual(exportErrors,[]);await exported.close();
+ console.log('PASS direct print, save PDF dispatch and actual ZIP with interactive simulator 24/48 hours');
  await fresh.evaluate(()=>backupCompany(state.companies[0].id));await save.waitFor();const backupPromise=page.waitForEvent('download');await save.getByRole('button',{name:'Descargar archivo',exact:true}).click();const backup=await backupPromise;assert.equal(JSON.parse(await readFile(await backup.path(),'utf8')).projects.length,1);
  assert.deepEqual(errors,[]);console.log('PASS Chromium: approval, print dispatch, real HTML download, persisted report and company backup; simulated API only');
 
