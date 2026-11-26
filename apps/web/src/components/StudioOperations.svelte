@@ -2,6 +2,7 @@
  import { onMount } from 'svelte';
  import { apiRequest } from '../lib/api';
  import StudioPublication from './StudioPublication.svelte';
+ import StudioCommercialActions from './StudioCommercialActions.svelte';
  let {token,projects,initialMode='inventory',embedded=false,procurementGroup=false}: {token:string;projects:{id:string;name:string}[];initialMode?:Mode;embedded?:boolean;procurementGroup?:boolean}=$props();
  type Mode='inventory'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication';
  let mode=$state<Mode>(initialMode),project=$state(''),busy=$state(false),error=$state(''),rows=$state<Record<string,any>[]>([]),cursor=$state<string|null>(null),loaded=$state(false),backupId=$state(''),receipt=$state<any>(null);
@@ -21,14 +22,14 @@
    else if(mode==='suppliers'){data=await query('/api/warehouse/procurement/suppliers'+after);key='suppliers'}
    else if(mode==='conflicts'){data=await query('/api/studio/v1/admin/conflicts'+after);key='conflicts'}
    else if(mode==='finance'||mode==='shortages'){
-    if(!project)throw Error('Selecciona un proyecto autorizado.');
+    if(!project)return;
     if(mode==='finance'){data=await query('/api/business-finance/projects/'+encodeURIComponent(project));if(run===generation)receipt=data}
     else{data=await query('/api/warehouse/procurement/shortages/'+encodeURIComponent(project)+after);key='requirements'}
    }else return;
    if(run!==generation)return;
    if(key){const page=Array.isArray(data[key])?data[key]:[];rows=more?[...rows,...page]:page;cursor=data.next==null?null:String(data.next)}
    loaded=true;
-  }catch(e){if(run===generation){rows=[];receipt=null;cursor=null;error=(e as Error&{status?:number}).status===503?((e as Error).message||'Función aún no habilitada en el servidor.')+' · No se han modificado existencias ni datos financieros.':(e as Error).message||'No se pudo consultar.'}}
+  }catch(e){if(run===generation){if(!more){rows=[];receipt=null;cursor=null;}error=(e as Error&{status?:number}).status===503?((e as Error).message||'Función aún no habilitada en el servidor.')+' · No se han modificado existencias ni datos financieros.':(e as Error).message||'No se pudo consultar.'}}
   finally{if(run===generation)busy=false}
  }
  async function inspect(r:any){
@@ -40,8 +41,8 @@
   const run=++generation;busy=true;error='';
   try{const data=choice==='merge'?JSON.parse(merged):undefined;await query('/api/studio/v1/admin/conflicts/'+reviewSeq+'/resolve',{choice,expectedRevision:reviewRevision,operationId:crypto.randomUUID(),...(data===undefined?{}:{data})});if(run===generation){reviewSeq=null;central=null;reviewRevision=null;await load()}}catch(e){if(run===generation){error=(e as Error).message||'Decisión no confirmada. Vuelve a consultar.';reviewSeq=null;central=null;reviewRevision=null}}finally{if(run===generation)busy=false}
  }
- function select(m:Mode){reviewSeq=null;central=null;reviewRevision=null;generation++;busy=false;mode=m;rows=[];cursor=null;receipt=null;error='';loaded=false;if(!['finance','shortages','backup','publication'].includes(m))void load()}
- function selectProject(p:string){generation++;busy=false;project=p;rows=[];receipt=null;cursor=null;loaded=false;error=''}
+ function select(m:Mode){reviewSeq=null;central=null;reviewRevision=null;generation++;busy=false;mode=m;rows=[];cursor=null;receipt=null;error='';loaded=false;if(!['finance','shortages','backup','publication'].includes(m)||(project&&['finance','shortages'].includes(m)))void load()}
+ function selectProject(p:string){generation++;busy=false;project=p;rows=[];receipt=null;cursor=null;loaded=false;error='';backupId='';if(p&&['finance','shortages'].includes(mode))void load()}
  async function backup(create:boolean){
   if(!project||busy)return;
   const run=++generation;busy=true;error='';receipt=null;
@@ -59,12 +60,15 @@
 </script>
 <section class="rounded-2xl border bg-white p-4 sm:p-6 space-y-4" aria-label="Operaciones empresariales">
  <header><p class="uppercase tracking-widest text-xs text-teal-700 font-bold">Administración autorizada</p><h3 class="text-xl font-extrabold">{mode==='conflicts'?'Revisión de conflictos':mode==='backup'?'Copias de secciones compartidas':mode==='finance'?'Obligaciones y compromisos reales':tabs.find(t=>t.key===mode)?.name||'Operaciones empresariales'}</h3><p class="text-sm text-slate-500">{mode==='finance'?'Información comercial registrada, distinta del presupuesto estimado del expediente.':mode==='inventory'?'Existencias físicas y reservas, distintas del listado de materiales del diseño.':mode==='backup'?'Copias de secciones compartidas, no sustituyen el respaldo general de ingeniería.':'Consultas en línea sujetas a permisos y habilitación del servidor.'}</p></header>
- {#if !embedded||procurementGroup}<div class="flex gap-2 flex-wrap">{#each (procurementGroup?tabs.filter(t=>['inventory','orders','suppliers','shortages'].includes(t.key)):tabs) as t}<button type="button" aria-pressed={mode===t.key} class={mode===t.key?'rounded-lg bg-teal-800 text-white px-3 py-2 text-sm font-semibold':'rounded-lg border px-3 py-2 text-sm'} onclick={()=>select(t.key)}>{t.name}</button>{/each}</div>{/if}
+ {#if !embedded||procurementGroup}<div class="flex gap-2 flex-wrap">{#each (procurementGroup?tabs.filter(t=>['inventory','orders','suppliers','shortages'].includes(t.key)):tabs) as t}<button type="button" aria-pressed={mode===t.key} class={mode===t.key?'rounded-lg bg-teal-800 text-white px-3 py-2 text-sm font-semibold':'rounded-lg border px-3 py-2 text-sm'} disabled={busy} onclick={()=>select(t.key)}>{t.name}</button>{/each}</div>{/if}
  {#if mode==='publication'}
   <StudioPublication {token} {projects}/>
  {:else}
  {#if ['finance','shortages','backup'].includes(mode)}
-  <label class="block text-sm font-bold">Proyecto<select class="mt-2 w-full rounded-lg border p-2 font-normal" value={project} onchange={e=>selectProject(e.currentTarget.value)}><option value="">Seleccionar proyecto</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}</select></label>
+  <label class="block text-sm font-bold">Proyecto<select class="mt-2 w-full rounded-lg border p-2 font-normal" value={project} disabled={busy} onchange={e=>selectProject(e.currentTarget.value)}><option value="">Seleccionar proyecto</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}</select></label>
+ {/if}
+ {#if ['finance','shortages','inventory','orders','suppliers'].includes(mode)}
+  {#key mode+'|'+project}<StudioCommercialActions {token} {mode} {project} {projects} onSaved={()=>load()}/>{/key}
  {/if}
  {#if mode==='backup'}
   <p class="text-sm text-slate-500">Uso administrativo: respaldo de tareas y materiales que comparten los trabajadores. Para conservar todos tus proyectos utiliza Respaldos generales. Copia cifrada de secciones y metadatos. No incluye los archivos adjuntos ni sustituye la copia integral. La vista previa nunca restaura automáticamente.</p>
