@@ -106,7 +106,7 @@ assistantRoutes.post('/message', async c => {
         const d=step.draft;
         const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment});
         if(intake.error||!intake.value)return c.json({error:'Revisa los datos del borrador'},400);
-        const description='[Origen: asistente web]\nEntidad: '+d.company+'\nNecesidad: '+d.need;
+        const description='[Origen: asistente web]\nEntidad: '+d.company+'\nNecesidad: '+d.need+(d.contact?'\nPersona de contacto: '+d.contact:'');
         // INSERT condicional: solo el dueño con el borrador exacto puede registrar.
         writes.push(DB.prepare(`INSERT INTO requests
           (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at)

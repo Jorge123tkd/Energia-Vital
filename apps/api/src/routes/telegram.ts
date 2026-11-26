@@ -18,7 +18,7 @@ import { classifyTelegramMessage,telegramReplyKeyboard,presentTelegramReply,type
 import { humanWhatsAppReply } from '../telegram-human-contact';
 import { currentTelegramCustomer } from '../telegram-customer-auth';
 import { SITE_URL, startsRegistration, cancelsRegistration, isCustomerCode, activeRegistration, startRegistration, saveRegistrationStep, cancelRegistration, registrationPrompt, redeemCustomerCode, type Stage } from '../telegram-customer-onboarding';
-import { advanceCommercialIntake, startCommercialIntake, type CommercialDraft } from '../commercial-intake';
+import { advanceCommercialIntake, startCommercialIntake, naturalCommercialStart, resumeCommercialIntake, type CommercialDraft } from '../commercial-intake';
 import { parseRequestIntake } from '../request-intake';
 import { requestTelegramAppointment } from '../telegram-customer-appointments';
 import { setTelegramCustomerNotifications } from '../telegram-customer-notifications';
@@ -71,7 +71,7 @@ function accountChoices(site:string):TelegramReplyMarkup{
 }
 function registrationDecision(stage:Stage,site:string,invalid=false):BotDecision{
   const reply=(invalid&&stage!=='password'?'No pude validar ese dato. Inténtalo otra vez.\n\n':'')+registrationPrompt(stage);
-  return {reply,skipHistory:true,state:null,commercial:null,replyMarkup:stage==='password'?{inline_keyboard:[[{text:'Establecer contraseña',web_app:{url:site+'/telegram-registro.html?mode=finish'}}]]}:{remove_keyboard:true}};
+  return {reply,skipHistory:true,state:null,replyMarkup:stage==='password'?{inline_keyboard:[[{text:'Establecer contraseña',web_app:{url:site+'/telegram-registro.html?mode=finish'}}]]}:{remove_keyboard:true}};
 }
 async function removeUnexpectedPasswordMessage(env:Env,chatId:string,messageId:number|undefined){
   if(messageId===undefined)return;
@@ -202,14 +202,14 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   }
   const documentReply=await telegramDocuments(env,chatId,text);
   if(documentReply!==null)return {reply:documentReply,skipHistory:true};
-  const intakeMessage=action==='request-service'&&!prior?'registrar solicitud comercial':text;
+  const intakeMessage=action==='request-service'&&!prior?'solicitar servicio':text;
   // Las acciones administrativas, nueva conversación y contacto humano no se consumen como campos.
-  if((action===null||action==='request-service')&&(prior||startCommercialIntake(intakeMessage))){
-    if(!customer)return {reply:'Antes de registrar tu solicitud, crea o vincula tu cuenta desde Telegram. Después escribe «registrar solicitud comercial». No tienes que visitar la web.',replyMarkup:accountButton,skipHistory:true};
+  if((action===null||action==='request-service'||action==='business-services'||action==='business-partner')&&(prior||startCommercialIntake(intakeMessage)||naturalCommercialStart(intakeMessage))){
     // Una vez persistido el borrador, su ID estable evita duplicar confirmaciones.
-    const step=advanceCommercialIntake(intakeMessage,prior,crypto.randomUUID());
+    const step=advanceCommercialIntake(intakeMessage,prior,'tg-solicitud-'+updateId);
     if(step){
       if(step.submit&&step.draft){
+        if(!customer)return {reply:'Tu solicitud está preparada y guardada en este chat. Para enviarla y poder consultar las respuestas, crea o vincula tu cuenta. Después escribe «confirmar solicitud comercial». No volveremos a pedir los datos del borrador.',commercial:step.draft,state:null,replyMarkup:accountButton,skipHistory:true};
         const d=step.draft, time=now();
         const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment});
         if(intake.error||!intake.value)return {reply:'Revisa el borrador antes de enviarlo.',commercial:prior,state:null};
@@ -217,7 +217,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
           env.DB.prepare("INSERT INTO requests (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at) "+
             "SELECT ?,id,'consultation','consultation',?,?,'pending','medium',?,NULL,?,? FROM customers WHERE id=? AND telegram_customer_chat_id=? AND is_active=1 "+
             "ON CONFLICT(id) DO NOTHING")
-            .bind(d.id,('Solicitud comercial: '+d.company).slice(0,180),'[Origen: Telegram]\nEntidad: '+d.company+'\nNecesidad: '+d.need,d.location||'',time,time,customer.id,chatId),
+            .bind(d.id,('Solicitud comercial: '+d.company).slice(0,180),'[Origen: Telegram]\nEntidad: '+d.company+'\nNecesidad: '+d.need+(d.contact?'\nPersona de contacto: '+d.contact:''),d.location||'',time,time,customer.id,chatId),
           env.DB.prepare("INSERT INTO request_intake (request_id,available_budget_usd_cents,payment_method,payment_currency,customer_type,created_at,updated_at) "+
             "SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1) ON CONFLICT(request_id) DO NOTHING")
             .bind(d.id,intake.value.available_budget_usd_cents,intake.value.payment_method,intake.value.payment_currency,intake.value.customer_type,time,time,d.id,customer.id,chatId)
@@ -423,7 +423,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     let state:SolarState|null=null, commercial:CommercialDraft|null=null;
     const currentCustomer=await currentTelegramCustomer(env,input.chatId);
     try{const parsed=JSON.parse(session.solar_context);
-      if(parsed&&typeof parsed==='object'&&'commercial' in parsed){state=parsed.solar||null;commercial=parsed.customerId===currentCustomer?.id?parsed.commercial||null:null;}
+      if(parsed&&typeof parsed==='object'&&'commercial' in parsed){state=parsed.solar||null;commercial=(parsed.customerId??null)===(currentCustomer?.id??null)||parsed.customerId===null&&!!currentCustomer?parsed.commercial||null:null;}
       else state=parsed as SolarState|null;
     }catch{/* recuperar estado vacío */}
     let decision:BotDecision|undefined;
@@ -433,21 +433,21 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
       if(currentCustomer)decision={reply:'Tu cuenta de cliente ya está vinculada.',skipHistory:true};
       else if(await redeemCustomerCode(env,input.chatId,input.text)){
         await cancelRegistration(env,input.chatId);
-        decision={reply:'¡Cuenta vinculada correctamente! Ya puedes consultar tus cotizaciones, solicitudes y citas aquí. Puedes seguir en este chat o abrir Bonaire: '+site,skipHistory:true,state:null,commercial:null};
+        decision={reply:'¡Cuenta vinculada correctamente! '+(commercial?resumeCommercialIntake(commercial):'Ya puedes consultar tus cotizaciones, solicitudes y citas aquí. Puedes seguir en este chat o abrir Bonaire: '+site),skipHistory:true,state:null};
       }else decision={reply:'Código inválido, vencido o ya utilizado. Entra a Mi perfil y genera uno nuevo.',skipHistory:true};
     }else if(startsRegistration(input.text)){
       if(currentCustomer)decision={reply:'Ya tienes una cuenta vinculada. Puedes entrar a Bonaire o seguir aquí.',skipHistory:true,replyMarkup:{inline_keyboard:[[{text:'Entrar en Bonaire',url:site+'/entrar'}]]}};
       else{const registration=await startRegistration(env,input.chatId,input.updateId);decision=registrationDecision(registration.stage,site);if(registration.stage==='name')decision.reply='Vamos a crear tu cuenta Bonaire. Usaremos estos datos para tu cuenta y tus servicios. Puedes escribir Cancelar registro en cualquier momento. Nunca envíes tu contraseña por chat.\n\n'+decision.reply;}
     }else if(draft&&/^(?:vincular cuenta|vincular cuenta existente|vincular cuenta de cliente)$/i.test(input.text)){
       await cancelRegistration(env,input.chatId);
-      decision={reply:'Registro cancelado. Inicia sesión en Bonaire, abre Mi perfil → Vincular Telegram y envíame el código de un solo uso.',skipHistory:true,state:null,commercial:null,replyMarkup:{inline_keyboard:[[{text:'Abrir mi perfil',url:site+'/perfil'}]]}};
+      decision={reply:'Registro cancelado. Inicia sesión en Bonaire, abre Mi perfil → Vincular Telegram y envíame el código de un solo uso.',skipHistory:true,state:null,replyMarkup:{inline_keyboard:[[{text:'Abrir mi perfil',url:site+'/perfil'}]]}};
     }else if(draft){
-      if(currentCustomer){await cancelRegistration(env,input.chatId);decision={reply:'Tu cuenta ya está creada y vinculada. Escribe «mi cuenta» o continúa con tus consultas.',skipHistory:true};}
+      if(currentCustomer){await cancelRegistration(env,input.chatId);decision={reply:'Tu cuenta ya está creada y vinculada. '+(commercial?resumeCommercialIntake(commercial):'Escribe «mi cuenta» o continúa con tus consultas.'),skipHistory:true};}
       else if(cancelsRegistration(input.text)){
         await cancelRegistration(env,input.chatId);
         const action=classifyTelegramMessage(input.text);
         if(action==='new-chat'||action==='erase-history')decision=await decide(env,input.chatId,input.text,state,session.thread_id,commercial,input.updateId);
-        else decision={reply:'Registro cancelado. No se creó ninguna cuenta. Puedes volver a intentarlo cuando quieras.',skipHistory:true,state:null,commercial:null};
+        else decision={reply:'Registro cancelado. No se creó ninguna cuenta. '+(commercial?'Tu borrador comercial sigue guardado.':'Puedes volver a intentarlo cuando quieras.'),skipHistory:true,state:null};
       }else if(draft.stage==='password'){
         await removeUnexpectedPasswordMessage(env,input.chatId,input.messageId);
         decision=registrationDecision('password',site);
@@ -458,6 +458,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     }
     decision=decision||await decide(env,input.chatId,input.text,state,session.thread_id,commercial,input.updateId);
     const nextCommercial=decision.newThread?null:decision.commercial===undefined?commercial:decision.commercial;
+    const linkedCustomer=await currentTelegramCustomer(env,input.chatId);
     const nextThread=decision.newThread?crypto.randomUUID():session.thread_id;
     const nextState=decision.newThread?null:decision.state===undefined?state:decision.state;
     // Refrescar el vínculo después de procesar el mensaje: el OTP puede haberlo creado
@@ -483,7 +484,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     await env.DB.batch([
       env.DB.prepare(
         'UPDATE telegram_bot_sessions SET thread_id=?,solar_context=?,window_start=?,window_count=?,updated_at=? WHERE chat_id=?'
-      ).bind(nextThread,JSON.stringify({solar:nextState,commercial:nextCommercial,customerId:currentCustomer?.id??null}),current?session.window_start:time,count,time,input.chatId),
+      ).bind(nextThread,JSON.stringify({solar:nextState,commercial:nextCommercial,customerId:linkedCustomer?.id??null}),current?session.window_start:time,count,time,input.chatId),
       ...audit,
       env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?")
         .bind(time,input.updateId)

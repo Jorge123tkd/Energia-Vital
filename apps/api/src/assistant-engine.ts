@@ -73,12 +73,12 @@ export function businessProposalReply(message: string, history: {role:string;con
     return 'Gracias. Este es el resumen de tu propuesta para revisar antes de compartirla con el equipo de Bonaire:\n\n'
       + [initial?.content, message].filter(Boolean).join('\n\n')
       + '\n\nPuedes corregir o completar estos datos al contactar al equipo: empresa y país, persona de contacto, productos o marca, y qué colaboración buscas (suministro, promoción, distribución en Cuba o asociación). En este primer contacto no pedimos anticipos, saldos ni plazos. Si ya conoces presupuesto orientativo en USD y forma de pago propuesta, puedes indicarlos; si no, seguimos igualmente.'
-      + '\n\nContacta con el equipo comercial por los canales publicados aquí: https://energia-vital-web.pages.dev/contacto#contacto-comercial'
+      + '\n\nContacta con el equipo comercial por los canales publicados aquí: https://bnergiv.com/contacto#contacto-comercial'
       + '\n\nLa propuesta permanece en esta conversación; no se ha enviado como solicitud ni aceptado ningún acuerdo. El equipo evaluará condiciones, disponibilidad y alcance contigo.';
   }
   return 'Propuesta comercial · Bonaire\n\nPodemos orientarte para presentar una propuesta como proveedor, promocionar tu marca, proponer que Bonaire distribuya tus productos en Cuba o explorar una asociación comercial. No tiene que tratarse de energía solar.'
     + '\n\nCuéntame brevemente qué empresa representas, de qué país es y qué colaboración propones. Añade solo los datos que todavía no hayas mencionado; si actúas por cuenta propia, puedes indicarlo.'
-    + '\n\nEsto prepara la conversación con nuestro equipo; no confirma un acuerdo ni crea una solicitud de servicio. Si prefieres hablar directamente con una persona: https://energia-vital-web.pages.dev/contacto#contacto-comercial';
+    + '\n\nEsto prepara la conversación con nuestro equipo; no confirma un acuerdo ni crea una solicitud de servicio. Si prefieres hablar directamente con una persona: https://bnergiv.com/contacto#contacto-comercial';
 }
 
 /** Trámite de servicios para organizaciones; NO sustituye la creación autenticada del expediente.
@@ -105,7 +105,7 @@ export function businessServiceReply(message:string, history:{role:string;conten
   if(pending && (general || isOutOfScopeMessage(message) ||
       /\b(?:asesoria solar|asesoramiento solar|precio del dolar|tipo de cambio)\b/.test(m)))return null;
   if(pending){
-    return 'Atención empresarial · Bonaire\n\nGracias por la información. Para preparar la evaluación de tu empresa, indica únicamente lo que falte: nombre de la entidad y persona de contacto; necesidad concreta y municipio; forma de pago prevista (transferencia, efectivo u otra) y presupuesto disponible aproximado en USD, si ya lo conoces.\n\nNo pedimos anticipo, saldos pendientes, autorizaciones ni estados financieros en esta primera conversación. Si es una empresa estatal, las condiciones y posibles aprobaciones se revisarán antes de comprometer recursos.\n\nEsto todavía es una orientación por chat, NO un expediente registrado. Para formalizar la solicitud, accede a tu cuenta en https://energia-vital-web.pages.dev/ o solicita contacto humano.';
+    return 'Atención empresarial · Bonaire\n\nGracias por la información. Para preparar la evaluación de tu empresa, indica únicamente lo que falte: nombre de la entidad y persona de contacto; necesidad concreta y municipio; forma de pago prevista (transferencia, efectivo u otra) y presupuesto disponible aproximado en USD, si ya lo conoces.\n\nNo pedimos anticipo, saldos pendientes, autorizaciones ni estados financieros en esta primera conversación. Si es una empresa estatal, las condiciones y posibles aprobaciones se revisarán antes de comprometer recursos.\n\nEsto todavía es una orientación por chat, NO un expediente registrado. Para formalizar la solicitud, accede a tu cuenta en https://bnergiv.com/ o solicita contacto humano.';
   }
   const estatal=/\b(?:estatal|organismo|institucion publica|centro estatal)\b/.test(m);
   const tipo=estatal?'empresa estatal':/\b(?:mipyme|mi pyme)\b/.test(m)?'mipyme':

@@ -31,3 +31,25 @@ d=null;say('Registrar solicitud comercial');
 assert.equal(say('cancelar borrador').draft,null);
 assert.equal(advance('confirmar solicitud comercial',null,'new'),null);
 console.log('PASS commercial intake: explicit confirmation, cancellation, USD validation, repeated confirmation');
+
+
+// Reproduce the reported conversation: menu, free text, multiple labelled fields,
+// no repeated generic guidance, explicit confirmation only.
+d=null;
+assert.equal(say('🏢 Empresas y negocios').draft.stage,'need');
+let natural=say('respaldo solar y somos de Boyeros');
+assert.equal(natural.draft.need,'respaldo solar');
+assert.equal(natural.draft.location,'Boyeros');
+assert.equal(natural.draft.stage,'kind');
+assert.equal(say('privada').draft.stage,'company');
+assert.equal(say('La entidad es Trinity, la persona de contacto es María').draft.company,'Trinity');
+assert.equal(d.contact,'María');
+assert.equal(d.stage,'payment');
+assert.equal(say('transferencia').draft.stage,'budget');
+assert.equal(say('por definir').draft.stage,'review');
+assert.equal(say('confirmar solicitud comercial').submit,true);
+assert.equal(d.kind,'empresa_privada');
+assert.match(say('corregir ubicación: La Habana').reply,/La Habana/);
+assert.equal(d.location,'La Habana');
+assert.equal(advance('¿Qué productos venden?',null,'q'),null);
+console.log('PASS natural business intake, multi-field extraction, explicit correction and consent');
