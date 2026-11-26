@@ -37,3 +37,8 @@ assert.match(nav,/studioGatedTabForPath/);
 assert.match(cfg,/binding = "ADMIN_SESSION_API"/);
 assert.match(cfg,/binding = "STUDIO_API"/);
 console.log('PASS release Pages-only: D1 024 o 028, Studio UI cerrada por defecto y activable expresamente con D1 028; Worker/D1 intactos.');
+
+assert.match(pages,/--location --max-redirs 3 --proto-redir/);
+assert.match(pages,/url_effective/);
+assert.match(pages,/Get-FileHash -Algorithm SHA256 \$target/);
+assert.match(pages,/HTML Studio no coincide con el build/);

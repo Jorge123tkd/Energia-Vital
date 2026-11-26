@@ -138,11 +138,27 @@ try{
  MustSucceed 'Fallo verificacion de enlace directo admin.'
  if("$adminDeep".Trim() -ne '200'){throw 'Pages publicado pero /admin/citas no responde 200; revisar rollback.'}
  if($HabilitarStudio){
-  foreach($path in @('/admin/ev-pro-studio','/studio-engineering/index.html')){
-   $status=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' ($site+$path)
-   MustSucceed ('Fallo comprobacion '+$path)
-   if("$status".Trim() -ne '200'){throw ('Pages publicado, pero ruta Studio no responde 200: '+$path)}
-  }
+  $adminStudio=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}' ($site+'/admin/ev-pro-studio')
+  MustSucceed 'Fallo comprobacion ruta Studio admin'
+  if("$adminStudio".Trim() -ne '200'){throw ('Pages publicado, pero ruta Studio admin no responde 200: '+$adminStudio)}
+  # Pages may canonicalize /index.html to the directory URL. Verify the
+  # actual engineering HTML, not merely a 200 from the SPA fallback.
+  $target=Join-Path $tmp 'published-studio-index.html'
+  $response=& curl.exe -sS --location --max-redirs 3 --proto-redir '=https' --max-time 30 -o $target -w '%{http_code}|%{url_effective}' ($site+'/studio-engineering/index.html?verify='+$head)
+  MustSucceed 'Fallo comprobacion HTML Studio'
+  if("$response" -notmatch '^200\|https://bnergiv\.com/studio-engineering/(index\.html)?(\?[^#]*)?
+  Write-Host '[OK] SOLO Pages desplegado; Studio UI habilitada. Acceso a expedientes sujeto a autorizacion del Worker. Falta prueba con cuenta real.'
+ }else{Write-Host '[OK] SOLO Pages desplegado y revisado: inicio y /admin/citas OK; Worker y D1 sin cambios; Studio UI apagada.'}
+}finally{
+ Remove-Item Env:VITE_API_URL -ErrorAction SilentlyContinue
+ Remove-Item Env:VITE_QA_MODE -ErrorAction SilentlyContinue
+ Remove-Item Env:VITE_STUDIO_UI_ENABLED -ErrorAction SilentlyContinue
+ Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+}
+){throw ('Pages publicado, pero respuesta final Studio inesperada: '+$response)}
+  $expected=(Get-FileHash -Algorithm SHA256 (Join-Path $root 'apps/web/dist/studio-engineering/index.html')).Hash
+  if((Get-FileHash -Algorithm SHA256 $target).Hash -ne $expected){throw 'Pages publicado, pero HTML Studio no coincide con el build.'}
+  Write-Host '[OK] HTML Studio publicado: destino final y SHA256 comprobados.'
   Write-Host '[OK] SOLO Pages desplegado; Studio UI habilitada. Acceso a expedientes sujeto a autorizacion del Worker. Falta prueba con cuenta real.'
  }else{Write-Host '[OK] SOLO Pages desplegado y revisado: inicio y /admin/citas OK; Worker y D1 sin cambios; Studio UI apagada.'}
 }finally{
