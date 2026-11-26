@@ -31,3 +31,11 @@ draft=advance('a las 2 pm',draft.draft,at);
 assert.equal(draft.draft.time,'14:00');
 assert.equal(advance('cancelar cita',draft.draft,at).draft,null);
 console.log('PASS natural appointment draft with Cuba timezone and explicit confirmation');
+
+const {cubanDayBounds:bounds}=mod.exports;
+assert.deepEqual(bounds('2027-01-20'),{start:'2027-01-20T05:00:00.000Z',end:'2027-01-21T05:00:00.000Z'});
+assert.deepEqual(bounds('2027-07-20'),{start:'2027-07-20T04:00:00.000Z',end:'2027-07-21T04:00:00.000Z'});
+assert.equal(bounds('2027-02-30'),null);
+assert.equal((Date.parse(bounds('2027-03-14').end)-Date.parse(bounds('2027-03-14').start))/3600000,23);
+assert.equal((Date.parse(bounds('2027-11-07').end)-Date.parse(bounds('2027-11-07').start))/3600000,25);
+console.log('PASS civil day boundaries in Cuba including both DST transitions');

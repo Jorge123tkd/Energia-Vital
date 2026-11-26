@@ -5,6 +5,18 @@ function localKey(date:Date):string{
  const p=Object.fromEntries(cubaClock.formatToParts(date).map(x=>[x.type,x.value]));
  return p.year+'-'+p.month+'-'+p.day+' '+p.hour+':'+p.minute;
 }
+/** Exact boundaries of a local civil day, including DST changes at midnight. */
+export function cubanDayBounds(date:string):{start:string;end:string}|null{
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return null;
+ const base=Date.parse(date+'T00:00:00Z');if(!Number.isFinite(base)||new Date(base).toISOString().slice(0,10)!==date)return null;
+ const boundary=(utc:number,local:string)=>{
+  let low=utc,high=utc+10*3600000;
+  if(localKey(new Date(low)).slice(0,10)>=local||localKey(new Date(high)).slice(0,10)<local)throw Error('Fecha local fuera de rango');
+  while(high-low>1){const mid=Math.floor((low+high)/2);if(localKey(new Date(mid)).slice(0,10)<local)low=mid;else high=mid;}
+  return new Date(high).toISOString();
+ };
+ try{const next=base+86400000;return {start:boundary(base,date),end:boundary(next,new Date(next).toISOString().slice(0,10))};}catch{return null;}
+}
 export function cubanAppointmentTime(input:string):Date|null{
  if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(input))return null;
  const base=Date.parse(input.replace(' ','T')+':00Z');
