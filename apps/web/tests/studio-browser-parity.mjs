@@ -74,7 +74,7 @@ try{
  assert.equal(await field('projectId').count(),0);await field('kind').selectOption('issue');assert.ok(await field('workId').isVisible());await field('kind').selectOption('receive');assert.equal(await field('workId').count(),0);
  await field('itemId').selectOption('item1');await field('quantity').fill('2.5');await field('reference').fill('Entrada QA');await submit();
  assert.equal(posts.at(-1).body.quantityMilli,2500);assert.equal(posts.at(-1).body.projectId,null);assert.equal(posts.at(-1).body.workId,null);
- await go('orders');await commercial.getByRole('button',{name:'Gestionar pedido y recepción',exact:true}).click();await commercial.getByLabel('Pedido',{exact:true}).selectOption('order1');await field('decision').waitFor();
+ await go('orders');await commercial.getByRole('button',{name:'Gestionar pedido y recepción',exact:true}).click();await commercial.locator('select').filter({has:commercial.locator('option[value="order1"]')}).selectOption('order1');await field('decision').waitFor();
  assert.deepEqual(await field('decision').locator('option').evaluateAll(o=>o.map(x=>x.value)),['','receive']);
  await field('lineId').selectOption('line1');await field('quantity').fill('2');await field('reference').fill('Recepción QA');await submit();assert.equal(posts.at(-1).path,'/api/warehouse/procurement/receipts');assert.equal(posts.at(-1).body.quantityMilli,2000);
  await go('finance');await commercial.getByRole('button',{name:'Registrar obligación documentada',exact:true}).click();await field('purchaseOrderId').waitFor();
