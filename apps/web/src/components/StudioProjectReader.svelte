@@ -5,13 +5,24 @@
  type Section={section_id:string;audience:'technical'|'private';revision:number;updated_at:string};
  type RecordData={section_id:string;revision:number;body:Record<string,any>;updated_at:string};
  let sections=$state<Section[]>([]),selected=$state<RecordData|null>(null),latest=$state<RecordData|null>(null),title=$state(''),status=$state(''),dueDate=$state(''),name=$state(''),quantity=$state(1),unit=$state('unit'),busy=$state(false),error=$state(''),message=$state(''),pendingOperation=$state('');
- let generation=0;
+ let generation=0,catalogRun=0;
+ type Product={id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null};
+ let productId=$state<string|null>(null),catalogSearch=$state(''),catalogRows=$state<Product[]>([]),catalogBusy=$state(false),catalogError=$state(''),catalogPage=$state(1),catalogMore=$state(false),chosenProduct=$state<Product|null>(null);
+ async function searchCatalog(page=1){
+  const run=++catalogRun;catalogBusy=true;catalogError='';
+  try{const r=await query('/api/studio/v1/catalog?'+new URLSearchParams({page:String(page),search:catalogSearch.trim()}));if(run===catalogRun){if(!Array.isArray(r.products))throw Error('Catálogo no disponible');catalogRows=r.products;catalogPage=page;catalogMore=!!r.hasMore;}}
+  catch(e){if(run===catalogRun){catalogRows=[];catalogMore=false;catalogError=(e as Error).message||'No se pudo consultar el catálogo.'}}
+  finally{if(run===catalogRun)catalogBusy=false}
+ }
+ function pickProduct(p:Product){if(busy||pendingOperation)return;chosenProduct=p;productId=p.id;}
+ function clearProduct(){if(busy||pendingOperation)return;chosenProduct=null;productId=null;}
  const base=()=>'/api/studio/v1/projects/'+encodeURIComponent(project.id)+'/sections';
  const query=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'PUT',body:JSON.stringify(body)})});
  const isTask=(id:string)=>/^task-[A-Za-z0-9_-]{1,80}$/.test(id);
  const isMaterial=(id:string)=>/^material-[A-Za-z0-9_-]{1,75}$/.test(id);
  function useRecord(r:RecordData,reset=true){
    selected=r;if(reset){pendingOperation='';latest=null}
+   catalogRun++;catalogBusy=false;catalogRows=[];catalogError='';catalogSearch='';catalogPage=1;catalogMore=false;chosenProduct=null;productId=typeof r.body.productId==='string'?r.body.productId:null;
    title=typeof r.body.title==='string'?r.body.title:'';
    status=typeof r.body.status==='string'?r.body.status:'pending';
    dueDate=typeof r.body.dueDate==='string'?r.body.dueDate:'';
@@ -35,7 +46,7 @@
   if(!selected||busy||(!isTask(selected.section_id)&&!isMaterial(selected.section_id)))return;
   busy=true;error='';message='';
   try{
-   const data=isTask(selected.section_id)?{title:title.trim(),status,dueDate}:{name:name.trim(),productId:selected.body.productId??null,quantity:Number(quantity),unit};
+   const data=isTask(selected.section_id)?{title:title.trim(),status,dueDate}:{name:name.trim(),productId,quantity:Number(quantity),unit};
    if(!pendingOperation)pendingOperation=crypto.randomUUID();
    const r=await query(base()+'/'+encodeURIComponent(selected.section_id),{operationId:pendingOperation,baseRevision:selected.revision,data});
    const next={...selected,revision:r.revision,body:data};
@@ -54,7 +65,7 @@
   selected=latest;latest=null;pendingOperation='';error='';message='Revisión actualizada. Comprueba la propuesta antes de guardarla.';
   // Preserve the text and numeric values already entered in the form.
  }
- onMount(()=>{void load();return()=>{generation++}});
+ onMount(()=>{void load();return()=>{generation++;catalogRun++}});
 </script>
 <section class="rounded-2xl border bg-white p-4 sm:p-6 space-y-4" aria-label="Proyecto EV Pro Studio">
  <header><p class="text-xs uppercase tracking-widest text-teal-700 font-bold">Proyecto autorizado</p><h3 class="text-xl font-extrabold">{project.name}</h3><p class="text-sm text-slate-500">Consulta técnica y modificaciones por fila. El servidor comprueba permisos y versiones.</p></header>
@@ -84,7 +95,14 @@
       <label class="block text-sm font-semibold">Material<input required maxlength="180" class="mt-1 block border rounded-lg p-2 w-full" bind:value={name}/></label>
       <label class="block text-sm font-semibold">Cantidad técnica<input required type="number" min="0.001" max="1000000" step="any" class="mt-1 block border rounded-lg p-2 w-full" bind:value={quantity}/></label>
       <label class="block text-sm font-semibold">Unidad<select class="mt-1 block border rounded-lg p-2 w-full" bind:value={unit}>{#each ['unit','m','m2','kg','set','roll','box'] as u}<option value={u}>{u}</option>{/each}</select></label>
-      <p class="text-xs text-slate-500">Referencia de catálogo: {selected.body.productId||'No vinculada'}. Esta cantidad técnica no reserva inventario.</p>
+      <div class="border rounded-lg p-3 space-y-2">
+       <p class="text-sm font-semibold">Producto del catálogo: {chosenProduct?.name||productId||'No vinculado'}</p>
+       <p class="text-xs text-slate-500">Vincula una referencia publicada sin reservar existencias ni modificar precios.</p>
+       <div class="flex flex-wrap gap-2"><input aria-label="Buscar producto de catálogo" type="search" maxlength="100" class="flex-1 min-w-0 border rounded p-2" bind:value={catalogSearch}/><button type="button" class="border rounded px-3 py-2" disabled={busy||catalogBusy||!!pendingOperation} onclick={()=>searchCatalog(1)}>Buscar</button><button type="button" class="border rounded px-3 py-2" disabled={busy||!!pendingOperation||!productId} onclick={clearProduct}>Quitar vínculo</button></div>
+       {#if catalogError}<p role="alert" class="text-sm">{catalogError}</p>{/if}
+       {#each catalogRows as p (p.id)}<div class="border-t pt-2 flex items-center justify-between gap-2"><span class="text-sm">{p.name} · {p.brand||''} {p.model||''}</span><button type="button" class="border rounded px-2 py-1" disabled={busy||!!pendingOperation} onclick={()=>pickProduct(p)}>Vincular</button></div>{/each}
+       <div class="flex gap-2"><button type="button" disabled={catalogBusy||catalogPage===1} onclick={()=>searchCatalog(catalogPage-1)}>Anterior</button><button type="button" disabled={catalogBusy||!catalogMore} onclick={()=>searchCatalog(catalogPage+1)}>Siguiente</button></div>
+      </div>
       <button type="submit" disabled={busy} class="rounded-lg bg-teal-800 text-white px-3 py-2">Guardar material</button>
      </form>
     {:else}<pre class="text-xs border rounded-lg p-3 bg-slate-50 whitespace-pre-wrap break-all">{JSON.stringify(selected.body,null,2)}</pre><p class="text-xs text-slate-500">La sección está disponible en modo consulta. Su editor especializado continúa pendiente.</p>{/if}
