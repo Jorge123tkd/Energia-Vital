@@ -51,6 +51,7 @@
  }
  function transport(request){
   return async(method,payload)=>{
+   if(method==='REV'){const result=await request('GET','/manifest');if(typeof result?.rev!=='string')throw Error('Revisión inválida');return {rev:result.rev};}
    if(method==='GET'){
     const result=await request('GET','/manifest');
     if(result.snapshot===null)return result;

@@ -61,6 +61,11 @@ jobs:
               echo "[SIN VERIFICAR] $asset no accesible"
             fi
           done
+      - name: Probar creación real y actualización automática en Chromium aislado
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/evpro-browser" --no-package-lock --no-audit --no-fund playwright@1.58.2
+          EVPRO_BROWSER_DEPS="$RUNNER_TEMP/evpro-browser" node apps/web/tests/studio-browser-sync.mjs
       - name: Compilar Pages Functions sin servidor
         working-directory: apps/web
         run: npx wrangler pages functions build functions --outfile "$RUNNER_TEMP/bonaire-session.js" --output-routes-path "$RUNNER_TEMP/bonaire-routes.json"

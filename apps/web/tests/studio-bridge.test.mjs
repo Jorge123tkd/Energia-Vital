@@ -291,9 +291,9 @@ test('authenticated account is supplied to the top bar independently of the rend
  assert.match(readFileSync(new URL('../public/studio-engineering/business-menu.js',import.meta.url),'utf8'),/\['exit','←','Volver a Bonaire'\]/);
  assert.match(frame,/requestClose\(data.section\)/);
  assert.match(frame,/if\(data.pending===false\)\{finishClose\(\);return\}/);
- assert.match(frame,/index\.html\?v=studio-3.9.0-beta.8/);
- assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.8/);
- assert.match(html,/app\.js\?v=studio-3.9.0-beta.8/);
+ assert.match(frame,/index\.html\?v=studio-3.9.0-beta.9/);
+ assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.9/);
+ assert.match(html,/app\.js\?v=studio-3.9.0-beta.9/);
 });
 
 test('web account fallback renders once from trusted parent and sends logout, not back',async()=>{
@@ -374,4 +374,15 @@ test('desktop operations reuse exactly the authenticated web modules and managed
  const manifest=JSON.parse(read('public/studio-engineering/source-version.json'));
  assert.ok(read('src/lib/studio-release.ts').includes(manifest.release));
  assert.match(read('src/components/StudioEngineeringFrame.svelte'),/version:STUDIO_RELEASE/);
+});
+
+test('revision polling reads manifest without fetching attachments, and browser forms remain isolated',async()=>{
+ const {transport}=await import('../src/lib/engineering-assets.js');
+ const calls=[];const sync=transport(async(method,path)=>{calls.push([method,path]);return {rev:'rev-1',snapshot:{projects:[{data:{__evAsset:'a'.repeat(64)}}]}}});
+ assert.deepEqual(await sync('REV'),{rev:'rev-1'});assert.deepEqual(calls,[['GET','/manifest']]);
+ const frame=readFileSync(new URL('../src/components/StudioEngineeringFrame.svelte',import.meta.url),'utf8');
+ const html=readFileSync(new URL('../public/studio-engineering/index.html',import.meta.url),'utf8');
+ assert.match(frame,/sandbox="[^"]*allow-forms/);assert.doesNotMatch(frame,/allow-same-origin/);assert.match(html,/form-action 'none'/);
+ assert.match(frame,/data\.action==='revision'\?'REV'/);
+ const app=readFileSync(new URL('../public/studio-engineering/app.js',import.meta.url),'utf8');assert.match(app,/MANAGED_SYNC_INTERVAL=15000/);
 });

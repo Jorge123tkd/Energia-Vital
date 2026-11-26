@@ -60,7 +60,76 @@ function setProject(k,v){project()[k]=v;touch()}
 let evLastNavHTML=null,evLastTopHTML=null,centralAccount=null,centralAccountBusy=false;
 var centralDefaults=null;
 function engineeringCanLeave(){commitVisualInput();return !pendingSave()&&!offlineRunning&&!manualSaveBusy&&!syncing&&!collision&&!offlineConflict}
+let managedSyncFlight=null,managedSyncMessage='Pendiente de consultar',managedSyncStarted=0,managedSyncTimer=null,managedSyncNext=0;
+const MANAGED_SYNC_INTERVAL=15000;
+function syncModal(){
+ let d=$('managedSyncDialog');
+ if(!d){d=document.createElement('dialog');d.id='managedSyncDialog';d.innerHTML='<h2>Sincronización con Bonaire</h2><p class="muted">Windows y web · revisión confirmada</p><p id="managedSyncMessage" role="status" aria-live="polite"></p><progress id="managedSyncProgress" max="100" style="width:100%" aria-label="Estado de sincronización"></progress><p id="managedSyncTime" class="muted"></p><div class="actions"><button type="button" class="secondary" id="managedSyncClose">Cerrar</button></div>';document.body.append(d);$('managedSyncClose').onclick=()=>d.close();d.addEventListener('close',()=>clearInterval(managedSyncTimer))}
+ if(!d.open){d.showModal();clearInterval(managedSyncTimer);managedSyncTimer=setInterval(updateSyncModal,500)}updateSyncModal();
+}
+function updateSyncModal(){const d=$('managedSyncDialog');if(!d?.open)return;$('managedSyncMessage').textContent=managedSyncMessage;$('managedSyncTime').textContent=managedSyncStarted?'Tiempo transcurrido: '+Math.floor((Date.now()-managedSyncStarted)/1000)+' s · consulta automática cada 15 s':'';const p=$('managedSyncProgress');if(managedSyncFlight)p.removeAttribute('value');else p.value=100}
+function syncPhase(message){managedSyncMessage=String(message);updateSyncModal()}
+function canRefreshManaged(){return engineeringCanLeave()&&!$('dialog')?.open&&!document.activeElement?.matches('input:not([type=button]),textarea,select,[contenteditable=true]')}
+function installManagedSnapshot(loaded,editVersion){
+ if(!loaded||typeof loaded.rev!=='string'||!loaded.snapshot)throw Error('La revisión recibida no contiene una base válida');
+ if(!engineeringCanLeave()||offlineEditVersion!==editVersion)return false;
+ if(loaded.rev===offlineRev)return true;
+ const next=normalize(loaded.snapshot);
+ state=next;offlineCommitted=loaded.snapshot;offlineRev=loaded.rev;nativeCalculatorSnapshot=loaded.snapshot.__evStudioCalc||null;
+ nativeAutoSavePreference=typeof loaded.snapshot.__evStudioPrefs?.autoSaveEnabled==='boolean'?loaded.snapshot.__evStudioPrefs.autoSaveEnabled:null;
+ centralDefaults=loaded.snapshot.__evStudioPrefs?.defaults||null;loadAutoSave();readOfflineCalculator();calculatorBaseline=JSON.stringify(calcSite);
+ render();return true;
+}
+async function syncManaged(manual=false){
+ if(!globalThis.EVEngineeringStore||!centralAccount)return;
+ if(managedSyncFlight){if(manual)syncModal();return managedSyncFlight}
+ if(!manual&&(!autoSaveEnabled||!canRefreshManaged()||document.visibilityState==='hidden'||Date.now()<managedSyncNext))return;
+ if(!manual&&centralAccount.platform==='windows'&&centralAccount.mode!=='online')return;
+ if(manual&&$('dialog')?.open){toast('Termina el formulario abierto antes de sincronizar.');return}
+ if(manual&&centralAccount.platform==='windows'&&centralAccount.mode!=='online'){toast('Inicia sesión en línea para sincronizar con Bonaire.');return}
+ if(manual&&pendingSave())await manualSaveNow();
+ if(!engineeringCanLeave()){if(manual)toast('Guarda los cambios pendientes o resuelve el conflicto antes de sincronizar.');return}
+ if(managedSyncFlight){if(manual)syncModal();return managedSyncFlight}
+ managedSyncStarted=Date.now();syncPhase('Comprobando revisiones…');const editVersion=offlineEditVersion;
+ managedSyncFlight=(async()=>{
+  try{
+   let result;
+   if(globalThis.EVEngineeringStore.scope==='online'){
+    const current=await globalThis.EVEngineeringStore.revision();
+    if(typeof current?.rev!=='string')throw Error('Revisión online inválida');
+    if(current.rev===offlineRev)result={state:'synced'};
+    else{
+     if(!engineeringCanLeave()||offlineEditVersion!==editVersion)return syncPhase('Cambios locales pendientes; se aplazó la actualización.');
+     syncPhase('Descargando la revisión nueva…');const loaded=await globalThis.EVEngineeringStore.read();
+     if(!installManagedSnapshot(loaded,editVersion))return syncPhase('Hay cambios locales pendientes. Se conservan sin sobrescribir.');
+     result={state:'downloaded'};
+    }
+   }else{
+    result=await globalThis.EVEngineeringAccount.action('sync');
+    if(result?.state==='downloaded'){
+     syncPhase('Aplicando la revisión cifrada…');const loaded=await globalThis.EVEngineeringStore.read();
+     if(!installManagedSnapshot(loaded,editVersion)){offlineConflict=true;status('Conflicto de revisión · conserva respaldo');return syncPhase('Se conservan tus ediciones en pantalla. Exporta una copia y revisa el conflicto.')}
+    }
+   }
+   if(result?.state==='conflict'){managedSyncNext=Date.now()+60000;syncPhase(result.reason||'Hay cambios independientes. No se sobrescribió ninguna versión.');if(!pendingSave())status('Conflicto de sincronización · conserva respaldo');return}
+   if(!['synced','uploaded','downloaded'].includes(result?.state)){managedSyncNext=Date.now()+60000;syncPhase(result?.reason||'Sincronización pendiente; datos conservados.');return}
+   syncPhase(result.state==='uploaded'?'Cambios enviados a Bonaire.':result.state==='downloaded'?'Cambios de la nube descargados.':'Windows y web tienen la misma revisión.');
+   if(!pendingSave()&&!offlineRunning)status('Sincronizado · '+new Date().toLocaleTimeString());
+  }catch(e){managedSyncNext=Date.now()+60000;syncPhase('No se confirmó la sincronización. '+String(e.message||e));if(!pendingSave()&&!offlineRunning)status('Sincronización pendiente · datos conservados')}
+ })().finally(()=>{managedSyncFlight=null;updateSyncModal()});
+ if(manual)syncModal();return managedSyncFlight;
+}
+function startManagedSync(){
+ if(!globalThis.EVEngineeringStore||!centralAccount)return;
+ if(globalThis.EVEngineeringStore.scope==='online'&&!globalThis.EVEngineeringStore.revision)return;
+ if(globalThis.EVEngineeringStore.scope==='local'&&!globalThis.EVEngineeringAccount?.onSyncProgress)return;
+ globalThis.EVEngineeringAccount?.onSyncProgress?.(syncPhase);
+ setInterval(()=>void syncManaged(),MANAGED_SYNC_INTERVAL);
+ window.addEventListener('online',()=>{managedSyncNext=0;void syncManaged()});
+}
 async function centralAccountAction(action){
+ if(action==='sync'&&globalThis.EVEngineeringStore&&(globalThis.EVEngineeringStore.scope==='online'||globalThis.EVEngineeringAccount?.onSyncProgress))return syncManaged(true);
+ if(managedSyncFlight){toast('Espera a que termine la sincronización.');return}
  if(!globalThis.EVEngineeringAccount||centralAccountBusy)return;
  if(!engineeringCanLeave()){toast('Guarda los cambios y verifica que no haya conflictos antes de continuar.');return}
  centralAccountBusy=true;renderNav();
@@ -69,7 +138,7 @@ async function centralAccountAction(action){
 }
 function centralSessionTools(){
  if(!centralAccount)return '';
- return '<div class="session-tools"><span class="session-account"><small>'+E(centralAccount.role==='admin'?'Administrador':'Trabajador técnico')+' · '+E(centralAccount.mode==='online'?'En línea':centralAccount.mode==='offline'?'Sin conexión':'Windows')+'</small><strong>'+E(centralAccount.email)+'</strong></span>'+ (centralAccount.platform==='windows'&&centralAccount.mode==='online'?B('Sincronizar',"centralAccountAction('sync')",'secondary small'):'')+B('Cerrar sesión',"centralAccountAction('logout')",'secondary logout-btn')+'</div>';
+ return '<div class="session-tools"><span class="session-account"><small>'+E(centralAccount.role==='admin'?'Administrador':'Trabajador técnico')+' · '+E(centralAccount.mode==='online'?'En línea':centralAccount.mode==='offline'?'Sin conexión':'Windows')+'</small><strong>'+E(centralAccount.email)+'</strong></span>'+ (centralAccount.mode==='online'?B('Sincronizar',"centralAccountAction('sync')",'secondary small'):'')+B('Cerrar sesión',"centralAccountAction('logout')",'secondary logout-btn')+'</div>';
 }
 function renderNav(){const p=project();const newNavHTML=`<div class="brand"><img class="mark" src="favicon.svg" width="44" height="44" alt=""><div><strong>ENERGÍA VITAL</strong><small>PRO STUDIO · V${E(globalThis.EVPRO_CURRENT_RELEASE||'3.7.0-prueba')}</small></div></div>${p?`${B('‹  Todos los proyectos',"nav('projects')",'navitem')}<div class="workspace-label"><strong>${E(cname(p))}</strong><br>${E(p.name)}<br><small style="color:#a7ceca">${E(p.version)}</small></div><div class="navlabel">EXPEDIENTE ACTIVO</div>${SUB.filter(([k])=>canSeeFinance()||k!=='budget').map(([k,g,t])=>`<button class="navitem ${page===k?'active':''}" onclick="sub('${k}')"><span>${g}</span>${t}</button>`).join('')}`:`<div class="navlabel">GESTIÓN EMPRESARIAL</div>${MAIN.map(([k,g,t])=>`<button class="navitem ${page===k?'active':''}" onclick="nav('${k}')"><span>${g}</span>${t}</button>`).join('')}`}<div class="navlabel">${globalThis.EVEngineeringStore?.scope==='online'?'INGENIERÍA ONLINE':globalThis.EVEngineeringStore?'INGENIERÍA CIFRADA':shared?'BASE COMPARTIDA':'MODO AUTÓNOMO'}</div><div class="workspace-label">${E(centralAccount?'Cuenta de Bonaire':shared?me?.username:'Este dispositivo')}<br><small style="color:#a7ceca">${globalThis.EVEngineeringStore?.scope==='online'?'Guardado privado por revisión':globalThis.EVEngineeringStore?'Guardado cifrado en Windows':shared?'SQLite · espacio empresarial':'Datos locales · exporta respaldos'}</small></div>`;const newTopHTML=`<div class="row"><button class="secondary mobile" onclick="$('nav').classList.toggle('visible')">☰</button><span class="crumb">Studio / ${p?E(cname(p)+' / '+p.name):E(MAIN.find(x=>x[0]===page)?.[2]||'Empresa')}</span></div><div class="row">${p?`<label class="field">Instalación<select aria-label="Instalación" onchange="sid=this.value;render()">${p.sites.map(s=>`<option value="${E(s.id)}" ${site()?.id===s.id?'selected':''}>${E(s.name)}</option>`).join('')}</select></label>${p.sites.length>1?B('Vincular instalaciones','installationGroupDialog()'):''}`:''}${offlineReady||(shared&&me)?`<div class="save-controls"><label class="autosave-check" title="Desactiva para editar sin guardar automáticamente"><input id="autoSaveToggle" type="checkbox" ${autoSaveEnabled?'checked':''} onchange="setAutoSave(this.checked)"> Autoguardado</label><button id="manualSave" type="button" class="secondary small" onclick="manualSaveNow()" ${manualSaveBusy?'disabled':''}>Guardar ahora</button></div>`:''}<span id="saveStatus" aria-live="polite"></span>${centralAccount?centralSessionTools():shared&&me?`<div class="session-tools"><span class="session-account" title="${E(me.role==='admin'?'Administrador':'Trabajador técnico')}"><small>Sesión activa</small><strong>${E(me.username)}</strong></span><button type="button" id="topLogout" class="secondary logout-btn" onclick="logout()" ${logoutBusy?'disabled':''} aria-label="Cerrar sesión"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg><span>Cerrar sesión</span></button></div>`:''}</div>`;if(evLastNavHTML!==newNavHTML||!$('nav').hasChildNodes()){$('nav').innerHTML=newNavHTML;evLastNavHTML=newNavHTML}if(evLastTopHTML!==newTopHTML||!$('top').hasChildNodes()){$('top').innerHTML=newTopHTML;evLastTopHTML=newTopHTML}status(lastSave)}
 // EV 3.6.6 — Reconciliación visual: no destruir la pantalla por cambios de controles.
@@ -1036,6 +1105,7 @@ async function startOffline(){
  if(globalThis.EVEngineeringAccount){try{centralAccount=await globalThis.EVEngineeringAccount.info();if(/^3\.9\.\d+(?:-beta\.\d+)?$/.test(centralAccount?.version||''))globalThis.EVPRO_CURRENT_RELEASE=centralAccount.version}catch{centralAccount=null}}if(centralAccount?.platform==='windows'&&globalThis.EVEngineeringBusiness&&globalThis.EVBusinessMenu)globalThis.EVBusinessMenu.install(section=>globalThis.EVEngineeringBusiness.navigate(section));offlineReady=true;loadAutoSave();readOfflineCalculator();calculatorBaseline=JSON.stringify(calcSite);restoreRoute();status(globalThis.EVEngineeringStore?(globalThis.EVEngineeringStore.scope==='online'?'Ingeniería online · ':'Ingeniería cifrada · ')+(raw?'base recuperada':'base nueva'):db?'Modo autónomo · '+(raw?'base recuperada':'base nueva'):'Sin IndexedDB · exporta respaldos');render();
  // Persist initial state or recovered journal immediately. Include the normal library only on first start.
  if(recovered||(!raw&&!globalThis.EVEngineeringStore)){dirty=true;queueOfflineSave()}
+ startManagedSync();
  // A blank authenticated workspace stays empty until the first real edit.
  // Merely opening EV Pro must not create conflicting cloud/local histories.
  window.addEventListener('beforeunload',e=>{if(dirty&&!offlineJournalOK){e.preventDefault();e.returnValue=''}});

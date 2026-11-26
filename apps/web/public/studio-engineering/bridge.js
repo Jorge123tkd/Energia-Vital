@@ -12,6 +12,7 @@
   window.removeEventListener('message',receive);
   port.onmessage=event=>{
    const response=event.data;if(response?.type==='check-close'){let pending=true;try{pending=typeof engineeringCanLeave!=='function'||!engineeringCanLeave()}catch{};port.postMessage({type:'close-state',pending});return}const pending=waiting.get(response?.id);if(!pending)return;
+   if(response.progress){clearTimeout(pending.timer);pending.timer=setTimeout(pending.expire,180000);return}
    waiting.delete(response.id);clearTimeout(pending.timer);
    if(response.ok)pending.resolve(response.result);
    else pending.reject(Object.assign(Error(response.error||'No se confirmó el guardado online'),{conflict:response.status===409,code:response.status}));
@@ -48,11 +49,12 @@
   let timer;try{await Promise.race([connected,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Studio no recibió autorización de Bonaire')),15000)})])}finally{clearTimeout(timer)}
   const id=++nextId;
   return new Promise((resolve,reject)=>{
-   const timer=setTimeout(()=>{waiting.delete(id);reject(Error('No se confirmó la operación online. Conserva tus cambios.'))},180000);
-   waiting.set(id,{resolve,reject,timer});
+   const expire=()=>{waiting.delete(id);reject(Error('No se confirmó la operación online. Conserva tus cambios.'))};
+   const timer=setTimeout(expire,180000);
+   waiting.set(id,{resolve,reject,timer,expire});
    port.postMessage({id,action,payload});
   });
  }
  Object.defineProperty(window,'EVEngineeringAccount',{value:Object.freeze({info:()=>call('account'),action:async action=>{if(action!=='logout')throw Error('Acción no disponible');if(!port)throw Error('Sesión no conectada');port.postMessage({type:'studio-navigation',section:'logout'})}}),writable:false,configurable:false});
- Object.defineProperty(window,'EVEngineeringStore',{value:Object.freeze({scope:'online',read:()=>call('read'),write:payload=>call('write',payload)}),writable:false,configurable:false});
+ Object.defineProperty(window,'EVEngineeringStore',{value:Object.freeze({scope:'online',read:()=>call('read'),revision:()=>call('revision'),write:payload=>call('write',payload)}),writable:false,configurable:false});
 })();
