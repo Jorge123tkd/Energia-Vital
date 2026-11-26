@@ -21,14 +21,7 @@ export async function renderStudioPdf(request,env,transport=fetch){
  const csp='<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:; object-src \'none\'; connect-src \'none\'; base-uri \'none\'; form-action \'none\'">';
  const html=/<head(?:\s[^>]*)?>/i.test(input.html)?input.html.replace(/<head(?:\s[^>]*)?>/i,m=>m+csp):csp+input.html;
  try{
- const result=await transport('https://api.cloudflare.com/client/v4/accounts/'+account+'/browser-rendering/pdf?cacheTTL=0',{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+env.STUDIO_PDF_TOKEN,'Content-Type':'application/json'},signal:AbortSignal.timeout(95000),body:JSON.stringify({html,setJavaScriptEnabled:false,allowRequestPattern:['^data:','^about:blank,rejectResourceTypes:['script','xhr','fetch','websocket','media','ping'],actionTimeout:60000,pdfOptions:{printBackground:true,preferCSSPageSize:true,format:'a4'}})});
- if(!result.ok)return reply({error:result.status===429?'Límite temporal del generador PDF. Intenta nuevamente.':'Cloudflare no confirmó el PDF.'},result.status===429?429:502);
- const bytes=await limitedBytes(result.body,PDF_LIMIT);if(new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-')return reply({error:'Respuesta PDF inválida'},502);
- let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));
- return reply({pdf:btoa(binary)});
- }catch{return reply({error:'No se pudo generar el PDF dentro de los límites establecidos.'},503)}
-}
-],rejectRequestPattern:['^https?:','^file:','^ftp:','^wss?:'],rejectResourceTypes:['script','xhr','fetch','websocket','media','ping'],actionTimeout:60000,pdfOptions:{printBackground:true,preferCSSPageSize:true,format:'a4'}})});
+ const result=await transport('https://api.cloudflare.com/client/v4/accounts/'+account+'/browser-rendering/pdf?cacheTTL=0',{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+env.STUDIO_PDF_TOKEN,'Content-Type':'application/json'},signal:AbortSignal.timeout(95000),body:JSON.stringify({html,setJavaScriptEnabled:false,allowRequestPattern:['^data:','^about:blank$'],rejectRequestPattern:['^https?:','^file:','^ftp:','^wss?:'],rejectResourceTypes:['script','xhr','fetch','websocket','media','ping'],actionTimeout:60000,pdfOptions:{printBackground:true,preferCSSPageSize:true,format:'a4'}})});
  if(!result.ok)return reply({error:result.status===429?'Límite temporal del generador PDF. Intenta nuevamente.':'Cloudflare no confirmó el PDF.'},result.status===429?429:502);
  const bytes=await limitedBytes(result.body,PDF_LIMIT);if(new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-')return reply({error:'Respuesta PDF inválida'},502);
  let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));
