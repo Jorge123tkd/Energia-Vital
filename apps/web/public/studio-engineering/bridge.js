@@ -56,6 +56,6 @@
   });
  }
  Object.defineProperty(window,'EVEngineeringAccount',{value:Object.freeze({info:()=>call('account'),action:async action=>{if(action!=='logout')throw Error('Acción no disponible');if(!port)throw Error('Sesión no conectada');port.postMessage({type:'studio-navigation',section:'logout'})}}),writable:false,configurable:false});
- Object.defineProperty(window,'EVEngineeringReports',{value:Object.freeze({preview:(html,options)=>call('preview',{html,options}),saveFile:(name,bytes,mime)=>call('save-file',{name,bytes,mime})}),writable:false,configurable:false});
+ Object.defineProperty(window,'EVEngineeringReports',{value:Object.freeze({preview:(html,options)=>call('preview',{html,options}),saveFile:(name,bytes,mime)=>call('save-file',{name,bytes,mime}),pdfStatus:()=>call('pdf-status'),renderPdf:html=>call('render-pdf',{html})}),writable:false,configurable:false});
  Object.defineProperty(window,'EVEngineeringStore',{value:Object.freeze({scope:'online',read:()=>call('read'),revision:()=>call('revision'),write:payload=>call('write',payload)}),writable:false,configurable:false});
 })();

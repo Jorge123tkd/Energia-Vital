@@ -1,3 +1,4 @@
+import {pdfEnabled,renderStudioPdf} from '../../../lib/studio-private-pdf.js';
 // Read-only initial bridge. Production binding is never available to preview environments.
 // Authentication is rechecked using the existing staff session; Studio independently checks membership.
 const allowedHosts = new Set(['https://bnergiv.com','https://www.bnergiv.com','https://energia-vital-web.pages.dev']);
@@ -109,9 +110,10 @@ export async function onRequest({request,env}){
   const engineeringWorkspace=!url.search&&engineeringRoute(path,request.method);
   const adminMutation=!url.search&&(request.method==='POST'&&(adminPost.test(path)||path===projectCreate||path===publicationList||path===initialAdmin)||request.method==='PUT'&&adminPut.test(path)||request.method==='DELETE'&&adminDelete.test(path));
   const staffRowMutation=!url.search&&request.method==='PUT'&&typedRowPut.test(path);
-  const adminOnly=engineeringWorkspace||adminRead.test(path)||(adminMutation&&path!==publicationList);
-  if(request.method!=='GET'&&!adminMutation&&!staffRowMutation&&!engineeringWorkspace)return fail(405,'Método no habilitado');
-  if(!url.pathname.startsWith('/api/studio/')||!(request.method==='GET'&&(permitted.test(path)||adminRead.test(path)||path===publicationList)||adminMutation||staffRowMutation||engineeringWorkspace)||url.search.length>1024)return fail(404,'Ruta no disponible');
+  const pdfRoute=!url.search&&path==='/v1/engineering/pdf'&&['GET','POST'].includes(request.method);
+  const adminOnly=pdfRoute||engineeringWorkspace||adminRead.test(path)||(adminMutation&&path!==publicationList);
+  if(request.method!=='GET'&&!adminMutation&&!staffRowMutation&&!engineeringWorkspace&&!pdfRoute)return fail(405,'Método no habilitado');
+  if(!url.pathname.startsWith('/api/studio/')||!(request.method==='GET'&&(permitted.test(path)||adminRead.test(path)||path===publicationList)||adminMutation||staffRowMutation||engineeringWorkspace||pdfRoute)||url.search.length>1024)return fail(404,'Ruta no disponible');
   const authorization=request.headers.get('Authorization')||'';
   if(!/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(authorization)||authorization.length>4103)return fail(401,'Debes iniciar sesión');
   if(!env?.STUDIO_API||!env?.ADMIN_SESSION_API)return fail(503,'Servicio Studio no configurado');
@@ -122,6 +124,14 @@ export async function onRequest({request,env}){
     const staff=(await auth.json()).user;
     if(!staff||!['admin','operator'].includes(staff.role))return fail(403,'Acceso de personal no autorizado');
     if(adminOnly&&staff.role!=='admin')return fail(403,'Solo administrador');
+    if(pdfRoute){
+      const membership=await env.STUDIO_API.fetch(new Request('https://studio.internal/v1/me',{headers:{Authorization:authorization},redirect:'manual'}));
+      if(!membership.ok)return fail([401,403].includes(membership.status)?403:503,'Studio no autorizado');
+      const member=(await membership.json()).user;
+      if(!member||member.id!==staff.id||member.role!=='admin')return fail(403,'Solo administrador Studio');
+      if(request.method==='GET')return new Response(JSON.stringify({available:pdfEnabled(env)}),{headers});
+      return renderStudioPdf(request,env);
+    }
     if(engineeringWorkspace){
       // The Worker independently checks membership, account scope and revisions.
       if(request.method!=='GET'&&!request.headers.get('Content-Type')?.toLowerCase().startsWith('application/json'))return fail(400,'Formato inválido');

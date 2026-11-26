@@ -75,12 +75,22 @@
     if(data.section==='engineering'||Object.hasOwn(names,data.section)){section=data.section;workspaceError='';if(section!=='engineering')void onBusinessOpen?.(section)}
     return;
    }
-   if(!Number.isSafeInteger(data.id)||!['read','write','account','revision','preview','save-file'].includes(data.action))return;
+   if(!Number.isSafeInteger(data.id)||!['read','write','account','revision','preview','save-file','pdf-status','render-pdf'].includes(data.action))return;
    const reply=(v:Record<string,unknown>)=>{if(current===epoch&&opened)channel.port1.postMessage({id:data.id,...v})};
    operations++;if(data.action!=='revision')workspaceError='';
    try{
     if(!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token)throw Object.assign(new Error('Sesión de Bonaire cambiada. Cierra y abre Studio.'),{status:401});
     if(data.action==='account'){reply({ok:true,result:{email:account.email,role:account.role,mode:'online',platform:'web',version:STUDIO_RELEASE}});return}
+    if(data.action==='pdf-status'||data.action==='render-pdf'){
+     if(account.role!=='admin'||section!=='engineering'||reportOutput)throw Error('PDF no autorizado.');
+     const url=route+'/pdf';
+     if(data.action==='pdf-status'){const result=await apiRequest(url,{headers:auth(),cache:'no-store',signal:AbortSignal.timeout(10000)});reply({ok:true,result:{available:result.available===true}});return}
+     const html=data.payload?.html;
+     if(typeof html!=='string'||new TextEncoder().encode(html).length>12*1024*1024)throw Error('Informe superior al límite de PDF web.');
+     const result=await apiRequest(url,{method:'POST',headers:auth(),cache:'no-store',signal:AbortSignal.timeout(110000),body:JSON.stringify({html})});
+     if(typeof result.pdf!=='string'||!result.pdf.startsWith('JVBER'))throw Error('PDF no confirmado.');
+     const bytes=Uint8Array.from(atob(result.pdf),c=>c.charCodeAt(0));reply({ok:true,result:bytes});return;
+    }
     if(data.action==='preview'||data.action==='save-file'){
      if(account.role!=='admin'||section!=='engineering'||reportOutput)throw Error('Cierra la salida actual antes de abrir otro informe o archivo.');
      const job=outputRequest(data.action,data.payload);

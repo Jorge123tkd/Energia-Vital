@@ -454,3 +454,14 @@ test('managed reports use an explicit user-controlled web output capability with
  assert.match(helper,/createElement\('template'\)/);assert.match(helper,/script-src/);assert.match(helper,/a.click\(\)/);
  assert.match(bridge,/EVEngineeringReports/);assert.match(bridge,/call\('save-file'/);
 });
+
+ test('private web PDF requires both central and Studio admin, explicit activation, and no scripts or external network',async()=>{
+ const {renderStudioPdf,pdfEnabled}=await import('../lib/studio-private-pdf.js');
+ const env={STUDIO_PDF_ENABLED:'true',STUDIO_PDF_TOKEN:'qa-only-token-not-a-real-secret'};
+ assert.equal(pdfEnabled({}),false);
+ let calls=0;const make=()=>new Request('https://bnergiv.com/api/studio/v1/engineering/pdf',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({html:'<html><head></head><body>QA</body></html>'})});
+ const mock=async(url,options)=>{calls++;const b=JSON.parse(options.body);assert.match(url,/browser-rendering\\/pdf$/);assert.equal(b.setJavaScriptEnabled,false);assert.equal(b.pdfOptions.preferCSSPageSize,true);assert.match(b.html,/Content-Security-Policy/);assert.ok(b.rejectRequestPattern.length);return new Response('%PDF-1.7 fake fixture')};
+ assert.equal((await renderStudioPdf(make(),{},mock)).status,503);assert.equal(calls,0);
+ const result=await renderStudioPdf(make(),env,mock);assert.equal(result.status,200);assert.match((await result.json()).pdf,/^JVBER/);assert.equal(calls,1);
+ const source=readFileSync(new URL('../functions/api/studio/[[path]].js',import.meta.url),'utf8');assert.match(source,/adminOnly=pdfRoute/);assert.match(source,/member.role!=='admin'/);
+ });
