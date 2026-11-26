@@ -7,7 +7,7 @@
  let items=$state<any[]>([]),suppliers=$state<any[]>([]),orders=$state<any[]>([]),payables=$state<any[]>([]);
  let opened=$state(false),ready=$state(false),busy=$state(false),error=$state(''),message=$state(''),oldNative=$state(false);
  let action=$state(''),orderId=$state(''),orderDetail=$state<any>(null),lines=$state<{key:string;itemId:string;quantity:string;total:string}[]>([]);
- let pending:{fingerprint:string;id:string;body:any}|null=null,disposed=false;
+ let pending=$state<{fingerprint:string;id:string;body:any}|null>(null),disposed=false;
  const call=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
  const base='/api/warehouse',finance='/api/business-finance';
  const actions:Record<string,{id:string;name:string}[]>={inventory:[{id:'item',name:'Crear artículo'},{id:'movement',name:'Registrar movimiento'}],suppliers:[{id:'supplier',name:'Registrar proveedor'}],orders:[{id:'order',name:'Crear pedido'},{id:'decision',name:'Gestionar pedido y recepción'}],shortages:[{id:'link',name:'Vincular solicitud comercial'},{id:'requirement',name:'Registrar necesidad aprobada'}],finance:[{id:'link',name:'Vincular solicitud comercial'},{id:'contract',name:'Registrar contrato aceptado'},{id:'obligation',name:'Registrar obligación documentada'},{id:'payment',name:'Registrar pago a proveedor'}]};
@@ -64,13 +64,13 @@
   }
   busy=true;error='';message='';
   try{
-   await call(path,pending.body);pending=null;
+   await call(path,$state.snapshot(pending!.body));pending=null;
    if(!disposed){message='Operación confirmada por el servidor.';ready=false;await onSaved();}
   }catch(e){
    const status=(e as Error&{status?:number}).status;
    // A definitive client rejection can be corrected; unknown outcomes retain the exact operation ID.
-   if(status&&status>=400&&status<500&&status!==408&&status!==429)pending=null;
-   if(!disposed)error=(e as Error).message||'Resultado no confirmado. Reintenta sin modificar los datos.';
+   if(status&&[400,401,403,404,405,413,422].includes(status))pending=null;
+   if(!disposed)error=((e as Error).message||'Resultado no confirmado.')+(pending?' Conserva este formulario y reintenta el mismo registro.':'');
   }finally{if(!disposed)busy=false}
  }
  async function submit(e:SubmitEvent){
