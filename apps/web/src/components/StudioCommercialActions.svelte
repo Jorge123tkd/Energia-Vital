@@ -7,6 +7,11 @@
  let items=$state<any[]>([]),suppliers=$state<any[]>([]),orders=$state<any[]>([]),payables=$state<any[]>([]);
  let opened=$state(false),ready=$state(false),busy=$state(false),error=$state(''),message=$state(''),oldNative=$state(false);
  let action=$state(''),orderId=$state(''),orderDetail=$state<any>(null),lines=$state<{key:string;itemId:string;quantity:string;total:string}[]>([]);
+ let movementKind=$state('receive'),expenseCategory=$state('goods'),purchaseOrder=$state(''),decisionKind=$state(''),receiptLine=$state('');
+ let eligibleOrders=$derived(orders.filter(o=>o.project_id===project&&['ordered','closed'].includes(o.status)));
+ let selectedOrder=$derived(eligibleOrders.find(o=>o.id===purchaseOrder));
+ let selectedLine=$derived(orderDetail?.lines?.find((l:any)=>l.id===receiptLine));
+ let availableDecisions=$derived(orderDetail?.order?.status==='draft'?['approve','cancel']:orderDetail?.order?.status==='ordered'?[...(orderDetail.lines||[]).some((l:any)=>l.outstanding_milli>0)?['receive']:['close'],...(!(orderDetail.lines||[]).some((l:any)=>l.received_milli>0)?['cancel']:[])]:[]);
  let pending=$state<{fingerprint:string;id:string;body:any}|null>(null),disposed=false;
  const call=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
  const base='/api/warehouse',finance='/api/business-finance';
@@ -26,22 +31,22 @@
  }
  function addLine(){if(lines.length<50)lines=[...lines,{key:crypto.randomUUID(),itemId:'',quantity:'',total:''}]}
  async function prepare(id:string){
-  if(busy||pending)return;opened=true;action=id;ready=false;error='';message='';busy=true;orderDetail=null;orderId='';lines=[];
+  if(busy||pending)return;opened=true;action=id;ready=false;error='';message='';busy=true;orderDetail=null;orderId='';lines=[];movementKind='receive';expenseCategory='goods';purchaseOrder='';decisionKind='';receiptLine='';
   try{
    const bridge=desktopStudioBridge();
    if(bridge){const info=await bridge.account();if(/^3\.9\.0-beta\.(?:[1-9]|1[01])$/.test(info.version)){oldNative=true;throw Error('Actualiza Windows a beta 12 o posterior para registrar operaciones comerciales.');}}
    if(['movement','requirement','order'].includes(id))items=await collect(base+'/items','items');
    if(['order','obligation'].includes(id))suppliers=(await collect(base+'/procurement/suppliers','suppliers')).filter(x=>Number(x.active)===1);
-   if(id==='decision')orders=await collect(base+'/procurement/orders','orders');
-   if(id==='payment')payables=await collect(finance+'/payables','payables');
+   if(id==='decision'||id==='obligation')orders=await collect(base+'/procurement/orders','orders');
+   if(id==='payment')payables=(await collect(finance+'/payables','payables')).filter(p=>p.project_id===project&&Number(p.outstanding_minor)>0);
    if(id==='order')addLine();
    if(!disposed)ready=true;
   }catch(e){if(!disposed)error=(e as Error).message||'No se pudo preparar la operación.'}
   finally{if(!disposed)busy=false}
  }
  async function inspectOrder(id:string){
-  if(busy||pending)return;orderId=id;orderDetail=null;error='';if(!id)return;busy=true;
-  try{const r=await call(base+'/procurement/orders/'+encodeURIComponent(id));if(!disposed)orderDetail=r}
+  if(busy||pending)return;orderId=id;orderDetail=null;decisionKind='';receiptLine='';error='';if(!id)return;busy=true;
+  try{const r=await call(base+'/procurement/orders/'+encodeURIComponent(id));if(!disposed){orderDetail=r;decisionKind=r.order?.status==='draft'?'approve':r.order?.status==='ordered'?(r.lines||[]).some((l:any)=>l.outstanding_milli>0)?'receive':'close':''}}
   catch(e){if(!disposed)error=(e as Error).message}finally{if(!disposed)busy=false}
  }
  const text=(f:FormData,k:string)=>String(f.get(k)||'').trim();
@@ -82,7 +87,7 @@
    if(action==='item')await commit(base+'/items',{name:v('name'),unit:v('unit'),productId:v('productId')||null});
    else if(action==='supplier')await commit(base+'/procurement/suppliers',{name:v('name'),country:v('country'),contact:v('contact')||null});
    else if(action==='movement'){
-    const kind=v('kind');
+    const kind=v('kind');if(kind!=='receive'&&!v('projectId'))throw Error('Selecciona el proyecto del movimiento.');if(['issue','consume','return'].includes(kind)&&!v('workId'))throw Error('Introduce una orden de trabajo vinculada.');
     await commit(base+'/movements',{itemId:v('itemId'),kind,quantityMilli:qty(v('quantity')),reference:v('reference'),projectId:kind==='receive'?null:v('projectId'),workId:['issue','consume','return'].includes(kind)?v('workId'):null});
    }else if(action==='link'){
     if(!project)throw Error('Selecciona un proyecto.');
@@ -96,17 +101,19 @@
    }else if(action==='decision'){
     if(!orderDetail||orderDetail.order.id!==orderId)throw Error('Consulta un pedido vigente.');
     const decision=v('decision');
-    if(decision==='receive')await commit(base+'/procurement/receipts',{lineId:v('lineId'),quantityMilli:qty(v('quantity')),reference:v('reference')});
+    if(!availableDecisions.includes(decision))throw Error('Operación no permitida para el estado del pedido.');
+    if(decision==='receive'){const quantity=qty(v('quantity'));if(!selectedLine||quantity>selectedLine.outstanding_milli||!v('reference'))throw Error('Selecciona una línea pendiente, una cantidad disponible y la referencia de recepción.');await commit(base+'/procurement/receipts',{lineId:selectedLine.id,quantityMilli:quantity,reference:v('reference')});}
     else await commit(base+'/procurement/orders/'+encodeURIComponent(orderId)+'/decision',{decision},false);
    }else if(action==='contract'){
     if(!project)throw Error('Selecciona un proyecto.');
     await commit(finance+'/projects/'+encodeURIComponent(project)+'/contract',{quoteId:v('quoteId'),contractReference:v('reference'),acceptanceEvidence:v('evidence'),acceptedOn:v('date'),dueOn:v('dueOn')||null},false);
    }else if(action==='obligation'){
     if(!project)throw Error('Selecciona un proyecto.');
-    await commit(finance+'/obligations',{supplierId:v('supplierId'),projectId:project,purchaseOrderId:v('purchaseOrderId')||null,category:v('category'),currency:v('currency'),amountMinor:money(v('amount')),documentReference:v('reference'),evidence:v('evidence'),issuedOn:v('date'),dueOn:v('dueOn')||null});
+    const goods=expenseCategory==='goods';if(goods&&!selectedOrder)throw Error('Para materiales selecciona un pedido aprobado de este proyecto.');
+    await commit(finance+'/obligations',{supplierId:goods?selectedOrder.supplier_id:v('supplierId'),projectId:project,purchaseOrderId:goods?selectedOrder.id:null,category:expenseCategory,currency:goods?selectedOrder.currency:v('currency'),amountMinor:money(v('amount')),documentReference:v('reference'),evidence:v('evidence'),issuedOn:v('date'),dueOn:v('dueOn')||null});
    }else if(action==='payment'){
     const payable=payables.find(p=>p.id===v('obligationId'));
-    if(!payable)throw Error('Selecciona una obligación documentada.');
+    if(!payable)throw Error('Selecciona una obligación documentada del proyecto.');if(money(v('amount'))>payable.outstanding_minor)throw Error('El pago supera el saldo pendiente.');
     await commit(finance+'/supplier-payments',{obligationId:payable.id,currency:payable.currency,amountMinor:money(v('amount')),reference:v('reference'),evidence:v('evidence'),paidOn:v('date')});
    }
   }catch(err){error=(err as Error).message}
@@ -125,24 +132,24 @@
    {#if action==='item'}<label>Unidad<select name="unit">{#each units as u}<option value={u[0]}>{u[1]}</option>{/each}</select></label><label>Referencia de producto publicado (opcional)<input name="productId" maxlength="100"/></label>{/if}
    {#if action==='supplier'}<label>País<input name="country" required maxlength="100"/></label><label>Contacto<input name="contact" maxlength="300"/></label>{/if}
    {#if action==='movement'||action==='requirement'}<label>Artículo<select name="itemId" required><option value="">Seleccionar</option>{#each items as i (i.id)}<option value={i.id}>{i.name} · {i.unit}</option>{/each}</select></label><label>Cantidad<input name="quantity" type="number" required min="0.001" max="1000000" step="0.001"/></label>{/if}
-   {#if action==='movement'}<label>Movimiento<select name="kind"><option value="receive">Entrada</option><option value="reserve">Reservar</option><option value="release">Liberar reserva</option><option value="issue">Entregar</option><option value="consume">Consumir</option><option value="return">Devolver</option></select></label><label>Proyecto (excepto entrada)<select name="projectId"><option value="">Sin proyecto</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}</select></label><label>Orden de trabajo (entrega, consumo o devolución)<input name="workId" maxlength="100"/></label>{/if}
+   {#if action==='movement'}<label>Movimiento<select name="kind" bind:value={movementKind}><option value="receive">Entrada</option><option value="reserve">Reservar</option><option value="release">Liberar reserva</option><option value="issue">Entregar</option><option value="consume">Consumir</option><option value="return">Devolver</option></select></label>{#if movementKind!=='receive'}<label>Proyecto<select name="projectId" required><option value="">Seleccionar proyecto</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}</select></label>{/if}{#if ['issue','consume','return'].includes(movementKind)}<label>Orden de trabajo vinculada<input name="workId" required maxlength="100"/></label>{/if}{/if}
    {#if action==='link'}<label>Identificador de solicitud existente<input name="requestId" required maxlength="100"/></label>{/if}
-   {#if action==='order'||action==='obligation'}<label>Proveedor<select name="supplierId" required><option value="">Seleccionar</option>{#each suppliers as s (s.id)}<option value={s.id}>{s.name}</option>{/each}</select></label>{/if}
+   {#if action==='order'||(action==='obligation'&&expenseCategory!=='goods')}<label>Proveedor<select name="supplierId" required><option value="">Seleccionar</option>{#each suppliers as s (s.id)}<option value={s.id}>{s.name}</option>{/each}</select></label>{/if}
    {#if action==='order'}<label>Proyecto<select name="projectId"><option value="">Compra general</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}</select></label><label>Incoterm<select name="incoterm">{#each incoterms as i}<option>{i}</option>{/each}</select></label>
     <div class="md:col-span-2 space-y-2"><p class="font-semibold">Líneas del pedido (importe total por línea)</p>{#each lines as l (l.key)}<div class="grid gap-2 md:grid-cols-4"><select aria-label="Artículo" required bind:value={l.itemId}><option value="">Seleccionar artículo</option>{#each items as i (i.id)}<option value={i.id}>{i.name}</option>{/each}</select><input aria-label="Cantidad" type="text" inputmode="decimal" required placeholder="Cantidad" bind:value={l.quantity}/><input aria-label="Importe total" type="text" inputmode="decimal" required placeholder="Importe total" bind:value={l.total}/><button type="button" disabled={lines.length===1||busy||!!pending} onclick={()=>lines=lines.filter(x=>x.key!==l.key)}>Quitar</button></div>{/each}<button type="button" disabled={busy||!!pending||lines.length>=50} onclick={addLine}>Agregar línea</button></div>
    {/if}
    {#if action==='decision'}<label>Pedido<select value={orderId} disabled={busy||!!pending} onchange={e=>inspectOrder(e.currentTarget.value)}><option value="">Seleccionar</option>{#each orders as o (o.id)}<option value={o.id}>{o.reference} · {o.status}</option>{/each}</select></label>
-    {#if orderDetail}<label>Operación<select name="decision"><option value="approve">Aprobar pedido</option><option value="close">Cerrar pedido</option><option value="cancel">Cancelar pedido</option><option value="receive">Registrar recepción</option></select></label><label>Línea (solo recepción)<select name="lineId"><option value="">Seleccionar</option>{#each orderDetail.lines||[] as l (l.id)}<option value={l.id}>{l.name} · {l.unit}</option>{/each}</select></label><label>Cantidad recibida<input name="quantity" type="number" min="0.001" max="1000000" step="0.001"/></label>{/if}
+    {#if orderDetail}<label>Operación<select name="decision" bind:value={decisionKind} required><option value="">Seleccionar</option>{#each availableDecisions as d}<option value={d}>{({approve:'Aprobar pedido',close:'Cerrar pedido',cancel:'Cancelar pedido',receive:'Registrar recepción'} as Record<string,string>)[d]}</option>{/each}</select></label>{#if !availableDecisions.length}<p class="text-sm">Este pedido está finalizado y no admite cambios.</p>{/if}{#if decisionKind==='receive'}<label>Línea pendiente<select name="lineId" bind:value={receiptLine} required><option value="">Seleccionar</option>{#each (orderDetail.lines||[]).filter((l:any)=>l.outstanding_milli>0) as l (l.id)}<option value={l.id}>{l.name} · {l.outstanding_milli/1000} {l.unit} pendientes</option>{/each}</select></label><label>Cantidad recibida<input name="quantity" type="number" required min="0.001" max={selectedLine?selectedLine.outstanding_milli/1000:1000000} step="0.001"/></label>{/if}{/if}
    {/if}
    {#if action==='contract'}<label>Identificador de cotización aceptada<input name="quoteId" required maxlength="100"/></label>{/if}
-   {#if action==='obligation'}<label>Pedido asociado (opcional)<input name="purchaseOrderId" maxlength="100"/></label><label>Categoría<select name="category"><option value="goods">Materiales</option><option value="freight">Flete</option><option value="customs">Aduana</option><option value="insurance">Seguro</option><option value="installation">Instalación</option><option value="labor">Mano de obra</option><option value="other">Otros</option></select></label>{/if}
-   {#if action==='payment'}<label>Obligación<select name="obligationId" required><option value="">Seleccionar</option>{#each payables as p (p.id)}<option value={p.id}>{p.supplier_name} · {p.document_reference||p.id} · {p.currency}</option>{/each}</select></label>{/if}
-   {#if action==='order'||action==='obligation'}<label>Moneda<select name="currency">{#each currencies as c}<option>{c}</option>{/each}</select></label>{/if}
+   {#if action==='obligation'}<label>Categoría<select name="category" bind:value={expenseCategory}><option value="goods">Materiales</option><option value="freight">Flete</option><option value="customs">Aduana</option><option value="insurance">Seguro</option><option value="installation">Instalación</option><option value="labor">Mano de obra</option><option value="other">Otros</option></select></label>{#if expenseCategory==='goods'}<label>Pedido aprobado<select name="purchaseOrderId" bind:value={purchaseOrder} required><option value="">Seleccionar</option>{#each eligibleOrders as o (o.id)}<option value={o.id}>{o.reference} · {o.supplier_name} · {o.currency}</option>{/each}</select></label>{#if selectedOrder}<p class="text-sm">Proveedor: {selectedOrder.supplier_name} · Moneda: {selectedOrder.currency}</p>{:else if !eligibleOrders.length}<p class="text-sm">Primero aprueba un pedido asociado a este proyecto.</p>{/if}{/if}{/if}
+   {#if action==='payment'}<label>Obligación<select name="obligationId" required><option value="">Seleccionar</option>{#each payables as p (p.id)}<option value={p.id}>{p.supplier_name} · {p.document_reference||p.id} · {p.outstanding_minor/100} {p.currency} pendientes</option>{/each}</select></label>{/if}
+   {#if action==='order'||(action==='obligation'&&expenseCategory!=='goods')}<label>Moneda<select name="currency">{#each currencies as c}<option>{c}</option>{/each}</select></label>{/if}
    {#if action==='obligation'||action==='payment'}<label>Importe<input name="amount" type="number" min="0.01" step="0.01" required/></label>{/if}
-   {#if ['movement','order','decision','contract','obligation','payment'].includes(action)}<label>Referencia documental<input name="reference" required={action!=='decision'} maxlength="200"/></label>{/if}
+   {#if ['movement','order','decision','contract','obligation','payment'].includes(action)}<label>Referencia documental<input name="reference" required={action!=='decision'||decisionKind==='receive'} maxlength={action==='payment'?150:200}/></label>{/if}
    {#if ['contract','obligation','payment'].includes(action)}<label>Fecha del documento o pago<input name="date" type="date" required/></label><label>Evidencia verificable<textarea name="evidence" required minlength="15" maxlength="900"></textarea></label>{/if}
    {#if action==='contract'||action==='obligation'}<label>Vencimiento (opcional)<input name="dueOn" type="date"/></label>{/if}
-   <div class="md:col-span-2 flex gap-2"><button type="submit" disabled={busy||(action==='decision'&&!orderDetail)}>{busy?'Procesando…':pending?'Reintentar mismo registro':'Confirmar registro'}</button><button type="button" disabled={busy||!!pending} onclick={close}>Cerrar formulario</button></div>
+   <div class="md:col-span-2 flex gap-2"><button type="submit" disabled={busy||(action==='decision'&&(!orderDetail||!availableDecisions.includes(decisionKind)))||(action==='obligation'&&expenseCategory==='goods'&&!selectedOrder)||(action==='payment'&&!payables.length)}>{busy?'Procesando…':pending?'Reintentar mismo registro':'Confirmar registro'}</button><button type="button" disabled={busy||!!pending} onclick={close}>Cerrar formulario</button></div>
    {#if pending}<p class="md:col-span-2 text-xs text-slate-600">No cambies ni abandones el formulario hasta confirmar el resultado. La misma solicitud se reintenta con su identificador original.</p><button type="button" disabled={busy} onclick={resolveUnknown}>He revisado el registro central: cerrar intento</button>{/if}
   </form>
  {:else if opened&&busy}<p role="status" class="text-sm">Consultando referencias…</p>{:else if opened&&!oldNative}<button type="button" onclick={close}>Cerrar</button>{/if}
