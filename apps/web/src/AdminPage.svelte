@@ -263,8 +263,7 @@
       if(mode==='replace')history.replaceState(null,'',path);
     }
     if (next !== 'brigades') brigadeRequestId = '';
-    if (mode!=='replace' && token && next === 'requests') void loadRequestPage(1);
-    if (mode!=='replace' && token && next === 'appointments') void loadAppointmentPage(1);
+    if(mode!=='replace'&&token){if(next==='requests')requestPage=1;if(next==='appointments')appointmentPage=1;void reload(token).catch(e=>{error=(e as Error).message;});}
     mobileMenu = false;
     accountMenu = false;
   }
@@ -275,6 +274,7 @@
     catch (e) { error = e instanceof Error ? e.message : 'No se pudieron sincronizar los datos.'; }
     finally { syncBusy = false; mobileMenu = false; accountMenu = false; }
   }
+  let customerTotal=$state<number|null>(null);
   let customers: any[] = $state([]);
   let requests: any[] = $state([]);
   let appointments: any[] = $state([]);
@@ -284,12 +284,13 @@
 
 
   let pendingCountBusy=false,viewGeneration=0;
+  let loadedSections=$state<Record<string,boolean>>({}),sectionLoading=$state(false);let sectionRun=0;
   async function refreshPendingCount(){
     if(!token||pendingCountBusy)return;
     pendingCountBusy=true;const generation=viewGeneration;
     try{
       const data=await api.adminRequests(token,'',1,5);
-      if(generation===viewGeneration&&token&&typeof data.pending_count==='number')pendingRequests=data.pending_count;
+      if(generation===viewGeneration&&token&&typeof data.pending_count==='number'){pendingRequests=data.pending_count;loadedSections={...loadedSections,requests:true};}
     }catch(e){if(generation===viewGeneration&&token&&(e as Error&{status?:number}).status===401){clearAdminSession();error='La sesión ha vencido. Vuelve a iniciar sesión.';}}
     finally{pendingCountBusy=false;}
   }
@@ -311,6 +312,7 @@
         const info=await api.adminMe(saved);staffRole=info.user.role;ownId=info.user.id;
         token=sessionStorage.getItem(ADMIN_TOKEN_KEY)||saved;
         chooseTab(safeAdminTab(window.location.pathname,staffRole),'replace');
+        checking=false;
         try{await reload(token);}catch(e){error=e instanceof Error?e.message:'No se pudieron cargar los datos.';}
       }
     }catch(e){
@@ -333,9 +335,9 @@
     finally { loading = false; }
   }
   function resetPrivateView(){
-    viewGeneration++;ownId='';
+    viewGeneration++;sectionRun++;sectionLoading=false;loadedSections={};ownId='';
     mobileMenu=false;accountMenu=false;calendarOpen=false;
-    customers=[];requests=[];appointments=[];products=[];services=[];categories=[];
+    customers=[];customerTotal=null;requests=[];appointments=[];products=[];services=[];categories=[];
     closeDossier();pendingRequests=0;manualRequestOpen=false;requestEditor=null;appointmentCreateOpen=false;telegramLinkOpen=false;
   }
   async function logout() {
@@ -344,30 +346,26 @@
     catch{error='Se cerró el acceso en este navegador, pero no se pudo confirmar la revocación remota. Revisa la conexión.';}
   }
   async function reload(t = token) {
-    if (!t) return;
-    const generation=viewGeneration;
-    if (staffRole === 'operator') {
-      const [c, r, a] = await Promise.all([
-        api.adminCustomers(t), api.adminRequests(t, requestQuery, requestPage, pageSize),
-        api.adminAppointments(t, appointmentQuery, appointmentPage, pageSize),
-      ]);
-      if(generation!==viewGeneration||!token)return;
-      customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
-      requestTotal = r.total ?? requests.length; pendingRequests = r.pending_count ?? 0;
-      appointmentTotal = a.total ?? appointments.length;
-      products = []; services = []; categories = [];
-      return;
-    }
-    const [c, r, a, p, s, cat] = await Promise.all([
-      api.adminCustomers(t), api.adminRequests(t, requestQuery, requestPage, pageSize),
-      api.adminAppointments(t, appointmentQuery, appointmentPage, pageSize),
-      api.getAdminProducts(t), api.getAdminServices(t), api.getAdminCategories(t),
-    ]);
-    if(generation!==viewGeneration||!token)return;
-    customers = c.customers ?? []; requests = r.requests ?? []; appointments = a.appointments ?? [];
-    requestTotal = r.total ?? requests.length; pendingRequests = r.pending_count ?? 0;
-    appointmentTotal = a.total ?? appointments.length;
-    products = p.products ?? []; services = s.services ?? []; categories = cat.categories ?? [];
+    if(!t)return;
+    const generation=viewGeneration,run=++sectionRun,selected=tab;
+    const active=()=>generation===viewGeneration&&run===sectionRun&&!!token&&tab===selected;
+    sectionLoading=true;
+    try{
+      if(selected==='requests'){
+        const r=await api.adminRequests(t,requestQuery,requestPage,pageSize);
+        if(active()){requests=r.requests??[];requestTotal=r.total??requests.length;pendingRequests=r.pending_count??0;loadedSections={...loadedSections,requests:true};}
+      }else if(selected==='appointments'){
+        const r=await api.adminAppointments(t,appointmentQuery,appointmentPage,pageSize);
+        if(active()){appointments=r.appointments??[];appointmentTotal=r.total??appointments.length;loadedSections={...loadedSections,appointments:true};}
+      }else if(selected==='customers'){
+        const r=await api.adminCustomers(t,'',1,1);
+        if(active()){customers=r.customers??[];customerTotal=r.total??null;loadedSections={...loadedSections,customers:true};}
+      }else if(staffRole==='admin'&&['products','services','gallery','site'].includes(selected)){
+        const [p,s,cat]=await Promise.all([api.getAdminProducts(t),api.getAdminServices(t),api.getAdminCategories(t)]);
+        if(active()){products=p.products??[];services=s.services??[];categories=cat.categories??[];loadedSections={...loadedSections,products:true};}
+      }
+    }finally{if(active())sectionLoading=false;}
+    if(active()&&selected!=='requests')void refreshPendingCount();
   }
   async function changeRequest(id: string, status: string) {
     error = ''; message = '';
@@ -545,8 +543,8 @@
       </button>
     </div>
     <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6" aria-label="Resumen de operaciones">
-      {#each [{label:'Solicitudes pendientes',count:pendingRequests,id:'requests'}, {label:'Citas',count:appointmentTotal,id:'appointments'},
-        {label:'Clientes',count:customers.length,id:'customers'}, {label:'Productos',count:products.length,id:'products'}] as item}
+      {#each [{label:'Solicitudes pendientes',count:loadedSections.requests?pendingRequests:'—',id:'requests'}, {label:'Citas',count:loadedSections.appointments?appointmentTotal:'—',id:'appointments'},
+        {label:'Clientes',count:customerTotal??'—',id:'customers'}, {label:'Productos',count:loadedSections.products?products.length:'—',id:'products'}] as item}
         <button class="rounded-2xl text-left bg-white border border-slate-200 shadow-sm p-4 hover:border-teal-500" onclick={() => chooseTab(item.id as AdminTab)}>
           <span class="block text-slate-500 text-xs uppercase tracking-wide">{item.label}</span>
           <span class="block text-3xl font-bold mt-2 text-slate-900">{item.count}</span>
@@ -555,6 +553,7 @@
     </section>
     {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
+    {#if sectionLoading}<p role="status" class="mb-4 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">Cargando la sección seleccionada…</p>{/if}
     {#if tab === 'customers'}
       <AdminCustomers {token} {customers} canManage={staffRole === 'admin'}
         onOpenDossier={(id:string)=>openDossier(id)} onRefresh={async () => { await reload(); }} />
@@ -577,7 +576,7 @@
             <div class="flex items-end gap-2"><button type="submit" disabled={pagingBusy} class="rounded-xl bg-teal-700 px-5 py-3 text-white font-bold text-sm">Buscar</button>
               <button type="button" onclick={() => { requestQuery = ''; void loadRequestPage(1); }} class="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold">Limpiar</button></div>
           </form>
-          {#if requests.length===0}<p class="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">Todavía no hay solicitudes.</p>{/if}
+          {#if !sectionLoading&&requests.length===0}<p class="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">Todavía no hay solicitudes.</p>{/if}
           <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
             {#each requests as r (r.id)}
               <article class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm min-w-0">
@@ -715,7 +714,7 @@
             <button type="button" onclick={() => { appointmentQuery=''; void loadAppointmentPage(1); }} class="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold">Limpiar</button>
           </div>
         </form>
-        {#if !appointments.length}<p class="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">No hay citas con esos criterios.</p>{/if}
+        {#if !sectionLoading&&!appointments.length}<p class="rounded-2xl bg-white border border-slate-200 p-6 text-sm text-slate-500">No hay citas con esos criterios.</p>{/if}
         <div class="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-3">
           {#each appointments as a (a.id)}
             <article class="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm min-w-0">
@@ -776,7 +775,7 @@
 {#if telegramLinkOpen}
   <div class="fixed inset-0 z-[230] flex justify-center items-center p-3">
     <button type="button" class="absolute inset-0 bg-slate-950/70"
-      aria-label="Cerrar vinculación de WhatsApp" onclick={()=>{if(!telegramLinkBusy)telegramLinkOpen=false;}}></button>
+      aria-label="Cerrar vinculación de Telegram" onclick={()=>{if(!telegramLinkBusy)telegramLinkOpen=false;}}></button>
     <dialog open aria-label="Vincular Telegram del equipo"
       class="relative m-0 w-full max-w-lg rounded-3xl bg-white p-5 sm:p-6 shadow-2xl space-y-4">
       <div class="flex items-start justify-between gap-2">

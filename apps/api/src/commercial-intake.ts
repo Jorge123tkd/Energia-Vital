@@ -20,7 +20,7 @@ export function commercialSummary(d:CommercialDraft):string{
 const naturalMenu=/^(?:empresas? y negocios|empresas?|negocios?|atencion a empresas|proyecto empresarial|servicios para empresas|proveedores y alianzas|proveedores?|alianzas|solicitar servicio|registrar solicitud)$/;
 export function naturalCommercialStart(text:string):boolean{
  const m=norm(text).replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
- if(naturalMenu.test(m))return true;
+ if(naturalMenu.test(m)||/^(?:somos|soy) (?:una? )?(?:empresa(?: estatal| privada)?|mipyme|negocio privado|cooperativa)$/.test(m))return true;
  if(/[¿?]/.test(text)||/\b(?:saber|informacion|conocer|que venden|que ofrecen)\b/.test(m))return false;
  return /\b(?:empresa|mipyme|negocio|tcp|cooperativa|entidad|fabricante|proveedor)\b/.test(m)&&/\b(?:necesit\w*|queremos|solicitar|cotiz\w*|respaldo|proyecto|mantenimiento|reparacion|suministro|alianza)\b/.test(m);
 }

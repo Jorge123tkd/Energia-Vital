@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { api } from '../lib/api';
+  import { api,apiRequest } from '../lib/api';
   import RequestDocuments from './RequestDocuments.svelte';
   import QuoteManager from './QuoteManager.svelte';
   import FinanceTracker from './FinanceTracker.svelte';
@@ -34,7 +34,15 @@
   let busy=$state(false),loading=$state(false),error=$state(''),success=$state('');
   let kind:'call'|'whatsapp'|'visit'|'follow_up'|'internal_note'=$state('call');
   let note=$state(''),nextStep=$state(''),followUpDate=$state('');
+  let replyText=$state(''),replyId=$state(''),replyBusy=$state(false),replyError=$state(''),replySuccess=$state('');
   let serial=0;
+  async function sendReply(e:SubmitEvent){
+    e.preventDefault();if(replyBusy||!currentRequestId||replyText.trim().length<3)return;
+    if(!replyId)replyId='reply-'+crypto.randomUUID();replyBusy=true;replyError='';replySuccess='';
+    try{await apiRequest('/api/dossiers/requests/'+encodeURIComponent(currentRequestId)+'/reply',{method:'POST',headers:{Authorization:'Bearer '+token},body:JSON.stringify({id:replyId,message:replyText.trim()})});replyText='';replyId='';replySuccess='Respuesta guardada. El cliente puede leerla en su cuenta y en Telegram.';}
+    catch(e){replyError=(e as Error).message||'Resultado no confirmado; reintenta la misma respuesta.';}
+    finally{replyBusy=false;}
+  }
   const labels:Record<string,string>={call:'Llamada',whatsapp:'WhatsApp',
     visit:'Visita',follow_up:'Seguimiento',internal_note:'Nota interna'};
   const status:Record<string,string>={pending:'Pendiente',quoted:'Presupuestada',
@@ -64,10 +72,10 @@
     finally{if(s===serial)loading=false;}
   }
   function viewRequest(id:string){
-    currentRequestId=id;requestData=null;success='';void load();
+    if(replyBusy||replyId)return;currentRequestId=id;requestData=null;success='';replyText='';replyError='';replySuccess='';void load();
   }
   function back(){
-    currentRequestId='';requestData=null;success='';void load();
+    if(replyBusy||replyId)return;currentRequestId='';requestData=null;success='';replyText='';replyError='';replySuccess='';void load();
   }
   async function saveActivity(e:SubmitEvent){
     e.preventDefault();
@@ -86,10 +94,10 @@
   onMount(()=>{void load();});
 </script>
 
-<svelte:window onkeydown={e=>{if(e.key==='Escape')onClose();}}/>
+<svelte:window onkeydown={e=>{if(e.key==='Escape'&&!replyBusy&&!replyId)onClose();}}/>
 <div class="fixed inset-0 z-[240] flex items-center justify-center p-2 sm:p-5">
   <button type="button" class="absolute inset-0 bg-slate-950/75"
-    aria-label="Cerrar expediente" onclick={onClose}></button>
+    aria-label="Cerrar expediente" onclick={()=>{if(!replyBusy&&(!replyId||window.confirm('Hay una respuesta sin confirmación. Comprueba la bandeja antes de volver a enviarla. ¿Cerrar?')))onClose();}}></button>
   <dialog open aria-label="Expediente comercial privado de Bonaire"
     class="relative m-0 w-full max-w-5xl max-h-[95dvh] overflow-y-auto rounded-3xl bg-white shadow-2xl">
     <header class="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 sm:px-6 py-4 flex items-start justify-between gap-3">
@@ -100,7 +108,7 @@
         </h2>
         <p class="text-xs text-slate-500 mt-1">Información vinculada, historial de gestores y próximos pasos; no modifica contratos ni pagos.</p>
       </div>
-      <button type="button" onclick={onClose} aria-label="Cerrar"
+      <button type="button" onclick={()=>{if(!replyBusy&&(!replyId||window.confirm('Hay una respuesta sin confirmación. Comprueba la bandeja antes de volver a enviarla. ¿Cerrar?')))onClose();}} aria-label="Cerrar"
         class="rounded-xl bg-slate-100 px-3 py-2 font-bold">✕</button>
     </header>
     <div class="p-4 sm:p-6 space-y-5">
@@ -215,6 +223,16 @@
           </section>
         </div>
         {#key currentRequestId}
+          {#if requestData.request.customer_id}
+          <form onsubmit={sendReply} class="space-y-3 rounded-2xl border border-teal-200 bg-white p-4" aria-label="Responder al cliente">
+            <h4 class="font-extrabold text-slate-900">Responder al cliente</h4>
+            <p class="text-xs text-slate-600">El cliente verá esta respuesta en su bandeja y podrá consultarla desde Telegram. No incluyas notas internas.</p>
+            <textarea aria-label="Respuesta al cliente" required minlength="3" maxlength="1500" rows="3" bind:value={replyText} disabled={replyBusy||!!replyId} class="w-full rounded-xl border border-slate-300 p-3 text-sm"></textarea>
+            <button disabled={replyBusy||replyText.trim().length<3} class="rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{replyBusy?'Guardando…':replyId?'Reintentar misma respuesta':'Enviar respuesta'}</button>
+            {#if replyError}<p role="alert" class="text-sm text-amber-800">{replyError}</p>{/if}
+            {#if replySuccess}<p role="status" class="text-sm text-teal-800">{replySuccess}</p>{/if}
+          </form>
+          {/if}
           <TechnicalFollowUp {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
           <FinanceTracker {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
           <RequestDocuments {token} requestId={currentRequestId}/>

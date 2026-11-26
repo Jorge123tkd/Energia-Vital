@@ -186,6 +186,16 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     ).bind(customer.id,chatId).all<{title:string;message:string;created_at:string}>();
     return {reply:results?.length?'Tus últimas notificaciones:\n\n'+results.map(n=>n.title+'\n'+n.message.slice(0,500)+'\n'+n.created_at.slice(0,10)).join('\n\n'):'No tienes notificaciones todavía.',skipHistory:true};
   }
+  const requestLookup=/^(?:ver solicitud|consultar solicitud|ver expediente|estado de solicitud)\s+([a-zA-Z0-9_-]{1,128})$/i.exec(text);
+  if(requestLookup){
+    if(!customer)return {reply:'Vincula tu cuenta para consultar solicitudes privadas.',replyMarkup:accountButton,skipHistory:true};
+    const r=await env.DB.prepare("SELECT r.id,r.title,r.status,r.updated_at FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1").bind(requestLookup[1],customer.id,chatId).first<{id:string;title:string;status:string;updated_at:string}>();
+    if(!r)return {reply:'No encontré esa solicitud en tu cuenta. Escribe «mis solicitudes» para ver tus referencias.',skipHistory:true};
+    const {results}=await env.DB.prepare("SELECT n.message,n.created_at FROM notifications n JOIN customers c ON c.id=n.user_id WHERE n.user_type='customer' AND n.type='request_reply' AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1 AND json_extract(CASE WHEN json_valid(n.data) THEN n.data ELSE '{}' END,'$.request_id')=? ORDER BY n.created_at DESC,n.id DESC LIMIT 3").bind(customer.id,chatId,r.id).all<{message:string;created_at:string}>();
+    const labels:Record<string,string>={pending:'Pendiente',quoted:'Presupuestada',approved:'Aprobada',scheduled:'Programada',completed:'Completada',cancelled:'Cancelada'};
+    const replies=(results||[]).map(n=>n.created_at.slice(0,10)+' · '+n.message.slice(0,900));
+    return {reply:r.title+'\nReferencia: '+r.id+'\nEstado: '+(labels[r.status]||r.status)+'\n\n'+(replies.length?'Últimas respuestas del equipo:\n'+replies.join('\n\n'):'Todavía no hay una respuesta escrita del equipo.'),skipHistory:true};
+  }
   if(action==='customer-requests'||action==='customer-appointments'){
     if(!customer)return {reply:'Para proteger tus datos, elige Crear cuenta o Vincular cuenta.',replyMarkup:accountButton,skipHistory:true};
     const isRequests=action==='customer-requests';
@@ -194,7 +204,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
       :"SELECT a.id,a.title,a.status,a.starts_at AS date FROM appointments a JOIN customers c ON c.id=a.customer_id WHERE a.customer_id=? AND c.telegram_customer_chat_id=? AND c.is_active=1 ORDER BY a.starts_at DESC LIMIT 10")
       .bind(customer.id,chatId).all<{id:string;title:string;status:string;date:string}>();
     const labels:Record<string,string>={pending:'Pendiente',quoted:'Presupuestada',approved:'Aprobada',scheduled:'Programada',completed:'Completada',cancelled:'Cancelada',confirmed:'Confirmada',in_progress:'En proceso'};
-    return {reply:results?.length?(isRequests?'Tus últimas solicitudes:\n\n':'Tus últimas citas:\n\n')+results.map(x=>x.title+'\n'+(labels[x.status]||x.status)+' · '+x.date+'\nReferencia: '+x.id).join('\n\n'):'Todavía no tienes registros en esta sección.',skipHistory:true};
+    return {reply:results?.length?(isRequests?'Tus últimas solicitudes:\n\n':'Tus últimas citas:\n\n')+results.map(x=>x.title+'\n'+(labels[x.status]||x.status)+' · '+x.date+'\nReferencia: '+x.id).join('\n\n')+(isRequests?'\n\nEscribe «ver solicitud» seguido de su referencia para leer las respuestas del equipo.':''):'Todavía no tienes registros en esta sección.',skipHistory:true};
   }
   if(/^(?:solicitar cita|pedir cita|reservar cita|confirmar cita\b.*)$/i.test(text)){
     if(!customer)return {reply:'Para solicitar una cita, elige Crear cuenta o Vincular cuenta.',replyMarkup:accountButton,skipHistory:true};

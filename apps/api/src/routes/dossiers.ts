@@ -168,3 +168,26 @@ dossierRoutes.post('/requests/:id/activities',async c=>{
   return c.json({id,request_id:requestId,activity_type:type,created_at:now,
     message:'Gestión guardada con identificación del responsable.'},201);
 });
+
+
+// Explicit public reply, distinct from immutable internal notes. Reuse the
+// authenticated customer inbox; no new DB schema and no unsolicited disclosure.
+dossierRoutes.post('/requests/:id/reply',async c=>{
+ const requestId=c.req.param('id'),body=await c.req.json().catch(()=>null);
+ if(!requestId||!idValid(requestId)||!object(body)||Object.keys(body).sort().join(',')!=='id,message'||typeof body.id!=='string'||!/^reply-[a-f0-9-]{36}$/.test(body.id))
+  return c.json({error:'Respuesta inválida.'},400);
+ const message=text(body.message,1500);if(!message||message.length<3)return c.json({error:'Escribe una respuesta de 3 a 1500 caracteres.'},400);
+ const actor=c.var.user!.user_id as string;
+ const owner=await c.env.DB.prepare('SELECT r.customer_id,r.title FROM requests r JOIN customers cu ON cu.id=r.customer_id AND cu.is_active=1 WHERE r.id=?').bind(requestId).first<{customer_id:string;title:string}>();
+ if(!owner)return c.json({error:'La solicitud no tiene una cuenta activa de cliente.'},404);
+ const data=JSON.stringify({request_id:requestId,actor_id:actor,kind:'request_reply'}),now=new Date().toISOString();
+ const existing=()=>c.env.DB.prepare("SELECT id,user_id,message,data FROM notifications WHERE id=? AND user_type='customer' AND type='request_reply'").bind(body.id).first<{id:string;user_id:string;message:string;data:string}>();
+ const same=(row:{id:string;user_id:string;message:string;data:string}|null)=>!!row&&row.user_id===owner.customer_id&&row.message===message&&row.data===data;
+ const prior=await existing();if(prior)return same(prior)?c.json({id:prior.id,replayed:true}):c.json({error:'Identificador ya utilizado.'},409);
+ await c.env.DB.batch([
+  c.env.DB.prepare("INSERT INTO notifications(id,user_id,user_type,type,title,message,data,is_read,created_at) SELECT ?,cu.id,'customer','request_reply',?,?,?,0,? FROM requests r JOIN customers cu ON cu.id=r.customer_id AND cu.is_active=1 WHERE r.id=? AND cu.id=? ON CONFLICT(id) DO NOTHING").bind(body.id,('Respuesta: '+owner.title).slice(0,200),message,data,now,requestId,owner.customer_id),
+  c.env.DB.prepare("INSERT INTO audit_logs(id,admin_user_id,action,entity_type,entity_id,details,created_at) SELECT ?,?,'customer_reply','request',?,?,? WHERE changes()=1").bind(crypto.randomUUID(),actor,requestId,JSON.stringify({notification_id:body.id}),now)
+ ]);
+ const saved=await existing();if(!same(saved))return c.json({error:'No se confirmó la respuesta.'},409);
+ return c.json({id:saved!.id,message:'Respuesta guardada en la bandeja del cliente.'},201);
+});
