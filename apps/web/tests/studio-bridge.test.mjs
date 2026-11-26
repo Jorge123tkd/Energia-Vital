@@ -464,4 +464,14 @@ test('managed reports use an explicit user-controlled web output capability with
  assert.equal((await renderStudioPdf(make(),{},mock)).status,503);assert.equal(calls,0);
  const result=await renderStudioPdf(make(),env,mock);assert.equal(result.status,200);assert.match((await result.json()).pdf,/^JVBER/);assert.equal(calls,1);
  const source=readFileSync(new URL('../functions/api/studio/[[path]].js',import.meta.url),'utf8');assert.match(source,/adminOnly=pdfRoute/);assert.match(source,/member.role!=='admin'/);
+ const {onRequest}=await import('../functions/api/studio/[[path]].js');
+ const auth='Bearer aaa.bbb.ccc';
+ const endpoint='https://bnergiv.com/api/studio/v1/engineering/pdf';
+ const status=(staffRole,memberRole,memberId='qa')=>onRequest({request:new Request(endpoint,{headers:{Authorization:auth}}),env:{...env,ADMIN_SESSION_API:{fetch:async()=>new Response(JSON.stringify({user:{id:'qa',role:staffRole}}))},STUDIO_API:{fetch:async()=>new Response(JSON.stringify({user:{id:memberId,role:memberRole}}))}}});
+ assert.equal((await onRequest({request:new Request(endpoint),env})).status,401);
+ assert.equal((await status('operator','admin')).status,403);
+ assert.equal((await status('admin','worker')).status,403);
+ assert.equal((await status('admin','admin','other')).status,403);
+ const permitted=await status('admin','admin');assert.equal(permitted.status,200);assert.equal((await permitted.json()).available,true);
+
  });

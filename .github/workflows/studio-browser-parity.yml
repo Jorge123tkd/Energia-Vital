@@ -2,7 +2,7 @@ name: Studio - auditoría real Chromium
 on:
   push:
     branches: [feat/cloudflare-customer-accounts-hardening]
-    paths: ['apps/web/public/studio-engineering/**','apps/web/src/components/Studio*.svelte','apps/web/src/lib/studio-*.ts','apps/web/tests/fixtures/studio-parity*','apps/web/tests/fixtures/StudioParityFixture.svelte','apps/web/tests/studio-browser-parity.mjs','.github/workflows/studio-browser-parity.yml']
+    paths: ['apps/web/public/studio-engineering/**','apps/web/src/components/Studio*.svelte','apps/web/src/lib/studio-*.ts','apps/web/lib/studio-private-pdf.js','apps/web/functions/api/studio/**','apps/web/tests/fixtures/studio-parity*','apps/web/tests/fixtures/StudioParityFixture.svelte','apps/web/tests/studio-browser-parity.mjs','.github/workflows/studio-browser-parity.yml']
   workflow_dispatch:
 permissions:
   contents: read

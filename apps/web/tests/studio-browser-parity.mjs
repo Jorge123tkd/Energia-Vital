@@ -8,11 +8,12 @@ try{
  const context=await browser.newContext({acceptDownloads:true});
  const page=await context.newPage();
  const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
- let manifest={snapshot:null,rev:''};const assets=new Map();
+ let manifest={snapshot:null,rev:''};const assets=new Map();let pdfAvailable=false,pdfFixture=null,pdfRequests=[];
  await page.route('**/api/studio/v1/engineering/**',async route=>{
   const req=route.request(),suffix=new URL(req.url()).pathname.split('/engineering/')[1],method=req.method();
   const reply=(json,status=200)=>route.fulfill({status,json});
-  if(suffix==='pdf'&&method==='GET')return reply({available:false});
+  if(suffix==='pdf'&&method==='GET')return reply({available:pdfAvailable});
+  if(suffix==='pdf'&&method==='POST'){if(!pdfAvailable||!pdfFixture)return reply({error:'PDF no habilitado'},503);const {html}=req.postDataJSON();pdfRequests.push(html);assert.match(html,/<html/);return reply({pdf:pdfFixture.toString('base64')});}
   if(suffix==='manifest'&&method==='GET')return reply(manifest);
   if(suffix==='manifest'&&method==='PUT'){const b=req.postDataJSON();if(b.expected!==manifest.rev)return reply({error:'conflicto QA'},409);manifest={snapshot:b.snapshot,rev:b.rev};return reply({ok:true,rev:b.rev})}
   if(suffix==='assets/check'&&method==='POST')return reply({present:req.postDataJSON().hashes.filter(h=>assets.has(h))});
@@ -57,7 +58,7 @@ try{
   assert.match(layout.visibleName,/Bonaire/);
   const pdf=await corporatePage.pdf({printBackground:true,preferCSSPageSize:true});
   assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
-  assert.ok(pdf.length>1000);
+  assert.ok(pdf.length>1000);if(n===0)pdfFixture=pdf;
  }
  await corporatePage.close();
  console.log('PASS corporate PDF layout: summary, RFQ, coverless report and long brand name; bounded original SVG and complete identity');
@@ -122,6 +123,28 @@ try{
  await exported.locator('#results').getByRole('heading',{name:/48 h/}).waitFor();
  assert.deepEqual(exportErrors,[]);await exported.close();
  console.log('PASS direct print, save PDF dispatch and actual ZIP with interactive simulator 24/48 hours');
+
+ // Exercise the actual company ZIP and MessageChannel route, using genuine
+ // PDF bytes rendered above by Chromium as the isolated API response.
+ pdfAvailable=true;
+ await fresh.evaluate(()=>companyExportDialog(state.companies[0].id,'summary'));
+ await fresh.locator('input[name=evCompanyProject]').first().check();
+ await fresh.locator('input[name=review]').check();
+ await fresh.getByRole('button',{name:'Descargar ZIP de empresa',exact:true}).click();
+ await save.waitFor();
+ const enterpriseEvent=page.waitForEvent('download');
+ await save.getByRole('button',{name:'Descargar archivo',exact:true}).click();
+ const enterpriseDownload=await enterpriseEvent;
+ const enterprise=zipEntries(await readFile(await enterpriseDownload.path()));
+ assert.ok(enterprise.has('00_Resumen_General_Empresa.pdf'));
+ assert.equal(enterprise.get('00_Resumen_General_Empresa.pdf').subarray(0,5).toString(),'%PDF-');
+ const nested=zipEntries(enterprise.get('01_Informes_de_Proyectos.zip'));
+ assert.ok([...nested.keys()].some(x=>x.endsWith('/Informe_Actual.pdf')));
+ assert.ok([...nested.keys()].some(x=>x.includes('/Historico/')&&x.endsWith('.pdf')));
+ for(const [name,bytes] of nested)assert.equal(bytes.subarray(0,5).toString(),'%PDF-',name);
+ assert.ok(pdfRequests.length>=3);
+ await fresh.waitForFunction(()=>!document.getElementById('dialog').open);
+ console.log('PASS corporate ZIP contains PDF summary, PDF per project and PDF historical revision via real parent bridge (mock service)');
  await fresh.evaluate(()=>backupCompany(state.companies[0].id));await save.waitFor();const backupPromise=page.waitForEvent('download');await save.getByRole('button',{name:'Descargar archivo',exact:true}).click();const backup=await backupPromise;assert.equal(JSON.parse(await readFile(await backup.path(),'utf8')).projects.length,1);
  assert.deepEqual(errors,[]);console.log('PASS Chromium: approval, print dispatch, real HTML download, persisted report and company backup; simulated API only');
 
