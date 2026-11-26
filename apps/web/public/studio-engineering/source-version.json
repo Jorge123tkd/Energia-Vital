@@ -1,6 +1,6 @@
 {
   "repository": "Jorge123tkd/EV-Pro-Estudio",
-  "commit": "df4a1a73baeca5b1f9a131d5a165b502197cb92a",
+  "commit": "a7aa3fbeb517b9aca22c003c40392618f65e6327",
   "files": {
     "app.js": "ef736dbe12b5f14369a898e5b899b87182d5ffcc",
     "engine.js": "c43ee1289b7af2095f4c9b160196077ebf0cd33c",
@@ -11,5 +11,5 @@
     "index.html": "52ba41b63254c03c15e306204a15c6252e7bc8ba",
     "business-menu.js": "a0901ab8410b7e9554594164a95b065334e7cc9e"
   },
-  "release": "3.9.0-beta.15"
+  "release": "3.9.0-beta.16"
 }

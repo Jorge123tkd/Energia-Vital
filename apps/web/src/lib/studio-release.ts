@@ -1,1 +1,1 @@
-export const STUDIO_RELEASE = '3.9.0-beta.15';
+export const STUDIO_RELEASE = '3.9.0-beta.16';
