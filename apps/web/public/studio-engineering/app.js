@@ -126,6 +126,8 @@ function startManagedSync(){
  globalThis.EVEngineeringAccount?.onSyncProgress?.(syncPhase);
  setInterval(()=>void syncManaged(),MANAGED_SYNC_INTERVAL);
  window.addEventListener('online',()=>{managedSyncNext=0;void syncManaged()});
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-managedSyncStarted>=MANAGED_SYNC_INTERVAL)void syncManaged()});
+ window.addEventListener('focus',()=>{if(Date.now()-managedSyncStarted>=MANAGED_SYNC_INTERVAL)void syncManaged()});
 }
 async function centralAccountAction(action){
  if(action==='sync'&&globalThis.EVEngineeringStore&&(globalThis.EVEngineeringStore.scope==='online'||globalThis.EVEngineeringAccount?.onSyncProgress))return syncManaged(true);
