@@ -12,6 +12,7 @@ try{
  await page.route('**/api/studio/v1/engineering/**',async route=>{
   const req=route.request(),suffix=new URL(req.url()).pathname.split('/engineering/')[1],method=req.method();
   const reply=(json,status=200)=>route.fulfill({status,json});
+  if(suffix==='pdf'&&method==='GET')return reply({available:false});
   if(suffix==='manifest'&&method==='GET')return reply(manifest);
   if(suffix==='manifest'&&method==='PUT'){const b=req.postDataJSON();if(b.expected!==manifest.rev)return reply({error:'conflicto QA'},409);manifest={snapshot:b.snapshot,rev:b.rev};return reply({ok:true,rev:b.rev})}
   if(suffix==='assets/check'&&method==='POST')return reply({present:req.postDataJSON().hashes.filter(h=>assets.has(h))});
