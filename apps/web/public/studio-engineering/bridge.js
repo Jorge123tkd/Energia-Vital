@@ -50,11 +50,12 @@
   const id=++nextId;
   return new Promise((resolve,reject)=>{
    const expire=()=>{waiting.delete(id);reject(Error('No se confirmó la operación online. Conserva tus cambios.'))};
-   const timer=setTimeout(expire,180000);
+   const timer=setTimeout(expire,['preview','save-file'].includes(action)?900000:180000);
    waiting.set(id,{resolve,reject,timer,expire});
-   port.postMessage({id,action,payload});
+   if(action==='save-file'&&payload?.bytes instanceof Uint8Array)port.postMessage({id,action,payload},[payload.bytes.buffer]);else port.postMessage({id,action,payload});
   });
  }
  Object.defineProperty(window,'EVEngineeringAccount',{value:Object.freeze({info:()=>call('account'),action:async action=>{if(action!=='logout')throw Error('Acción no disponible');if(!port)throw Error('Sesión no conectada');port.postMessage({type:'studio-navigation',section:'logout'})}}),writable:false,configurable:false});
+ Object.defineProperty(window,'EVEngineeringReports',{value:Object.freeze({preview:(html,options)=>call('preview',{html,options}),saveFile:(name,bytes,mime)=>call('save-file',{name,bytes,mime})}),writable:false,configurable:false});
  Object.defineProperty(window,'EVEngineeringStore',{value:Object.freeze({scope:'online',read:()=>call('read'),revision:()=>call('revision'),write:payload=>call('write',payload)}),writable:false,configurable:false});
 })();

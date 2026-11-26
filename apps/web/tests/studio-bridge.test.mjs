@@ -291,9 +291,9 @@ test('authenticated account is supplied to the top bar independently of the rend
  assert.match(readFileSync(new URL('../public/studio-engineering/business-menu.js',import.meta.url),'utf8'),/\['exit','←','Volver a Bonaire'\]/);
  assert.match(frame,/requestClose\(data.section\)/);
  assert.match(frame,/if\(data.pending===false\)\{finishClose\(\);return\}/);
- assert.match(frame,/index\.html\?v=studio-3.9.0-beta.12/);
- assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.12/);
- assert.match(html,/app\.js\?v=studio-3.9.0-beta.12/);
+ assert.match(frame,/index\.html\?v=studio-3.9.0-beta.13/);
+ assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.13/);
+ assert.match(html,/app\.js\?v=studio-3.9.0-beta.13/);
 });
 
 test('web account fallback renders once from trusted parent and sends logout, not back',async()=>{
@@ -441,3 +441,16 @@ test('business modules distinguish saved engineering and linked project records 
  assert.match(m,/present!==add/);assert.match(p,/productId===null/);assert.match(r,/function pickProduct/);
  assert.doesNotMatch(a,/localStorage\.|sessionStorage\./);
  });
+
+
+test('managed reports use an explicit user-controlled web output capability without changing engineering isolation',()=>{
+ const frame=readFileSync(new URL('../src/components/StudioEngineeringFrame.svelte',import.meta.url),'utf8');
+ const output=readFileSync(new URL('../src/components/StudioReportOutput.svelte',import.meta.url),'utf8');
+ const helper=readFileSync(new URL('../src/lib/studio-report-output.ts',import.meta.url),'utf8');
+ const bridge=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
+ assert.match(frame,/outputRequest\(data.action,data.payload\)/);assert.match(frame,/account.role!=='admin'/);
+ assert.doesNotMatch(frame,/allow-same-origin/);assert.match(output,/sandbox="allow-same-origin allow-modals"/);
+ assert.doesNotMatch(output,/allow-scripts/);assert.match(output,/w.print\(\)/);assert.match(output,/disabled=\{!approved\|\|!ready\}/);
+ assert.match(helper,/createElement\('template'\)/);assert.match(helper,/script-src/);assert.match(helper,/a.click\(\)/);
+ assert.match(bridge,/EVEngineeringReports/);assert.match(bridge,/call\('save-file'/);
+});

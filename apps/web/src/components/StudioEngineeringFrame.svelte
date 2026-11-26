@@ -4,10 +4,14 @@
  import {transport} from '../lib/engineering-assets.js';
  import {createCache} from '../lib/engineering-assets.js';
  import {STUDIO_RELEASE} from '../lib/studio-release';
+ import StudioReportOutput from './StudioReportOutput.svelte';
+ import {outputRequest,type OutputRequest,type OutputResult} from '../lib/studio-report-output';
  let {token,business,onExit,onLogout,account,onBusinessOpen}:{token:string;business:Snippet<[string]>;onExit:()=>void;onLogout:()=>Promise<void>;account:{email:string;role:string};onBusinessOpen?:(section:string)=>Promise<void>}=$props();
  let frame:HTMLIFrameElement|undefined=$state(),opened=$state(false),busy=$state(false),error=$state(''),workspaceError=$state('');
  let port:MessagePort|null=null,epoch=0,loads=0,operations=$state(0),firstRead:any=null,connected=false,closePending=$state(false);
  let section=$state('engineering');
+ let reportOutput=$state.raw<OutputRequest|null>(null),finishOutput:((result:OutputResult)=>void)|null=null;
+ function closeOutput(result:OutputResult){const resolve=finishOutput;finishOutput=null;reportOutput=null;resolve?.(result)}
  let attachmentCache=createCache();
  let closeAction:'exit'|'logout'='exit',closeTimer:ReturnType<typeof setTimeout>|undefined;
  function finishClose(){const action=closeAction;close();if(action==='logout')void onLogout();else onExit()}
@@ -16,7 +20,7 @@
  type EngineeringRequest=(method:string,suffix:string,payload?:unknown)=>Promise<any>;
  const auth=()=>({Authorization:'Bearer '+token});
  function close(){
-  clearTimeout(closeTimer);attachmentCache=createCache();epoch++;port?.close();port=null;connected=false;firstRead=null;opened=false;loads=0;operations=0;closePending=false;
+  closeOutput({opened:false,approved:false,state:'cancelled'});clearTimeout(closeTimer);attachmentCache=createCache();epoch++;port?.close();port=null;connected=false;firstRead=null;opened=false;loads=0;operations=0;closePending=false;
   section='engineering';
  }
  function requestClose(action:'exit'|'logout'='exit'){
@@ -66,16 +70,23 @@
     return;
    }
    if(data.type==='studio-navigation'){
+    if(reportOutput)return;
     if(data.section==='exit'||data.section==='logout'){requestClose(data.section);return}
     if(data.section==='engineering'||Object.hasOwn(names,data.section)){section=data.section;workspaceError='';if(section!=='engineering')void onBusinessOpen?.(section)}
     return;
    }
-   if(!Number.isSafeInteger(data.id)||!['read','write','account','revision'].includes(data.action))return;
+   if(!Number.isSafeInteger(data.id)||!['read','write','account','revision','preview','save-file'].includes(data.action))return;
    const reply=(v:Record<string,unknown>)=>{if(current===epoch&&opened)channel.port1.postMessage({id:data.id,...v})};
    operations++;if(data.action!=='revision')workspaceError='';
    try{
     if(!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token)throw Object.assign(new Error('Sesión de Bonaire cambiada. Cierra y abre Studio.'),{status:401});
     if(data.action==='account'){reply({ok:true,result:{email:account.email,role:account.role,mode:'online',platform:'web',version:STUDIO_RELEASE}});return}
+    if(data.action==='preview'||data.action==='save-file'){
+     if(account.role!=='admin'||section!=='engineering'||reportOutput)throw Error('Cierra la salida actual antes de abrir otro informe o archivo.');
+     const job=outputRequest(data.action,data.payload);
+     const result=await new Promise<OutputResult>(resolve=>{finishOutput=resolve;reportOutput=job});
+     reply({ok:true,result});return;
+    }
     const request=requestFor(current,true);
     const sync=transport(async(method,suffix,payload)=>{reply({progress:true});return request(method,suffix,payload)},{cache:attachmentCache});
     let result;
@@ -93,13 +104,14 @@
 </script>
 <div class="ev-workspace" aria-label="EV Pro Studio">
  {#if opened}
-  <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html?v=studio-3.9.0-beta.12" sandbox="allow-scripts allow-downloads allow-modals allow-forms" referrerpolicy="no-referrer"></iframe>
+  <iframe inert={!!reportOutput} bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html?v=studio-3.9.0-beta.13" sandbox="allow-scripts allow-downloads allow-modals allow-forms" referrerpolicy="no-referrer"></iframe>
   {#if section!=='engineering'}
     <section class="ev-business" aria-label={names[section]}>
       <header class="ev-business-header"><span>Studio / {names[section]}</span><div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg border px-3 py-2 text-sm" onclick={()=>section='engineering'}>Volver a ingeniería</button><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('exit')}>Volver a Bonaire</button><span class="text-xs">{account.email}</span><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('logout')}>Cerrar sesión</button></div></header>
       <main class="ev-business-main"><h1 class="text-2xl sm:text-3xl font-bold mb-5">{names[section]}</h1>{@render business(section)}</main>
     </section>
   {/if}
+  {#if reportOutput}<StudioReportOutput request={reportOutput} onFinish={closeOutput}/>{/if}
   {#if workspaceError}<div role="alert" class="ev-error bg-amber-50 text-amber-900 px-4 py-2 text-sm flex items-center gap-3"><span class="flex-1">{workspaceError}</span><button type="button" onclick={()=>workspaceError=''}>Cerrar aviso</button></div>{/if}
   {#if closePending}<div role="status" class="ev-error bg-white p-3">Verificando guardado…</div>{/if}
  {:else}
