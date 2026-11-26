@@ -51,4 +51,38 @@ try{
  await fresh.getByRole('button',{name:'Descargar copia',exact:true}).click();const save=page.getByRole('dialog',{name:'Guardar archivo'});await save.waitFor();const archivedPromise=page.waitForEvent('download');await save.getByRole('button',{name:'Descargar archivo',exact:true}).click();const archived=await archivedPromise;assert.match(await readFile(await archived.path(),'utf8'),/Proyecto QA/);
  await fresh.evaluate(()=>backupCompany(state.companies[0].id));await save.waitFor();const backupPromise=page.waitForEvent('download');await save.getByRole('button',{name:'Descargar archivo',exact:true}).click();const backup=await backupPromise;assert.equal(JSON.parse(await readFile(await backup.path(),'utf8')).projects.length,1);
  assert.deepEqual(errors,[]);console.log('PASS Chromium: approval, print dispatch, real HTML download, persisted report and company backup; simulated API only');
+
+ // Run the actual commercial component against isolated fixtures. Verify every
+ // posted body in the same browser used for the engineering tests.
+ const commercial=await context.newPage();commercial.on('dialog',d=>d.accept());
+ const posts=[],orders=[{id:'order1',project_id:'p1',supplier_id:'supplier1',supplier_name:'Proveedor QA',currency:'USD',reference:'PO-QA',status:'ordered'},{id:'other',project_id:'p2',supplier_id:'supplier1',supplier_name:'Proveedor QA',currency:'EUR',reference:'Otro pedido',status:'ordered'}];
+ await commercial.route('**/api/**',async route=>{
+  const req=route.request(),path=new URL(req.url()).pathname;
+  const reply=json=>route.fulfill({status:200,json});
+  if(req.method()==='POST'){posts.push({path,body:req.postDataJSON()});return reply({ok:true})}
+  if(path==='/api/warehouse/items')return reply({items:[{id:'item1',name:'Panel QA',unit:'unit'}],next:null});
+  if(path==='/api/warehouse/procurement/suppliers')return reply({suppliers:[{id:'supplier1',name:'Proveedor QA',active:1}],next:null});
+  if(path==='/api/warehouse/procurement/orders')return reply({orders,next:null});
+  if(path==='/api/warehouse/procurement/orders/order1')return reply({order:orders[0],lines:[{id:'line1',name:'Panel QA',unit:'unit',outstanding_milli:2000,received_milli:1000}]});
+  if(path==='/api/business-finance/payables')return reply({payables:[{id:'pay1',project_id:'p1',supplier_name:'Proveedor QA',document_reference:'Factura QA',currency:'USD',outstanding_minor:5000},{id:'pay2',project_id:'p2',supplier_name:'Otro proveedor',currency:'EUR',outstanding_minor:9000},{id:'paid',project_id:'p1',supplier_name:'Pagado',currency:'USD',outstanding_minor:0}],next:null});
+  return route.fulfill({status:404,json:{error:'Ruta QA no encontrada'}});
+ });
+ const go=mode=>commercial.goto('http://127.0.0.1:5173/tests/fixtures/studio-parity.html?commercial='+mode);
+ const field=name=>commercial.locator('[name="'+name+'"]');
+ const submit=async()=>{await commercial.getByRole('button',{name:'Confirmar registro',exact:true}).click();await commercial.getByText('Operación confirmada por el servidor.',{exact:true}).waitFor()};
+ await go('inventory');await commercial.getByRole('button',{name:'Registrar movimiento',exact:true}).click();await field('kind').waitFor();
+ assert.equal(await field('projectId').count(),0);await field('kind').selectOption('issue');assert.ok(await field('workId').isVisible());await field('kind').selectOption('receive');assert.equal(await field('workId').count(),0);
+ await field('itemId').selectOption('item1');await field('quantity').fill('2.5');await field('reference').fill('Entrada QA');await submit();
+ assert.equal(posts.at(-1).body.quantityMilli,2500);assert.equal(posts.at(-1).body.projectId,null);assert.equal(posts.at(-1).body.workId,null);
+ await go('orders');await commercial.getByRole('button',{name:'Gestionar pedido y recepción',exact:true}).click();await commercial.getByLabel('Pedido',{exact:true}).selectOption('order1');await field('decision').waitFor();
+ assert.deepEqual(await field('decision').locator('option').evaluateAll(o=>o.map(x=>x.value)),['','receive']);
+ await field('lineId').selectOption('line1');await field('quantity').fill('2');await field('reference').fill('Recepción QA');await submit();assert.equal(posts.at(-1).path,'/api/warehouse/procurement/receipts');assert.equal(posts.at(-1).body.quantityMilli,2000);
+ await go('finance');await commercial.getByRole('button',{name:'Registrar obligación documentada',exact:true}).click();await field('purchaseOrderId').waitFor();
+ assert.deepEqual(await field('purchaseOrderId').locator('option').evaluateAll(o=>o.map(x=>x.value)),['','order1']);await field('purchaseOrderId').selectOption('order1');assert.equal(await field('currency').count(),0);assert.equal(await field('supplierId').count(),0);
+ await field('amount').fill('40.50');await field('reference').fill('Factura QA');await field('date').fill('2025-01-01');await field('evidence').fill('Evidencia ficticia de una factura QA');await submit();assert.deepEqual({supplier:posts.at(-1).body.supplierId,currency:posts.at(-1).body.currency,order:posts.at(-1).body.purchaseOrderId,amount:posts.at(-1).body.amountMinor},{supplier:'supplier1',currency:'USD',order:'order1',amount:4050});
+ await commercial.getByRole('button',{name:'Registrar pago a proveedor',exact:true}).click();await field('obligationId').waitFor();assert.deepEqual(await field('obligationId').locator('option').evaluateAll(o=>o.map(x=>x.value)),['','pay1']);
+ await field('obligationId').selectOption('pay1');await field('amount').fill('51');await field('reference').fill('Pago QA');await field('date').fill('2025-01-01');await field('evidence').fill('Evidencia ficticia de pago QA');await commercial.getByRole('button',{name:'Confirmar registro',exact:true}).click();await commercial.getByText('El pago supera el saldo pendiente.',{exact:true}).waitFor();assert.equal(posts.length,3);
+ await field('amount').fill('25');await submit();assert.equal(posts.at(-1).body.obligationId,'pay1');assert.equal(posts.at(-1).body.amountMinor,2500);
+ console.log('PASS commercial browser: stock receipt, procurement receipt, project obligation and payment, invalid overpayment rejected');
 }finally{await browser.close()}
+
