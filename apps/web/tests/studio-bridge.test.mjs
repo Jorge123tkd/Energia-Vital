@@ -291,9 +291,9 @@ test('authenticated account is supplied to the top bar independently of the rend
  assert.match(readFileSync(new URL('../public/studio-engineering/business-menu.js',import.meta.url),'utf8'),/\['exit','←','Volver a Bonaire'\]/);
  assert.match(frame,/requestClose\(data.section\)/);
  assert.match(frame,/if\(data.pending===false\)\{finishClose\(\);return\}/);
- assert.match(frame,/index\.html\?v=studio-3.9.0-beta.11/);
- assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.11/);
- assert.match(html,/app\.js\?v=studio-3.9.0-beta.11/);
+ assert.match(frame,/index\.html\?v=studio-3.9.0-beta.12/);
+ assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.12/);
+ assert.match(html,/app\.js\?v=studio-3.9.0-beta.12/);
 });
 
 test('web account fallback renders once from trusted parent and sends logout, not back',async()=>{
@@ -431,3 +431,13 @@ test('business modules distinguish saved engineering and linked project records 
  assert.match(entry,/Vincular expediente/);
  assert.match(entry,/teamTab==='staff'/);
 });
+
+ test('business modules register existing IDs and use scoped central write paths',()=>{
+ const read=p=>readFileSync(new URL('../src/components/'+p,import.meta.url),'utf8');
+ const a=read('StudioCommercialActions.svelte'),e=read('StudioEntrance.svelte'),o=read('StudioOperations.svelte'),m=read('StudioManagement.svelte'),p=read('StudioPublication.svelte'),r=read('StudioProjectReader.svelte');
+ assert.match(e,/async function registerAll/);assert.match(e,/id:p\.id,name:p\.name/);
+ assert.match(o,/<StudioCommercialActions /);assert.match(a,/method:'POST'/);assert.match(a,/window\.confirm/);assert.match(a,/pending\.fingerprint!==fingerprint/);assert.match(a,/\$state\.snapshot\(pending!/);
+ for(const path of ['/movements','/procurement/orders','/procurement/receipts','/obligations','/supplier-payments'])assert.ok(a.includes(path),path);
+ assert.match(m,/present!==add/);assert.match(p,/productId===null/);assert.match(r,/function pickProduct/);
+ assert.doesNotMatch(a,/localStorage\.|sessionStorage\./);
+ });

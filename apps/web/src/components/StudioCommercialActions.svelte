@@ -54,6 +54,7 @@
  const qty=(s:string)=>integerAmount(s,1000,1,1000000000);
  const money=(s:string,zero=false)=>integerAmount(s,100,zero?0:1,1000000000000);
  function close(){if(busy||pending)return;opened=false;ready=false;error='';message='';action=''}
+ function resolveUnknown(){if(busy||!pending)return;if(window.confirm('Comprueba primero el registro central. ¿Deseas cerrar este intento sin volver a enviarlo? No se revertirá ninguna operación ya registrada.')){pending=null;close();void onSaved();}}
  async function commit(path:string,body:Record<string,unknown>,withId=true){
   const fingerprint=JSON.stringify([path,body,withId]);
   if(pending&&pending.fingerprint!==fingerprint)throw Error('Hay una operación sin confirmación. Reintenta exactamente la misma solicitud.');
@@ -142,7 +143,7 @@
    {#if ['contract','obligation','payment'].includes(action)}<label>Fecha del documento o pago<input name="date" type="date" required/></label><label>Evidencia verificable<textarea name="evidence" required minlength="15" maxlength="900"></textarea></label>{/if}
    {#if action==='contract'||action==='obligation'}<label>Vencimiento (opcional)<input name="dueOn" type="date"/></label>{/if}
    <div class="md:col-span-2 flex gap-2"><button type="submit" disabled={busy||(action==='decision'&&!orderDetail)}>{busy?'Procesando…':pending?'Reintentar mismo registro':'Confirmar registro'}</button><button type="button" disabled={busy||!!pending} onclick={close}>Cerrar formulario</button></div>
-   {#if pending}<p class="md:col-span-2 text-xs text-slate-600">No cambies el formulario hasta confirmar el resultado. La misma solicitud se reintenta con su identificador original.</p>{/if}
+   {#if pending}<p class="md:col-span-2 text-xs text-slate-600">No cambies ni abandones el formulario hasta confirmar el resultado. La misma solicitud se reintenta con su identificador original.</p><button type="button" disabled={busy} onclick={resolveUnknown}>He revisado el registro central: cerrar intento</button>{/if}
   </form>
  {:else if opened&&busy}<p role="status" class="text-sm">Consultando referencias…</p>{:else if opened&&!oldNative}<button type="button" onclick={close}>Cerrar</button>{/if}
 </section>
