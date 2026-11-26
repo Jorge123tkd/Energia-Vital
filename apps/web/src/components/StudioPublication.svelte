@@ -4,7 +4,8 @@
  let {token,projects}:{token:string;projects:{id:string;name:string}[]}=$props();
  type Proposal={id:string;project_id:string;kind:'catalog'|'gallery';title:string;summary:string;source_section_id:string|null;consent_reference:string|null;status:string;created_by:string};
  let proposals=$state<Proposal[]>([]),project=$state(''),kind=$state<'catalog'|'gallery'>('catalog'),title=$state(''),summary=$state(''),source=$state(''),consent=$state(''),reviewId=$state(''),reviewNote=$state(''),next=$state<string|null>(null),pendingId=$state(''),busy=$state(false),error=$state(''),message=$state('');
- let generation=0;
+ let generation=0,materialGeneration=0;
+ let materials=$state<{id:string;name:string}[]>([]),materialLoading=$state(false),materialError=$state('');
  const api=(path:string,body?:unknown)=>apiRequest('/api/studio/v1/'+path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
  async function load(more=false){
   const run=++generation;busy=true;error='';message='';
@@ -20,11 +21,30 @@
   }catch(e){if(run===generation){if(!more)proposals=[];next=null;error=(e as Error&{status?:number}).status===503?'Propuestas todavía no habilitadas.':(e as Error).message||'No se pudo consultar.'}}
   finally{if(run===generation)busy=false}
  }
+ async function loadMaterials(){
+  const run=++materialGeneration;materials=[];source='';materialError='';materialLoading=false;
+  if(!project||kind!=='catalog')return;
+  materialLoading=true;
+  try{
+   const target='projects/'+encodeURIComponent(project)+'/sections';
+   const r=await api(target);
+   if(!Array.isArray(r.sections))throw Error('No se pudieron consultar los materiales compartidos.');
+   const rows=r.sections.filter((s:any)=>/^material-[A-Za-z0-9_-]{1,75}$/.test(s.section_id));
+   const eligible:{id:string;name:string}[]=[];
+   for(let i=0;i<rows.length;i+=8){
+    if(run!==materialGeneration)return;
+    const batch=await Promise.all(rows.slice(i,i+8).map((s:any)=>api(target+'/'+encodeURIComponent(s.section_id))));
+    for(const s of batch)if(s.body?.productId===null&&typeof s.body.name==='string')eligible.push({id:s.section_id,name:s.body.name});
+   }
+   if(run===materialGeneration)materials=eligible.sort((a,b)=>a.name.localeCompare(b.name,'es'));
+  }catch(e){if(run===materialGeneration)materialError=(e as Error).message||'No se pudieron consultar los materiales.'}
+  finally{if(run===materialGeneration)materialLoading=false}
+ }
  async function create(){
   if(busy)return;busy=true;error='';message='';
   try{
    if(!project)throw Error('Selecciona un proyecto autorizado.');
-   if(kind==='catalog'&&!/^material-[A-Za-z0-9_-]{1,75}$/.test(source.trim()))throw Error('Indica la referencia de material técnico (material-...).');
+   if(kind==='catalog'&&!materials.some(m=>m.id===source))throw Error('Selecciona un material compartido sin producto publicado.');
    if(kind==='gallery'&&consent.trim().length<12)throw Error('Identifica el documento de consentimiento antes de crear la sugerencia.');
    if(!pendingId)pendingId=crypto.randomUUID();
    await api('publication-proposals',{id:pendingId,projectId:project,kind,sourceSectionId:kind==='catalog'?source.trim():null,title:title.trim(),summary:summary.trim(),consentReference:kind==='gallery'?consent.trim():null});
@@ -46,22 +66,24 @@
   }catch(e){error=(e as Error&{status?:number}).status===503?'Revisión todavía no habilitada.':(e as Error).message||'Decisión no confirmada.'}
   finally{busy=false}
  }
- onMount(()=>{void load();return()=>{generation++}});
+ onMount(()=>{void load();return()=>{generation++;materialGeneration++}});
 </script>
 <section class="space-y-4" aria-label="Sugerencias comerciales">
  <div><h4 class="text-lg font-extrabold">Sugerencias de catálogo y galería</h4><p class="text-sm text-slate-500">Solo propuestas internas. Ni la aprobación ni el consentimiento registrado publican imágenes, productos, precios o datos del cliente.</p></div>
  <label class="text-sm font-semibold block">Proyecto
-  <select class="block w-full border rounded-lg p-2 mt-1" value={project} onchange={e=>{project=e.currentTarget.value;pendingId='';void load()}}>
+  <select class="block w-full border rounded-lg p-2 mt-1" value={project} disabled={busy||materialLoading} onchange={e=>{project=e.currentTarget.value;pendingId='';void load();void loadMaterials()}}>
    <option value="">Todos los proyectos / seleccionar para proponer</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
   </select>
  </label>
  <form class="space-y-3 border rounded-xl p-4" onsubmit={e=>{e.preventDefault();void create()}}>
-  <label class="block text-sm font-semibold">Tipo<select class="block w-full border rounded-lg p-2 mt-1" bind:value={kind} onchange={()=>{pendingId=''}}><option value="catalog">Artículo para catálogo</option><option value="gallery">Proyecto para galería</option></select></label>
+  <label class="block text-sm font-semibold">Tipo<select class="block w-full border rounded-lg p-2 mt-1" bind:value={kind} disabled={busy} onchange={()=>{pendingId='';void loadMaterials()}}><option value="catalog">Artículo para catálogo</option><option value="gallery">Proyecto para galería</option></select></label>
   <label class="block text-sm font-semibold">Título<input required minlength="3" maxlength="160" class="block w-full border rounded-lg p-2 mt-1" bind:value={title}/></label>
   <label class="block text-sm font-semibold">Descripción interna<textarea maxlength="600" rows="3" class="block w-full border rounded-lg p-2 mt-1" bind:value={summary}></textarea></label>
-  {#if kind==='catalog'}<label class="block text-sm font-semibold">Fila de material sin producto publicado<input required pattern={'material-[A-Za-z0-9_-]{1,75}'} placeholder="material-..." class="block w-full border rounded-lg p-2 mt-1" bind:value={source}/></label>
+  {#if kind==='catalog'}<label class="block text-sm font-semibold">Material técnico sin producto publicado<select required disabled={busy||materialLoading||!materials.length} class="block w-full border rounded-lg p-2 mt-1" bind:value={source}><option value="">Seleccionar material</option>{#each materials as m (m.id)}<option value={m.id}>{m.name}</option>{/each}</select></label>
+  {#if materialLoading}<p role="status" class="text-sm">Consultando materiales compartidos…</p>{:else if materialError}<p role="alert" class="text-sm text-amber-900">{materialError}</p>{:else if project&&!materials.length}<p class="text-sm text-slate-600">No hay materiales elegibles. Comparte primero los materiales desde Colaboración y permisos.</p>{/if}
+  <button type="button" disabled={!project||busy||materialLoading} class="text-sm underline" onclick={loadMaterials}>Actualizar materiales</button>
   {:else}<label class="block text-sm font-semibold">Referencia del consentimiento documentado<input required minlength="12" maxlength="200" placeholder="Documento firmado o autorización verificable" class="block w-full border rounded-lg p-2 mt-1" bind:value={consent}/></label>{/if}
-  <button type="submit" disabled={busy||!project} class="rounded-lg bg-teal-800 text-white font-semibold px-4 py-2">Guardar sugerencia interna</button>
+  <button type="submit" disabled={busy||!project||(kind==='catalog'&&(materialLoading||!source||!!materialError))} class="rounded-lg bg-teal-800 text-white font-semibold px-4 py-2">Guardar sugerencia interna</button>
  </form>
  {#if error}<p role="alert" class="rounded-lg bg-amber-50 text-amber-900 p-3 text-sm">{error}</p>{/if}
  {#if message}<p role="status" class="rounded-lg bg-teal-50 text-teal-900 p-3 text-sm">{message}</p>{/if}
