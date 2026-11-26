@@ -46,5 +46,5 @@ assert.match(pages,/HTML Studio no coincide con el build/);
 const releaseWorkflow=source('.github/workflows/studio-pages-release.yml');
 assert.equal(pages.split('}finally{\n Remove-Item Env:VITE_API_URL').length,2);
 assert.equal(releaseWorkflow.split("Write-Host ('[OK] Publicado y verificado: '+$asset)").length,2);
-assert.ok(pages.includes(String.raw`(\\?[^#]*)?\\z'){throw`));
-assert.ok(releaseWorkflow.includes(String.raw`(\\?[^#]*)?\\z')){throw`));
+assert.ok(pages.includes(String.raw`(\?[^#]*)?\z'){throw`));
+assert.ok(releaseWorkflow.includes(String.raw`(\?[^#]*)?\z')){throw`));
