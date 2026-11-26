@@ -9,25 +9,48 @@
   try{await fn()}catch(e){problem=(e as Error&{status?:number}).status===503?'Función aún no habilitada o servicio no disponible.':(e as Error).message||'No se confirmó la operación.'}
   finally{busy=false}
  }
+ async function collect(path:string,key:string){
+  let all:any[]=[],cursor:string|null=null;
+  for(let page=0;page<20;page++){
+   const r=await call(path+(cursor?'?after='+encodeURIComponent(cursor):''));
+   if(!Array.isArray(r[key]))throw Error('Respuesta incompleta de '+key);
+   all=[...all,...r[key]];
+   const next=r.next==null?null:String(r.next);
+   if(!next)return {all,truncated:false};
+   if(next===cursor)throw Error('Paginación inválida.');
+   cursor=next;
+  }
+  return {all,truncated:true};
+ }
+ let targetMember=$derived(members.find(x=>x.user_id===target));
+ let targetStaff=$derived(staff.find(x=>x.id===target));
+ let assignable=$derived(staffLoaded&&!truncated&&targetMember?.role==='worker'&&Number(targetMember.active)===1);
+ function chooseTarget(id:string){target=id;studioRole=members.find(x=>x.user_id===id)?.role==='admin'?'admin':'worker'}
  async function loadTeam(){
   staffLoaded=false;staff=[];members=[];truncated=false;
-  const [a,b]=await Promise.all([call('/api/admin/users'),call('/api/studio/v1/admin/members')]);
-  staff=Array.isArray(a.users)?a.users.filter((x:any)=>x.is_active===1||x.is_active===true):[];
-  members=Array.isArray(b.members)?b.members:[];truncated=!!b.next;staffLoaded=true;
+  const [a,b]=await Promise.all([call('/api/admin/users'),collect('/api/studio/v1/admin/members','members')]);
+  staff=Array.isArray(a.users)?a.users.filter((x:any)=>(x.is_active===1||x.is_active===true)&&['admin','operator'].includes(x.role)):[];
+  members=b.all;truncated=b.truncated;staffLoaded=true;if(target&&!staff.some(x=>x.id===target))target='';
  }
  async function loadAssignments(){
   assignments=[];if(!project)return;
-  const a=await call('/api/studio/v1/projects/'+encodeURIComponent(project)+'/assignments');
-  assignments=a.assignments||[];truncated=truncated||!!a.next;
+  const a=await collect('/api/studio/v1/projects/'+encodeURIComponent(project)+'/assignments','assignments');
+  assignments=a.all;truncated=truncated||a.truncated;
  }
  async function refresh(){await action(async()=>{await loadTeam();await loadAssignments();})}
  async function member(active:boolean){await action(async()=>{
-  if(!target)throw Error('Selecciona una cuenta existente.');
+  if(!target||!staffLoaded||truncated)throw Error('Selecciona una cuenta existente y consulta primero todos los permisos.');
+  if(active&&studioRole==='admin'&&targetStaff?.role!=='admin')throw Error('Solo una cuenta administradora de Bonaire puede administrar Studio.');
   await call('/api/studio/v1/admin/members/'+encodeURIComponent(target),'PUT',{role:studioRole,active});message=active?'Autorización registrada.':'Acceso desactivado; la cuenta central permanece.';await loadTeam();
  })}
  async function assign(add:boolean){await action(async()=>{
-  if(!project||!target)throw Error('Selecciona proyecto y trabajador.');
-  await call('/api/studio/v1/projects/'+encodeURIComponent(project)+'/assignments/'+encodeURIComponent(target),add?'PUT':'DELETE',add?{}:undefined);message=add?'Asignación procesada.':'Asignación retirada.';await loadAssignments();
+  if(!project||!target||!staffLoaded||truncated)throw Error('Selecciona proyecto y trabajador con permisos verificados.');
+  if(add&&!assignable)throw Error('Autoriza primero al trabajador con rol Trabajador.');
+  const result=await call('/api/studio/v1/projects/'+encodeURIComponent(project)+'/assignments/'+encodeURIComponent(target),add?'PUT':'DELETE',add?{}:undefined);
+  await loadAssignments();
+  const present=assignments.some(a=>a.user_id===target);
+  if(truncated||present!==add)throw Error('No se pudo verificar el estado de la asignación.');
+  message=result.changed?(add?'Asignación confirmada.':'Asignación retirada.'):(add?'El trabajador ya estaba asignado.':'El trabajador no estaba asignado.');
  })}
  onMount(()=>{void refresh()});
  async function link(){await action(async()=>{
@@ -41,15 +64,15 @@
  {#if problem}<p role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{problem}</p>{/if}
  {#if message}<p role="status" class="rounded-lg bg-teal-50 p-3 text-sm text-teal-900">{message}</p>{/if}
  {#if truncated}<p class="text-xs text-slate-500">Hay más registros; esta primera vista no representa el listado completo.</p>{/if}
- <p class="text-sm text-slate-500">Crea expedientes únicamente en Proyectos. Comparte sus secciones para habilitar asignaciones; se conserva el identificador original.</p>
+ <p class="text-sm text-slate-500">Crea expedientes únicamente en Proyectos. Primero vincula el expediente, después autoriza la cuenta y asigna el trabajador. Comparte tareas y materiales desde la pestaña correspondiente; se conserva el identificador original.</p>
  <div class="grid gap-3 md:grid-cols-2">
   <label class="text-sm font-semibold">Proyecto<select class="mt-1 block w-full rounded-lg border p-2" bind:value={project} disabled={busy} onchange={()=>void action(loadAssignments)}><option value="">Seleccionar</option>{#each projects as p}<option value={p.id}>{p.name}</option>{/each}</select></label>
-  <label class="text-sm font-semibold">Cuenta central<select class="mt-1 block w-full rounded-lg border p-2" bind:value={target} disabled={busy||!staffLoaded}><option value="">Seleccionar</option>{#each staff as v}<option value={v.id}>{v.email}</option>{/each}</select></label>
-  <label class="text-sm font-semibold">Rol Studio<select bind:value={studioRole} class="mt-1 block w-full rounded-lg border p-2"><option value="worker">Trabajador</option><option value="admin">Administrador</option></select></label>
-  <div class="flex gap-2 flex-wrap items-end"><button type="button" disabled={busy||!target} onclick={()=>member(true)} class="rounded-lg border px-3 py-2 text-sm">Autorizar</button><button type="button" disabled={busy||!target} onclick={()=>member(false)} class="rounded-lg border px-3 py-2 text-sm">Desactivar acceso</button></div>
+  <label class="text-sm font-semibold">Cuenta central<select class="mt-1 block w-full rounded-lg border p-2" value={target} onchange={e=>chooseTarget(e.currentTarget.value)} disabled={busy||!staffLoaded}><option value="">Seleccionar</option>{#each staff as v}<option value={v.id}>{v.email}</option>{/each}</select></label>
+  <label class="text-sm font-semibold">Rol Studio<select bind:value={studioRole} class="mt-1 block w-full rounded-lg border p-2"><option value="worker">Trabajador</option><option value="admin" disabled={targetStaff?.role!=='admin'}>Administrador</option></select></label>
+  <div class="flex gap-2 flex-wrap items-end"><button type="button" disabled={busy||!target||!staffLoaded||truncated} onclick={()=>member(true)} class="rounded-lg border px-3 py-2 text-sm">Autorizar</button><button type="button" disabled={busy||!target||!targetMember||truncated} onclick={()=>member(false)} class="rounded-lg border px-3 py-2 text-sm">Desactivar acceso</button></div>
  </div>
  {#if target}<p class="text-sm">Membresía: {members.find(x=>x.user_id===target)?.role||'No figura en esta página'} · {members.find(x=>x.user_id===target)?.active?'Activa':'Sin confirmar'}</p>{/if}
- <div class="flex flex-wrap gap-2"><button type="button" disabled={busy||!target||!project} onclick={()=>assign(true)} class="rounded-lg bg-teal-800 text-white px-3 py-2 text-sm">Asignar al proyecto</button><button type="button" disabled={busy||!target||!project} onclick={()=>assign(false)} class="rounded-lg border px-3 py-2 text-sm">Retirar asignación</button></div>
+ <div class="flex flex-wrap gap-2"><button type="button" disabled={busy||!target||!project||!assignable} onclick={()=>assign(true)} class="rounded-lg bg-teal-800 text-white px-3 py-2 text-sm">Asignar al proyecto</button><button type="button" disabled={busy||!target||!project||truncated||!assignments.some(a=>a.user_id===target)} onclick={()=>assign(false)} class="rounded-lg border px-3 py-2 text-sm">Retirar asignación</button></div>
  {#if project}<p class="text-sm font-semibold">Asignaciones consultadas: {assignments.length}</p>{#each assignments as a}<p class="text-sm">{staff.find(s=>s.id===a.user_id)?.email||a.user_id}</p>{/each}{/if}
  <form class="flex gap-2 flex-wrap items-end border-t pt-4" onsubmit={e=>{e.preventDefault();void link()}}><label class="text-sm flex-1 min-w-0 font-semibold">Solicitud comercial existente<input class="block w-full mt-1 rounded-lg border p-2" bind:value={requestId} maxlength="100" required placeholder="Identificador de solicitud"/></label><button type="submit" class="rounded-lg border px-3 py-2 text-sm" disabled={busy||!project}>Vincular proyecto</button></form>
  <p class="text-xs text-slate-500">Las funciones de escritura tienen habilitación independiente. La vinculación no crea otra solicitud.</p>
