@@ -28,7 +28,7 @@
    if(run!==generation)return;
    if(key){const page=Array.isArray(data[key])?data[key]:[];rows=more?[...rows,...page]:page;cursor=data.next==null?null:String(data.next)}
    loaded=true;
-  }catch(e){if(run===generation){rows=[];receipt=null;cursor=null;error=(e as Error&{status?:number}).status===503?'Módulo aún no habilitado o temporalmente desconectado.':(e as Error).message||'No se pudo consultar.'}}
+  }catch(e){if(run===generation){rows=[];receipt=null;cursor=null;error=(e as Error&{status?:number}).status===503?((e as Error).message||'Función aún no habilitada en el servidor.')+' · No se han modificado existencias ni datos financieros.':(e as Error).message||'No se pudo consultar.'}}
   finally{if(run===generation)busy=false}
  }
  async function inspect(r:any){
@@ -67,7 +67,7 @@
   <label class="block text-sm font-bold">Proyecto<select class="mt-2 w-full rounded-lg border p-2 font-normal" value={project} onchange={e=>selectProject(e.currentTarget.value)}><option value="">Seleccionar proyecto</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}</select></label>
  {/if}
  {#if mode==='backup'}
-  <p class="text-sm text-slate-500">Copia cifrada de secciones y metadatos. No incluye los archivos adjuntos ni sustituye la copia integral. La vista previa nunca restaura automáticamente.</p>
+  <p class="text-sm text-slate-500">Uso administrativo: respaldo de tareas y materiales que comparten los trabajadores. Para conservar todos tus proyectos utiliza Respaldos generales. Copia cifrada de secciones y metadatos. No incluye los archivos adjuntos ni sustituye la copia integral. La vista previa nunca restaura automáticamente.</p>
   <div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg bg-teal-800 text-white px-3 py-2" disabled={!project||busy} onclick={()=>backup(true)}>Crear respaldo</button><input class="rounded-lg border p-2 min-w-0 flex-1" aria-label="Identificador de respaldo" placeholder="Identificador del respaldo" maxlength="100" bind:value={backupId}/><button type="button" class="rounded-lg border px-3 py-2" disabled={!project||!backupId||busy} onclick={()=>backup(false)}>Comparar</button></div>
  {:else}
   <button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={busy||(['finance','shortages'].includes(mode)&&!project)} onclick={()=>load()}>{busy?'Consultando…':'Actualizar datos'}</button>

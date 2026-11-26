@@ -1,5 +1,6 @@
 <script lang="ts">
  import { apiRequest } from '../lib/api';
+ import {onMount} from 'svelte';
  let {token,projects,onRefresh}:{token:string;projects:{id:string;name:string}[];onRefresh:()=>Promise<void>}=$props();
  let staff=$state<any[]>([]),members=$state<any[]>([]),assignments=$state<any[]>([]),project=$state(''),target=$state(''),studioRole=$state('worker'),requestId=$state(''),busy=$state(false),message=$state(''),problem=$state(''),staffLoaded=$state(false),truncated=$state(false);
  const call=(path:string,method='GET',body?:unknown)=>apiRequest(path,{method,headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{body:JSON.stringify(body)})});
@@ -28,6 +29,7 @@
   if(!project||!target)throw Error('Selecciona proyecto y trabajador.');
   await call('/api/studio/v1/projects/'+encodeURIComponent(project)+'/assignments/'+encodeURIComponent(target),add?'PUT':'DELETE',add?{}:undefined);message=add?'Asignación procesada.':'Asignación retirada.';await loadAssignments();
  })}
+ onMount(()=>{void refresh()});
  async function link(){await action(async()=>{
   if(!project||!requestId.trim())throw Error('Indica el identificador de una solicitud existente.');
   await call('/api/warehouse/projects/'+encodeURIComponent(project)+'/link','POST',{requestId:requestId.trim()});message='Vinculación comercial confirmada.';

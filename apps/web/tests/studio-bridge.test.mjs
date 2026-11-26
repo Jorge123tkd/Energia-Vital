@@ -291,9 +291,9 @@ test('authenticated account is supplied to the top bar independently of the rend
  assert.match(readFileSync(new URL('../public/studio-engineering/business-menu.js',import.meta.url),'utf8'),/\['exit','←','Volver a Bonaire'\]/);
  assert.match(frame,/requestClose\(data.section\)/);
  assert.match(frame,/if\(data.pending===false\)\{finishClose\(\);return\}/);
- assert.match(frame,/index\.html\?v=studio-3.9.0-beta.9/);
- assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.9/);
- assert.match(html,/app\.js\?v=studio-3.9.0-beta.9/);
+ assert.match(frame,/index\.html\?v=studio-3.9.0-beta.11/);
+ assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.11/);
+ assert.match(html,/app\.js\?v=studio-3.9.0-beta.11/);
 });
 
 test('web account fallback renders once from trusted parent and sends logout, not back',async()=>{
@@ -419,4 +419,15 @@ test('web attachment cache reuses verified bytes across successive revisions',as
  const cache=createCache();
  assert.deepEqual((await transport(request,{cache})('GET')).snapshot,snapshot);rev='two';
  assert.deepEqual((await transport(request,{cache})('GET')).snapshot,snapshot);assert.equal(downloads,1);
+});
+
+test('business modules distinguish saved engineering and linked project records and isolate catalog failures',()=>{
+ const entry=readFileSync(new URL('../src/components/StudioEntrance.svelte',import.meta.url),'utf8');
+ assert.match(entry,/engineeringProjects\.filter\(p=>!projects\.some\(r=>r\.id===p\.id\)\)/);
+ assert.match(entry,/id:original\.id,name:original\.name/);
+ assert.match(entry,/await Promise\.all\(jobs\)/);
+ assert.match(entry,/catalogError/);
+ assert.match(entry,/onBusinessOpen=\{refreshBusiness\}/);
+ assert.match(entry,/Vincular expediente/);
+ assert.match(entry,/teamTab==='staff'/);
 });

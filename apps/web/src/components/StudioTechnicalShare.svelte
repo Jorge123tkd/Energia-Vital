@@ -1,4 +1,5 @@
 <script lang="ts">
+ import {onMount} from 'svelte';
  import {apiRequest,ADMIN_TOKEN_KEY,isDesktopStudio} from '../lib/api';
  import {savedProjects,previewTechnicalRows,reviewTeamChanges,applyTeamChanges,type TeamChange} from '../lib/studio-technical-share.js';
  let {token,projects,onRefresh}:{token:string;projects:{id:string;name:string}[];onRefresh:()=>Promise<void>}=$props();
@@ -17,6 +18,7 @@
   catch(e){error=(e as Error).message||'No se pudo consultar ingeniería guardada.'}
   finally{busy=false}
  }
+ onMount(()=>{void load()});
  async function preview(){
   if(busy||!selected)return;busy=true;error='';message='';rows=[];checked=[];skipped=[];reviewed=false;existing=[];
   try{
@@ -61,7 +63,7 @@
    const result=await applyTeamChanges(current.snapshot,selected,fresh),next=crypto.randomUUID();
    const receipt=await call('engineering/manifest','PUT',{snapshot:result.snapshot,expected:current.rev,rev:next});
    if(receipt.ok!==true||receipt.rev!==next)throw Error('No se confirmó el expediente actualizado');
-   source=result.snapshot;rev=next;message='Cambios incorporados al expediente: '+result.applied.length+'. Cierra y vuelve a abrir la ingeniería online para consultar la revisión actualizada.';
+   source=result.snapshot;rev=next;message='Cambios incorporados al expediente: '+result.applied.length+'. La ingeniería consultará automáticamente la nueva revisión.';
    changes=[];approved=[];acceptReview=false;rows=[];checked=[];reviewed=false;
   }catch(e){error=(e as Error).message||'No se confirmó la incorporación.'}
   finally{busy=false}
@@ -116,7 +118,7 @@
  {/if}
  {#if changes.length}
   <h4 class="font-bold">Cambios propuestos por el equipo</h4>
-  <p class="text-sm text-slate-600">Selecciona qué valores del servidor reemplazarán los valores actuales del expediente. Los demás campos permanecen intactos. Cierra la ingeniería online antes de incorporar cambios.</p>
+  <p class="text-sm text-slate-600">Selecciona qué valores del servidor reemplazarán los valores actuales del expediente. Los demás campos permanecen intactos. Guarda los cambios de ingeniería antes de incorporar los valores revisados.</p>
   <div class="max-h-96 overflow-auto border rounded-lg divide-y">
    {#each changes as change (change.id)}
     <label class="flex gap-3 items-start p-3 text-sm"><input type="checkbox" value={change.id} bind:group={approved} disabled={busy} onchange={()=>acceptReview=false}/><span class="min-w-0 break-words"><strong>{change.before.title||change.before.name}</strong> · {change.site}<br/>Actual: {Object.values(change.before).join(' · ')}<br/>Equipo: {Object.values(change.incoming).join(' · ')} · rev. {change.revision}</span></label>
