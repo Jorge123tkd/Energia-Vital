@@ -101,12 +101,7 @@ jobs:
             $response=curl.exe --fail --silent --show-error --location --max-redirs 3 --proto-redir '=https' --max-time 30 -H 'Cache-Control: no-cache' -o $target -w '%{http_code}|%{url_effective}' ('https://bnergiv.com/studio-engineering/'+$asset+'?verify='+$env:GITHUB_SHA)
             if ($LASTEXITCODE -ne 0) { throw ('No se pudo verificar '+$asset) }
             $allowedPath=if($asset -eq 'index.html'){'(index\.html)?'}else{[regex]::Escape($asset)}
-            if("$response" -notmatch ('^200\|https://bnergiv\.com/studio-engineering/'+$allowedPath+'(\?[^#]*)?
-            $expected=(Get-FileHash -Algorithm SHA256 ('apps/web/public/studio-engineering/'+$asset)).Hash
-            if ((Get-FileHash -Algorithm SHA256 $target).Hash -ne $expected) { throw ('Pages publicado, pero hash no coincide: '+$asset) }
-            Write-Host ('[OK] Publicado y verificado: '+$asset)
-          }
-)){throw ('Destino final inesperado: '+$asset)}
+            if("$response" -notmatch ('^200\|https://bnergiv\.com/studio-engineering/'+$allowedPath+'(\?[^#]*)?\z')){throw ('Destino final inesperado: '+$asset)}
             $expected=(Get-FileHash -Algorithm SHA256 ('apps/web/public/studio-engineering/'+$asset)).Hash
             if ((Get-FileHash -Algorithm SHA256 $target).Hash -ne $expected) { throw ('Pages publicado, pero hash no coincide: '+$asset) }
             Write-Host ('[OK] Publicado y verificado: '+$asset)
