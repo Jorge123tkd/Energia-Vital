@@ -31,6 +31,35 @@ try{
  for(const section of ['team','catalog','backup','inventory','finance','publication']){
   await frame.locator('[data-studio-section="'+section+'"]').click();await page.getByTestId('business-section').filter({hasText:section}).waitFor();await page.getByRole('button',{name:'Volver a ingeniería',exact:true}).click();
  }
+
+ // Regression for the customer's PDF: the original global SVG width rule
+ // pushed the corporate name outside the page. Exercise actual print geometry.
+ const brandedDocuments=await frame.evaluate(()=>{
+  const c=state.companies[0],p=state.projects[0];
+  const cfg=reportConfig(p);cfg.sections=cfg.sections.filter(x=>x!=='cover');
+  return [companyExportSummaryHTML(c,[p]),clientPage('Solicitud técnica de cotización','<section><h2>Materiales QA</h2></section>',false),reportHTML(p,c),clientPage('Identidad larga','<section>QA</section>',false,'',{name:'Bonaire Energía Vital · '+ 'Nombre empresarial muy largo '.repeat(3),division:'División de ingeniería y proyectos',footer:'Bonaire'})];
+ });
+ const corporatePage=await context.newPage();
+ await corporatePage.route('**/*',r=>r.abort());
+ for(let n=0;n<brandedDocuments.length;n++){
+  await corporatePage.setViewportSize({width:n===1?1030:702,height:1020});
+  await corporatePage.emulateMedia({media:'print'});
+  await corporatePage.setContent(brandedDocuments[n]);
+  const layout=await corporatePage.locator('.ev-client-header').first().evaluate(h=>{
+   const logo=h.querySelector('.ev-brand-mark'),name=h.querySelector('.ev-brand-copy'),title=h.querySelector('h1'),r=h.getBoundingClientRect(),a=logo.getBoundingClientRect(),b=name.getBoundingClientRect(),t=title.getBoundingClientRect();
+   return {width:r.width,height:r.height,logoWidth:a.width,logoHeight:a.height,logoLeft:a.left,logoRight:a.right,copyLeft:b.left,copyRight:b.right,headerLeft:r.left,headerRight:r.right,titleRight:t.right,copyOverflow:name.scrollWidth-name.clientWidth,visibleName:name.textContent};
+  });
+  assert.ok(layout.logoWidth>=40&&layout.logoWidth<=50,JSON.stringify(layout));
+  assert.ok(Math.abs(layout.logoWidth-layout.logoHeight)<1,JSON.stringify(layout));
+  assert.ok(layout.copyLeft>=layout.logoRight&&layout.copyRight<=layout.headerRight+1&&layout.titleRight<=layout.headerRight+1,JSON.stringify(layout));
+  assert.ok(layout.copyOverflow<=1&&layout.height<220,JSON.stringify(layout));
+  assert.match(layout.visibleName,/Bonaire/);
+  const pdf=await corporatePage.pdf({printBackground:true,preferCSSPageSize:true});
+  assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
+  assert.ok(pdf.length>1000);
+ }
+ await corporatePage.close();
+ console.log('PASS corporate PDF layout: summary, RFQ, coverless report and long brand name; bounded original SVG and complete identity');
  await frame.evaluate(()=>openProject(state.projects[0].id,'export'));
  await frame.getByRole('button',{name:'Vista previa de resumen',exact:true}).click();
  const overlay=page.getByRole('dialog',{name:'Vista previa de informe'});await overlay.waitFor();
