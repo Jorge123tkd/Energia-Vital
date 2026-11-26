@@ -83,7 +83,7 @@ function installManagedSnapshot(loaded,editVersion){
 async function syncManaged(manual=false){
  if(!globalThis.EVEngineeringStore||!centralAccount)return;
  if(managedSyncFlight){if(manual)syncModal();return managedSyncFlight}
- if(!manual&&(!autoSaveEnabled||!canRefreshManaged()||document.visibilityState==='hidden'||Date.now()<managedSyncNext))return;
+ if(!manual&&(!canRefreshManaged()||document.visibilityState==='hidden'||Date.now()<managedSyncNext))return;
  if(!manual&&centralAccount.platform==='windows'&&centralAccount.mode!=='online')return;
  if(manual&&$('dialog')?.open){toast('Termina el formulario abierto antes de sincronizar.');return}
  if(manual&&centralAccount.platform==='windows'&&centralAccount.mode!=='online'){toast('Inicia sesión en línea para sincronizar con Bonaire.');return}

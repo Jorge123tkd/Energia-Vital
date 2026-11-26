@@ -49,13 +49,20 @@
   }
   return walk(snapshot);
  }
- function transport(request){
+ function createCache(){return {values:new Map(),bytes:0}}
+ function remember(cache,hash,data){if(!cache||cache.values.has(hash))return;while(cache.values.size>=MAX_REFS||cache.bytes+data.length>MAX_TOTAL){const first=cache.values.keys().next().value;if(first===undefined)return;cache.bytes-=cache.values.get(first).length;cache.values.delete(first)}cache.values.set(hash,data);cache.bytes+=data.length}
+ function transport(request,{cache=null}={}){
   return async(method,payload)=>{
    if(method==='REV'){const result=await request('GET','/manifest');if(typeof result?.rev!=='string')throw Error('Revisión inválida');return {rev:result.rev};}
    if(method==='GET'){
     const result=await request('GET','/manifest');
     if(result.snapshot===null)return result;
-    const snapshot=await unpack(result.snapshot,async hash=>(await request('GET','/assets/'+hash)).data);
+    const snapshot=await unpack(result.snapshot,async hash=>{
+     if(cache?.values.has(hash))return cache.values.get(hash);
+     const data=(await request('GET','/assets/'+hash)).data;
+     if(dataURL(data)&&data.length<=MAX_ASSET&&await digest(data)===hash)remember(cache,hash,data);
+     return data;
+    });
     // Restore plain JSON prototypes (desktop comparison uses deep equality).
     return {...result,snapshot:JSON.parse(JSON.stringify(snapshot))};
    }
@@ -75,7 +82,9 @@
      if(receipt?.ok!==true||receipt.hash!==hash)throw Error('No se confirmó el adjunto');
     }
    }
-   return request('PUT','/manifest',{...payload,snapshot});
+   const result=await request('PUT','/manifest',{...payload,snapshot});
+   if(result?.ok===true)for(const [hash,data] of assets)remember(cache,hash,data);
+   return result;
   };
  }
-export {pack,unpack,transport};
+export {pack,unpack,transport,createCache};

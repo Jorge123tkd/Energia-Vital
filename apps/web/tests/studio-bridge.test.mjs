@@ -386,3 +386,37 @@ test('revision polling reads manifest without fetching attachments, and browser 
  assert.match(frame,/data\.action==='revision'\?'REV'/);
  const app=readFileSync(new URL('../public/studio-engineering/app.js',import.meta.url),'utf8');assert.match(app,/MANAGED_SYNC_INTERVAL=15000/);
 });
+
+test('all Studio application routes are passed to their authenticated upstream with exact methods',async()=>{
+ const calls=[];let role='admin';
+ const env={ADMIN_SESSION_API:{fetch:async()=>Response.json({user:{id:'qa-admin',role}})},STUDIO_API:{fetch:async req=>{calls.push({path:new URL(req.url).pathname,method:req.method,auth:req.headers.get('Authorization')});return Response.json({ok:true})}}};
+ const hash='a'.repeat(64);
+ const routes=[
+ ['GET','/v1/me'],['GET','/v1/catalog?page=1&search=panel'],['GET','/v1/projects?after=example'],['POST','/v1/projects',{id:'p',name:'QA'}],
+ ['GET','/v1/projects/p/sections'],['GET','/v1/projects/p/sections/task-a'],['PUT','/v1/projects/p/sections/task-a',{}],['PUT','/v1/projects/p/sections/material-a',{}],
+ ['GET','/v1/admin/members'],['PUT','/v1/admin/members/a',{}],['GET','/v1/projects/p/assignments'],['PUT','/v1/projects/p/assignments/a',{}],['DELETE','/v1/projects/p/assignments/a'],
+ ['GET','/v1/admin/conflicts'],['POST','/v1/admin/conflicts/1/resolve',{}],['GET','/v1/admin/projects/p/backups/b/preview'],['POST','/v1/admin/projects/p/backups/b',{}],
+ ['GET','/v1/publication-proposals?project=p'],['POST','/v1/publication-proposals',{}],['POST','/v1/admin/publication-proposals/p/decision',{}],
+ ['GET','/v1/engineering/manifest'],['PUT','/v1/engineering/manifest',{}],['POST','/v1/engineering/assets/check',{hashes:[hash]}],['GET','/v1/engineering/assets/'+hash],['PUT','/v1/engineering/assets/'+hash,{data:'data:image/png;base64,QQ=='}]];
+ for(const [method,path,body] of routes){
+  const prefixes=path.startsWith('/v1/engineering/')?['/api/studio','/api/studio/native']:['/api/studio'];
+  for(const prefix of prefixes){
+   const r=await onRequest({request:new Request(origin+prefix+path,{method,headers:{Authorization:auth,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}),env});
+   assert.equal(r.status,200,method+' '+prefix+path);
+   assert.deepEqual(calls.at(-1),{path:path.split('?')[0],method,auth});
+  }
+ }
+});
+test('web attachment cache reuses verified bytes across successive revisions',async()=>{
+ const {transport,createCache,pack}=await import('../src/lib/engineering-assets.js');
+ const snapshot={companies:[],projects:[{data:'data:image/png;base64,SGVsbG8='}],library:[],templates:[]};
+ const packed=await pack(snapshot),hash=[...packed.assets.keys()][0];let downloads=0,rev='one';
+ const request=async(method,path)=>{
+  if(path==='/manifest')return {snapshot:packed.snapshot,rev};
+  if(path==='/assets/'+hash){downloads++;return {data:packed.assets.get(hash)}}
+  throw Error('Unexpected '+path);
+ };
+ const cache=createCache();
+ assert.deepEqual((await transport(request,{cache})('GET')).snapshot,snapshot);rev='two';
+ assert.deepEqual((await transport(request,{cache})('GET')).snapshot,snapshot);assert.equal(downloads,1);
+});

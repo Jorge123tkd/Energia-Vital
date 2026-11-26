@@ -2,11 +2,13 @@
  import {onMount,onDestroy,type Snippet} from 'svelte';
  import {apiRequest,ADMIN_TOKEN_KEY} from '../lib/api';
  import {transport} from '../lib/engineering-assets.js';
+ import {createCache} from '../lib/engineering-assets.js';
  import {STUDIO_RELEASE} from '../lib/studio-release';
  let {token,business,onExit,onLogout,account}:{token:string;business:Snippet<[string]>;onExit:()=>void;onLogout:()=>Promise<void>;account:{email:string;role:string}}=$props();
  let frame:HTMLIFrameElement|undefined=$state(),opened=$state(false),busy=$state(false),error=$state(''),workspaceError=$state('');
  let port:MessagePort|null=null,epoch=0,loads=0,operations=$state(0),firstRead:any=null,connected=false,closePending=$state(false);
  let section=$state('engineering');
+ let attachmentCache=createCache();
  let closeAction:'exit'|'logout'='exit',closeTimer:ReturnType<typeof setTimeout>|undefined;
  function finishClose(){const action=closeAction;close();if(action==='logout')void onLogout();else onExit()}
  const names:Record<string,string>={catalog:'Catálogo comercial',team:'Colaboración y permisos',inventory:'Almacén y compras',finance:'Finanzas y compromisos',backup:'Copias de secciones compartidas',publication:'Publicaciones comerciales'};
@@ -14,7 +16,7 @@
  type EngineeringRequest=(method:string,suffix:string,payload?:unknown)=>Promise<any>;
  const auth=()=>({Authorization:'Bearer '+token});
  function close(){
-  clearTimeout(closeTimer);epoch++;port?.close();port=null;connected=false;firstRead=null;opened=false;loads=0;operations=0;closePending=false;
+  clearTimeout(closeTimer);attachmentCache=createCache();epoch++;port?.close();port=null;connected=false;firstRead=null;opened=false;loads=0;operations=0;closePending=false;
   section='engineering';
  }
  function requestClose(action:'exit'|'logout'='exit'){
@@ -35,7 +37,7 @@
   try{
    // Resolve the real manifest and attachments before opening the renderer.
    // Failure is shown in Bonaire, not disguised as damaged local encryption.
-   const result=await transport(requestFor(run,false))('GET');
+   const result=await transport(requestFor(run,false),{cache:attachmentCache})('GET');
    if(run!==epoch)return;
    if(!result||!Object.hasOwn(result,'snapshot')||typeof result.rev!=='string')throw Error('Respuesta de ingeniería online inválida');
    firstRead=result;loads=0;connected=false;opened=true;
@@ -75,7 +77,7 @@
     if(!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token)throw Object.assign(new Error('Sesión de Bonaire cambiada. Cierra y abre Studio.'),{status:401});
     if(data.action==='account'){reply({ok:true,result:{email:account.email,role:account.role,mode:'online',platform:'web',version:STUDIO_RELEASE}});return}
     const request=requestFor(current,true);
-    const sync=transport(async(method,suffix,payload)=>{reply({progress:true});return request(method,suffix,payload)});
+    const sync=transport(async(method,suffix,payload)=>{reply({progress:true});return request(method,suffix,payload)},{cache:attachmentCache});
     let result;
     if(data.action==='read'&&firstRead!==null){result=firstRead;firstRead=null}
     else result=await sync(data.action==='revision'?'REV':data.action==='read'?'GET':'PUT',data.payload);
