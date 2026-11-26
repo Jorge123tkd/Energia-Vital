@@ -291,9 +291,9 @@ test('authenticated account is supplied to the top bar independently of the rend
  assert.match(readFileSync(new URL('../public/studio-engineering/business-menu.js',import.meta.url),'utf8'),/\['exit','←','Volver a Bonaire'\]/);
  assert.match(frame,/requestClose\(data.section\)/);
  assert.match(frame,/if\(data.pending===false\)\{finishClose\(\);return\}/);
- assert.match(frame,/index\.html\?v=studio-3.9.0-beta.13/);
- assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.13/);
- assert.match(html,/app\.js\?v=studio-3.9.0-beta.13/);
+ assert.match(frame,/index\.html\?v=studio-3.9.0-beta.14/);
+ assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.14/);
+ assert.match(html,/app\.js\?v=studio-3.9.0-beta.14/);
 });
 
 test('web account fallback renders once from trusted parent and sends logout, not back',async()=>{

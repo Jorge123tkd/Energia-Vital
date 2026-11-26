@@ -1,0 +1,34 @@
+name: Studio - auditoría real Chromium
+on:
+  push:
+    branches: [feat/cloudflare-customer-accounts-hardening]
+    paths: ['apps/web/public/studio-engineering/**','apps/web/src/components/Studio*.svelte','apps/web/src/lib/studio-*.ts','apps/web/tests/fixtures/studio-parity*','apps/web/tests/fixtures/StudioParityFixture.svelte','apps/web/tests/studio-browser-parity.mjs','.github/workflows/studio-browser-parity.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: studio-browser-parity-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Instalar Chromium QA aislado (sin cambiar dependencias de producción)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/evpro-browser" --no-audit --no-fund playwright@1.56.1
+          "$RUNNER_TEMP/evpro-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Probar interfaz auténtica con datos ficticios
+        run: |
+          npm run dev --workspace=apps/web -- --host 127.0.0.1 > "$RUNNER_TEMP/studio-vite.log" 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for n in $(seq 1 40); do if curl -fsS http://127.0.0.1:5173/tests/fixtures/studio-parity.html >/dev/null; then break; fi; sleep 1; done
+          EV_PLAYWRIGHT_MODULE="$RUNNER_TEMP/evpro-browser/node_modules/playwright/index.mjs" node apps/web/tests/studio-browser-parity.mjs
