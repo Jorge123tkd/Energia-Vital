@@ -60,8 +60,8 @@ function advanceNatural(text:string,prior:CommercialDraft|null,id:string):Commer
  if(/^(?:cancelar|cancelar borrador|cancelar solicitud comercial|no gracias)$/.test(m))return {draft:null,reply:'Borrador cancelado. No se registró ninguna solicitud.'};
  if(/[¿?]/.test(text))return {draft:d,reply:'Tu solicitud sigue guardada. '+resumeCommercialIntake(d)};
  if(d.stage==='review'&&m==='confirmar solicitud comercial')return {draft:d,reply:'',submit:true};
- const menu=naturalMenu.test(m.replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim());
- if(menu){if(/proveedor|alianza/.test(m)&&!d.kind)d.kind='otro';return naturalNext(d);}
+ const menu=naturalMenu.test(m.replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim())||/^(?:somos|soy) (?:una? )?(?:empresa(?: estatal| privada)?|mipyme|negocio privado|cooperativa)$/.test(m);
+ if(menu){const kind=naturalKind(text);if(kind&&!d.kind)d.kind=kind;return naturalNext(d);}
  let value:string|undefined,matched=false;
  const assign=(k:'company'|'contact'|'need'|'location'|'payment',v:string|undefined,max:number,min=2)=>{
   if(v&&v.length>=min&&v.length<=max){d[k]=v;matched=true;}

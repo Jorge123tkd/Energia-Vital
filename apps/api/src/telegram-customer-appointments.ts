@@ -31,3 +31,32 @@ export async function requestTelegramAppointment(env:Env,customerId:string,chatI
  if(!result.meta?.changes)return 'No se pudo reservar ese horario. Comprueba tu cuenta o elige otra fecha.';
  return 'Cita solicitada para '+match[1]+' (hora de Cuba). Pendiente de aprobación; no es una visita confirmada. Referencia: '+id+'.';
 }
+
+
+export type AppointmentDraft={date?:string;time?:string};
+export function appointmentDraftReply(d:AppointmentDraft):string{
+ if(!d.date)return '¿Qué día quieres la visita? Puedes decir mañana o escribir la fecha (día/mes/año).';
+ if(!d.time)return '¿A qué hora de Cuba prefieres la visita? Por ejemplo, 10:00.';
+ return 'Visita de una hora: '+d.date+' a las '+d.time+' (hora de Cuba). Escribe «confirmar cita» para solicitarla. Quedará pendiente de aprobación. Puedes indicar otra fecha u hora.';
+}
+export function advanceAppointmentDraft(input:string,prior:AppointmentDraft|null,at=new Date()):{draft:AppointmentDraft|null;reply:string;submit?:string}|null{
+ const text=input.trim(),m=text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ const start=/^(?:solicitar cita|pedir cita|reservar cita|agendar cita|confirmar cita|quiero (?:una )?cita|(?:quiero|quisiera|necesito) (?:reservar|pedir|solicitar|agendar|programar|hacer) (?:una )?cita|quiero una visita tecnica)(?:\s|$)/.test(m);
+ if(!prior&&!start)return null;
+ if(/^(?:cancelar cita|cancelar borrador de cita)$/.test(m))return {draft:null,reply:'Borrador de cita cancelado. No se registró ninguna visita.'};
+ if(/[¿?]/.test(text))return null;
+ if(prior&&!start&&!/^(?:hoy|manana|pasado manana|(?:el )?\d|a las|cambiar (?:fecha|hora))/.test(m))return null;
+ const d={...prior};
+ const iso=/\b(\d{4}-\d{2}-\d{2})\b/.exec(m),slash=/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/.exec(m);
+ const relative=/\b(pasado manana|manana|hoy)\b/.exec(m);
+ if(iso)d.date=iso[1];
+ else if(slash)d.date=slash[3]+'-'+slash[2].padStart(2,'0')+'-'+slash[1].padStart(2,'0');
+ else if(relative){const offset=relative[1]==='hoy'?0:relative[1]==='manana'?1:2;d.date=new Date(Date.parse(localKey(at).slice(0,10)+'T12:00:00Z')+offset*86400000).toISOString().slice(0,10);}
+ const withoutDate=m.replace(iso?.[0]||slash?.[0]||'__no_date__','');
+ const hour=/(?:\ba las\s+|\b)(\d{1,2}):(\d{2})(?:\s*(am|pm))?\b/.exec(withoutDate)||/\ba las\s+(\d{1,2})(?:\s*(am|pm))?\b/.exec(withoutDate)||/^\s*(\d{1,2})(?:\s*(am|pm))?\s*$/.exec(withoutDate);
+ if(hour){let h=Number(hour[1]);const colon=hour[0].includes(':'),minute=colon?Number(hour[2]):0,meridiem=colon?hour[3]:hour[2];if(meridiem){if(h<1||h>12)return {draft:d,reply:'Indica una hora válida.'};h=h%12+(meridiem==='pm'?12:0);}
+ if(h>23||minute>59)return {draft:d,reply:'Indica una hora válida.'};d.time=String(h).padStart(2,'0')+':'+String(minute).padStart(2,'0');}
+ if(d.date&&d.time){const stamp=cubanAppointmentTime(d.date+' '+d.time);if(!stamp||stamp<=at||stamp.getTime()>at.getTime()+366*86400000){delete d.date;delete d.time;return {draft:d,reply:'La fecha u hora no es válida o no está en el futuro. Indica otro horario (hora de Cuba).'};}}
+ if(/^confirmar cita(?:\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})?$/.test(m)&&d.date&&d.time)return {draft:d,reply:'',submit:d.date+' '+d.time};
+ return {draft:d,reply:appointmentDraftReply(d)};
+}

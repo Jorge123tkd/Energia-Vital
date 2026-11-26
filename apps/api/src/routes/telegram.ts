@@ -12,6 +12,7 @@ import {
   OUT_OF_SCOPE_REPLY,isCurrencyQuestion
 } from '../assistant-engine';
 import { advanceSolarGuidance,type SolarState } from '../solar-guidance';
+import { callAI } from '../assistant-ai';
 import { getElToqueRates,formatExchangeReply } from '../exchange-rates';
 import { agendaForTeam,pendingTicketSummary } from '../telegram-agenda';
 import { classifyTelegramMessage,telegramReplyKeyboard,presentTelegramReply,type TelegramReplyMarkup } from '../telegram-conversation';
@@ -20,7 +21,7 @@ import { currentTelegramCustomer } from '../telegram-customer-auth';
 import { SITE_URL, startsRegistration, cancelsRegistration, isCustomerCode, activeRegistration, startRegistration, saveRegistrationStep, cancelRegistration, registrationPrompt, redeemCustomerCode, type Stage } from '../telegram-customer-onboarding';
 import { advanceCommercialIntake, startCommercialIntake, naturalCommercialStart, resumeCommercialIntake, type CommercialDraft } from '../commercial-intake';
 import { parseRequestIntake } from '../request-intake';
-import { requestTelegramAppointment } from '../telegram-customer-appointments';
+import { requestTelegramAppointment,advanceAppointmentDraft,appointmentDraftReply,type AppointmentDraft } from '../telegram-customer-appointments';
 import { setTelegramCustomerNotifications } from '../telegram-customer-notifications';
 import { issuedCustomerQuotes } from '../customer-quotes';
 import { extractTelegramPhoto, receiveTelegramPhoto } from '../telegram-customer-photos';
@@ -143,10 +144,10 @@ async function redeemCode(env:Env,chatId:string,code:string):Promise<string>{
 }
 type Session={chat_id:string;thread_id:string;solar_context:string;window_start:string|null;window_count:number};
 type BotDecision={
-  reply:string;state?:SolarState|null;commercial?:CommercialDraft|null;newThread?:boolean;skipHistory?:boolean;
+  reply:string;state?:SolarState|null;commercial?:CommercialDraft|null;appointment?:AppointmentDraft|null;newThread?:boolean;skipHistory?:boolean;
   keyboardView?:'reminders';replyMarkup?:TelegramReplyMarkup;
 };
-async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string,prior:CommercialDraft|null,updateId:string):Promise<BotDecision>{
+async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string,prior:CommercialDraft|null,updateId:string,appointment:AppointmentDraft|null=null):Promise<BotDecision>{
   const text=raw.trim();
   // Un empleado obtiene su código desde /admin y lo escribe AQUÍ sin comandos.
   // Por compatibilidad seguimos admitiendo /vincular 12345678.
@@ -206,9 +207,14 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     const labels:Record<string,string>={pending:'Pendiente',quoted:'Presupuestada',approved:'Aprobada',scheduled:'Programada',completed:'Completada',cancelled:'Cancelada',confirmed:'Confirmada',in_progress:'En proceso'};
     return {reply:results?.length?(isRequests?'Tus últimas solicitudes:\n\n':'Tus últimas citas:\n\n')+results.map(x=>x.title+'\n'+(labels[x.status]||x.status)+' · '+x.date+'\nReferencia: '+x.id).join('\n\n')+(isRequests?'\n\nEscribe «ver solicitud» seguido de su referencia para leer las respuestas del equipo.':''):'Todavía no tienes registros en esta sección.',skipHistory:true};
   }
-  if(/^(?:solicitar cita|pedir cita|reservar cita|confirmar cita\b.*)$/i.test(text)){
-    if(!customer)return {reply:'Para solicitar una cita, elige Crear cuenta o Vincular cuenta.',replyMarkup:accountButton,skipHistory:true};
-    return {reply:await requestTelegramAppointment(env,customer.id,chatId,updateId,text),skipHistory:true};
+  const visit=advanceAppointmentDraft(text,appointment);
+  if(visit){
+    if(visit.submit){
+      if(!customer)return {reply:'Tu horario está guardado. Crea o vincula tu cuenta para enviar la cita; después escribe «confirmar cita».',appointment:visit.draft,replyMarkup:accountButton,skipHistory:true};
+      const reply=await requestTelegramAppointment(env,customer.id,chatId,updateId,'confirmar cita '+visit.submit);
+      return {reply,appointment:/^(?:Cita solicitada|Esta cita ya se solicitó)/.test(reply)?null:visit.draft,skipHistory:true};
+    }
+    return {reply:visit.reply,appointment:visit.draft,state:null,skipHistory:true};
   }
   const documentReply=await telegramDocuments(env,chatId,text);
   if(documentReply!==null)return {reply:documentReply,skipHistory:true};
@@ -378,7 +384,12 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     "SELECT role,content FROM telegram_bot_messages WHERE chat_id=? AND thread_id=? "+
     "ORDER BY created_at DESC LIMIT 12"
   ).bind(chatId,threadId).all<{role:string;content:string}>();
-  return {reply:generateResponse(text,context,(history.results||[]).reverse()).text};
+  const fallback=generateResponse(text,context,(history.results||[]).reverse());
+  if(!prior&&!appointment&&env.AI&&env.WORKERS_AI_ENABLED!=='false'&&fallback.intent!=='general'){
+    const ai=await callAI({...env,AI_API_KEY:undefined,AI_API_BASE:undefined},context,[],text);
+    if(ai.text)return {reply:ai.text.slice(0,3000)+'\n\nOrientación del asistente. Las solicitudes y citas solo se registran mediante su confirmación explícita.'};
+  }
+  return {reply:fallback.text};
 }
 async function claimAttachmentQuota(env:Env,chatId:string):Promise<boolean>{
   const time=now(),threshold=new Date(Date.now()-3600000).toISOString();
@@ -430,10 +441,10 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
       ]);
       return;
     }
-    let state:SolarState|null=null, commercial:CommercialDraft|null=null;
+    let state:SolarState|null=null, commercial:CommercialDraft|null=null, appointment:AppointmentDraft|null=null;
     const currentCustomer=await currentTelegramCustomer(env,input.chatId);
     try{const parsed=JSON.parse(session.solar_context);
-      if(parsed&&typeof parsed==='object'&&'commercial' in parsed){state=parsed.solar||null;commercial=(parsed.customerId??null)===(currentCustomer?.id??null)||parsed.customerId===null&&!!currentCustomer?parsed.commercial||null:null;}
+      if(parsed&&typeof parsed==='object'&&'commercial' in parsed){state=parsed.solar||null;const sameOwner=(parsed.customerId??null)===(currentCustomer?.id??null)||parsed.customerId===null&&!!currentCustomer;commercial=sameOwner?parsed.commercial||null:null;appointment=sameOwner?parsed.appointment||null:null;}
       else state=parsed as SolarState|null;
     }catch{/* recuperar estado vacío */}
     let decision:BotDecision|undefined;
@@ -443,7 +454,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
       if(currentCustomer)decision={reply:'Tu cuenta de cliente ya está vinculada.',skipHistory:true};
       else if(await redeemCustomerCode(env,input.chatId,input.text)){
         await cancelRegistration(env,input.chatId);
-        decision={reply:'¡Cuenta vinculada correctamente! '+(commercial?resumeCommercialIntake(commercial):'Ya puedes consultar tus cotizaciones, solicitudes y citas aquí. Puedes seguir en este chat o abrir Bonaire: '+site),skipHistory:true,state:null};
+        decision={reply:'¡Cuenta vinculada correctamente! '+(appointment?appointmentDraftReply(appointment):commercial?resumeCommercialIntake(commercial):'Ya puedes consultar tus cotizaciones, solicitudes y citas aquí. Puedes seguir en este chat o abrir Bonaire: '+site),skipHistory:true,state:null};
       }else decision={reply:'Código inválido, vencido o ya utilizado. Entra a Mi perfil y genera uno nuevo.',skipHistory:true};
     }else if(startsRegistration(input.text)){
       if(currentCustomer)decision={reply:'Ya tienes una cuenta vinculada. Puedes entrar a Bonaire o seguir aquí.',skipHistory:true,replyMarkup:{inline_keyboard:[[{text:'Entrar en Bonaire',url:site+'/entrar'}]]}};
@@ -452,7 +463,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
       await cancelRegistration(env,input.chatId);
       decision={reply:'Registro cancelado. Inicia sesión en Bonaire, abre Mi perfil → Vincular Telegram y envíame el código de un solo uso.',skipHistory:true,state:null,replyMarkup:{inline_keyboard:[[{text:'Abrir mi perfil',url:site+'/perfil'}]]}};
     }else if(draft){
-      if(currentCustomer){await cancelRegistration(env,input.chatId);decision={reply:'Tu cuenta ya está creada y vinculada. '+(commercial?resumeCommercialIntake(commercial):'Escribe «mi cuenta» o continúa con tus consultas.'),skipHistory:true};}
+      if(currentCustomer){await cancelRegistration(env,input.chatId);decision={reply:'Tu cuenta ya está creada y vinculada. '+(appointment?appointmentDraftReply(appointment):commercial?resumeCommercialIntake(commercial):'Escribe «mi cuenta» o continúa con tus consultas.'),skipHistory:true};}
       else if(cancelsRegistration(input.text)){
         await cancelRegistration(env,input.chatId);
         const action=classifyTelegramMessage(input.text);
@@ -466,8 +477,9 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
         decision=registrationDecision(step.stage,site,!step.valid);
       }
     }
-    decision=decision||await decide(env,input.chatId,input.text,state,session.thread_id,commercial,input.updateId);
+    decision=decision||await decide(env,input.chatId,input.text,state,session.thread_id,commercial,input.updateId,appointment);
     const nextCommercial=decision.newThread?null:decision.commercial===undefined?commercial:decision.commercial;
+    const nextAppointment=decision.newThread?null:decision.appointment===undefined?appointment:decision.appointment;
     const linkedCustomer=await currentTelegramCustomer(env,input.chatId);
     const nextThread=decision.newThread?crypto.randomUUID():session.thread_id;
     const nextState=decision.newThread?null:decision.state===undefined?state:decision.state;
@@ -494,7 +506,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     await env.DB.batch([
       env.DB.prepare(
         'UPDATE telegram_bot_sessions SET thread_id=?,solar_context=?,window_start=?,window_count=?,updated_at=? WHERE chat_id=?'
-      ).bind(nextThread,JSON.stringify({solar:nextState,commercial:nextCommercial,customerId:linkedCustomer?.id??null}),current?session.window_start:time,count,time,input.chatId),
+      ).bind(nextThread,JSON.stringify({solar:nextState,commercial:nextCommercial,appointment:nextAppointment,customerId:linkedCustomer?.id??null}),current?session.window_start:time,count,time,input.chatId),
       ...audit,
       env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?")
         .bind(time,input.updateId)

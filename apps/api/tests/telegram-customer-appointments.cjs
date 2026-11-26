@@ -18,3 +18,16 @@ assert.equal(time('2027-01-20'),null);
  assert.equal(writes,0);
  console.log('PASS Cuban appointment time, invalid calendar dates and explicit confirmation');
 })().catch(e=>{console.error(e);process.exitCode=1});
+
+const {advanceAppointmentDraft:advance}=mod.exports;
+const at=new Date('2026-11-26T15:00:00Z');
+let draft=advance('Quiero reservar una cita mañana a las 10',null,at);
+assert.deepEqual(draft.draft,{date:'2026-11-27',time:'10:00'});
+assert.equal(draft.submit,undefined);
+assert.equal(advance('confirmar cita',draft.draft,at).submit,'2026-11-27 10:00');
+draft=advance('solicitar cita',null,at);
+draft=advance('28/11/2026',draft.draft,at);
+draft=advance('a las 2 pm',draft.draft,at);
+assert.equal(draft.draft.time,'14:00');
+assert.equal(advance('cancelar cita',draft.draft,at).draft,null);
+console.log('PASS natural appointment draft with Cuba timezone and explicit confirmation');
