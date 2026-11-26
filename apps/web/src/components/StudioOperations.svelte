@@ -1,11 +1,11 @@
 <script lang="ts">
- import { onMount } from 'svelte';
+ import { onMount, untrack } from 'svelte';
  import { apiRequest } from '../lib/api';
  import StudioPublication from './StudioPublication.svelte';
  import StudioCommercialActions from './StudioCommercialActions.svelte';
  let {token,projects,initialMode='inventory',embedded=false,procurementGroup=false}: {token:string;projects:{id:string;name:string}[];initialMode?:Mode;embedded?:boolean;procurementGroup?:boolean}=$props();
  type Mode='inventory'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication';
- let mode=$state<Mode>(initialMode),project=$state(''),busy=$state(false),error=$state(''),rows=$state<Record<string,any>[]>([]),cursor=$state<string|null>(null),loaded=$state(false),backupId=$state(''),receipt=$state<any>(null);
+ let mode=$state<Mode>(untrack(()=>initialMode)),project=$state(''),busy=$state(false),error=$state(''),rows=$state<Record<string,any>[]>([]),cursor=$state<string|null>(null),loaded=$state(false),backupId=$state(''),receipt=$state<any>(null);
  let generation=0;
  let reviewSeq=$state<number|null>(null),reviewRevision=$state<number|null>(null),central=$state<any>(null),merged=$state('');
  const tabs:{key:Mode;name:string}[]=[{key:'inventory',name:'Almacén'},{key:'orders',name:'Compras'},{key:'suppliers',name:'Proveedores'},{key:'finance',name:'Economía'},{key:'shortages',name:'Faltantes'},{key:'conflicts',name:'Conflictos'},{key:'backup',name:'Respaldos'},{key:'publication',name:'Publicaciones'}];

@@ -127,6 +127,14 @@ try{
  // Exercise the actual company ZIP and MessageChannel route, using genuine
  // PDF bytes rendered above by Chromium as the isolated API response.
  pdfAvailable=true;
+ await fresh.getByRole('button',{name:'Vista previa de resumen',exact:true}).click();
+ await overlay.waitFor();
+ const direct=overlay.getByRole('button',{name:'Descargar PDF directo',exact:true});await direct.waitFor();
+ await overlay.getByRole('checkbox').check();await page.waitForFunction(()=>[...document.querySelectorAll('.output-actions button')].some(b=>b.textContent==='Descargar PDF directo'&&!b.disabled));
+ const directEvent=page.waitForEvent('download');await direct.click();const directFile=await directEvent;
+ assert.match(directFile.suggestedFilename(),/\.pdf$/);assert.equal((await readFile(await directFile.path())).subarray(0,5).toString(),'%PDF-');
+ await overlay.getByRole('button',{name:'Confirmar revisión y volver'}).click();
+ await fresh.waitForFunction(()=>document.getElementById('reviewed').checked);
  await fresh.evaluate(()=>companyExportDialog(state.companies[0].id,'summary'));
  await fresh.locator('input[name=evCompanyProject]').first().check();
  await fresh.locator('input[name=review]').check();

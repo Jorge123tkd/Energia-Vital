@@ -29,6 +29,26 @@
   if(port){closePending=true;port.postMessage({type:'check-close'});closeTimer=setTimeout(()=>{closePending=false;workspaceError='No se pudo verificar el guardado. Intenta de nuevo.'},8000);return}
   finishClose();
  }
+ function pdfSession(current:number){
+  if(current!==epoch||!opened||!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token||account.role!=='admin'||section!=='engineering')throw Error('PDF no autorizado.');
+ }
+ async function checkPdf(){
+  const current=epoch;pdfSession(current);
+  const result=await apiRequest(route+'/pdf',{headers:auth(),cache:'no-store',signal:AbortSignal.timeout(10000)});
+  pdfSession(current);return result.available===true;
+ }
+ async function renderPdf(html:unknown){
+  const current=epoch;pdfSession(current);
+  if(typeof html!=='string'||!html.trim()||new TextEncoder().encode(html).length>12*1024*1024)throw Error('Informe vacío o superior al límite de PDF web.');
+  const body=JSON.stringify({html});
+  if(new TextEncoder().encode(body).length>12*1024*1024)throw Error('Informe superior al límite de PDF web. Reduce los adjuntos o utiliza la opción de imprimir / guardar PDF.');
+  const result=await apiRequest(route+'/pdf',{method:'POST',headers:auth(),cache:'no-store',signal:AbortSignal.timeout(110000),body});
+  pdfSession(current);
+  if(typeof result.pdf!=='string'||!result.pdf.startsWith('JVBER'))throw Error('PDF no confirmado.');
+  const bytes=Uint8Array.from(atob(result.pdf),c=>c.charCodeAt(0));
+  if(new TextDecoder().decode(bytes.subarray(0,5))!=='%PDF-')throw Error('PDF no confirmado.');
+  return bytes;
+ }
  function requestFor(current:number,requireOpen:boolean):EngineeringRequest{
   return async(method,suffix,payload)=>{
    if(current!==epoch||(requireOpen&&!opened)||!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token)throw Object.assign(new Error('La sesión de Bonaire cambió. Vuelve a abrir Studio.'),{status:401});
@@ -83,15 +103,8 @@
     if(data.action==='account'){reply({ok:true,result:{email:account.email,role:account.role,mode:'online',platform:'web',version:STUDIO_RELEASE}});return}
     if(data.action==='pdf-status'||data.action==='render-pdf'){
      if(account.role!=='admin'||section!=='engineering'||reportOutput)throw Error('PDF no autorizado.');
-     const url=route+'/pdf';
-     if(data.action==='pdf-status'){const result=await apiRequest(url,{headers:auth(),cache:'no-store',signal:AbortSignal.timeout(10000)});reply({ok:true,result:{available:result.available===true}});return}
-     const html=data.payload?.html;
-     if(typeof html!=='string'||!html.trim()||new TextEncoder().encode(html).length>12*1024*1024)throw Error('Informe vacío o superior al límite de PDF web.');
-     const body=JSON.stringify({html});
-     if(new TextEncoder().encode(body).length>12*1024*1024)throw Error('Informe superior al límite de PDF web. Reduce los adjuntos o utiliza la opción de imprimir / guardar PDF.');
-     const result=await apiRequest(url,{method:'POST',headers:auth(),cache:'no-store',signal:AbortSignal.timeout(110000),body});
-     if(typeof result.pdf!=='string'||!result.pdf.startsWith('JVBER'))throw Error('PDF no confirmado.');
-     const bytes=Uint8Array.from(atob(result.pdf),c=>c.charCodeAt(0));reply({ok:true,result:bytes});return;
+     if(data.action==='pdf-status'){reply({ok:true,result:{available:await checkPdf()}});return}
+     reply({ok:true,result:await renderPdf(data.payload?.html)});return;
     }
     if(data.action==='preview'||data.action==='save-file'){
      if(account.role!=='admin'||section!=='engineering'||reportOutput)throw Error('Cierra la salida actual antes de abrir otro informe o archivo.');
@@ -123,7 +136,7 @@
       <main class="ev-business-main"><h1 class="text-2xl sm:text-3xl font-bold mb-5">{names[section]}</h1>{@render business(section)}</main>
     </section>
   {/if}
-  {#if reportOutput}<StudioReportOutput request={reportOutput} onFinish={closeOutput}/>{/if}
+  {#if reportOutput}<StudioReportOutput request={reportOutput} onFinish={closeOutput} pdfStatus={checkPdf} pdfRender={renderPdf}/>{/if}
   {#if workspaceError}<div role="alert" class="ev-error bg-amber-50 text-amber-900 px-4 py-2 text-sm flex items-center gap-3"><span class="flex-1">{workspaceError}</span><button type="button" onclick={()=>workspaceError=''}>Cerrar aviso</button></div>{/if}
   {#if closePending}<div role="status" class="ev-error bg-white p-3">Verificando guardado…</div>{/if}
  {:else}

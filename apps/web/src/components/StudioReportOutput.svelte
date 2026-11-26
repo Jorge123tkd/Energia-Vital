@@ -1,10 +1,19 @@
 <script lang="ts">
- import {onMount} from 'svelte';
+ import {onMount,onDestroy} from 'svelte';
  import {requestDownload,type OutputRequest,type OutputResult} from '../lib/studio-report-output';
- let {request,onFinish}:{request:OutputRequest;onFinish:(result:OutputResult)=>void}=$props();
+ let {request,onFinish,pdfStatus,pdfRender}:{request:OutputRequest;onFinish:(result:OutputResult)=>void;pdfStatus?:()=>Promise<boolean>;pdfRender?:(html:string)=>Promise<Uint8Array>}=$props();
  let approved=$state(false),ready=$state(false),error=$state(''),notice=$state('');
  let reportFrame:HTMLIFrameElement|undefined=$state(),closeButton:HTMLButtonElement|undefined=$state();
- onMount(()=>{if(request.kind==='preview')approved=request.approved;closeButton?.focus()});
+ let pdfAvailable=$state(false),pdfBusy=$state(false);let active=true;
+ onDestroy(()=>{active=false});
+ onMount(()=>{if(request.kind==='preview'){approved=request.approved;void pdfStatus?.().then(value=>{if(active)pdfAvailable=value}).catch(()=>{})}closeButton?.focus()});
+ async function savePDF(){
+  if(request.kind!=='preview'||!approved||!pdfAvailable||!pdfRender||pdfBusy)return;
+  pdfBusy=true;error='';notice='';
+  try{const bytes=await pdfRender(request.html);if(!active)return;requestDownload(request.name+'.pdf',bytes,'application/pdf');notice='Descarga PDF solicitada. Comprueba la carpeta de descargas.'}
+  catch(e){if(active)error=(e as Error).message||'No se pudo generar el PDF. Puedes imprimir o guardar PDF desde el navegador.'}
+  finally{if(active)pdfBusy=false}
+ }
  function printReport(){
   if(request.kind!=='preview'||!approved||!ready)return;
   try{const w=reportFrame?.contentWindow;if(!w)throw Error('La vista previa todavía no está lista.');w.focus();w.print();notice='Diálogo de impresión solicitado. Elige impresora o Guardar como PDF.';error=''}
@@ -20,16 +29,17 @@
  }
  function close(){onFinish(request.kind==='preview'?{opened:true,approved}:{state:'cancelled'})}
 </script>
-<section class="output-overlay" role="dialog" aria-modal="true" aria-label={request.kind==='preview'?'Vista previa de informe':'Guardar archivo'}>
+<div class="output-overlay" role="dialog" aria-modal="true" aria-label={request.kind==='preview'?'Vista previa de informe':'Guardar archivo'}>
  <header>
   <div><strong>{request.kind==='preview'?'Vista previa · '+request.name:'Guardar archivo'}</strong><p>{request.kind==='preview'?'Revisa el informe antes de imprimir o entregar.':'Confirma la descarga desde Bonaire.'}</p></div>
   <button bind:this={closeButton} type="button" onclick={close}>Cerrar / volver</button>
  </header>
  {#if request.kind==='preview'}
   <div class="output-actions">
-   <label><input type="checkbox" bind:checked={approved}/> He revisado y autorizo los textos e imágenes de esta entrega.</label>
+   <label><input type="checkbox" disabled={pdfBusy} bind:checked={approved}/> He revisado y autorizo los textos e imágenes de esta entrega.</label>
    <div class="buttons">
     <button type="button" class="primary" disabled={!approved||!ready} onclick={printReport}>Imprimir / guardar PDF</button>
+    {#if pdfAvailable}<button type="button" disabled={!approved||!ready||pdfBusy} onclick={savePDF}>{pdfBusy?'Generando PDF…':'Descargar PDF directo'}</button>{/if}
     <button type="button" disabled={!approved} onclick={saveHTML}>Descargar HTML</button>
     <button type="button" disabled={!approved} onclick={close}>Confirmar revisión y volver</button>
    </div>
@@ -46,7 +56,7 @@
  {/if}
  {#if notice}<p class="message" role="status">{notice}</p>{/if}
  {#if error}<p class="message error" role="alert">{error}</p>{/if}
-</section>
+</div>
 <style>
  .output-overlay{position:absolute;inset:0;z-index:20;background:#f1f6f5;display:flex;flex-direction:column;overflow:hidden;color:#173840}
  header,.output-actions{padding:12px 20px;background:white;border-bottom:1px solid #d9e5e4}
