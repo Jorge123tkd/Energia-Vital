@@ -475,3 +475,21 @@ test('managed reports use an explicit user-controlled web output capability with
  const permitted=await status('admin','admin');assert.equal(permitted.status,200);assert.equal((await permitted.json()).available,true);
 
  });
+
+test('web PDF rejects oversized JSON, including streamed requests, before contacting the renderer',async()=>{
+ const {renderStudioPdf}=await import('../lib/studio-private-pdf.js');
+ const env={STUDIO_PDF_ENABLED:'true',STUDIO_PDF_TOKEN:'qa-only-token-not-a-real-secret'};
+ const limit=12*1024*1024;
+ let calls=0;const render=async()=>{calls++;throw Error('unexpected remote call')};
+ const url='https://bnergiv.com/api/studio/v1/engineering/pdf';
+ const make=(body,headers={})=>new Request(url,{method:'POST',headers:{'content-type':'application/json',...headers},body,...(body instanceof ReadableStream?{duplex:'half'}:{})});
+ assert.equal((await renderStudioPdf(make('{}',{'content-length':String(limit+1)}),env,render)).status,413);
+ const bytes=new TextEncoder().encode(JSON.stringify({html:'"'.repeat(limit/2)}));
+ assert.ok(bytes.length>limit);
+ const stream=new ReadableStream({start(controller){controller.enqueue(bytes.subarray(0,limit));controller.enqueue(bytes.subarray(limit));controller.close()}});
+ assert.equal((await renderStudioPdf(make(stream),env,render)).status,413);
+ assert.equal((await renderStudioPdf(make('{bad JSON'),env,render)).status,400);
+ assert.equal(calls,0);
+ const source=readFileSync(new URL('../src/components/StudioEngineeringFrame.svelte',import.meta.url),'utf8');
+ assert.match(source,/encode\(body\)\.length>12\*1024\*1024/);
+});

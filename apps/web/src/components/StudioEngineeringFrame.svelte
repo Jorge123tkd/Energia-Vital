@@ -86,8 +86,10 @@
      const url=route+'/pdf';
      if(data.action==='pdf-status'){const result=await apiRequest(url,{headers:auth(),cache:'no-store',signal:AbortSignal.timeout(10000)});reply({ok:true,result:{available:result.available===true}});return}
      const html=data.payload?.html;
-     if(typeof html!=='string'||new TextEncoder().encode(html).length>12*1024*1024)throw Error('Informe superior al límite de PDF web.');
-     const result=await apiRequest(url,{method:'POST',headers:auth(),cache:'no-store',signal:AbortSignal.timeout(110000),body:JSON.stringify({html})});
+     if(typeof html!=='string'||!html.trim()||new TextEncoder().encode(html).length>12*1024*1024)throw Error('Informe vacío o superior al límite de PDF web.');
+     const body=JSON.stringify({html});
+     if(new TextEncoder().encode(body).length>12*1024*1024)throw Error('Informe superior al límite de PDF web. Reduce los adjuntos o utiliza la opción de imprimir / guardar PDF.');
+     const result=await apiRequest(url,{method:'POST',headers:auth(),cache:'no-store',signal:AbortSignal.timeout(110000),body});
      if(typeof result.pdf!=='string'||!result.pdf.startsWith('JVBER'))throw Error('PDF no confirmado.');
      const bytes=Uint8Array.from(atob(result.pdf),c=>c.charCodeAt(0));reply({ok:true,result:bytes});return;
     }
