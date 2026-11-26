@@ -11,7 +11,7 @@
   const names:Record<string,string>={catalog:'Catálogo comercial',team:'Colaboración y permisos',inventory:'Almacén y compras',finance:'Finanzas y compromisos',backup:'Copias de secciones compartidas',publication:'Publicaciones comerciales'};
   let account=$state({email:'',role:'worker'});
   type Project = {id:string;name:string};
-  type Product = {id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null};
+  type Product = {id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null;category?:string|null;specifications?:string|null;stockStatus?:string|null};
   let busy=$state(false),ready=$state(false),error=$state(''),projects=$state<Project[]>([]),products=$state<Product[]>([]);
   let search=$state(''),nextProject=$state<string|null>(null),catalogPage=$state(1),catalogMore=$state(false);
   let generation=0;
@@ -33,12 +33,12 @@
         let page=await query('projects'),all:Project[]=Array.isArray(page.projects)?page.projects:[],cursor=page.next||null;
         // Fetch bounded pages; never infer a missing project from the first page alone.
         for(let n=1;cursor&&n<20;n++){const prior=cursor;page=await query('projects?'+new URLSearchParams({after:cursor}));all=[...all,...(page.projects??[])];cursor=page.next||null;if(cursor===prior)throw Error('Paginación de proyectos inválida');}
-        if(run===businessRun){projects=all;nextProject=cursor;if(cursor)businessError=partialProjectsMessage}
+        if(run===businessRun){projects=all;nextProject=cursor;if(selectedProject&&!all.some(p=>p.id===selectedProject?.id))selectedProject=null;if(cursor)businessError=partialProjectsMessage}
       }catch(e){if(run===businessRun)businessError=(e as Error).message||'No se pudo consultar el registro de colaboración.'}})());
       if(isAdministrator)jobs.push((async()=>{try{const manifest=await query('engineering/manifest');const list=savedProjects(manifest.snapshot);if(run===businessRun)engineeringProjects=list}catch(e){if(run===businessRun)engineeringError=(e as Error).message||'No se pudo consultar ingeniería guardada.'}})());
     }
     if(wantCatalog)jobs.push((async()=>{catalogError='';try{
-      const c=await query('catalog?page=1');if(run===businessRun){products=Array.isArray(c.products)?c.products:[];catalogPage=1;catalogMore=!!c.hasMore;catalogLoaded=true}
+      const c=await query('catalog?'+new URLSearchParams({page:'1',search:search.trim()}));if(run===businessRun){products=Array.isArray(c.products)?c.products:[];catalogPage=1;catalogMore=!!c.hasMore;catalogLoaded=true}
     }catch(e){if(run===businessRun){catalogError=(e as Error).message||'No se pudo consultar el catálogo.';catalogLoaded=false}}})());
     await Promise.all(jobs);if(run===businessRun)businessLoading=false;
   }
@@ -56,6 +56,23 @@
     }catch(e){registrationError=(e as Error&{status?:number}).status===503?'La vinculación empresarial está deshabilitada en el servidor. El expediente de ingeniería sigue intacto.':(e as Error).message||'No se confirmó la vinculación.'}
     finally{registrationBusy=false}
   }
+  async function registerAll(section:string){
+    if(registrationBusy||businessLoading||businessError||engineeringError||nextProject||!isAdministrator||!unregistered.length)return;
+    if(!window.confirm('¿Vincular todos los expedientes guardados pendientes? Se registran sus identificadores, sin compartir datos técnicos, costos ni archivos.'))return;
+    registrationBusy=true;registrationError='';registrationMessage='';
+    let completed=0;
+    try{
+      const current=await query('engineering/manifest');
+      const known=new Set(projects.map(p=>p.id));
+      const pending=savedProjects(current.snapshot).filter(p=>!known.has(p.id));
+      for(const p of pending){
+        await apiRequest('/api/studio/v1/projects',{method:'POST',headers:{Authorization:'Bearer '+token},body:JSON.stringify({id:p.id,name:p.name})});
+        completed++;
+      }
+      registrationMessage=completed+' expedientes vinculados. No se han duplicado proyectos ni compartido archivos.';
+    }catch(e){registrationError=completed+' vinculados antes de detenerse. '+((e as Error).message||'No se pudo completar la vinculación.')}
+    finally{try{await refreshBusiness(section)}finally{registrationBusy=false}}
+  }
   async function load(){
     const run=++generation;busy=true;error='';
     try{
@@ -70,7 +87,7 @@
   async function find(page=1){
     if(!ready||busy||businessLoading)return;
     const run=++generation;busy=true;catalogError='';
-    try{const d=await query('catalog?'+new URLSearchParams({page:String(page),search}));
+    try{const d=await query('catalog?'+new URLSearchParams({page:String(page),search:search.trim()}));
       if(run===generation){products=d.products??[];catalogPage=page;catalogMore=!!d.hasMore;catalogLoaded=true;}
     }catch(e){if(run===generation){catalogError=(e as Error).message||'No se pudo consultar el catálogo.';catalogLoaded=false;}}
     finally{if(run===generation)busy=false;}
@@ -89,8 +106,8 @@
   {#if section!=='catalog'&&businessError}<p role="alert" class="rounded-lg bg-amber-50 p-3 mb-3">{businessError}</p>{/if}
   {#if section!=='catalog'&&engineeringError}<p role="alert" class="rounded-lg bg-amber-50 p-3 mb-3">{engineeringError}</p>{/if}
   {#if isAdministrator&&['team','finance','inventory','backup','publication'].includes(section)}
-   <section class="rounded-xl border bg-white p-4 mb-4 space-y-2"><div class="flex flex-wrap justify-between gap-2"><h3 class="font-bold">Expedientes y vinculación empresarial</h3><button type="button" class="border rounded-lg px-3 py-1 text-sm" disabled={businessLoading} onclick={()=>refreshBusiness(section)}>{businessLoading?'Consultando…':'Actualizar expedientes'}</button></div><p class="text-sm">Ingeniería guardada: {engineeringProjects.length} · Registro empresarial: {projects.length} · Pendientes de vincular: {unregistered.length}</p><p class="text-xs text-slate-600">Los expedientes de ingeniería son la base original. La vinculación registra su mismo ID para asignaciones, almacén y economía; no duplica el proyecto ni comparte archivos o costos privados.</p>
-   {#if unregistered.length&&!businessLoading}<div class="max-h-64 overflow-auto divide-y">{#each unregistered as p (p.id)}<div class="flex flex-wrap justify-between items-center gap-2 py-2"><span class="text-sm">{p.name}</span><button type="button" class="border rounded-lg px-3 py-1 text-sm" disabled={registrationBusy||!!businessError||!!engineeringError||!!nextProject} onclick={()=>registerProject(p,section)}>Vincular expediente</button></div>{/each}</div>{/if}
+   <section class="rounded-xl border bg-white p-4 mb-4 space-y-2"><div class="flex flex-wrap justify-between gap-2"><h3 class="font-bold">Expedientes y vinculación empresarial</h3><button type="button" class="border rounded-lg px-3 py-1 text-sm" disabled={businessLoading||registrationBusy||busy} onclick={()=>refreshBusiness(section)}>{businessLoading?'Consultando…':'Actualizar expedientes'}</button></div><p class="text-sm">Ingeniería guardada: {engineeringProjects.length} · Registro empresarial: {projects.length} · Pendientes de vincular: {unregistered.length}</p><p class="text-xs text-slate-600">Los expedientes de ingeniería son la base original. La vinculación registra su mismo ID para asignaciones, almacén y economía; no duplica el proyecto ni comparte archivos o costos privados. Para almacén y finanzas, vincula además la solicitud comercial real desde sus formularios.</p>
+   {#if unregistered.length&&!businessLoading}<button type="button" class="rounded-lg bg-teal-800 text-white px-3 py-2 text-sm" disabled={registrationBusy||!!businessError||!!engineeringError||!!nextProject} onclick={()=>registerAll(section)}>{registrationBusy?'Vinculando…':'Vincular todos los expedientes pendientes'}</button><div class="max-h-64 overflow-auto divide-y">{#each unregistered as p (p.id)}<div class="flex flex-wrap justify-between items-center gap-2 py-2"><span class="text-sm">{p.name}</span><button type="button" class="border rounded-lg px-3 py-1 text-sm" disabled={registrationBusy||!!businessError||!!engineeringError||!!nextProject} onclick={()=>registerProject(p,section)}>Vincular expediente</button></div>{/each}</div>{/if}
    {#if nextProject}<button type="button" disabled={busy||businessLoading||registrationBusy} onclick={moreProjects} class="text-sm text-teal-800 underline">Cargar más proyectos antes de vincular</button>{/if}
    {#if registrationError}<p role="alert" class="bg-amber-50 p-2 text-sm">{registrationError}</p>{/if}{#if registrationMessage}<p role="status" class="bg-teal-50 p-2 text-sm">{registrationMessage}</p>{/if}
    </section>
@@ -113,7 +130,7 @@
         </form>
         <p class="text-xs text-slate-500">Productos activos publicados por Bonaire. No son la biblioteca técnica ni las existencias físicas. La edición del catálogo corresponde a la administración comercial.</p>
         {#if catalogError}<p role="alert" class="bg-amber-50 p-2 text-sm">{catalogError}</p>{:else if businessLoading}<p role="status" class="text-sm">Consultando catálogo…</p>{/if}
-        {#each products as p (p.id)}<div class="border-t py-3"><p class="font-semibold break-words">{p.name}</p><p class="text-xs text-slate-500">{p.brand||''} {p.model||''} · Existencia: {p.publishedStock??'Sin confirmar'}</p></div>{/each}
+        {#each products as p (p.id)}<div class="border-t py-3"><p class="font-semibold break-words">{p.name}</p><p class="text-xs text-slate-500">{p.brand||''} {p.model||''} · {p.category||'Sin categoría'} · Existencia publicada: {p.publishedStock??'Sin confirmar'}</p>{#if p.specifications}<details class="text-sm mt-2"><summary>Especificaciones técnicas</summary><p class="whitespace-pre-wrap break-words">{p.specifications}</p></details>{/if}<p class="text-xs text-slate-500">{p.stockStatus==='in_stock'?'Disponible publicado':p.stockStatus==='out_of_stock'?'Agotado publicado':p.stockStatus==='on_order'?'Por encargo':'Estado sin confirmar'} · No es una reserva de almacén.</p></div>{/each}
         {#if catalogLoaded&&!products.length&&!catalogError}<p class="text-sm text-slate-500">{search?'No hay productos que coincidan con la búsqueda.':'No hay productos activos publicados en el catálogo de Bonaire.'}</p>{/if}
         <div class="flex gap-3 text-sm"><button type="button" disabled={busy||businessLoading||catalogPage===1} onclick={()=>find(catalogPage-1)} class="text-teal-800 disabled:opacity-40">Anterior</button><span>Página {catalogPage}</span><button type="button" disabled={busy||businessLoading||!catalogMore} onclick={()=>find(catalogPage+1)} class="text-teal-800 disabled:opacity-40">Siguiente</button></div>
       </section>
