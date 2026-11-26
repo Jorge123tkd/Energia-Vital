@@ -18,7 +18,7 @@ jobs:
   browser-qa:
     if: >-
       github.ref == 'refs/heads/feat/cloudflare-customer-accounts-hardening' &&
-      ((github.event_name == 'push' && github.event.before == '1f19f7b2e023b2415a7b777b6adadf7c7af11944') ||
+      ((github.event_name == 'push' && github.event.before == 'a054f2fa16b97f9f8943e34d590fbae4ce7b7b13') ||
        (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'PUBLICAR_PAGES_STUDIO_PRIVADO'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -47,7 +47,7 @@ jobs:
     # Future pushes never deploy automatically; subsequent releases need dispatch.
     if: >-
       github.ref == 'refs/heads/feat/cloudflare-customer-accounts-hardening' &&
-      ((github.event_name == 'push' && github.event.before == '1f19f7b2e023b2415a7b777b6adadf7c7af11944') ||
+      ((github.event_name == 'push' && github.event.before == 'a054f2fa16b97f9f8943e34d590fbae4ce7b7b13') ||
        (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'PUBLICAR_PAGES_STUDIO_PRIVADO'))
     runs-on: windows-latest
     timeout-minutes: 25
@@ -65,6 +65,8 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           if ((git rev-parse HEAD).Trim() -cne $env:GITHUB_SHA) { throw 'La rama cambió; no publicar.' }
+          $manifest=Get-Content apps/web/public/studio-engineering/source-version.json -Raw | ConvertFrom-Json
+          if ($env:GITHUB_EVENT_NAME -eq 'push' -and ($manifest.release -ne '3.9.0-beta.16' -or $manifest.commit -ne 'a7aa3fbeb517b9aca22c003c40392618f65e6327')) { throw 'La autorización única corresponde exclusivamente a Beta 16.' }
           npm ci
           if ($LASTEXITCODE -ne 0) { throw 'npm ci falló' }
           node scripts/tests/pages-only-policy.cjs
@@ -94,7 +96,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          foreach ($asset in @('index.html','bridge.js','app.js','style.css')) {
+          foreach ($asset in @('index.html','bridge.js','app.js','style.css','source-version.json','engine.js','library.js','business-menu.js','updater.js','favicon.svg')) {
             $target=Join-Path $env:RUNNER_TEMP ('published-'+$asset)
             curl.exe --fail --silent --show-error --max-time 30 -H 'Cache-Control: no-cache' -o $target ('https://bnergiv.com/studio-engineering/'+$asset+'?verify='+$env:GITHUB_SHA)
             if ($LASTEXITCODE -ne 0) { throw ('No se pudo verificar '+$asset) }
