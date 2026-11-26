@@ -15,12 +15,39 @@ concurrency:
   group: bonaire-pages-production-only
   cancel-in-progress: false
 jobs:
+  browser-qa:
+    if: >-
+      github.ref == 'refs/heads/feat/cloudflare-customer-accounts-hardening' &&
+      ((github.event_name == 'push' && github.event.before == '1f19f7b2e023b2415a7b777b6adadf7c7af11944') ||
+       (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'PUBLICAR_PAGES_STUDIO_PRIVADO'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Instalar Chromium QA aislado
+        run: |
+          npm install --prefix "$RUNNER_TEMP/evpro-browser" --no-audit --no-fund playwright@1.56.1
+          "$RUNNER_TEMP/evpro-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verificar ingeniería y formularios comerciales antes de publicar
+        run: |
+          npm run dev --workspace=apps/web -- --host 127.0.0.1 > "$RUNNER_TEMP/studio-vite.log" 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for n in $(seq 1 40); do if curl -fsS http://127.0.0.1:5173/tests/fixtures/studio-parity.html >/dev/null; then break; fi; sleep 1; done
+          EV_PLAYWRIGHT_MODULE="$RUNNER_TEMP/evpro-browser/node_modules/playwright/index.mjs" node apps/web/tests/studio-browser-parity.mjs
   pages-only:
-    # A one-time owner-authorized push from the already validated source.
+    needs: browser-qa
+    # One-time owner-authorized release; browser QA must succeed on this exact commit.
     # Future pushes never deploy automatically; subsequent releases need dispatch.
     if: >-
       github.ref == 'refs/heads/feat/cloudflare-customer-accounts-hardening' &&
-      ((github.event_name == 'push' && github.event.before == '7fcdd9630f4fae6715631df71c9c1f9e92d2b1a5') ||
+      ((github.event_name == 'push' && github.event.before == '1f19f7b2e023b2415a7b777b6adadf7c7af11944') ||
        (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'PUBLICAR_PAGES_STUDIO_PRIVADO'))
     runs-on: windows-latest
     timeout-minutes: 25
