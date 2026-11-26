@@ -460,6 +460,7 @@
                  <button type="button" onclick={() => {calendarOpen=true;accountMenu=false;}}
                    class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">🗓️ Calendario del equipo</button>
                 {#if studioUiEnabled}<button type="button" onclick={() => chooseTab('studio')} class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold text-teal-800 hover:bg-teal-50">EV Pro Studio</button>{/if}
+                <a href="/evpro/downloads.html" class="block px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">Descargas EV Pro Studio</a>
                 <a href="/" class="block px-3 py-2.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50">Ver sitio público</a>
                 <button type="button" onclick={()=>{accountMenu=false;void openTelegramLink();}}
                   class="block w-full text-left px-3 py-2.5 rounded-lg text-sm font-semibold text-teal-800 hover:bg-teal-50">Vincular Telegram de equipo</button>

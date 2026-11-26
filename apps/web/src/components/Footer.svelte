@@ -69,7 +69,7 @@
         <h3 class="text-white font-semibold mb-5">Explorar</h3>
         <ul class="space-y-3 text-sm">{#each links as link}
           <li><a href={link.url} target={link.url.startsWith('https://') ? '_blank' : undefined} rel={link.url.startsWith('https://') ? 'noopener noreferrer' : undefined} class="text-slate-400 hover:text-teal-300 transition">{link.label}</a></li>
-        {/each}</ul>
+        {/each}<li><a href="/evpro/downloads.html" class="text-slate-400 hover:text-teal-300 transition">Descargas EV Pro Studio</a></li></ul>
       </div>
       <div>
         <h3 class="text-white font-semibold mb-5">Contacto</h3>
