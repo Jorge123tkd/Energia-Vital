@@ -36,16 +36,16 @@ let browser;
 try{
  browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-sandbox']});
  const page=await browser.newPage({viewport:{width:1440,height:950}});
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')console.log('[Chromium]',m.text())});
  await page.goto('http://127.0.0.1:'+server.address().port);
  const frame=page.frameLocator('#studio');
- await frame.getByText('Panel principal',{exact:true}).waitFor();
- await frame.getByRole('button',{name:'+ Nuevo proyecto'}).click();
+ try{await frame.locator('#nav button').filter({hasText:'Panel principal'}).waitFor({timeout:15000})}catch(e){console.log('QA fixture',await page.evaluate(()=>({reads:window.qa.reads,writes:window.qa.writes,checks:window.qa.checks})));console.log('Renderer body',await frame.locator('body').innerText({timeout:3000}));console.log('Page errors',errors);throw e}
+ await frame.getByRole('button',{name:/Nuevo proyecto/}).first().click();
  await frame.locator('#pickCompany').evaluate(el=>el.value='qa-company');
  await frame.locator('#modalForm button[type=submit]').click();
  await page.waitForFunction(()=>window.qa.snapshot.projects.length===1&&window.qa.writes>0,{timeout:20000});
  assert.equal(await page.evaluate(()=>window.qa.snapshot.projects.length),1);
- await frame.getByRole('button',{name:'Todos los proyectos',exact:false}).click();
+ await frame.getByRole('button',{name:/Todos los proyectos/}).click();await frame.locator('#main').click({position:{x:3,y:3}});
  await page.evaluate(()=>{window.qa.snapshot.projects[0].name='Proyecto recibido desde Windows';window.qa.rev='qa-remote-2'});
  await frame.getByText('Proyecto recibido desde Windows',{exact:false}).first().waitFor({timeout:30000});
  assert.ok(await page.evaluate(()=>window.qa.checks>0&&window.qa.reads>=2));
