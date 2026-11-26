@@ -1,5 +1,5 @@
 <script lang="ts">
- import {apiRequest,ADMIN_TOKEN_KEY} from '../lib/api';
+ import {apiRequest,ADMIN_TOKEN_KEY,isDesktopStudio} from '../lib/api';
  import {savedProjects,previewTechnicalRows,reviewTeamChanges,applyTeamChanges,type TeamChange} from '../lib/studio-technical-share.js';
  let {token,projects,onRefresh}:{token:string;projects:{id:string;name:string}[];onRefresh:()=>Promise<void>}=$props();
  type Project={id:string;name:string};
@@ -8,7 +8,7 @@
  let source=$state<any>(null),available=$state<Project[]>([]),selected=$state(''),rows=$state<Row[]>([]),skipped=$state<Skip[]>([]),checked=$state<string[]>([]),existing=$state<string[]>([]),reviewed=$state(false),busy=$state(false),error=$state(''),message=$state(''),rev=$state('');
  let changes=$state<TeamChange[]>([]),approved=$state<string[]>([]),acceptReview=$state(false);
  function call(path:string,method='GET',body?:unknown){
-  if(!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token)throw Error('Sesión cambiada. Abre Studio nuevamente.');
+  if(!token||(!isDesktopStudio()&&sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token))throw Error('Sesión cambiada. Abre Studio nuevamente.');
   return apiRequest('/api/studio/v1/'+path,{method,headers:{Authorization:'Bearer '+token},cache:'no-store',...(body===undefined?{}:{body:JSON.stringify(body)})});
  }
  async function load(){

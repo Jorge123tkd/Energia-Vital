@@ -2,6 +2,7 @@
  import {onMount,onDestroy,type Snippet} from 'svelte';
  import {apiRequest,ADMIN_TOKEN_KEY} from '../lib/api';
  import {transport} from '../lib/engineering-assets.js';
+ import {STUDIO_RELEASE} from '../lib/studio-release';
  let {token,business,onExit,onLogout,account}:{token:string;business:Snippet<[string]>;onExit:()=>void;onLogout:()=>Promise<void>;account:{email:string;role:string}}=$props();
  let frame:HTMLIFrameElement|undefined=$state(),opened=$state(false),busy=$state(false),error=$state(''),workspaceError=$state('');
  let port:MessagePort|null=null,epoch=0,loads=0,operations=$state(0),firstRead:any=null,connected=false,closePending=$state(false);
@@ -72,7 +73,7 @@
    operations++;workspaceError='';
    try{
     if(!token||sessionStorage.getItem(ADMIN_TOKEN_KEY)!==token)throw Object.assign(new Error('Sesión de Bonaire cambiada. Cierra y abre Studio.'),{status:401});
-    if(data.action==='account'){reply({ok:true,result:{email:account.email,role:account.role,mode:'online',platform:'web'}});return}
+    if(data.action==='account'){reply({ok:true,result:{email:account.email,role:account.role,mode:'online',platform:'web',version:STUDIO_RELEASE}});return}
     const sync=transport(requestFor(current,true));
     let result;
     if(data.action==='read'&&firstRead!==null){result=firstRead;firstRead=null}
@@ -89,7 +90,7 @@
 </script>
 <div class="ev-workspace" aria-label="EV Pro Studio">
  {#if opened}
-  <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html?v=respaldo-20261125-3" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer"></iframe>
+  <iframe bind:this={frame} onload={loaded} title="EV Pro Ingeniería original" src="/studio-engineering/index.html?v=studio-3.9.0-beta.8" sandbox="allow-scripts allow-downloads allow-modals" referrerpolicy="no-referrer"></iframe>
   {#if section!=='engineering'}
     <section class="ev-business" aria-label={names[section]}>
       <header class="ev-business-header"><span>Studio / {names[section]}</span><div class="flex flex-wrap gap-2"><button type="button" class="rounded-lg border px-3 py-2 text-sm" onclick={()=>section='engineering'}>Volver a ingeniería</button><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('exit')}>Volver a Bonaire</button><span class="text-xs">{account.email}</span><button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={operations>0||closePending} onclick={()=>requestClose('logout')}>Cerrar sesión</button></div></header>

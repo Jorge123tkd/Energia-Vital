@@ -16,6 +16,7 @@
   import AdminPage from './AdminPage.svelte';
   import { isAdminPath } from './lib/admin-navigation';
   import ChiefPortal from './ChiefPortal.svelte';
+  import StudioDesktopOperations from './components/StudioDesktopOperations.svelte';
   import { api, customerToken, setCustomerToken, logoutCurrentSession, setCustomerRefreshToken, setAdminRefreshToken, clearAdminSession, ADMIN_TOKEN_KEY, restorePublicBrowserAccess } from './lib/api';
   import { isAssistantOpen, assistantSessionId, assistantMessages } from './lib/store';
 
@@ -38,7 +39,7 @@
   });
   async function restoreSession() {
     // AdminPage restores its own session: never rotate the same cookie twice.
-    if(isAdminPath(window.location.pathname)){checking=false;return;}
+    if(isAdminPath(window.location.pathname)||window.location.pathname==='/studio-desktop-operations'){checking=false;return;}
     const generation=++restoreGeneration;
     checking=true;user=null;
     try {
@@ -123,7 +124,9 @@
   }
 </script>
 
-{#if currentRoute === '/jefe-brigada'}
+{#if currentRoute === '/studio-desktop-operations'}
+  <StudioDesktopOperations />
+{:else if currentRoute === '/jefe-brigada'}
   <ChiefPortal />
 {:else if isAdminPath(currentRoute)}
   <AdminPage />

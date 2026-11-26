@@ -339,7 +339,21 @@ async function renewCustomerAccess(failedToken: string): Promise<string | null> 
   }
   return refreshing;
 }
+type DesktopStudioBridge={account:()=>Promise<{email:string;role:string;version:string}>;request:(path:string,method:string,body?:unknown)=>Promise<{ok:boolean;data?:any;status?:number;error?:string}>;leave:(action:'engineering'|'logout')=>Promise<unknown>};
+export function desktopStudioBridge():DesktopStudioBridge|undefined{
+ if(typeof window==='undefined'||window.location.pathname!=='/studio-desktop-operations')return undefined;
+ return (window as Window&{EVStudioDesktop?:DesktopStudioBridge}).EVStudioDesktop;
+}
+export function isDesktopStudio(){return Boolean(desktopStudioBridge())}
 export async function apiRequest(path: string, options: RequestInit = {}): Promise<any> {
+  const desktop=desktopStudioBridge();
+  if(desktop){
+    if(options.body!=null&&typeof options.body!=='string')throw Error('Formato de solicitud de escritorio inválido');
+    const response=await desktop.request(path,options.method||'GET',options.body==null?undefined:JSON.parse(options.body));
+    if(!response.ok)throw Object.assign(new Error(response.error||'Operación comercial no confirmada'),{status:response.status||0});
+    return response.data;
+  }
+
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const suppliedAuth = headers.has('Authorization');

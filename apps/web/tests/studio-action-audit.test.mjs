@@ -55,7 +55,7 @@ test('Bonaire ships the recorded EV Pro engineering assets without drift',()=>{
  const manifest=JSON.parse(readFileSync(new URL('source-version.json',dir),'utf8'));
  assert.equal(manifest.repository,'Jorge123tkd/EV-Pro-Estudio');
  assert.match(manifest.commit,/^[a-f0-9]{40}$/);
- for(const file of ['app.js','engine.js','library.js','style.css','favicon.svg','updater.js']){
+ for(const file of ['app.js','engine.js','library.js','style.css','favicon.svg','updater.js','business-menu.js']){
   // Git stores canonical LF text; Windows checkouts may use CRLF.
   const bytes=Buffer.from(readFileSync(new URL(file,dir),'utf8').replace(/\r\n/g,'\n'),'utf8');
   const hash=createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');

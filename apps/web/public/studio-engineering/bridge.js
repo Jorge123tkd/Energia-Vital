@@ -40,28 +40,7 @@
   }
   new MutationObserver(decorate).observe(top,{childList:true,subtree:true});decorate();
  }
- function installMenu(){
-  const menu=document.getElementById('nav');if(!menu)return;
-  const items=[['team','♙','Colaboración y permisos','projects'],['catalog','▥','Catálogo comercial','library'],['backup','↧','Copias de secciones compartidas','backups'],['inventory','▦','Almacén y compras'],['finance','＄','Finanzas y compromisos'],['publication','↗','Publicaciones comerciales'],['exit','←','Volver a Bonaire']];
-  const send=section=>{if(port)port.postMessage({type:'studio-navigation',section})};
-  function decorate(){
-   if(!menu.querySelector('.brand')||menu.querySelector('#ev-business-nav'))return;
-   const group=document.createElement('div');group.id='ev-business-nav';
-   const label=document.createElement('div');label.className='navlabel';label.textContent='OPERACIONES BONAIRE';group.append(label);
-   for(const [section,glyph,name,under] of items){
-    const button=document.createElement('button');button.type='button';button.className='navitem';button.dataset.studioSection=section;
-    const icon=document.createElement('span');icon.textContent=glyph;button.append(icon,document.createTextNode(name));
-    button.addEventListener('click',()=>{menu.classList.remove('visible');send(section)});
-    const anchor=under&&Array.from(menu.querySelectorAll('button.navitem')).find(b=>b.getAttribute('onclick')==="nav('"+under+"')");
-    if(anchor){button.style.paddingLeft='27px';button.style.fontSize='12px';anchor.after(button)}
-    else if(!under||section==='team'){group.append(button)}
-   
-   }
-   menu.append(group);
-  }
-  menu.addEventListener('click',e=>{const button=e.target.closest?.('button.navitem');if(button&&!button.dataset.studioSection)send('engineering')},true);
-  new MutationObserver(decorate).observe(menu,{childList:true});decorate();
- }
+ function installMenu(){globalThis.EVBusinessMenu?.install(section=>{if(port)port.postMessage({type:'studio-navigation',section})},{web:true})}
  window.addEventListener('message',receive);
  const signal=()=>{if(!port)parent.postMessage({type:'evpro-engineering-ready-v2'},expectedParentOrigin)};
  signal();readyTimer=setInterval(signal,500);

@@ -246,13 +246,14 @@ test('Studio route is a dedicated app, not a nested commercial admin page',()=>{
  assert.match(admin,/\{#if token && ownId && tab === 'studio' && studioUiEnabled\}[\s\S]*?<StudioEntrance[\s\S]*?\{:else\}[\s\S]*?<header class="sticky/);
  assert.doesNotMatch(frame,/Abrir EV Pro Online|showModal\(/);
  assert.match(frame,/\{@render business\(section\)\}/);
- assert.match(bridge,/OPERACIONES BONAIRE/);
+ const menu=readFileSync(new URL('../public/studio-engineering/business-menu.js',import.meta.url),'utf8');
+ assert.match(menu,/OPERACIONES BONAIRE/);assert.match(bridge,/EVBusinessMenu/);
  assert.match(bridge,/studio-navigation/);
  assert.match(entry,/StudioOperations[\s\S]*initialMode=/);
 });
 
 test('online Studio groups overlapping functions without a second project creation flow',()=>{
- const bridge=readFileSync(new URL('../public/studio-engineering/bridge.js',import.meta.url),'utf8');
+ const bridge=readFileSync(new URL('../public/studio-engineering/business-menu.js',import.meta.url),'utf8');
  const entry=readFileSync(new URL('../src/components/StudioEntrance.svelte',import.meta.url),'utf8');
  const management=readFileSync(new URL('../src/components/StudioManagement.svelte',import.meta.url),'utf8');
  assert.doesNotMatch(bridge,/\['assigned',|\['orders',|\['suppliers',|\['shortages',|\['conflicts',/);
@@ -287,12 +288,12 @@ test('authenticated account is supplied to the top bar independently of the rend
  assert.match(bridge,/logout.textContent='Cerrar sesión'/);
  assert.match(bridge,/\.session-tools:not\(#ev-web-account-fallback\) \.logout-btn/);
  assert.match(bridge,/section:'logout'/);
- assert.match(bridge,/\['exit','←','Volver a Bonaire'\]/);
+ assert.match(readFileSync(new URL('../public/studio-engineering/business-menu.js',import.meta.url),'utf8'),/\['exit','←','Volver a Bonaire'\]/);
  assert.match(frame,/requestClose\(data.section\)/);
  assert.match(frame,/if\(data.pending===false\)\{finishClose\(\);return\}/);
- assert.match(frame,/index\.html\?v=respaldo-20261125-3/);
- assert.match(html,/bridge\.js\?v=respaldo-20261125-3/);
- assert.match(html,/app\.js\?v=respaldo-20261125-3/);
+ assert.match(frame,/index\.html\?v=studio-3.9.0-beta.8/);
+ assert.match(html,/bridge\.js\?v=studio-3.9.0-beta.8/);
+ assert.match(html,/app\.js\?v=studio-3.9.0-beta.8/);
 });
 
 test('web account fallback renders once from trusted parent and sends logout, not back',async()=>{
@@ -360,4 +361,17 @@ test('web uses same explicit confirmation for large backup downloads and restore
  assert.equal(ctx.confirmLargeBackup(48*1024*1024,'importar'),true);
  assert.equal(calls,2);
  assert.ok(source.includes("if(!approveImportedWorkspace(next))return false;state=next;"));
+});
+
+test('desktop operations reuse exactly the authenticated web modules and managed version',()=>{
+ const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+ const app=read('src/App.svelte'),entry=read('src/components/StudioEntrance.svelte'),desktop=read('src/components/StudioDesktopOperations.svelte'),api=read('src/lib/api.ts');
+ assert.match(app,/currentRoute === '\/studio-desktop-operations'/);
+ assert.match(desktop,/<StudioEntrance token="desktop-session" desktopSection=/);
+ assert.match(entry,/\{@render business\(desktopSection\)\}/);
+ assert.match(api,/desktop\.request\(path,options\.method/);
+ assert.match(read('src/components/StudioTechnicalShare.svelte'),/!isDesktopStudio\(\)/);
+ const manifest=JSON.parse(read('public/studio-engineering/source-version.json'));
+ assert.ok(read('src/lib/studio-release.ts').includes(manifest.release));
+ assert.match(read('src/components/StudioEngineeringFrame.svelte'),/version:STUDIO_RELEASE/);
 });

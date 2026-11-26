@@ -6,7 +6,8 @@
   import StudioManagement from './StudioManagement.svelte';
   import StudioTechnicalShare from './StudioTechnicalShare.svelte';
   import StudioProjectReader from './StudioProjectReader.svelte';
-  let {token,onExit,onLogout}: {token:string;onExit:()=>void;onLogout:()=>Promise<void>} = $props();
+  let {token,onExit,onLogout,desktopSection=''}: {token:string;onExit:()=>void;onLogout:()=>Promise<void>;desktopSection?:string} = $props();
+  const names:Record<string,string>={catalog:'Catálogo comercial',team:'Colaboración y permisos',inventory:'Almacén y compras',finance:'Finanzas y compromisos',backup:'Copias de secciones compartidas',publication:'Publicaciones comerciales'};
   let account=$state({email:'',role:'worker'});
   type Project = {id:string;name:string};
   type Product = {id:string;name:string;brand:string|null;model:string|null;publishedStock:number|null};
@@ -87,7 +88,22 @@
     {#key section}<StudioOperations {token} {projects} initialMode={section as 'inventory'|'finance'|'backup'|'publication'} embedded={true} procurementGroup={section==='inventory'}/>{/key}
   {/if}
 {/snippet}
-{#if ready&&isAdministrator}
+{#if desktopSection}
+  <section class="min-h-screen bg-[#f1f6f5] text-[#18323a]">
+    <header class="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-white px-6 py-3">
+      <span class="text-sm text-slate-600">Studio / {names[desktopSection]||'Operaciones Bonaire'}</span>
+      <div class="flex flex-wrap items-center gap-2"><button type="button" class="rounded-lg border px-3 py-2 text-sm" onclick={onExit}>Volver a ingeniería</button><span class="text-xs">{account.email}</span><button type="button" class="rounded-lg border px-3 py-2 text-sm" onclick={onLogout}>Cerrar sesión</button></div>
+    </header>
+    <main class="max-w-[1540px] mx-auto px-6 py-8">
+      <h1 class="text-2xl font-bold mb-5">{names[desktopSection]||'Operaciones Bonaire'}</h1>
+      {#if ready&&isAdministrator&&Object.hasOwn(names,desktopSection)}
+        {@render business(desktopSection)}
+      {:else if error}<p role="alert">{error}</p><button type="button" class="border rounded-lg px-3 py-2" onclick={load}>Reintentar conexión</button>
+      {:else if ready}<p role="alert">Acceso de administrador requerido.</p>
+      {:else}<p role="status">Verificando sesión de Bonaire…</p>{/if}
+    </main>
+  </section>
+{:else if ready&&isAdministrator}
   <StudioEngineeringFrame {token} {business} {onExit} {onLogout} {account}/>
 {:else if ready}
   <main class="min-h-screen bg-slate-50 p-5 space-y-4"><header class="flex justify-between items-center"><h1 class="text-2xl font-bold">EV Pro Studio · Proyectos asignados</h1><div class="flex flex-wrap items-center gap-3"><span class="text-sm">{account.email}</span><button type="button" class="border rounded-lg px-3 py-2" onclick={onExit}>Volver a Bonaire</button><button type="button" class="border rounded-lg px-3 py-2" onclick={onLogout}>Cerrar sesión</button></div></header>{@render business('assigned')}</main>
