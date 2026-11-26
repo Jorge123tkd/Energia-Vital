@@ -254,6 +254,8 @@
     ] : []),
     ...(staffRole === 'admin' ? [{ id: 'notifications', title: 'Notificaciones a clientes' }] : [])
   ]);
+  const menuGroups=[{title:'Operaciones',ids:['requests','appointments','brigades','customers']},{title:'Contenido y ventas',ids:['products','services','gallery','site']},{title:'Gestión',ids:['assistant-usage','staff','notifications']}];
+  let visibleMenuGroups=$derived(menuGroups.map(g=>({...g,items:menuItems.filter(item=>g.ids.includes(item.id))})).filter(g=>g.items.length));
   function chooseTab(next: AdminTab,mode:'push'|'replace'|'none'='push') {
     next=safeAdminTab(adminPaths[next],staffRole);
     tab = next;
@@ -438,19 +440,7 @@
         </span>
       </button>
 
-      {#if token}
-        <nav aria-label="Secciones del panel" class="hidden xl:flex flex-1 min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap py-1">
-          {#each menuItems as item (item.id)}
-            <button type="button" onclick={() => chooseTab(item.id as typeof tab)}
-              aria-current={tab === item.id ? 'page' : undefined}
-              class="shrink-0 rounded-lg px-2.5 py-2 text-xs 2xl:text-sm font-semibold transition-colors {tab === item.id ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-teal-50 hover:text-teal-900'}">{item.title}
-              {#if item.id==='requests' && pendingRequests>0}<span aria-label={pendingRequests+' solicitudes pendientes'}
-                class="ml-1.5 inline-flex min-w-5 justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-extrabold text-white">{pendingRequests>99?'99+':pendingRequests}</span>{/if}</button>
-          {/each}
-        </nav>
-      {:else}
-        <span class="flex-1"></span>
-      {/if}
+      <span class="flex-1"></span>
 
       <div class="flex items-center justify-end gap-2 ml-auto shrink-0">
         {#if token}
@@ -491,14 +481,17 @@
     </div>
     {#if token && mobileMenu}
       <nav id="admin-mobile-menu" aria-label="Menú móvil de administración" class="xl:hidden border-t border-slate-200 bg-white px-3 sm:px-5 py-3 shadow-md max-h-[75vh] overflow-y-auto">
+        {#each visibleMenuGroups as group (group.title)}
+        <p class="mt-3 mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{group.title}</p>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-          {#each menuItems as item (item.id)}
+          {#each group.items as item (item.id)}
             <button type="button" onclick={() => chooseTab(item.id as typeof tab)}
               aria-current={tab === item.id ? 'page' : undefined}
               class="text-left rounded-xl px-3 py-3 text-sm font-semibold {tab === item.id ? 'bg-teal-700 text-white' : 'bg-slate-50 text-slate-700 hover:bg-teal-50'}">{item.title}
               {#if item.id==='requests' && pendingRequests>0}<span class="ml-1.5 inline-flex min-w-5 justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{pendingRequests>99?'99+':pendingRequests}</span>{/if}</button>
           {/each}
         </div>
+        {/each}
         <div class="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2">
           <a href="/perfil" class="rounded-xl border border-slate-200 px-3 py-3 text-sm font-semibold text-slate-700 text-center">Mi perfil</a>
            <button type="button" onclick={() => {calendarOpen=true;mobileMenu=false;}}
@@ -532,6 +525,26 @@
       <button disabled={loading} class="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white py-3.5 px-5 rounded-xl font-bold">{loading ? 'Entrando…' : 'Entrar en administración'}</button>
     </form>
   {:else}
+    <div class="grid grid-cols-1 xl:grid-cols-[232px_minmax(0,1fr)] gap-5 xl:gap-7 items-start">
+      <aside class="hidden xl:block sticky top-24 self-start max-h-[calc(100dvh-7rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3" aria-label="Navegación administrativa">
+        {#if studioUiEnabled}
+          <button type="button" onclick={()=>chooseTab('studio')} class="w-full text-left rounded-xl bg-teal-800 px-3 py-3 text-white mb-3 hover:bg-teal-900"><span class="block text-sm font-bold">EV Pro Studio</span><span class="block text-xs text-teal-100">Ingeniería y operaciones</span></button>
+        {/if}
+        <nav aria-label="Secciones del panel" class="space-y-4">
+          {#each visibleMenuGroups as group (group.title)}
+            <div class="space-y-1">
+              <p class="px-3 pt-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">{group.title}</p>
+              {#each group.items as item (item.id)}
+                <button type="button" onclick={()=>chooseTab(item.id as AdminTab)} aria-current={tab===item.id?'page':undefined} class="w-full text-left rounded-lg px-3 py-2.5 text-sm font-semibold flex items-center justify-between gap-2 {tab===item.id?'bg-teal-50 text-teal-900 ring-1 ring-inset ring-teal-200':'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}">
+                  <span>{item.title}</span>
+                  {#if item.id==='requests'&&pendingRequests>0}<span class="shrink-0 rounded-full bg-red-50 text-red-700 px-2 py-0.5 text-xs font-bold" aria-label={pendingRequests+' solicitudes pendientes'}>{pendingRequests>99?'99+':pendingRequests}</span>{/if}
+                </button>
+              {/each}
+            </div>
+          {/each}
+        </nav>
+      </aside>
+      <div class="min-w-0">
     <div class="mb-5 flex items-center gap-3 justify-between">
       <div>
         <p class="text-xs font-extrabold uppercase tracking-wider text-teal-700">Centro de operaciones</p>
@@ -542,7 +555,7 @@
         {syncBusy ? 'Sincronizando…' : '↻ Sincronizar'}
       </button>
     </div>
-    <section class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6" aria-label="Resumen de operaciones">
+    {#if tab==='requests'}<section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" aria-label="Resumen de operaciones">
       {#each [{label:'Solicitudes pendientes',count:loadedSections.requests?pendingRequests:'—',id:'requests'}, {label:'Citas',count:loadedSections.appointments?appointmentTotal:'—',id:'appointments'},
         {label:'Clientes',count:customerTotal??'—',id:'customers'}, {label:'Productos',count:loadedSections.products?products.length:'—',id:'products'}] as item}
         <button class="rounded-2xl text-left bg-white border border-slate-200 shadow-sm p-4 hover:border-teal-500" onclick={() => chooseTab(item.id as AdminTab)}>
@@ -550,8 +563,8 @@
           <span class="block text-3xl font-bold mt-2 text-slate-900">{item.count}</span>
         </button>
       {/each}
-    </section>
-    {#if error}<p role="alert" class="text-red-700 mb-4">{error}</p>{/if}
+    </section>{/if}
+    {#if error}<p role="alert" class="rounded-xl border border-red-200 bg-red-50 text-red-800 p-3 mb-4 text-sm">{error}</p>{/if}
     {#if message}<p role="status" class="text-green-700 mb-4">{message}</p>{/if}
     {#if sectionLoading}<p role="status" class="mb-4 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">Cargando la sección seleccionada…</p>{/if}
     {#if tab === 'customers'}
@@ -758,6 +771,8 @@
     {:else if tab === 'notifications' && staffRole === 'admin'}
       <AdminNotifications {token} canSend={true} />
     {/if}
+      </div>
+    </div>
   {/if}
 </div>
 

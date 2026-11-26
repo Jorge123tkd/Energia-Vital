@@ -40,7 +40,7 @@
     e.preventDefault();if(replyBusy||!currentRequestId||replyText.trim().length<3)return;
     if(!replyId)replyId='reply-'+crypto.randomUUID();replyBusy=true;replyError='';replySuccess='';
     try{await apiRequest('/api/dossiers/requests/'+encodeURIComponent(currentRequestId)+'/reply',{method:'POST',headers:{Authorization:'Bearer '+token},body:JSON.stringify({id:replyId,message:replyText.trim()})});replyText='';replyId='';replySuccess='Respuesta guardada. El cliente puede leerla en su cuenta y en Telegram.';}
-    catch(e){replyError=(e as Error).message||'Resultado no confirmado; reintenta la misma respuesta.';}
+    catch(e){const failure=e as Error&{status?:number};if([400,401,403,404,413,422].includes(failure.status||0))replyId='';replyError=failure.message||'Resultado no confirmado; reintenta la misma respuesta.';}
     finally{replyBusy=false;}
   }
   const labels:Record<string,string>={call:'Llamada',whatsapp:'WhatsApp',
