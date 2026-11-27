@@ -74,3 +74,8 @@ assert.equal(recovered.draft.need,'respaldo solar');assert.equal(recovered.draft
 assert.equal(recoverLegacyCommercialIntake(old,'confirmar solicitud comercial','recover-2').submit,undefined);
 assert.equal(recoverLegacyCommercialIntake([{role:'assistant',content:'Atención empresarial · Bonaire'}],'Privada','no-anchor'),null);
 console.log('PASS legacy conversation recovery without replaying consent');
+
+d=null;say('Empresas y negocios');say('Necesitamos respaldo solar y somos de Boyeros');
+say('Privada. Somos una MIPYME llamada Empresa Ejemplo. Contacto: María. Pagamos por transferencia en CUP y tenemos 5000 USD de presupuesto.');
+assert.equal(d.company,'Empresa Ejemplo');assert.equal(d.contact,'María');assert.equal(d.currency,'CUP');assert.equal(d.payment,'transferencia');assert.equal(d.budget,'5000');assert.equal(d.stage,'review');
+console.log('PASS free-form multi-field business answer in a single message');

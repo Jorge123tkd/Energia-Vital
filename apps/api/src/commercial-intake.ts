@@ -47,9 +47,9 @@ function naturalKind(text:string):string|undefined{
  return undefined;
 }
 function labelled(text:string,key:string):string|undefined{
- const re=new RegExp('(?:^|[;,\\n]|\\b(?:y|la|el)\\s+)\\s*(?:'+key+')\\s*(?:es\\s+|:|=)\\s*([^;\\n]+)','i');
+ const re=new RegExp('(?:^|[;,\\n]|\\.\\s+|\\b(?:y|la|el)\\s+)\\s*(?:'+key+')\\s*(?:es\\s+|:|=)\\s*([^;\\n]+)','i');
  const m=re.exec(text);
- return m?.[1].split(/,\s*(?:(?:la |el )?(?:persona|contacto|ubicaci[oó]n|municipio|necesidad|presupuesto|forma de pago|moneda|tipo de cliente|entidad|empresa)\b)/i)[0].trim();
+ return m?.[1].split(/(?:,\s*|\.\s+)(?:(?:la |el )?(?:persona|contacto|ubicaci[oó]n|municipio|necesidad|presupuesto|forma de pago|moneda|tipo de cliente|entidad|empresa|pagamos|pago|tenemos|disponemos|somos)\b)/i)[0].trim().replace(/\.$/,'');
 }
 export function resumeCommercialIntake(d:CommercialDraft):string{
  if(d.stage==='submitted')return 'Solicitud registrada. Referencia: '+d.id+'. Consulta «mis solicitudes».';
@@ -70,6 +70,7 @@ function advanceNatural(text:string,prior:CommercialDraft|null,id:string):Commer
  const explicitKind=naturalKind(text);
  if(explicitKind&&(d.kind===undefined||d.stage==='kind')){d.kind=explicitKind;matched=true;}
  assign('company',labelled(text,'(?:corregir\\s+)?(?:nombre(?: de la entidad)?|entidad|empresa)'),120,3);
+ if(!d.company){const named=/(?:empresa|mipyme|mi pyme|negocio|cooperativa|entidad|fabricante)\s+(?:llamad[ao]|denominad[ao])\s+([^;,\n]+?)(?=\.\s|[;,\n]|$)/i.exec(text);if(named)assign('company',named[1].trim(),120,3);}
  assign('contact',labelled(text,'(?:persona de contacto|contacto|representante)'),120);
  assign('location',labelled(text,'(?:corregir\\s+)?(?:ubicaci[oó]n|municipio|provincia|direcci[oó]n)'),250);
  assign('need',labelled(text,'(?:corregir\\s+)?(?:necesidad|servicio|proyecto)'),1800,3);
@@ -88,7 +89,7 @@ function advanceNatural(text:string,prior:CommercialDraft|null,id:string):Commer
  if(value){const amount=value.replace(/\s*USD$/i,'').trim(),parsed=parseRequestIntake({available_budget_usd:optional(amount)?'':amount,customer_type:d.kind});if(!parsed.error){d.budget=optional(amount)?'':amount;matched=true;}}
  // Un importe explícitamente en USD se entiende aunque no lleve etiqueta.
  if(d.budget===undefined&&!value){
-  const plain=/^(\d{1,9}(?:[.,]\d{1,2})?)\s*USD$/i.exec(text);
+  const plain=/^(\d{1,9}(?:[.,]\d{1,2})?)\s*USD$/i.exec(text)||/\b(?:tenemos|dispongo de|disponemos de|cuento con|contamos con)\s+(\d{1,9}(?:[.,]\d{1,2})?)\s*USD\b/i.exec(text);
   if(plain){d.budget=plain[1];matched=true;}
  }
  if(!matched&&d.stage!=='review'){
