@@ -4,7 +4,7 @@ const {validateSurvey,surveyQuote}=m.exports;
 const material={name:'Panel solar',kind:'material',unit:'unit',required_milli:8000,client_milli:5000,warehouse_milli:2000,sale_cents:10000};
 const labor={name:'Montaje de panel',kind:'labor',unit:'unit',required_milli:8000,client_milli:0,warehouse_milli:0,sale_cents:1500};
 const input={mode:'partial',site:'Boyeros',notes:'Visita',lines:[material,labor]};
-const s=validateSurvey(input);assert.ok(s);const q=surveyQuote(s,1);assert.equal(q.items[0].quantity,3);assert.equal(q.items[1].quantity,8);assert.match(q.stockNotes,/proveedor 1/);assert.equal(q.canImport,true);
+const s=validateSurvey(input);assert.ok(s);const q=surveyQuote(s,1);assert.equal(q.items[0].quantity,3);assert.equal(q.items[1].quantity,8);assert.match(q.planningNotes,/proveedor 1/);assert.doesNotMatch(q.stockNotes,/proveedor|almacén/i);assert.equal(q.canImport,true);
 assert.equal(validateSurvey({...input,mode:'turnkey'}),null);
 assert.equal(validateSurvey({...input,mode:'installation'}),null);
 assert.equal(validateSurvey({...input,lines:[{...material,warehouse_milli:4000}]}),null);

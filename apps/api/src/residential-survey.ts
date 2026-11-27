@@ -25,6 +25,7 @@ export function surveyQuote(s:Survey,revision:number){
   if(l.kind==='material'&&billed)planning.push(l.name+': almacén previsto '+l.warehouse_milli/1000+'; proveedor '+(billed-l.warehouse_milli)/1000+' '+l.unit);
   if(billed){if(l.sale_cents===null)missing.push(l.name);else items.push({description:(l.name+' ('+l.unit+')').slice(0,180),quantity:billed/1000,unit_price_usd_cents:l.sale_cents});}
  }
- const stockNotes='Aportado por cliente: '+(provided.join('; ')||'Nada registrado')+'. Suministro previsto: '+(planning.join('; ')||'No aplica')+'. Sin reserva de almacén.';
- return {revision,items,missing,stockNotes,canImport:missing.length===0&&items.length>0&&stockNotes.length<=600};
+ const stockNotes='Aportado por cliente: '+(provided.join('; ')||'Nada registrado')+'. Suministro de Bonaire según partidas cotizadas; disponibilidad por confirmar.';
+ const planningNotes='Plan interno: '+(planning.join('; ')||'No aplica')+'. Sin reserva de almacén.';
+ return {revision,items,missing,stockNotes,planningNotes,canImport:missing.length===0&&items.length>0&&stockNotes.length<=600};
 }

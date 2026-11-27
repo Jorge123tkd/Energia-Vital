@@ -4,7 +4,7 @@
  import QuoteManager from './QuoteManager.svelte';
  let {token,requestId='',projectId='',canReview=false}:{token:string;requestId?:string;projectId?:string;canReview?:boolean}=$props();
  type Line={key:number;name:string;kind:'material'|'labor';unit:string;required:number;client:number;warehouse:number;price:string};
- type Proposal={revision:number;items:{description:string;quantity:number;unit_price_usd_cents:number}[];missing:string[];stockNotes:string;canImport:boolean};
+ type Proposal={revision:number;items:{description:string;quantity:number;unit_price_usd_cents:number}[];missing:string[];stockNotes:string;planningNotes:string;canImport:boolean};
  let id=$state(untrack(()=>requestId)),revision=$state(0),mode=$state('partial'),site=$state(''),notes=$state(''),lines=$state<Line[]>([]),proposal=$state<Proposal|null>(null),error=$state(''),notice=$state(''),busy=$state(false),ready=$state(false),dirty=$state(false);
  let lookup=$state<any[]>([]),search=$state(''),source=$state('products'),chosen=$state(''),next=$state<string|null>(null),finding=$state(false),serial=0;
  const base='/api/quotes/residential';

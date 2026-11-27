@@ -12,7 +12,7 @@
     internal_notes:string|null;status:string;created_by_email:string;
     issued_at?:string|null;reviewed_by_email?:string|null;review_reason?:string|null;created_at:string};
   type ItemEdit={key:number;description:string;quantity:number;price_usd:number};
-  let {token,requestId,canReview=false,residentialProposal=null}:{token:string;requestId:string;canReview?:boolean;residentialProposal?:{revision:number;items:{description:string;quantity:number;unit_price_usd_cents:number}[];stockNotes:string;canImport:boolean}|null}=$props();
+  let {token,requestId,canReview=false,residentialProposal=null}:{token:string;requestId:string;canReview?:boolean;residentialProposal?:{revision:number;items:{description:string;quantity:number;unit_price_usd_cents:number}[];stockNotes:string;planningNotes:string;canImport:boolean}|null}=$props();
   let versions:Version[]=$state([]),loading=$state(false),busy=$state(false),
     editorOpen=$state(false),error=$state(''),success=$state(''),truncated=$state(false);
   let title=$state(''),items:ItemEdit[]=$state([]),validUntil=$state('');
@@ -82,7 +82,7 @@
     items=p.items.map(i=>({key:++nextKey,description:i.description,quantity:i.quantity,price_usd:i.unit_price_usd_cents/100}));
     stockNotes=p.stockNotes;title='Propuesta residencial';
     taxesUsd=0;freightUsd=0;discountUsd=0;
-    internalNotes=['Origen: levantamiento residencial revisión '+p.revision+'. Revisa impuestos, transporte y descuentos.',internalNotes].filter(Boolean).join('\n').slice(0,1000);
+    internalNotes=['Origen: levantamiento residencial revisión '+p.revision+'. Revisa impuestos, transporte y descuentos.',p.planningNotes,internalNotes].filter(Boolean).join('\n').slice(0,1000);
   }
   async function saveDraft(e:SubmitEvent){
     e.preventDefault();
