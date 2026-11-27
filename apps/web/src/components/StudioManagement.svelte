@@ -25,7 +25,7 @@
  let targetMember=$derived(members.find(x=>x.user_id===target));
  let targetStaff=$derived(staff.find(x=>x.id===target));
  let assignable=$derived(staffLoaded&&!truncated&&targetMember?.role==='worker'&&Number(targetMember.active)===1);
- function chooseTarget(id:string){target=id;studioRole=members.find(x=>x.user_id===id)?.role==='admin'?'admin':'worker'}
+ function chooseTarget(id:string){target=id;studioRole=staff.find(x=>x.id===id)?.role==='admin'?'admin':'worker'}
  async function loadTeam(){
   staffLoaded=false;staff=[];members=[];truncated=false;
   const [a,b]=await Promise.all([call('/api/admin/users'),collect('/api/studio/v1/admin/members','members')]);
@@ -40,7 +40,8 @@
  async function refresh(){await action(async()=>{await loadTeam();await loadAssignments();})}
  async function member(active:boolean){await action(async()=>{
   if(!target||!staffLoaded||truncated)throw Error('Selecciona una cuenta existente y consulta primero todos los permisos.');
-  if(active&&studioRole==='admin'&&targetStaff?.role!=='admin')throw Error('Solo una cuenta administradora de Bonaire puede administrar Studio.');
+  if(!targetStaff)throw Error('La cuenta central no está activa.');
+  studioRole=targetStaff.role==='admin'?'admin':'worker';
   await call('/api/studio/v1/admin/members/'+encodeURIComponent(target),'PUT',{role:studioRole,active});message=active?'Autorización registrada.':'Acceso desactivado; la cuenta central permanece.';await loadTeam();
  })}
  async function assign(add:boolean){await action(async()=>{
@@ -59,16 +60,16 @@
  })}
 </script>
 <section class="rounded-2xl border bg-white p-4 sm:p-6 space-y-4" aria-label="Administración de proyectos y personal">
- <div><h3 class="text-xl font-extrabold">Personal y asignaciones</h3><p class="text-sm text-slate-500">Autoriza exclusivamente cuentas existentes de Bonaire. No se crean contraseñas ni usuarios nuevos.</p></div>
+ <div><h3 class="text-xl font-extrabold">Personal y asignaciones</h3><p class="text-sm text-slate-500">Usa las cuentas activas de Bonaire. Administración conserva su rol central; los moderadores acceden a los proyectos asignados. No se crean otras contraseñas.</p></div>
  <button type="button" class="rounded-lg border px-3 py-2 text-sm" disabled={busy} onclick={refresh}>Consultar personal y asignaciones</button>
  {#if problem}<p role="alert" class="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{problem}</p>{/if}
  {#if message}<p role="status" class="rounded-lg bg-teal-50 p-3 text-sm text-teal-900">{message}</p>{/if}
  {#if truncated}<p class="text-xs text-slate-500">Hay más registros; esta primera vista no representa el listado completo.</p>{/if}
- <p class="text-sm text-slate-500">Crea expedientes únicamente en Proyectos. Primero vincula el expediente, después autoriza la cuenta y asigna el trabajador. Comparte tareas y materiales desde la pestaña correspondiente; se conserva el identificador original.</p>
+ <p class="text-sm text-slate-500">Crea expedientes únicamente en Proyectos. Vincula el expediente y asigna al moderador. Si aún no ha iniciado sesión, puedes registrar su permiso con Autorizar. Las revocaciones explícitas requieren reactivación. Comparte tareas y materiales desde la pestaña correspondiente; se conserva el identificador original.</p>
  <div class="grid gap-3 md:grid-cols-2">
   <label class="text-sm font-semibold">Proyecto<select class="mt-1 block w-full rounded-lg border p-2" bind:value={project} disabled={busy} onchange={()=>void action(loadAssignments)}><option value="">Seleccionar</option>{#each projects as p}<option value={p.id}>{p.name}</option>{/each}</select></label>
   <label class="text-sm font-semibold">Cuenta central<select class="mt-1 block w-full rounded-lg border p-2" value={target} onchange={e=>chooseTarget(e.currentTarget.value)} disabled={busy||!staffLoaded}><option value="">Seleccionar</option>{#each staff as v}<option value={v.id}>{v.email}</option>{/each}</select></label>
-  <label class="text-sm font-semibold">Rol Studio<select bind:value={studioRole} class="mt-1 block w-full rounded-lg border p-2"><option value="worker">Trabajador</option><option value="admin" disabled={targetStaff?.role!=='admin'}>Administrador</option></select></label>
+  <div class="text-sm font-semibold">Rol según Bonaire<p class="mt-1 rounded-lg border p-2 font-normal">{targetStaff?targetStaff.role==='admin'?'Administrador':'Moderador / trabajador':'Selecciona una cuenta'}</p></div>
   <div class="flex gap-2 flex-wrap items-end"><button type="button" disabled={busy||!target||!staffLoaded||truncated} onclick={()=>member(true)} class="rounded-lg border px-3 py-2 text-sm">Autorizar</button><button type="button" disabled={busy||!target||!targetMember||truncated} onclick={()=>member(false)} class="rounded-lg border px-3 py-2 text-sm">Desactivar acceso</button></div>
  </div>
  {#if target}<p class="text-sm">Membresía: {members.find(x=>x.user_id===target)?.role||'No figura en esta página'} · {members.find(x=>x.user_id===target)?.active?'Activa':'Sin confirmar'}</p>{/if}
