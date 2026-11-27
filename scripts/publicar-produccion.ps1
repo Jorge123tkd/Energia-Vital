@@ -80,6 +80,8 @@ try {
   $health=Invoke-RestMethod -Uri "$apiUrl/health" -Method Get -TimeoutSec 20
   if($health.status -ne 'ok'){throw 'Health no confirmó status ok.'}
   Write-Host 'Worker actualizado y /health OK.' -ForegroundColor Green
+  node (Join-Path $root 'scripts/tests/production-worker-gates.cjs')
+  if($LASTEXITCODE -ne 0){throw 'Las rutas de entrega protegidas o los gates de almacen/finanzas fallaron.'}
 } catch {
   throw "Worker se publicó pero health falló. NO publicar Pages: $($_.Exception.Message)"
 }

@@ -63,12 +63,12 @@ async function main(){
   return
  }
  if((op==='--crear'||op==='--crear-28')&&process.argv.length===5){
-  const expected=op==='--crear-28'?28:24
+  const expectedMigrations=op==='--crear-28'?28:24
   const source=target(arg1,'.sql'),dest=target(arg2,'.evbackup')
   check(!existsSync(dest),'No sobrescribir la copia cifrada')
   check(statSync(dirname(dest)).isDirectory(),'Directorio inexistente')
   const sql=readFileSync(source)
-  checkRestoration(sql,expected)
+  checkRestoration(sql,expectedMigrations)
   const p=await prompt('Frase de respaldo (16+ caracteres, oculta): ')
   validPass(p);check(p===await prompt('Repita la frase (oculta): '),'Frases distintas')
   const expected=createHash('sha256').update(sql).digest(),encrypted=seal(sql,p)
@@ -79,19 +79,19 @@ async function main(){
    fsyncSync(fd);closeSync(fd);fd=undefined
    const restored=unseal(readFileSync(dest),p)
    check(timingSafeEqual(expected,createHash('sha256').update(restored).digest()),'Verificacion hash fallida')
-   checkRestoration(restored,expected)
+   checkRestoration(restored,expectedMigrations)
   }catch(e){if(fd!==undefined)closeSync(fd);if(created)unlinkSync(dest);throw e}
-  console.log('[OK] D1 '+expected+'/'+expected+' restaurable en memoria, cifrado AES-256-GCM autenticado.')
+  console.log('[OK] D1 '+expectedMigrations+'/'+expectedMigrations+' restaurable en memoria, cifrado AES-256-GCM autenticado.')
   console.log('[OK] SHA256 copia cifrada: '+createHash('sha256').update(readFileSync(dest)).digest('hex'))
   console.log('[PENDIENTE] Copiar fuera de Cloudflare y SSD y verificar archivo recuperado antes de migrar.')
   return
  }
  if((op==='--verificar'||op==='--verificar-28')&&process.argv.length===4){
-  const expected=op==='--verificar-28'?28:24
+  const expectedMigrations=op==='--verificar-28'?28:24
   const blob=readFileSync(target(arg1,'.evbackup'))
   const p=await prompt('Frase de respaldo (oculta): ')
-  checkRestoration(unseal(blob,p),expected)
-  console.log('[OK] Copia restaurada en memoria; '+expected+'/'+expected+' y hash del archivo cifrado:')
+  checkRestoration(unseal(blob,p),expectedMigrations)
+  console.log('[OK] Copia restaurada en memoria; '+expectedMigrations+'/'+expectedMigrations+' y hash del archivo cifrado:')
   console.log(createHash('sha256').update(blob).digest('hex'))
   return
  }
