@@ -9,7 +9,7 @@ function load(file,fakeRequire){
 }
 const auth={currentTelegramCustomer:async()=>null};
 const docs=load('../src/telegram-customer-documents.ts',name=>{
- if(name==='../telegram-customer-auth')return auth;
+ if(name==='./telegram-customer-auth')return auth;
  if(name==='./request-documents')return {boundedDocument:()=>null,saveRequestDocument:()=>false,listRequestDocuments:()=>[],ownedDocument:()=>null,maxDocumentBytes:8*1024*1024,documentFormat:()=>null};
  throw Error('Unexpected dependency '+name);
 });
