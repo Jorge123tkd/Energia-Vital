@@ -24,7 +24,7 @@
  {#if error}<p role="alert" class="bg-amber-50 p-3 rounded">{error}</p>{/if}
  {#if notice}<p role="status" class="bg-teal-50 p-3 rounded">{notice}</p>{/if}
  {#if editing}<form onsubmit={save} class="grid gap-3 md:grid-cols-2 border rounded-xl p-3">
- <label>Código único<input required pattern="[a-z0-9_-]{3,80}" readonly={revision>0} bind:value={code}/></label>
+ <label>Código único<input required pattern={String.raw`[a-z0-9_\-]{3,80}`} minlength="3" maxlength="80" readonly={revision>0} bind:value={code}/></label>
  <label>Nombre<input required minlength="3" maxlength="150" bind:value={name}/></label>
  <label>Categoría<select bind:value={category}>{#each cats as c}<option value={c[0]}>{c[1]}</option>{/each}</select></label>
  <label>Unidad<select bind:value={unit}>{#each units as u}<option value={u[0]}>{u[1]}</option>{/each}</select></label>
