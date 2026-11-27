@@ -31,7 +31,7 @@ const audit=(db:Env['DB'],actor:string,action:string,id:string,details:Record<st
       guard?.status??null,guard?.status??null,guard?.updated_at??null);
 
 function sqlConflict(error:unknown){
-  return /constraint|la brigada tiene ocupaci|autoriza|UNIQUE/i.test(
+  return /constraint|la brigada tiene ocupaci|autoriza|UNIQUE|service_work_assignment/i.test(
     error instanceof Error?error.message:String(error));
 }
 
@@ -88,11 +88,14 @@ brigadeWorkRoutes.get('/pending',requireAdminAuth,async c=>{
 brigadeWorkRoutes.post('/',async c=>{
   const body=await c.req.json().catch(()=>null);
   if(!isObject(body)||Object.keys(body).some(x=>![
-    'brigade_id','request_id','work_date','estimated_minutes','busy_acknowledged'
+    'brigade_id','request_id','work_date','estimated_minutes','busy_acknowledged','work_order_quote_id'
   ].includes(x)))return c.json({error:'Datos de asignación inválidos.'},400);
   const brigadeId=body.brigade_id,requestId=body.request_id,date=body.work_date;
   const duration=body.estimated_minutes===undefined?480:body.estimated_minutes;
   const acknowledged=body.busy_acknowledged===true;
+  const order=body.work_order_quote_id;
+  if(order!==undefined&&(typeof order!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(order)))return c.json({error:'Orden inválida.'},400);
+  if(order!==undefined&&!await c.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='service_work_assignments'").first())return c.json({error:'Órdenes pendientes de habilitación.'},503);
   if(typeof brigadeId!=='string'||brigadeId.length<4||brigadeId.length>96||
      typeof requestId!=='string'||requestId.length<4||requestId.length>96||
      !validCubanWorkDate(date)||date<cubaToday()||
@@ -117,8 +120,9 @@ brigadeWorkRoutes.post('/',async c=>{
         requestId,brigadeId,acknowledged?1:0,date),
       audit(c.env.DB,actor,'brigade_work_requested',id,{
         brigade_id:brigadeId,request_id:requestId,work_date:date,estimated_minutes:duration,
-        busy_acknowledged:acknowledged
-      })
+        busy_acknowledged:acknowledged,work_order_quote_id:order??null
+      }),
+      ...(typeof order==='string'?[c.env.DB.prepare('INSERT INTO service_work_assignments(work_id,quote_id) SELECT id,? FROM brigade_work WHERE id=?').bind(order,id)]:[])
     ]);
     if(!results[0]?.meta?.changes){
       return c.json({error:'Brigada no disponible o solicitud inexistente/cerrada. Si hay ocupación con una o dos brigadas, el gestor debe confirmarla.'},409);

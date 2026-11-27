@@ -3,7 +3,9 @@ import type {Env} from '../types';
 import {requireAdminAuth} from '../middleware';
 import {cubaToday,validCubanWorkDate} from '../brigade-policy';
 import {documentFormat,maxDocumentBytes} from '../request-documents';
+import {executionRoutes} from './execution';
 export const contractRoutes=new Hono<{Bindings:Env;Variables:{user?:any}}>();
+contractRoutes.route('/execution',executionRoutes);
 contractRoutes.use('*',requireAdminAuth);
 contractRoutes.use('*',async(c,next)=>{
  c.header('Cache-Control','private, no-store');
