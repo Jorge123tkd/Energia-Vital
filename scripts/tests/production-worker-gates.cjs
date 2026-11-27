@@ -9,7 +9,6 @@ const worker = 'https://energia-vital-api.astrustrus.workers.dev';
 const config = readFileSync(resolve(root, 'apps/api/wrangler.toml'), 'utf8');
 const warehouseSource = readFileSync(resolve(root, 'apps/api/src/routes/warehouse.ts'), 'utf8');
 const financeSource = readFileSync(resolve(root, 'apps/api/src/routes/business-finance.ts'), 'utf8');
-const deliverySource = readFileSync(resolve(root, 'apps/api/src/routes/delivery.ts'), 'utf8');
 
 async function getJson(path, expectedStatus) {
   const response = await fetch(worker + path, {
@@ -30,12 +29,6 @@ test('The production Worker responds to read-only health checks', async () => {
   const health = await getJson('/health', 200);
   assert.equal(health.status, 'ok');
   assert.equal(health.service, 'energia-vital-api');
-});
-
-test('Signed delivery endpoint is present and protected', async () => {
-  assert.match(deliverySource, /requireAdminAuth/);
-  const delivery = await getJson('/api/quotes/contracts/execution/delivery/nonexistent', 401);
-  assert.equal(typeof delivery.error, 'string');
 });
 
 test('Enterprise warehouse and finance remain closed until a separate activation', async () => {

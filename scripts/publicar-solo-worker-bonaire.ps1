@@ -49,7 +49,9 @@ try{
   throw 'Worker YA desplegado, /health no devolvio 200 JSON. Revisar rollback.'
  }
  Write-Host '[OK] Worker API desplegado y /health responde 200 JSON.'
- & node (Join-Path $root 'scripts/tests/production-worker-gates.cjs')
- if($LASTEXITCODE -ne 0){throw 'Las rutas de entrega protegidas o los gates de almacen/finanzas fallaron.'}
+ & node (Join-Path $root 'scripts/tests/production-delivery-gate.cjs')
+ if($LASTEXITCODE -ne 0){throw 'La ruta de entrega no esta publicada o no esta protegida.'}
+ & node --test (Join-Path $root 'scripts/tests/production-worker-gates.cjs')
+ if($LASTEXITCODE -ne 0){throw 'Los gates de almacen/finanzas fallaron.'}
  Write-Host '[OK] Rutas protegidas verificadas; Pages y D1 no se modificaron en este paso.'
 }finally{Pop-Location}
