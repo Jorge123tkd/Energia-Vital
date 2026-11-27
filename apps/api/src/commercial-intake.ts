@@ -80,7 +80,7 @@ function advanceNatural(text:string,prior:CommercialDraft|null,id:string):Commer
  const place=/(?:somos|estamos|trabajamos|radicamos)\s+(?:de|en)\s+([^,;\n]+?)(?=\s+y\s+(?:necesit|querem|pag)|[,;\n]|$)/i.exec(text);
  if(place&&!d.location)assign('location',place[1].trim(),250);
  const need=/(?:necesitamos|necesito|queremos|requerimos)\s+(.+?)(?=\s+y\s+(?:somos|estamos|trabajamos)|\.\s+|[;\n]|$)/i.exec(text);
- if(need&&!d.need)assign('need',need[1].trim(),1800,3);
+ if(need){const candidate=need[1].trim();if(!d.need||candidate.length>d.need.length)assign('need',candidate,1800,3);}
  if(!d.need&&place){const prefix=text.slice(0,place.index).replace(/\s+y\s*$/i,'').trim();assign('need',prefix,1800,3);}
  if(d.payment===undefined&&/\b(?:transferencia|efectivo|cheque)\b/.test(m)){
   const pay=m.match(/\b(?:transferencia|efectivo|cheque)\b/);if(pay)assign('payment',pay[0],160);
