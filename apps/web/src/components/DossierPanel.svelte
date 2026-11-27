@@ -2,7 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { api,apiRequest } from '../lib/api';
   import RequestDocuments from './RequestDocuments.svelte';
-  import QuoteManager from './QuoteManager.svelte';
+  import ResidentialCommercial from './ResidentialCommercial.svelte';
   import FinanceTracker from './FinanceTracker.svelte';
   import TechnicalFollowUp from './TechnicalFollowUp.svelte';
 
@@ -236,7 +236,7 @@
           <TechnicalFollowUp {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
           <FinanceTracker {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
           <RequestDocuments {token} requestId={currentRequestId}/>
-          <QuoteManager {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
+          <ResidentialCommercial {token} requestId={currentRequestId} canReview={canReviewQuotes}/>
         {/key}
         <section class="space-y-3">
           <h4 class="font-extrabold text-lg">Historial de intervenciones de gestores</h4>

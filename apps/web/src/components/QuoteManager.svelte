@@ -12,7 +12,7 @@
     internal_notes:string|null;status:string;created_by_email:string;
     issued_at?:string|null;reviewed_by_email?:string|null;review_reason?:string|null;created_at:string};
   type ItemEdit={key:number;description:string;quantity:number;price_usd:number};
-  let {token,requestId,canReview=false}:{token:string;requestId:string;canReview?:boolean}=$props();
+  let {token,requestId,canReview=false,residentialProposal=null}:{token:string;requestId:string;canReview?:boolean;residentialProposal?:{revision:number;items:{description:string;quantity:number;unit_price_usd_cents:number}[];stockNotes:string;canImport:boolean}|null}=$props();
   let versions:Version[]=$state([]),loading=$state(false),busy=$state(false),
     editorOpen=$state(false),error=$state(''),success=$state(''),truncated=$state(false);
   let title=$state(''),items:ItemEdit[]=$state([]),validUntil=$state('');
@@ -75,6 +75,13 @@
     freightNotes=last?.freight_notes||'';
     internalNotes=last?.internal_notes||'';
     error='';success='';editorOpen=true;void loadTariffs();
+  }
+  function importResidential(){
+    const p=residentialProposal;if(!p?.canImport||busy)return;
+    if(!window.confirm('¿Sustituir las partidas de este borrador por el levantamiento residencial guardado? Las versiones anteriores no cambian.'))return;
+    items=p.items.map(i=>({key:++nextKey,description:i.description,quantity:i.quantity,price_usd:i.unit_price_usd_cents/100}));
+    stockNotes=p.stockNotes;title='Propuesta residencial';
+    internalNotes='Origen: levantamiento residencial revisión '+p.revision+'.';
   }
   async function saveDraft(e:SubmitEvent){
     e.preventDefault();
@@ -245,6 +252,7 @@
         </label>
         <fieldset class="border border-slate-200 rounded-xl p-3 space-y-2">
           <legend class="font-bold text-sm px-1">Partidas y precios unitarios en USD</legend>
+          {#if residentialProposal?.canImport}<button type="button" disabled={busy} onclick={importResidential} class="rounded-lg bg-teal-800 text-white px-3 py-2">Traer levantamiento residencial guardado · R{residentialProposal.revision}</button>{/if}
           <div class="rounded-lg bg-slate-50 p-3 space-y-2">
             <p class="text-xs font-semibold">Añadir desde catálogo central</p>
             <select aria-label="Origen del precio" value={tariffSource} disabled={tariffBusy} onchange={e=>{tariffSource=e.currentTarget.value;void loadTariffs()}} class="w-full border rounded p-2"><option value="tariffs">Tarifas de instalación y servicios</option><option value="products">Productos Bonaire con precio USD</option></select>
