@@ -4,7 +4,7 @@
 
   type Item={description:string;quantity:number;unit_price_usd_cents:number;
     line_total_usd_cents:number};
-  type Version={id:string;request_id:string;version_no:number;title:string;currency:string;
+  type Version={customer_decision?:{decision:string;note:string;source:string;evidence?:string;decided_at:string}|null;id:string;request_id:string;version_no:number;title:string;currency:string;
     items:Item[];subtotal_cents:number;taxes_cents:number;freight_cents:number;
     discount_cents:number;total_cents:number;valid_until:string|null;
     delivery_terms:string|null;warranty_terms:string|null;payment_terms:string|null;
@@ -20,6 +20,9 @@
   let deliveryTerms=$state(''),warrantyTerms=$state(''),paymentTerms=$state('');
   let stockNotes=$state(''),taxNotes=$state(''),freightNotes=$state(''),internalNotes=$state('');
   let reviewReason=$state('');
+  let decisionsAvailable=$state(false),decisionId=$state(''),decisionValue=$state('changes'),decisionNote=$state(''),decisionEvidence=$state('');
+  const decisions:Record<string,string>={accept:'Aceptada por el cliente',changes:'Modificaciones solicitadas',reject:'No aceptada por el cliente'};
+  async function recordDecision(v:Version){if(busy||!canReview)return;if(!window.confirm('¿Registrar evidencia de la respuesta real del cliente? Esto no es firma de contrato.'))return;busy=true;error='';success='';try{await apiRequest('/api/quotes/'+encodeURIComponent(v.id)+'/customer-decision',{method:'POST',headers:{Authorization:'Bearer '+token},body:JSON.stringify({decision:decisionValue,note:decisionNote,evidence:decisionEvidence})});decisionId='';success='Respuesta documentada.';await reload()}catch(e){error=(e as Error).message}finally{busy=false}}
   let nextKey=0;
   let tariffs=$state<any[]>([]),tariffSearch=$state(''),tariffId=$state(''),tariffBusy=$state(false),tariffError=$state(''),tariffNext=$state<string|null>(null),tariffSource=$state('tariffs');
   async function loadTariffs(more=false){
@@ -51,7 +54,7 @@
     loading=true;error='';
     try{
       const result=await api.quoteVersions(token,requestId);
-      versions=result.versions||[];truncated=Boolean(result.truncated);
+      versions=result.versions||[];truncated=Boolean(result.truncated);decisionsAvailable=Boolean(result.decisions_available);
     }catch(e){error=e instanceof Error?e.message:'No se pudieron consultar las cotizaciones.';}
     finally{loading=false;}
   }
@@ -199,6 +202,10 @@
           {#if v.internal_notes}<p class="whitespace-pre-wrap">Nota interna: {v.internal_notes}</p>{/if}
         </div>
       </details>
+      {#if v.customer_decision}<div class="bg-teal-50 rounded p-2 text-sm"><strong>{decisions[v.customer_decision.decision]}</strong><p>{v.customer_decision.decided_at.slice(0,10)} · {v.customer_decision.source==='customer'?'Cuenta del cliente':'Evidencia registrada por administración'}</p><p class="whitespace-pre-wrap">{v.customer_decision.note}</p>{#if v.customer_decision.evidence}<p class="text-xs">{v.customer_decision.evidence}</p>{/if}</div>
+      {:else if canReview&&decisionsAvailable&&v.status==='approved_internal'}<button type="button" disabled={busy} onclick={()=>{decisionId=v.id;decisionValue='changes';decisionNote='';decisionEvidence=''}} class="border rounded px-3 py-2 text-xs">Registrar respuesta documentada</button>
+      {#if decisionId===v.id}<form class="space-y-2 border rounded p-3" onsubmit={e=>{e.preventDefault();void recordDecision(v)}}><label class="block text-sm">Decisión<select class="block w-full border rounded p-2" bind:value={decisionValue}><option value="accept">Acepta</option><option value="changes">Solicita modificaciones</option><option value="reject">No acepta</option></select></label><label class="block text-sm">Observaciones<textarea class="block w-full border rounded p-2" bind:value={decisionNote} required={decisionValue==='changes'} minlength={decisionValue==='changes'?3:0} maxlength="1000"></textarea></label><label class="block text-sm">Evidencia de la respuesta (referencia al documento o comunicación real)<textarea class="block w-full border rounded p-2" required minlength="12" maxlength="1000" bind:value={decisionEvidence}></textarea></label><button type="submit" disabled={busy} class="bg-teal-800 text-white rounded px-3 py-2">Registrar</button><button type="button" disabled={busy} onclick={()=>decisionId=''} class="ml-2">Cancelar</button></form>{/if}
+      {/if}
       {#if v.reviewed_by_email}
         <p class="text-xs text-slate-600">Revisó: {v.reviewed_by_email}{v.review_reason?' · '+v.review_reason:''}</p>
       {/if}

@@ -3,6 +3,7 @@ import type { Env } from '../types';
 import { getUser, requireCustomerAuth } from '../middleware';
 import { parseRequestIntake } from '../request-intake';
 import { issuedCustomerQuotes } from '../customer-quotes';
+import {recordQuoteDecision} from '../quote-decisions';
 
 export const privateRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
 privateRoutes.use('*', requireCustomerAuth);
@@ -105,3 +106,8 @@ privateRoutes.post('/appointments', async c => {
 // Cambios de estado, notas y asignaciones solo desde endpoints del administrador.
 
 privateRoutes.get('/quotes', async c => c.json({quotes:await issuedCustomerQuotes(c.env,getUser(c)!.user_id)}));
+privateRoutes.post('/quotes/:id/decision',async c=>{
+ const b=await c.req.json().catch(()=>null);
+ const r=await recordQuoteDecision(c.env,c.req.param('id'),b,getUser(c)!.user_id,'customer');
+ return c.json(r,r.status as 200|400|404|409|503);
+});

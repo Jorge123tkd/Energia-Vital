@@ -10,6 +10,7 @@ import { validCubanWorkDate, cubaToday } from '../brigade-policy';
 
 import { tariffRoutes } from './tariffs';
 import { residentialRoutes } from './residential';
+import {quoteDecisionsAvailable,recordQuoteDecision} from '../quote-decisions';
 export const quoteRoutes=new Hono<{Bindings:Env;Variables:{user?:any}}>();
 quoteRoutes.route('/tariffs',tariffRoutes);
 quoteRoutes.route('/residential',residentialRoutes);
@@ -123,7 +124,10 @@ quoteRoutes.get('/requests/:requestId',async c=>{
     'WHERE v.request_id=? ORDER BY v.version_no DESC LIMIT 101'
   ).bind(id).all();
   const raw=rows.results||[];
-  return c.json({versions:raw.slice(0,100).map((x:any)=>({
+  const available=await quoteDecisionsAvailable(c.env);
+  const decisions=available?(await c.env.DB.prepare('SELECT d.* FROM commercial_quote_decisions d JOIN commercial_quote_versions q ON q.id=d.quote_id WHERE q.request_id=?').bind(id).all()).results||[]:[];
+  return c.json({decisions_available:available,versions:raw.slice(0,100).map((x:any)=>({
+    customer_decision:decisions.find(d=>d.quote_id===x.id)||null,
     ...x,items:JSON.parse(x.items_json),items_json:undefined
   })),truncated:raw.length>100,request_id:id});
 });
@@ -286,4 +290,9 @@ quoteRoutes.post('/:id/issue',requireAdminAuth,async c=>{
   await c.env.DB.prepare("INSERT INTO audit_logs(id,admin_user_id,action,entity_type,entity_id,details,created_at) VALUES (?,?,'quote_issued','quote',?,?,?)")
     .bind(crypto.randomUUID(),c.var.user!.user_id,id,JSON.stringify({notification_id:notificationId}),time).run();
   return c.json({message:'Cotización publicada para su titular. Disponible en su cuenta y Telegram vinculado.',issued:true},201);
+});
+
+quoteRoutes.post('/:id/customer-decision',requireAdminAuth,async c=>{
+ const id=c.req.param('id')||'';const r=await recordQuoteDecision(c.env,id,await c.req.json().catch(()=>null),c.var.user!.user_id,'staff_evidence');
+ return c.json(r,r.status as 200|400|404|409|503);
 });
