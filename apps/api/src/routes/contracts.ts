@@ -38,7 +38,7 @@ contractRoutes.post('/:id',async c=>{
  if(!b||Object.keys(b).sort().join(',')!==[...fields,'reference','expected_revision'].sort().join(',')||!Number.isSafeInteger(b.expected_revision)||b.expected_revision<0||b.expected_revision>=1000000||!str(b.reference,3,80)||!fields.every(k=>str(b[k],3,k==='supplier'||k==='customer'?500:1200)))return c.json({error:'Completa identificación de las partes, alcance y condiciones del contrato.'},400);
  const terms=Object.fromEntries(fields.map(k=>[k,b[k].trim()]));
  const body=JSON.stringify(terms),reference=b.reference.trim(),actor=c.var.user!.user_id;
- const prior=await read(c.env,quoteId);if(prior.draft?.reference===reference&&JSON.stringify(prior.draft.terms)===body)return c.json(prior);
+ const prior=await read(c.env,quoteId);if(prior.draft&&prior.draft.reference===reference&&JSON.stringify(prior.draft.terms)===body)return c.json(prior);
  if(prior.approved||(prior.draft?.revision||0)!==b.expected_revision||(prior.draft&&prior.draft.reference!==reference))return c.json({error:'Revisión desactualizada, referencia modificada o contrato ya aprobado.'},409);
  try{await c.env.DB.prepare('INSERT INTO service_contract_drafts(quote_id,revision,reference,body_json,created_by,created_at) VALUES(?,?,?,?,?,?)').bind(quoteId,b.expected_revision+1,reference,body,actor,new Date().toISOString()).run()}catch(e){if(conflict(e))return c.json({error:'No se pudo crear: propuesta no aceptada, referencia repetida o expediente cerrado.'},409);throw e}
  return c.json(await read(c.env,quoteId),201);
