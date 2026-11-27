@@ -13,7 +13,7 @@ function load(file){
  },module,module.exports);
  return module.exports;
 }
-const {decide}=load(path.join(__dirname,'../src/routes/telegram.ts'));
+const {decide,canonicalTelegramLinks,sendTelegramText}=load(path.join(__dirname,'../src/routes/telegram.ts'));
 const requests=new Map(),intakes=new Map(),appointments=new Map();
 let linked=false,customerId='qa-customer',update=100,commercial=null,appointment=null;
 const env={ENVIRONMENT:'production',DB:{
@@ -25,6 +25,26 @@ const env={ENVIRONMENT:'production',DB:{
 }};
 async function say(text){const r=await decide(env,'555001',text,null,'qa-thread',commercial,String(update++),appointment);if(r.commercial!==undefined)commercial=r.commercial;if(r.appointment!==undefined)appointment=r.appointment;return r}
 (async()=>{
+ const retired=[
+  'https://energia-vital-web.pages.dev/perfil',
+  'http://energiavitalweb.page.dev/entrar',
+  'https://energia-vitalweb.pages.net/admin',
+  'https://www.energia-vital-web.page.net/telegram-registro.html'
+ ];
+ for(const old of retired)assert.equal(canonicalTelegramLinks(old),'https://bnergiv.com'+new URL(old).pathname);
+ assert.equal(canonicalTelegramLinks('https://wa.me/5351234567'),'https://wa.me/5351234567');
+ assert.equal(canonicalTelegramLinks('https://external.example/'),'https://external.example/');
+ const previousFetch=global.fetch;let outbound;
+ try{
+  global.fetch=async(url,options)=>{outbound={url,body:JSON.parse(options.body)};return {ok:true,json:async()=>({ok:true})}};
+  await sendTelegramText({ENVIRONMENT:'production',TELEGRAM_BOT_TOKEN:'TEST_NO_REAL'},'555001',
+   'Abre tu perfil: https://energiavitalweb.page.net/perfil',
+   {inline_keyboard:[[{text:'Perfil',url:'https://energia-vital-web.pages.dev/perfil'}],[{text:'Registro',web_app:{url:'https://energia-vitalweb.page.dev/telegram-registro.html'}}]]});
+ }finally{global.fetch=previousFetch}
+ assert.match(outbound.body.text,/https:\/\/bnergiv\.com\/perfil/);
+ assert.equal(outbound.body.reply_markup.inline_keyboard[0][0].url,'https://bnergiv.com/perfil');
+ assert.equal(outbound.body.reply_markup.inline_keyboard[1][0].web_app.url,'https://bnergiv.com/telegram-registro.html');
+
  assert.equal((await say('🏢 Empresas y negocios')).commercial.stage,'need');
  await say('respaldo solar y somos de Boyeros');assert.equal(commercial.stage,'kind');
  await say('privada');await say('Nombre: Empresa QA; contacto: María');await say('Forma de pago: transferencia; moneda: CUP; presupuesto: 2500 USD');
@@ -32,6 +52,27 @@ async function say(text){const r=await decide(env,'555001',text,null,'qa-thread'
  const id=commercial.id;const pending=await say('confirmar solicitud comercial');assert.match(pending.reply,/crea o vincula/i);assert.equal(commercial.id,id);assert.equal(requests.size,0);
  linked=true;assert.match((await say('confirmar solicitud comercial')).reply,/Solicitud registrada/);assert.equal(requests.size,1);assert.equal(intakes.get(id)[1],250000);assert.equal(intakes.get(id)[3],'CUP');
  assert.match((await say('confirmar solicitud comercial')).reply,/ya está registrada/);assert.equal(requests.size,1);
+
+ // The full natural answer is parsed once; the next response is the review, not another field prompt.
+ commercial=null;linked=false;
+ await say('Empresas y negocios');
+ await say('respaldo solar y somos de Boyeros');
+ const fullAnswer=await say('Privada. Somos una MIPYME llamada Empresa Onair. Persona de contacto: María Pérez. Necesitamos un sistema de respaldo solar para nuestras oficinas. Pagamos por transferencia en CUP y tenemos 5000 USD de presupuesto.');
+ assert.equal(commercial.stage,'review');
+ assert.equal(commercial.company,'Empresa Onair');
+ assert.equal(commercial.contact,'María Pérez');
+ assert.equal(commercial.need,'un sistema de respaldo solar para nuestras oficinas');
+ assert.equal(commercial.location,'Boyeros');
+ assert.equal(commercial.payment,'transferencia');
+ assert.equal(commercial.currency,'CUP');
+ assert.equal(commercial.budget,'5000');
+ assert.match(fullAnswer.reply,/confirmar solicitud comercial/);
+ assert.doesNotMatch(fullAnswer.reply,/¿Cuál es el nombre|¿Qué presupuesto|¿Cómo prevén pagar|¿En qué municipio/);
+ assert.equal(requests.size,0,'No request before explicit confirmation and identity/phone choice');
+ const fullChoice=await say('confirmar solicitud comercial');
+ assert.match(JSON.stringify(fullChoice.replyMarkup),/Dejar número de WhatsApp/);
+ assert.equal(requests.size,0);
+
  commercial=null;await say('solicitar servicio');await say('Necesito reparar el inversor y estamos en Plaza');await say('vivienda');await say('Ana Pérez');await say('efectivo');await say('por definir');
  assert.equal(commercial.kind,'persona');assert.equal(commercial.stage,'review');await say('cancelar borrador');assert.equal(commercial,null);assert.equal(requests.size,1);
  await say('quiero ser proveedor');assert.equal(commercial.kind,'otro');await say('cancelar borrador');

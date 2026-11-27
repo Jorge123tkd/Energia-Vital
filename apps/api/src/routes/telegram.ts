@@ -66,10 +66,10 @@ export function extractTelegramAccountCallback(payload:any):{id:string;input:Non
 async function acknowledgeCallback(env:Env,id:string){
   try{await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/answerCallbackQuery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({callback_query_id:id}),signal:AbortSignal.timeout(5000)});}catch{/* No sensitive logs. */}
 }
-function siteForBot(env:Env){return env.ENVIRONMENT==='qa'?(env.SITE_URL||'').replace(/\/+$/,''):SITE_URL;}
+function siteForBot(env:Env){return env.ENVIRONMENT==='qa'?(env.SITE_URL||SITE_URL).replace(/\/+$/,''):SITE_URL;}
 /** Rewrite only known retired Bonaire web hosts, never Telegram/WhatsApp/API URLs. */
 export function canonicalTelegramLinks(value:string,site='https://bnergiv.com'):string{
- return value.replace(/https?:\/\/(?:energia-vital-web|energiavitalweb|energia-vitalweb)\.(?:pages\.dev|pages\.net|page\.dev|page\.net)(?=[/?#\s"'<>),!]|$|\.(?=\s|$))/gi,()=>site);
+ return value.replace(/https?:\/\/(?:www\.)?(?:energia-vital-web|energiavitalweb|energia-vitalweb)\.(?:pages\.dev|pages\.net|page\.dev|page\.net)(?=[/?#\s"'<>),!]|$|\.(?=\s|$))/gi,()=>site);
 }
 function canonicalMarkup(markup:TelegramReplyMarkup|undefined,site:string):TelegramReplyMarkup|undefined{
  if(!markup||!('inline_keyboard' in markup))return markup;
