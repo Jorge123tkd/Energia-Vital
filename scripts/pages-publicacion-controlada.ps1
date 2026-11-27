@@ -28,12 +28,12 @@ function CheckCloudflare {
   $total=[int]$r.total; $last=[int]$r.last_id
  }catch{throw 'Historial D1 con formato inesperado; no publicar.'}
  Write-Host "[LECTURA] D1 Bonaire: $total migraciones registradas; ultima ID $last."
- if(!(($total -eq 24 -and $last -eq 24) -or ($total -eq 28 -and $last -eq 28))){
-  throw 'D1 parcial o inesperado: solo se permite 24/24 o 28/28, no publicar.'
+ if($total -ne 34 -or $last -ne 34){
+  throw 'La version actual de Pages requiere D1 34/34. No publicar con esquema anterior o parcial.'
  }
- Write-Host '[OK] Esquema comercial compatible con Pages: ningun dato ni migracion modificados.'
+ Write-Host '[OK] Esquema comercial 34/34 compatible con Pages: ningun dato ni migracion modificados.'
  if($HabilitarStudio){
-  if($total -ne 28 -or $last -ne 28){throw 'Studio requiere el esquema comercial 28/28.'}
+  if($total -ne 34 -or $last -ne 34){throw 'Studio requiere el esquema comercial 34/34.'}
   foreach($path in @('/v1/me','/v1/engineering/manifest')){
    $status=& curl.exe -sS --max-time 20 -o NUL -w '%{http_code}|%{content_type}' ('https://evpro-sync.bnergiv.com'+$path)
    MustSucceed 'No se pudo consultar el Worker Studio.'

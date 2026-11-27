@@ -21,14 +21,15 @@ export function unseal(blob,p){
  try{const c=createDecipheriv('aes-256-gcm',key,iv);c.setAAD(head);c.setAuthTag(blob.subarray(blob.length-TAG))
  return Buffer.concat([c.update(blob.subarray(HEADER,blob.length-TAG)),c.final()])}finally{key.fill(0)}
 }
-export function checkRestoration(sql){
+export function checkRestoration(sql,expected=24){
+ check([24,28,34].includes(expected),'Historial esperado no autorizado')
  check(Buffer.isBuffer(sql)&&sql.length>100&&sql.length<=MAX,'SQL no valido')
  const script=resolve(ROOT,'scripts/verificar-exportacion-d1.py')
  const tools=process.platform==='win32'?[['py',['-3',script]],['python',[script]]]:[['python3',[script]],['python',[script]]]
  for(const [command,args] of tools){
-  const r=spawnSync(command,args,{input:sql,encoding:'utf8',timeout:45000,maxBuffer:4096,windowsHide:true})
+  const r=spawnSync(command,[...args,'--expected',String(expected)],{input:sql,encoding:'utf8',timeout:45000,maxBuffer:4096,windowsHide:true})
   if(r.error?.code==='ENOENT')continue
-  check(r.status===0&&r.stdout?.includes('24/24'),'No se pudo restaurar D1 en memoria; no continuar')
+  check(r.status===0&&r.stdout?.includes(expected+'/'+expected),'No se pudo restaurar D1 en memoria; no continuar')
   return true
  }
  throw Error('Python 3 no disponible')
@@ -61,12 +62,13 @@ async function main(){
   console.log('La copia externa real debe estar fuera de Cloudflare y del SSD. No se suben archivos automaticamente.')
   return
  }
- if(op==='--crear'&&process.argv.length===5){
+ if((op==='--crear'||op==='--crear-28')&&process.argv.length===5){
+  const expected=op==='--crear-28'?28:24
   const source=target(arg1,'.sql'),dest=target(arg2,'.evbackup')
   check(!existsSync(dest),'No sobrescribir la copia cifrada')
   check(statSync(dirname(dest)).isDirectory(),'Directorio inexistente')
   const sql=readFileSync(source)
-  checkRestoration(sql)
+  checkRestoration(sql,expected)
   const p=await prompt('Frase de respaldo (16+ caracteres, oculta): ')
   validPass(p);check(p===await prompt('Repita la frase (oculta): '),'Frases distintas')
   const expected=createHash('sha256').update(sql).digest(),encrypted=seal(sql,p)
@@ -77,22 +79,23 @@ async function main(){
    fsyncSync(fd);closeSync(fd);fd=undefined
    const restored=unseal(readFileSync(dest),p)
    check(timingSafeEqual(expected,createHash('sha256').update(restored).digest()),'Verificacion hash fallida')
-   checkRestoration(restored)
+   checkRestoration(restored,expected)
   }catch(e){if(fd!==undefined)closeSync(fd);if(created)unlinkSync(dest);throw e}
-  console.log('[OK] D1 restaurable en memoria, cifrado AES-256-GCM autenticado.')
+  console.log('[OK] D1 '+expected+'/'+expected+' restaurable en memoria, cifrado AES-256-GCM autenticado.')
   console.log('[OK] SHA256 copia cifrada: '+createHash('sha256').update(readFileSync(dest)).digest('hex'))
   console.log('[PENDIENTE] Copiar fuera de Cloudflare y SSD y verificar archivo recuperado antes de migrar.')
   return
  }
- if(op==='--verificar'&&process.argv.length===4){
+ if((op==='--verificar'||op==='--verificar-28')&&process.argv.length===4){
+  const expected=op==='--verificar-28'?28:24
   const blob=readFileSync(target(arg1,'.evbackup'))
   const p=await prompt('Frase de respaldo (oculta): ')
-  checkRestoration(unseal(blob,p))
-  console.log('[OK] Copia restaurada en memoria; 24/24 y hash del archivo cifrado:')
+  checkRestoration(unseal(blob,p),expected)
+  console.log('[OK] Copia restaurada en memoria; '+expected+'/'+expected+' y hash del archivo cifrado:')
   console.log(createHash('sha256').update(blob).digest('hex'))
   return
  }
- throw Error('Uso: --plan | --crear EXPORTACION.sql CIFRADO.evbackup | --verificar CIFRADO.evbackup')
+ throw Error('Uso: --plan | --crear EXPORTACION.sql CIFRADO.evbackup | --verificar CIFRADO.evbackup | --crear-28 EXPORTACION.sql CIFRADO.evbackup | --verificar-28 CIFRADO.evbackup')
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
  main().catch(()=>{console.error('[BLOQUEADO] Respaldo no validado, datos privados omitidos.');process.exitCode=1})

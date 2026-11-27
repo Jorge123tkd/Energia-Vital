@@ -4,6 +4,11 @@ import sqlite3
 import sys
 
 def main():
+    expected = 24
+    if len(sys.argv) == 3 and sys.argv[1] == '--expected':
+        expected = int(sys.argv[2])
+    if expected not in (24, 28, 34):
+        raise ValueError('Historial esperado no autorizado')
     raw = sys.stdin.buffer.read()
     if len(raw) < 100 or len(raw) > 256 * 1024 * 1024:
         raise ValueError("SQL fuera de rango")
@@ -15,12 +20,12 @@ def main():
     if db.execute("PRAGMA foreign_key_check").fetchall():
         raise ValueError("SQLite foreign_key_check")
     count, last = db.execute("SELECT COUNT(*), COALESCE(MAX(id),0) FROM d1_migrations").fetchone()
-    if (count, last) != (24, 24):
-        raise ValueError("Historial D1 original distinto de 24/24")
+    if (count, last) != (expected, expected):
+        raise ValueError("Historial D1 original distinto del esperado")
     for name in ("admin_users", "requests", "customers", "auth_sessions", "products"):
         if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone():
             raise ValueError("Falta tabla comercial basica")
-    print("[OK] Exportacion SQL restaurada en memoria: 24/24, quick_check y claves foraneas correctas")
+    print(f"[OK] Exportacion SQL restaurada en memoria: {expected}/{expected}, quick_check y claves foraneas correctas")
 
 try:
     main()

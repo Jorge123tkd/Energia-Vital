@@ -133,18 +133,19 @@ jobs:
         run: |
           set -euo pipefail
           npx wrangler d1 execute energia-vital-db --remote --json \
-            --command "SELECT COUNT(*) AS present FROM sqlite_master WHERE type='table' AND name IN ('brigades','brigade_members','brigade_work','request_activities','commercial_quote_versions','request_financial_declarations','request_payment_reports','technical_work_reports','service_followup_cases','service_case_notes','brigade_chief_accounts','brigade_chief_sessions','brigade_chief_reports','brigade_evidence_images','chief_completion_reviews')" \
+            --command "SELECT (SELECT COUNT(*) FROM d1_migrations) AS migrations, (SELECT COALESCE(MAX(id),0) FROM d1_migrations) AS last_migration, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('brigades','brigade_members','brigade_work','request_activities','commercial_quote_versions','request_financial_declarations','request_payment_reports','technical_work_reports','service_followup_cases','service_case_notes','brigade_chief_accounts','brigade_chief_sessions','brigade_chief_reports','brigade_evidence_images','chief_completion_reviews','commercial_tariff_versions','residential_survey_versions','commercial_quote_decisions','service_contract_drafts','service_contract_approvals','service_contract_signatures','service_work_orders','service_work_assignments','service_deliveries')) AS present, (SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='commercial_tariffs') AS tariffs_view" \
             > "$RUNNER_TEMP/bonaire-schema-count.json"
           node -e '
             const fs = require("fs");
             const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
             const result = Array.isArray(raw) ? raw[0] : raw;
-            const count = Number(result?.results?.[0]?.present);
-            if (count !== 15) {
-              console.error("D1 remota NO tiene las 15 tablas requeridas. Detenido antes de deploy.");
+            const row = result?.results?.[0];
+            const count = Number(row?.present);
+            if (Number(row?.migrations) !== 34 || Number(row?.last_migration) !== 34 || count !== 24 || Number(row?.tariffs_view) !== 1) {
+              console.error("D1 remota NO cumple 34/34 o faltan tablas de tarifas, contratos, ejecucion y entrega. Detenido antes de deploy.");
               process.exit(1);
             }
-            console.log("Verificación de estructura D1 remota correcta (15 tablas esperadas).");
+            console.log("Verificación de estructura D1 remota correcta: 34/34, 24 tablas y vista de tarifas.");
           ' "$RUNNER_TEMP/bonaire-schema-count.json"
       - name: Bloquear publicación si falta la columna de rotación en D1 remota (solo SELECT)
         working-directory: apps/api
@@ -167,6 +168,8 @@ jobs:
             }
             console.log("Esquema D1 remota compatible con refresh rotation 021.");
           ' "$RUNNER_TEMP/bonaire-refresh-column.json"
+      - name: Verificar rutas nuevas de entrega y garantías protegidas (solo lectura)
+        run: node scripts/tests/production-worker-gates.cjs
       - name: Publicar Cloudflare Worker
         working-directory: apps/api
         run: npx wrangler deploy

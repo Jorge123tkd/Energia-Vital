@@ -19,15 +19,16 @@ if($cfg -notmatch '(?m)^name\s*=\s*"energia-vital-api"\s*$' -or
  throw 'La configuracion del Worker no coincide con produccion conocida'
 }
 function Read-Schema {
- $sql="SELECT (SELECT COUNT(*) FROM d1_migrations) AS total, (SELECT COALESCE(MAX(id),0) FROM d1_migrations) AS last_id, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='warehouse_items') AS warehouse, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='warehouse_project_links') AS links, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='procurement_orders') AS procurement, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='business_obligations') AS obligations"
+ $sql="SELECT (SELECT COUNT(*) FROM d1_migrations) AS total, (SELECT COALESCE(MAX(id),0) FROM d1_migrations) AS last_id, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='warehouse_items') AS warehouse, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='warehouse_project_links') AS links, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='procurement_orders') AS procurement, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='business_obligations') AS obligations, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('commercial_tariff_versions','residential_survey_versions','commercial_quote_decisions','service_contract_drafts','service_contract_approvals','service_contract_signatures','service_work_orders','service_work_assignments','service_deliveries')) AS residential_flow, (SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='commercial_tariffs') AS tariffs_view"
  $raw=& npx.cmd --yes wrangler@4.151.2 d1 execute energia-vital-db --remote --config wrangler.toml --json --command $sql
  if($LASTEXITCODE -ne 0){throw 'Fallo la consulta del esquema D1'}
  try{$obj=($raw -join [Environment]::NewLine)|ConvertFrom-Json;$r=@($obj)[0].results[0]}catch{throw 'D1 devolvio esquema JSON inesperado'}
- if([int]$r.total -ne 28 -or [int]$r.last_id -ne 28 -or [int]$r.warehouse -ne 1 -or
-    [int]$r.links -ne 1 -or [int]$r.procurement -ne 1 -or [int]$r.obligations -ne 1){
-  throw 'Worker nuevo requiere D1 28/28 y tablas comerciales; no publicar'
+ if([int]$r.total -ne 34 -or [int]$r.last_id -ne 34 -or [int]$r.warehouse -ne 1 -or
+    [int]$r.links -ne 1 -or [int]$r.procurement -ne 1 -or [int]$r.obligations -ne 1 -or
+    [int]$r.residential_flow -ne 9 -or [int]$r.tariffs_view -ne 1){
+  throw 'Worker nuevo requiere D1 34/34, almacen, compras, finanzas, tarifas, contratos, ejecucion y entrega; no publicar'
  }
- Write-Host '[OK] D1 de produccion 28/28 y modulos empresariales detectados.'
+ Write-Host '[OK] D1 de produccion 34/34 y todos los modulos comerciales detectados.'
 }
 Push-Location $api
 try{
