@@ -54,7 +54,7 @@ async function say(text){const r=await decide(env,'555001',text,null,'qa-thread'
  assert.match((await say('confirmar solicitud comercial')).reply,/ya está registrada/);assert.equal(requests.size,1);
 
  // The full natural answer is parsed once; the next response is the review, not another field prompt.
- commercial=null;linked=false;
+ commercial=null;linked=false;const requestsBeforeFull=requests.size;
  await say('Empresas y negocios');
  await say('respaldo solar y somos de Boyeros');
  const fullAnswer=await say('Privada. Somos una MIPYME llamada Empresa Onair. Persona de contacto: María Pérez. Necesitamos un sistema de respaldo solar para nuestras oficinas. Pagamos por transferencia en CUP y tenemos 5000 USD de presupuesto.');
@@ -68,10 +68,10 @@ async function say(text){const r=await decide(env,'555001',text,null,'qa-thread'
  assert.equal(commercial.budget,'5000');
  assert.match(fullAnswer.reply,/confirmar solicitud comercial/);
  assert.doesNotMatch(fullAnswer.reply,/¿Cuál es el nombre|¿Qué presupuesto|¿Cómo prevén pagar|¿En qué municipio/);
- assert.equal(requests.size,0,'No request before explicit confirmation and identity/phone choice');
+ assert.equal(requests.size,requestsBeforeFull,'No request before explicit confirmation and identity/phone choice');
  const fullChoice=await say('confirmar solicitud comercial');
  assert.match(JSON.stringify(fullChoice.replyMarkup),/Dejar número de WhatsApp/);
- assert.equal(requests.size,0);
+ assert.equal(requests.size,requestsBeforeFull);
 
  commercial=null;await say('solicitar servicio');await say('Necesito reparar el inversor y estamos en Plaza');await say('vivienda');await say('Ana Pérez');await say('efectivo');await say('por definir');
  assert.equal(commercial.kind,'persona');assert.equal(commercial.stage,'review');await say('cancelar borrador');assert.equal(commercial,null);assert.equal(requests.size,1);
