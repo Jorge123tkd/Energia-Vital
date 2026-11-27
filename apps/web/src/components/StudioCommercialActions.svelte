@@ -5,6 +5,7 @@
  const units=[['unit','Unidad'],['m','Metro'],['m2','Metro cuadrado'],['kg','Kilogramo'],['set','Juego'],['roll','Rollo'],['box','Caja']];
  const currencies=['USD','CUP','EUR','CNY'],incoterms=['EXW','FCA','FOB','CFR','CIF','DAP','DDP','LOCAL'];
  let items=$state<any[]>([]),suppliers=$state<any[]>([]),orders=$state<any[]>([]),payables=$state<any[]>([]);
+ let catalog=$state<any[]>([]),productId=$state(''),itemName=$state('');
  let opened=$state(false),ready=$state(false),busy=$state(false),error=$state(''),message=$state(''),oldNative=$state(false);
  let action=$state(''),orderId=$state(''),orderDetail=$state<any>(null),lines=$state<{key:string;itemId:string;quantity:string;total:string}[]>([]);
  let movementKind=$state('receive'),expenseCategory=$state('goods'),purchaseOrder=$state(''),decisionKind=$state(''),receiptLine=$state('');
@@ -35,6 +36,7 @@
   try{
    const bridge=desktopStudioBridge();
    if(bridge){const info=await bridge.account();if(/^3\.9\.0-beta\.(?:[1-9]|1[01])$/.test(info.version)){oldNative=true;throw Error('Actualiza Windows a beta 12 o posterior para registrar operaciones comerciales.');}}
+   if(id==='item'){productId='';itemName='';catalog=(await collect(base+'/catalog','products')).filter(p=>!p.warehouse_item_id)}
    if(['movement','requirement','order'].includes(id))items=await collect(base+'/items','items');
    if(['order','obligation'].includes(id))suppliers=(await collect(base+'/procurement/suppliers','suppliers')).filter(x=>Number(x.active)===1);
    if(id==='decision'||id==='obligation')orders=await collect(base+'/procurement/orders','orders');
@@ -128,8 +130,11 @@
  {#if message}<p role="status" class="bg-teal-50 p-2 text-sm">{message}</p>{/if}
  {#if opened&&ready}
   <form class="grid gap-3 md:grid-cols-2" onsubmit={submit}>
-   {#if action==='item'||action==='supplier'}<label>Nombre<input name="name" required maxlength="200"/></label>{/if}
-   {#if action==='item'}<label>Unidad<select name="unit">{#each units as u}<option value={u[0]}>{u[1]}</option>{/each}</select></label><label>Referencia de producto publicado (opcional)<input name="productId" maxlength="100"/></label>{/if}
+   {#if action==='supplier'}<label>Nombre<input name="name" required maxlength="200"/></label>{/if}
+   {#if action==='item'}
+    <label>Producto de Bonaire (opcional)<select name="productId" value={productId} onchange={e=>{productId=e.currentTarget.value;itemName=catalog.find(p=>p.id===productId)?.name||''}}><option value="">Artículo interno sin producto publicado</option>{#each catalog as p (p.id)}<option value={p.id}>{p.name}{p.model?' · '+p.model:''}</option>{/each}</select></label>
+    <label>Nombre del artículo<input name="name" bind:value={itemName} required maxlength="200"/></label><label>Unidad de inventario<select name="unit">{#each units as u}<option value={u[0]}>{u[1]}</option>{/each}</select></label><p class="text-xs text-slate-600">La vinculación no crea existencias. Registra después la entrada física comprobada.</p>
+   {/if}
    {#if action==='supplier'}<label>País<input name="country" required maxlength="100"/></label><label>Contacto<input name="contact" maxlength="300"/></label>{/if}
    {#if action==='movement'||action==='requirement'}<label>Artículo<select name="itemId" required><option value="">Seleccionar</option>{#each items as i (i.id)}<option value={i.id}>{i.name} · {i.unit}</option>{/each}</select></label><label>Cantidad<input name="quantity" type="number" required min="0.001" max="1000000" step="0.001"/></label>{/if}
    {#if action==='movement'}<label>Movimiento<select name="kind" bind:value={movementKind}><option value="receive">Entrada</option><option value="reserve">Reservar</option><option value="release">Liberar reserva</option><option value="issue">Entregar</option><option value="consume">Consumir</option><option value="return">Devolver</option></select></label>{#if movementKind!=='receive'}<label>Proyecto<select name="projectId" required><option value="">Seleccionar proyecto</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}</select></label>{/if}{#if ['issue','consume','return'].includes(movementKind)}<label>Orden de trabajo vinculada<input name="workId" required maxlength="100"/></label>{/if}{/if}

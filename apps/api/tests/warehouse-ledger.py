@@ -46,3 +46,18 @@ reject(lambda:db.execute("UPDATE warehouse_items SET unit='kg' WHERE id='panel'"
 assert db.execute("SELECT stock_quantity FROM products WHERE id='panel'").fetchone()==(99,)
 assert db.execute("SELECT consumed_milli FROM warehouse_project_balances WHERE item_id='panel' AND project_id='p'").fetchone()==(3000,)
 print('PASS warehouse: immutable ledger, availability, project reservation, issue, consumption, return, duplicate rejection, catalog unchanged')
+
+# Execute the exact catalog query from the API; no physical quantity is copied.
+import re
+source=(root.parent/'src'/'routes'/'warehouse.ts').read_text()
+catalog=re.search(r'const catalogSQL="([^"]+)"\+actorGuard\+"([^"]+)"',source)
+assert catalog
+guard=re.search(r'const actorGuard="([^"]+)"',source).group(1)
+sql=catalog.group(1)+guard+catalog.group(2)
+db.execute("INSERT INTO products(id,category_id,name,slug,stock_quantity,brand,model) VALUES('battery','cat','Batería','battery',50,'QA','LFP')")
+rows={r[0]:r for r in db.execute(sql,('','','admin'))}
+assert rows['panel'][10]==3000
+assert rows['battery'][6] is None and rows['battery'][8] is None and rows['battery'][10] is None
+assert db.execute(sql,('','LFP','admin')).fetchone()[0]=='battery'
+assert db.execute(sql,('','','worker')).fetchall()==[]
+print('PASS catalog bridge: published products, linked real stock, unknown unlinked stock and admin-only search')

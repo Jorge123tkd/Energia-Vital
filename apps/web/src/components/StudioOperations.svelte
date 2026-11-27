@@ -4,11 +4,11 @@
  import StudioPublication from './StudioPublication.svelte';
  import StudioCommercialActions from './StudioCommercialActions.svelte';
  let {token,projects,initialMode='inventory',embedded=false,procurementGroup=false}: {token:string;projects:{id:string;name:string}[];initialMode?:Mode;embedded?:boolean;procurementGroup?:boolean}=$props();
- type Mode='inventory'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication';
+ type Mode='inventory'|'catalog'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication';
  let mode=$state<Mode>(untrack(()=>initialMode)),project=$state(''),busy=$state(false),error=$state(''),rows=$state<Record<string,any>[]>([]),cursor=$state<string|null>(null),loaded=$state(false),backupId=$state(''),receipt=$state<any>(null);
- let generation=0;
+ let generation=0;let search=$state('');
  let reviewSeq=$state<number|null>(null),reviewRevision=$state<number|null>(null),central=$state<any>(null),merged=$state('');
- const tabs:{key:Mode;name:string}[]=[{key:'inventory',name:'Almacén'},{key:'orders',name:'Compras'},{key:'suppliers',name:'Proveedores'},{key:'finance',name:'Economía'},{key:'shortages',name:'Faltantes'},{key:'conflicts',name:'Conflictos'},{key:'backup',name:'Respaldos'},{key:'publication',name:'Publicaciones'}];
+ const tabs:{key:Mode;name:string}[]=[{key:'inventory',name:'Almacén'},{key:'catalog',name:'Catálogo Bonaire'},{key:'orders',name:'Compras'},{key:'suppliers',name:'Proveedores'},{key:'finance',name:'Economía'},{key:'shortages',name:'Faltantes'},{key:'conflicts',name:'Conflictos'},{key:'backup',name:'Respaldos'},{key:'publication',name:'Publicaciones'}];
  const query=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
  const money=(v:unknown,c:string)=>typeof v==='number'?new Intl.NumberFormat('es',{style:'currency',currency:c}).format(v/100):'—';
  const qty=(v:unknown)=>typeof v==='number'?new Intl.NumberFormat('es',{maximumFractionDigits:3}).format(v/1000):'—';
@@ -18,6 +18,7 @@
    const after=more&&cursor?'?after='+encodeURIComponent(cursor):'';
    let data:any,key='';
    if(mode==='inventory'){data=await query('/api/warehouse/items'+after);key='items'}
+   else if(mode==='catalog'){const params=new URLSearchParams();if(more&&cursor)params.set('after',cursor);if(search.trim())params.set('search',search.trim());data=await query('/api/warehouse/catalog'+(params.size?'?'+params.toString():''));key='products'}
    else if(mode==='orders'){data=await query('/api/warehouse/procurement/orders'+after);key='orders'}
    else if(mode==='suppliers'){data=await query('/api/warehouse/procurement/suppliers'+after);key='suppliers'}
    else if(mode==='conflicts'){data=await query('/api/studio/v1/admin/conflicts'+after);key='conflicts'}
@@ -41,7 +42,7 @@
   const run=++generation;busy=true;error='';
   try{const data=choice==='merge'?JSON.parse(merged):undefined;await query('/api/studio/v1/admin/conflicts/'+reviewSeq+'/resolve',{choice,expectedRevision:reviewRevision,operationId:crypto.randomUUID(),...(data===undefined?{}:{data})});if(run===generation){reviewSeq=null;central=null;reviewRevision=null;await load()}}catch(e){if(run===generation){error=(e as Error).message||'Decisión no confirmada. Vuelve a consultar.';reviewSeq=null;central=null;reviewRevision=null}}finally{if(run===generation)busy=false}
  }
- function select(m:Mode){reviewSeq=null;central=null;reviewRevision=null;generation++;busy=false;mode=m;rows=[];cursor=null;receipt=null;error='';loaded=false;if(!['finance','shortages','backup','publication'].includes(m)||(project&&['finance','shortages'].includes(m)))void load()}
+ function select(m:Mode){reviewSeq=null;central=null;reviewRevision=null;generation++;busy=false;mode=m;search='';rows=[];cursor=null;receipt=null;error='';loaded=false;if(!['finance','shortages','backup','publication'].includes(m)||(project&&['finance','shortages'].includes(m)))void load()}
  function selectProject(p:string){generation++;busy=false;project=p;rows=[];receipt=null;cursor=null;loaded=false;error='';backupId='';if(p&&['finance','shortages'].includes(mode))void load()}
  async function backup(create:boolean){
   if(!project||busy)return;
@@ -60,13 +61,14 @@
 </script>
 <section class="rounded-2xl border bg-white p-4 sm:p-6 space-y-4" aria-label="Operaciones empresariales">
  <header><p class="uppercase tracking-widest text-xs text-teal-700 font-bold">Administración autorizada</p><h3 class="text-xl font-extrabold">{mode==='conflicts'?'Revisión de conflictos':mode==='backup'?'Copias de secciones compartidas':mode==='finance'?'Obligaciones y compromisos reales':tabs.find(t=>t.key===mode)?.name||'Operaciones empresariales'}</h3><p class="text-sm text-slate-500">{mode==='finance'?'Información comercial registrada, distinta del presupuesto estimado del expediente.':mode==='inventory'?'Existencias físicas y reservas, distintas del listado de materiales del diseño.':mode==='backup'?'Copias de secciones compartidas, no sustituyen el respaldo general de ingeniería.':'Consultas en línea sujetas a permisos y habilitación del servidor.'}</p></header>
- {#if !embedded||procurementGroup}<div class="flex gap-2 flex-wrap">{#each (procurementGroup?tabs.filter(t=>['inventory','orders','suppliers','shortages'].includes(t.key)):tabs) as t}<button type="button" aria-pressed={mode===t.key} class={mode===t.key?'rounded-lg bg-teal-800 text-white px-3 py-2 text-sm font-semibold':'rounded-lg border px-3 py-2 text-sm'} disabled={busy} onclick={()=>select(t.key)}>{t.name}</button>{/each}</div>{/if}
+ {#if !embedded||procurementGroup}<div class="flex gap-2 flex-wrap">{#each (procurementGroup?tabs.filter(t=>['inventory','catalog','orders','suppliers','shortages'].includes(t.key)):tabs) as t}<button type="button" aria-pressed={mode===t.key} class={mode===t.key?'rounded-lg bg-teal-800 text-white px-3 py-2 text-sm font-semibold':'rounded-lg border px-3 py-2 text-sm'} disabled={busy} onclick={()=>select(t.key)}>{t.name}</button>{/each}</div>{/if}
  {#if mode==='publication'}
   <StudioPublication {token} {projects}/>
  {:else}
  {#if ['finance','shortages','backup'].includes(mode)}
   <label class="block text-sm font-bold">Proyecto<select class="mt-2 w-full rounded-lg border p-2 font-normal" value={project} disabled={busy} onchange={e=>selectProject(e.currentTarget.value)}><option value="">Seleccionar proyecto</option>{#each projects as p (p.id)}<option value={p.id}>{p.name}</option>{/each}</select></label>
  {/if}
+ {#if mode==='catalog'}<p class="text-sm text-slate-600">Productos activos de Bonaire. Los artículos sin inventariar no tienen existencias confirmadas. Utiliza Almacén → Crear artículo para vincularlos y registrar entradas reales.</p><form class="flex gap-2" onsubmit={e=>{e.preventDefault();void load()}}><input aria-label="Buscar en catálogo Bonaire" placeholder="Nombre, marca o modelo" maxlength="100" class="min-w-0 flex-1 rounded-lg border p-2" bind:value={search} disabled={busy}/><button type="submit" disabled={busy} class="rounded-lg bg-teal-800 text-white px-3 py-2">Buscar</button></form>{/if}
  {#if ['finance','shortages','inventory','orders','suppliers'].includes(mode)}
   {#key mode+'|'+project}<StudioCommercialActions {token} {mode} {project} {projects} onSaved={()=>load()}/>{/key}
  {/if}
@@ -82,6 +84,7 @@
  {#each rows as r}
    <article class="border rounded-xl p-3 space-y-1 text-sm break-words">
    {#if mode==='inventory'}<p class="font-bold">{r.name}</p><p>Físico: {qty(r.on_hand_milli)} {r.unit} · Libre: {qty(r.available_milli)} · Reservado: {qty(r.reserved_milli)} · Entregado: {qty(r.issued_milli)}</p>
+   {:else if mode==='catalog'}<p class="font-bold">{r.name}</p><p>{[r.brand,r.model].filter(Boolean).join(' · ')}</p><p>Precio de venta publicado: {r.price==null?'Por definir':Number(r.price).toFixed(2)+' '+r.currency}</p>{#if r.warehouse_item_id}<p>Inventario: {qty(r.on_hand_milli)} {r.unit} · Libre: {qty(r.available_milli)} · Reservado: {qty(r.reserved_milli)}</p>{:else}<p class="text-amber-800">Sin inventariar · Existencias físicas no confirmadas</p>{/if}
    {:else if mode==='orders'}<p class="font-bold">{r.reference} · {r.supplier_name}</p><p>{r.status} · {r.incoterm} · {money(r.total_minor,r.currency)}</p>
    {:else if mode==='suppliers'}<p class="font-bold">{r.name}</p><p>{r.country} · {r.active?'Activo':'Inactivo'}</p><p>{r.contact||'Sin contacto registrado'}</p>
    {:else if mode==='shortages'}<p class="font-bold">{r.name}</p><p>Necesidad: {qty(r.required_milli)} · Sin cubrir: {qty(r.uncovered_milli)} · Disponible compartido: {qty(r.shared_available_milli)} · Por recibir: {qty(r.ordered_not_received_milli)} {r.unit}</p>

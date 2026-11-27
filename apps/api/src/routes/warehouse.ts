@@ -25,6 +25,16 @@ async function smallBody(req:Request):Promise<Record<string,unknown>|null>{
 }
 function knownConstraint(e:unknown){return /warehouse_|constraint|UNIQUE/i.test(e instanceof Error?e.message:String(e))}
 const actorGuard="EXISTS(SELECT 1 FROM admin_users WHERE id=? AND is_active=1 AND role='admin')";
+// The public catalog is not a physical stock ledger. Unlinked products have
+// unknown inventory, not zero; published stock_quantity is never imported.
+const catalogSQL="SELECT p.id,p.name,p.brand,p.model,p.price,p.currency,i.id AS warehouse_item_id,i.unit,b.on_hand_milli,b.reserved_milli,b.on_hand_milli-b.reserved_milli AS available_milli FROM products p LEFT JOIN warehouse_items i ON i.product_id=p.id LEFT JOIN warehouse_balances b ON b.item_id=i.id WHERE p.is_active=1 AND p.id>? AND instr(lower(p.name||' '||COALESCE(p.brand,'')||' '||COALESCE(p.model,'')),lower(?))>0 AND "+actorGuard+" ORDER BY p.id LIMIT 51";
+warehouseRoutes.get('/catalog',async c=>{
+ const after=c.req.query('after')||'',search=(c.req.query('search')||'').trim();
+ if((after&&!id(after))||search.length>100)return c.json({error:'Consulta inválida'},400);
+ const r=await c.env.DB.prepare(catalogSQL).bind(after,search,c.var.user!.user_id).all();
+ const rows=r.results||[],page=rows.slice(0,50);
+ return c.json({products:page,next:rows.length>50?page.at(-1)!.id:null});
+});
 warehouseRoutes.get('/items',async c=>{
  const after=c.req.query('after')||'',search=(c.req.query('search')||'').trim();
  if((after&&!id(after))||search.length>100)return c.json({error:'Consulta inválida'},400);
