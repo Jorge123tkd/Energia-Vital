@@ -23,11 +23,11 @@ CREATE TABLE service_work_assignments (
 );
 CREATE TRIGGER service_work_assignment_guard BEFORE INSERT ON service_work_assignments BEGIN
  SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM service_work_orders o JOIN warehouse_project_links l ON l.project_id=o.project_id JOIN brigade_work w ON w.request_id=l.request_id JOIN requests r ON r.id=w.request_id WHERE o.quote_id=NEW.quote_id AND w.id=NEW.work_id AND w.status IN ('scheduled','pending_approval') AND r.status NOT IN ('cancelled','completed'))
- OR EXISTS(SELECT 1 FROM service_work_orders o JOIN procurement_project_shortages s ON s.project_id=o.project_id WHERE o.quote_id=NEW.quote_id AND s.uncovered_milli>0)
+ OR EXISTS(SELECT 1 FROM service_work_orders o JOIN procurement_project_shortages s ON s.project_id=o.project_id WHERE o.quote_id=NEW.quote_id AND (s.uncovered_milli>0 OR o.material_mode='customer_only'))
  THEN RAISE(ABORT,'service_work_assignment_not_ready') END;
 END;
 CREATE TRIGGER service_work_review_guard BEFORE UPDATE OF status ON brigade_work
-WHEN OLD.status='pending_approval' AND NEW.status='scheduled' AND EXISTS(SELECT 1 FROM service_work_assignments a JOIN service_work_orders o ON o.quote_id=a.quote_id JOIN procurement_project_shortages s ON s.project_id=o.project_id WHERE a.work_id=NEW.id AND s.uncovered_milli>0)
+WHEN OLD.status='pending_approval' AND NEW.status='scheduled' AND EXISTS(SELECT 1 FROM service_work_assignments a JOIN service_work_orders o ON o.quote_id=a.quote_id JOIN procurement_project_shortages s ON s.project_id=o.project_id WHERE a.work_id=NEW.id AND (s.uncovered_milli>0 OR o.material_mode='customer_only'))
 BEGIN SELECT RAISE(ABORT,'service_work_assignment_not_ready'); END;
 CREATE TRIGGER service_work_order_no_update BEFORE UPDATE ON service_work_orders BEGIN SELECT RAISE(ABORT,'service_work_order_immutable'); END;
 CREATE TRIGGER service_work_order_no_delete BEFORE DELETE ON service_work_orders BEGIN SELECT RAISE(ABORT,'service_work_order_immutable'); END;
