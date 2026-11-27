@@ -35,7 +35,7 @@ test('offline plan and no production mutations',()=>{
 })
 
 test('private export restoration accepts the verified 28/28 pre-migration snapshot',()=>{
- const sql28=Buffer.from('BEGIN TRANSACTION;\\nCREATE TABLE d1_migrations(id INTEGER PRIMARY KEY);\\n'+Array.from({length:28},(_,i)=>'INSERT INTO d1_migrations(id) VALUES('+(i+1)+');\\n').join('')+['admin_users','requests','customers','auth_sessions','products'].map(n=>'CREATE TABLE '+n+'(id TEXT PRIMARY KEY);\\n').join('')+'COMMIT;\\n');
+ const sql28=Buffer.from('BEGIN TRANSACTION;\nCREATE TABLE d1_migrations(id INTEGER PRIMARY KEY);\n'+Array.from({length:28},(_,i)=>'INSERT INTO d1_migrations(id) VALUES('+(i+1)+');\n').join('')+['admin_users','requests','customers','auth_sessions','products'].map(n=>'CREATE TABLE '+n+'(id TEXT PRIMARY KEY);\n').join('')+'COMMIT;\n');
  assert.equal(checkRestoration(sql28,28),true);
  assert.throws(()=>checkRestoration(sql28,24));
 });
