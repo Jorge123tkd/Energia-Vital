@@ -49,7 +49,7 @@ function naturalKind(text:string):string|undefined{
 function labelled(text:string,key:string):string|undefined{
  const re=new RegExp('(?:^|[;,\\n]|\\.\\s+|\\b(?:y|la|el)\\s+)\\s*(?:'+key+')\\s*(?:es\\s+|:|=)\\s*([^;\\n]+)','i');
  const m=re.exec(text);
- return m?.[1].split(/(?:,\s*|\.\s+)(?:(?:la |el )?(?:persona|contacto|ubicaci[oó]n|municipio|necesidad|presupuesto|forma de pago|moneda|tipo de cliente|entidad|empresa|pagamos|pago|tenemos|disponemos|somos)\b)/i)[0].trim().replace(/\.$/,'');
+ return m?.[1].split(/(?:,\s*|\.\s+)(?:(?:la |el )?(?:persona|contacto|ubicaci[oó]n|municipio|necesidad|presupuesto|forma de pago|moneda|tipo de cliente|entidad|empresa|pagamos|pago|tenemos|disponemos|somos|necesitamos|necesito|queremos|requerimos)\b)/i)[0].trim().replace(/\.$/,'');
 }
 export function resumeCommercialIntake(d:CommercialDraft):string{
  if(d.stage==='submitted')return 'Solicitud registrada. Referencia: '+d.id+(d.guestSubmitted?'. El equipo te contactará por WhatsApp.':'. Consulta «mis solicitudes».');
@@ -79,7 +79,7 @@ function advanceNatural(text:string,prior:CommercialDraft|null,id:string):Commer
  if(currency&&/^(USD|CUP|MLC|EUR)$/i.test(currency)){d.currency=currency.toUpperCase();matched=true;}
  const place=/(?:somos|estamos|trabajamos|radicamos)\s+(?:de|en)\s+([^,;\n]+?)(?=\s+y\s+(?:necesit|querem|pag)|[,;\n]|$)/i.exec(text);
  if(place&&!d.location)assign('location',place[1].trim(),250);
- const need=/(?:necesitamos|necesito|queremos|requerimos)\s+(.+?)(?=\s+y\s+(?:somos|estamos|trabajamos)|[;\n]|$)/i.exec(text);
+ const need=/(?:necesitamos|necesito|queremos|requerimos)\s+(.+?)(?=\s+y\s+(?:somos|estamos|trabajamos)|\.\s+|[;\n]|$)/i.exec(text);
  if(need&&!d.need)assign('need',need[1].trim(),1800,3);
  if(!d.need&&place){const prefix=text.slice(0,place.index).replace(/\s+y\s*$/i,'').trim();assign('need',prefix,1800,3);}
  if(d.payment===undefined&&/\b(?:transferencia|efectivo|cheque)\b/.test(m)){
