@@ -79,3 +79,12 @@ d=null;say('Empresas y negocios');say('Necesitamos respaldo solar y somos de Boy
 say('Privada. Somos una MIPYME llamada Empresa Ejemplo. Contacto: María. Pagamos por transferencia en CUP y tenemos 5000 USD de presupuesto.');
 assert.equal(d.company,'Empresa Ejemplo');assert.equal(d.contact,'María');assert.equal(d.currency,'CUP');assert.equal(d.payment,'transferencia');assert.equal(d.budget,'5000');assert.equal(d.stage,'review');
 console.log('PASS free-form multi-field business answer in a single message');
+
+const {commercialSummary}=load('commercial-intake');
+for(const kind of ['empresa_privada','mipyme','tcp','cooperativa','persona']){
+ const summary=commercialSummary({id:'q',stage:'review',kind,company:'Entidad',need:'Respaldo',location:'Boyeros',payment:'Transferencia',budget:'1000'});
+ assert.match(summary,/Tipo: Privado/);
+ assert.doesNotMatch(summary,/Mipyme|TCP|Cooperativa|Residencial/);
+}
+assert.match(commercialSummary({id:'q',stage:'review',kind:'estatal'}),/Tipo: Estatal/);
+console.log('PASS customer classification: only Estatal and Privado; subtypes remain internal');

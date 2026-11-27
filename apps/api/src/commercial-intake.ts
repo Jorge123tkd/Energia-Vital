@@ -8,7 +8,7 @@ export type CommercialDraft = {
 export type CommercialStep = {draft:CommercialDraft|null; reply:string; submit?:true};
 const norm=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const kinds:Record<string,string>={'privada':'empresa_privada','privado':'empresa_privada','mipyme':'mipyme','empresa estatal':'estatal','estatal':'estatal','negocio privado':'empresa_privada','empresa privada':'empresa_privada','tcp':'tcp','cooperativa':'cooperativa','residencial':'persona','vivienda':'persona','proveedor':'otro','alianza':'otro','otro':'otro'};
-const labels:Record<string,string>={mipyme:'Privado · Mipyme',estatal:'Estatal',empresa_privada:'Privado',tcp:'Privado · TCP',cooperativa:'Privado · Cooperativa',persona:'Privado · Residencial',otro:'Proveedor / alianza comercial'};
+const labels:Record<string,string>={mipyme:'Privado',estatal:'Estatal',empresa_privada:'Privado',tcp:'Privado',cooperativa:'Privado',persona:'Privado',otro:'Proveedor / alianza comercial'};
 export const startCommercialIntake=(s:string)=>/^(?:registrar (?:una )?solicitud comercial|crear (?:un )?expediente comercial|iniciar solicitud empresarial|registrar proyecto empresarial)[.!]*$/.test(norm(s));
 const optional=(s:string)=>/^(?:no se|por definir|pendiente|omitir|no disponible|aun no|todavia no)$/.test(norm(s));
 export function commercialSummary(d:CommercialDraft):string{
