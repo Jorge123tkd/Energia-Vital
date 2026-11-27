@@ -73,7 +73,7 @@ async function say(text){const r=await decide(env,'555001',text,null,'qa-thread'
  assert.match(JSON.stringify(fullChoice.replyMarkup),/Dejar número de WhatsApp/);
  assert.equal(requests.size,requestsBeforeFull);
 
- commercial=null;await say('solicitar servicio');await say('Necesito reparar el inversor y estamos en Plaza');await say('vivienda');await say('Ana Pérez');await say('efectivo');await say('por definir');
+ commercial=null;linked=true;await say('solicitar servicio');await say('Necesito reparar el inversor y estamos en Plaza');await say('vivienda');await say('Ana Pérez');await say('efectivo');await say('por definir');
  assert.equal(commercial.kind,'persona');assert.equal(commercial.stage,'review');await say('cancelar borrador');assert.equal(commercial,null);assert.equal(requests.size,1);
  await say('quiero ser proveedor');assert.equal(commercial.kind,'otro');await say('cancelar borrador');
  await say('solicitar cita');await say('mañana');await say('10:00');assert.equal(appointments.size,0);assert.ok(appointment.date&&appointment.time);
