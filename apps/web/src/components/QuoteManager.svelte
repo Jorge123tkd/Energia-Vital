@@ -81,7 +81,8 @@
     if(!window.confirm('¿Sustituir las partidas de este borrador por el levantamiento residencial guardado? Las versiones anteriores no cambian.'))return;
     items=p.items.map(i=>({key:++nextKey,description:i.description,quantity:i.quantity,price_usd:i.unit_price_usd_cents/100}));
     stockNotes=p.stockNotes;title='Propuesta residencial';
-    internalNotes='Origen: levantamiento residencial revisión '+p.revision+'.';
+    taxesUsd=0;freightUsd=0;discountUsd=0;
+    internalNotes=['Origen: levantamiento residencial revisión '+p.revision+'. Revisa impuestos, transporte y descuentos.',internalNotes].filter(Boolean).join('\n').slice(0,1000);
   }
   async function saveDraft(e:SubmitEvent){
     e.preventDefault();

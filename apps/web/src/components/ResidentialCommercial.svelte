@@ -1,11 +1,11 @@
 <script lang="ts">
- import {onMount} from 'svelte';
+ import {onMount,untrack} from 'svelte';
  import {apiRequest} from '../lib/api';
  import QuoteManager from './QuoteManager.svelte';
  let {token,requestId='',projectId='',canReview=false}:{token:string;requestId?:string;projectId?:string;canReview?:boolean}=$props();
  type Line={key:number;name:string;kind:'material'|'labor';unit:string;required:number;client:number;warehouse:number;price:string};
  type Proposal={revision:number;items:{description:string;quantity:number;unit_price_usd_cents:number}[];missing:string[];stockNotes:string;canImport:boolean};
- let id=$state(''),revision=$state(0),mode=$state('partial'),site=$state(''),notes=$state(''),lines=$state<Line[]>([]),proposal=$state<Proposal|null>(null),error=$state(''),notice=$state(''),busy=$state(false),ready=$state(false),dirty=$state(false);
+ let id=$state(untrack(()=>requestId)),revision=$state(0),mode=$state('partial'),site=$state(''),notes=$state(''),lines=$state<Line[]>([]),proposal=$state<Proposal|null>(null),error=$state(''),notice=$state(''),busy=$state(false),ready=$state(false),dirty=$state(false);
  let lookup=$state<any[]>([]),search=$state(''),source=$state('products'),chosen=$state(''),next=$state<string|null>(null),finding=$state(false),serial=0;
  const base='/api/quotes/residential';
  const call=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
@@ -16,7 +16,7 @@
  async function find(more=false){finding=true;error='';if(!more){lookup=[];next=null;chosen=''}try{const p=new URLSearchParams({search});if(more&&next)p.set('after',next);const r=await call('/api/quotes/tariffs'+(source==='products'?'/products':'')+'?'+p);lookup=more?[...lookup,...r.tariffs]:r.tariffs;next=r.next}catch(e){error=(e as Error).message}finally{finding=false}}
  function pick(){const t=lookup.find(x=>x.code===chosen);if(!t||lines.length>=30)return;const l=blank(source==='products'||t.category==='material'?'material':'labor');l.name=t.name.slice(0,130);l.unit=t.unit;l.price=String(t.sale_cents/100);lines=lines.length===1&&!lines[0].name?[l]:[...lines,l];chosen='';dirty=true}
  const qty=(v:number)=>Math.round(Number(v)*1000);
- function price(v:string){if(!v.trim())return null;if(!/^\d{1,6}(?:\.\d{1,2})?$/.test(v.trim()))throw Error('Importe USD inválido');return Math.round(Number(v)*100)}
+ function price(v:string){if(!v.trim())return null;if(!/^\d{1,9}(?:\.\d{1,2})?$/.test(v.trim()))throw Error('Importe USD inválido');return Math.round(Number(v)*100)}
  async function save(e:SubmitEvent){e.preventDefault();if(busy||!ready)return;busy=true;error='';notice='';try{const body={mode,site,notes,lines:lines.map(l=>({name:l.name,kind:l.kind,unit:l.unit,required_milli:qty(l.required),client_milli:l.kind==='labor'?0:qty(l.client),warehouse_milli:l.kind==='labor'?0:qty(l.warehouse),sale_cents:price(l.price)}))};const r=await call(base+'/requests/'+encodeURIComponent(id),{expected_revision:revision,survey:body});apply(r);notice='Levantamiento guardado. No se han reservado materiales ni enviado presupuestos.'}catch(e){error=(e as Error).message}finally{busy=false}}
  onMount(()=>{void load()});
 </script>
@@ -41,5 +41,5 @@
  {#if proposal}<p class="text-sm">Revisión guardada {proposal.revision}. {proposal.missing.length?'Faltan precios: '+proposal.missing.join(', '):proposal.canImport?'Lista para preparar presupuesto.':'Revisa extensión del resumen o partidas facturables.'}</p>{/if}
  {/if}
 </section>
-{#if id&&ready}<QuoteManager {token} requestId={id} {canReview} residentialProposal={dirty?null:proposal}/>{/if}
+{#if id}{#key id}<QuoteManager {token} requestId={id} {canReview} residentialProposal={!ready||dirty?null:proposal}/>{/key}{/if}
 <style>label{font-size:.875rem;font-weight:600}input,select,textarea{display:block;width:100%;border:1px solid #cbd5e1;border-radius:.5rem;padding:.5rem;margin-top:.25rem;font-weight:400}</style>

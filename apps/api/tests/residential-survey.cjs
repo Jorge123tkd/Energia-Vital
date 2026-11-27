@@ -12,3 +12,6 @@ assert.equal(validateSurvey({...input,lines:[{...labor,client_milli:1000}]}),nul
 assert.equal(surveyQuote(validateSurvey({...input,lines:[{...material,sale_cents:null}]}),1).canImport,false);
 assert.equal(surveyQuote(validateSurvey({...input,mode:'installation',lines:[{...material,client_milli:8000,warehouse_milli:0,sale_cents:null},labor]}),1).items.length,1);
 console.log('PASS residential: partial supply, labor independent, installation-only, invalid allocation and missing price');
+
+assert.ok(validateSurvey({...input,lines:[{...material,sale_cents:250000000}]}));
+assert.equal(validateSurvey({...input,lines:[{...material,sale_cents:100000000000}]}),null);
