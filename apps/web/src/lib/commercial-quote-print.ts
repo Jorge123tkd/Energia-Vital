@@ -15,3 +15,9 @@ export function printCommercialQuote(q:Printable,approved:boolean){
  popup.document.open();popup.document.write(commercialQuoteHtml(q,approved));popup.document.close();
  popup.focus();popup.print();
 }
+
+export function downloadCommercialQuoteHtml(q:Printable,approved:boolean){
+ const url=URL.createObjectURL(new Blob([commercialQuoteHtml(q,approved)],{type:'text/html;charset=utf-8'}));
+ const link=document.createElement('a');link.href=url;link.download='Bonaire-propuesta-'+q.id.replace(/[^A-Za-z0-9_-]/g,'').slice(0,80)+'-R'+q.version_no+'.html';
+ document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+}

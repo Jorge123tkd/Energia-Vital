@@ -32,3 +32,16 @@ reject(lambda:db.execute("UPDATE commercial_quote_decisions SET decision='reject
 quote('q3',3);issue('q3');reject(lambda:decide('q3'))
 assert db.execute('SELECT count(*) FROM commercial_quote_decisions').fetchone()==(2,)
 print('PASS quote decisions: ownership, issuance, validity, immutable revisions and accepted offer guard')
+
+# A documented external response may be recorded for an unregistered customer, but not by an operator.
+db.execute("INSERT INTO admin_users(id,email,password_hash,role) VALUES('o','o@invalid.test','x','operator')")
+db.execute("INSERT INTO requests(id,type,title) VALUES('guest','consultation','Guest QA')")
+db.execute("INSERT INTO commercial_quote_versions(id,request_id,version_no,title,items_json,subtotal_cents,total_cents,valid_until,created_by,created_at,updated_at) VALUES('g','guest',1,'Guest offer','[]',100,100,'2026-12-01','a','2026-11-27','2026-11-27')")
+db.execute("UPDATE commercial_quote_versions SET status='in_review' WHERE id='g'")
+db.execute("UPDATE commercial_quote_versions SET status='approved_internal',reviewed_by='a',reviewed_at='2026-11-27' WHERE id='g'")
+def external(actor):
+ db.execute("INSERT INTO commercial_quote_decisions VALUES('g','accept','','staff_evidence',NULL,?,'Respuesta recibida por escrito','2026-11-27','2026-11-27')",(actor,))
+reject(lambda:external('o'))
+external('a')
+assert db.execute("SELECT source FROM commercial_quote_decisions WHERE quote_id='g'").fetchone()==('staff_evidence',)
+print('PASS unregistered customer: documented response, admin-only')

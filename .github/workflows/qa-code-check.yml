@@ -31,6 +31,7 @@ jobs:
           node apps/api/tests/assistant-usage.cjs
           node apps/api/tests/commercial-intake.cjs
           node apps/api/tests/residential-survey.cjs
+          node apps/web/tests/commercial-quote-print.cjs
           node apps/api/tests/telegram-journeys.cjs
           node apps/api/tests/telegram-customer-auth.cjs
           node apps/api/tests/telegram-customer-appointments.cjs
