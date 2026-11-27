@@ -88,7 +88,7 @@ jobs:
           if (!$response.success -or $response.result.name -ne 'energia-vital-web' -or $response.result.production_branch -ne 'main' -or !$response.result.canonical_deployment.id) { throw 'Proyecto, rama o retorno de Pages no confirmados.' }
           $previous=$response.result.canonical_deployment.id
           Write-Host ('[RETORNO] Despliegue previo: '+$previous)
-          # The reviewed publisher rechecks D1 28/28 and the active private
+          # The reviewed publisher rechecks D1 34/34 and the active private
           # Studio gates, builds Studio enabled and deploys ONLY Pages.
           powershell -NoProfile -File scripts/pages-publicacion-controlada.ps1 -Publicar -HabilitarStudio -DependenciasYaInstaladas -Confirmacion PUBLICAR_PAGES_STUDIO_PRIVADO
           if ($LASTEXITCODE -ne 0) { throw 'Publicador Pages no confirmó éxito; revisar su salida antes de reintentar.' }
@@ -106,3 +106,19 @@ jobs:
             if ((Get-FileHash -Algorithm SHA256 $target).Hash -ne $expected) { throw ('Pages publicado, pero hash no coincide: '+$asset) }
             Write-Host ('[OK] Publicado y verificado: '+$asset)
           }
+
+      - name: Comprobar centro de descargas y favicons publicados
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach ($asset in @('evpro/downloads.html','evpro/downloads.js','evpro/stable-release.json','favicon.svg','studio-engineering/favicon.svg')) {
+            $target=Join-Path $env:RUNNER_TEMP ('published-'+($asset -replace '[^A-Za-z0-9.-]','_'))
+            $response=curl.exe --fail --silent --show-error --location --max-redirs 3 --proto-redir '=https' --max-time 30 -H 'Cache-Control: no-cache' -o $target -w '%{http_code}|%{url_effective}' ('https://bnergiv.com/'+$asset+'?verify='+$env:GITHUB_SHA)
+            if ($LASTEXITCODE -ne 0) { throw ('No se pudo verificar '+$asset) }
+            if ("$response" -notmatch ('^200\|https://bnergiv\.com/'+[regex]::Escape($asset)+'(\?[^#]*)?\z')) { throw ('Destino final inesperado: '+$asset) }
+            $expected=(Get-FileHash -Algorithm SHA256 ('apps/web/public/'+$asset)).Hash
+            if ((Get-FileHash -Algorithm SHA256 $target).Hash -ne $expected) { throw ('Hash no coincide: '+$asset) }
+            Write-Host ('[OK] Publicado y verificado: '+$asset)
+          }
+          $manifest=Get-Content apps/web/public/evpro/stable-release.json -Raw | ConvertFrom-Json
+          if ($manifest.schema -ne 'evpro-stable-v2' -or $manifest.available -ne $false) { throw 'El canal publico no debe exponer un piloto privado.' }
