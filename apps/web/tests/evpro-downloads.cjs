@@ -1,0 +1,18 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const html=fs.readFileSync('apps/web/public/evpro/downloads.html','utf8');
+const js=fs.readFileSync('apps/web/public/evpro/downloads.js','utf8');
+const manifest=JSON.parse(fs.readFileSync('apps/web/public/evpro/stable-release.json','utf8'));
+assert.match(html,/EV Pro Studio/);
+assert.match(html,/Bonaire/);
+assert.match(html,/href="\/studio-engineering\/favicon\.svg"/);
+assert.match(html,/https:\/\/bnergiv\.com\/evpro\/downloads\.html/);
+assert.match(html,/theme-color" content="#102f36"/);
+assert.equal(manifest.schema,'evpro-stable-v2');
+assert.equal(manifest.available,false,'No beta/private build may be exposed as a stable release');
+assert.match(js,/Jorge123tkd\/EV-Pro-Estudio\/releases\/download/);
+assert.match(js,/allowedReleasePage/);
+assert.match(js,/SHA-256/);
+assert.doesNotMatch(js,/\/evpro\/releases\/EV-Pro-Studio-/,'Large Windows binaries must not be hosted as Pages static assets');
+console.log('PASS EV Pro downloads: Bonaire/Studio identity, favicon, stable-only gate and GitHub Releases assets.');
