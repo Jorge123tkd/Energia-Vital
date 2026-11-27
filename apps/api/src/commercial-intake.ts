@@ -3,7 +3,7 @@
 import {parseRequestIntake} from './request-intake';
 export type CommercialDraft = {
  id:string; stage:'kind'|'company'|'need'|'location'|'payment'|'budget'|'review'|'submitted';
- kind?:string; company?:string; need?:string; location?:string; payment?:string; budget?:string; contact?:string; currency?:string; natural?:boolean;
+ kind?:string; company?:string; need?:string; location?:string; payment?:string; budget?:string; contact?:string; currency?:string; natural?:boolean; contactMode?:'choice'|'name'|'phone'; guestSubmitted?:boolean;
 };
 export type CommercialStep = {draft:CommercialDraft|null; reply:string; submit?:true};
 const norm=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -27,7 +27,7 @@ export function naturalCommercialStart(text:string):boolean{
 const prompt:Record<string,string>={
  kind:'¿La entidad es estatal o privada? (Privada incluye mipymes, TCP, cooperativas y viviendas.)',
  company:'¿Cómo se llama la entidad o titular? Puedes indicar también la persona de contacto.',
- need:'¿Qué necesitan resolver? Cuéntame el servicio, suministro o proyecto que desean.',
+ need:'¿Qué necesitas resolver? Podemos ayudarte con respaldo solar, suministro de equipos, instalación, mantenimiento o reparación. Cuéntame qué necesitas y en qué municipio sería el trabajo.',
  location:'¿En qué municipio, provincia o país sería el trabajo?',
  payment:'¿Cómo prevén pagar? Transferencia, efectivo u otra forma. Si aún no lo saben, escribe «por definir».',
  budget:'¿Qué presupuesto aproximado tienen disponible en USD? Puedes escribir «por definir». No pedimos anticipo.'
@@ -52,7 +52,7 @@ function labelled(text:string,key:string):string|undefined{
  return m?.[1].split(/(?:,\s*|\.\s+)(?:(?:la |el )?(?:persona|contacto|ubicaci[oó]n|municipio|necesidad|presupuesto|forma de pago|moneda|tipo de cliente|entidad|empresa|pagamos|pago|tenemos|disponemos|somos)\b)/i)[0].trim().replace(/\.$/,'');
 }
 export function resumeCommercialIntake(d:CommercialDraft):string{
- if(d.stage==='submitted')return 'Solicitud registrada. Referencia: '+d.id+'. Consulta «mis solicitudes».';
+ if(d.stage==='submitted')return 'Solicitud registrada. Referencia: '+d.id+(d.guestSubmitted?'. El equipo te contactará por WhatsApp.':'. Consulta «mis solicitudes».');
  if(d.natural)return naturalNext({...d}).reply;
  return d.stage==='review'?'Tu borrador sigue guardado:\n\n'+commercialSummary(d)+'\n\nEscribe «confirmar solicitud comercial» para enviarlo.':prompt[d.stage]||'Continúa con tu solicitud comercial.';
 }

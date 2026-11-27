@@ -19,9 +19,9 @@ let linked=false,customerId='qa-customer',update=100,commercial=null,appointment
 const env={ENVIRONMENT:'production',DB:{
  prepare(sql){return {sql,args:[],bind(...args){this.args=args;return this},
  async all(){if(sql.includes('FROM customers WHERE telegram_customer_chat_id'))return {results:linked?[{id:customerId,name:'Cliente QA'}]:[]};return {results:[]}},
- async first(){if(sql.includes('FROM telegram_staff_links'))return null;if(sql.includes('FROM customers WHERE id='))return linked?{id:customerId,name:'Cliente QA'}:null;if(sql.includes('FROM requests r JOIN customers'))return requests.get(this.args[0])?.owner===customerId?{id:this.args[0]}:null;if(sql.includes('FROM appointments a JOIN customers'))return appointments.has(this.args[0])?{id:this.args[0]}:null;return null},
+ async first(){if(sql.includes('FROM requests r JOIN request_intake'))return requests.get(this.args[0])?.owner===null&&requests.get(this.args[0])?.args[2]===this.args[1]?{id:this.args[0]}:null;if(sql.includes('FROM telegram_staff_links'))return null;if(sql.includes('FROM customers WHERE id='))return linked?{id:customerId,name:'Cliente QA'}:null;if(sql.includes('FROM requests r JOIN customers'))return requests.get(this.args[0])?.owner===customerId?{id:this.args[0]}:null;if(sql.includes('FROM appointments a JOIN customers'))return appointments.has(this.args[0])?{id:this.args[0]}:null;return null},
  async run(){if(sql.includes('INSERT INTO appointments')){assert.equal(this.args[5],customerId);appointments.set(this.args[0],this.args);return {meta:{changes:1}}}throw Error('Unexpected write '+sql)}}},
- async batch(stmts){for(const s of stmts){if(s.sql.includes('INSERT INTO requests')){assert.equal(s.args[6],customerId);assert.equal(s.args[7],'555001');if(!requests.has(s.args[0]))requests.set(s.args[0],{owner:customerId,args:s.args})}else if(s.sql.includes('INSERT INTO request_intake'))intakes.set(s.args[0],s.args);else throw Error('Unexpected batch '+s.sql)}return stmts.map(()=>({meta:{changes:1}}))}
+ async batch(stmts){for(const s of stmts){if(s.sql.includes('INSERT INTO requests')&&s.sql.includes('VALUES (?,NULL')){assert.equal(linked,false);if(!requests.has(s.args[0]))requests.set(s.args[0],{owner:null,args:s.args})}else if(s.sql.includes('INSERT INTO requests')){assert.equal(s.args[6],customerId);assert.equal(s.args[7],'555001');if(!requests.has(s.args[0]))requests.set(s.args[0],{owner:customerId,args:s.args})}else if(s.sql.includes('INSERT INTO request_intake'))intakes.set(s.args[0],s.args);else throw Error('Unexpected batch '+s.sql)}return stmts.map(()=>({meta:{changes:1}}))}
 }};
 async function say(text){const r=await decide(env,'555001',text,null,'qa-thread',commercial,String(update++),appointment);if(r.commercial!==undefined)commercial=r.commercial;if(r.appointment!==undefined)appointment=r.appointment;return r}
 (async()=>{
@@ -37,5 +37,13 @@ async function say(text){const r=await decide(env,'555001',text,null,'qa-thread'
  await say('quiero ser proveedor');assert.equal(commercial.kind,'otro');await say('cancelar borrador');
  await say('solicitar cita');await say('mañana');await say('10:00');assert.equal(appointments.size,0);assert.ok(appointment.date&&appointment.time);
  assert.match((await say('confirmar cita')).reply,/Pendiente de aprobación/);assert.equal(appointments.size,1);assert.equal(appointment,null);
+ linked=false;commercial=null;
+ await say('Empresas y negocios');await say('respaldo solar y somos de Boyeros');await say('estatal');await say('Nombre: Entidad QA');await say('transferencia');await say('por definir');
+ const choice=await say('confirmar solicitud comercial');assert.match(JSON.stringify(choice.replyMarkup),/Dejar número de WhatsApp/);assert.equal(requests.size,1);
+ await say('dejar número de WhatsApp');assert.equal(commercial.contactMode,'name');await say('María Pérez');assert.equal(commercial.contactMode,'phone');
+ await say('123');assert.equal(requests.size,1);const guest=await say('55551234');assert.match(guest.reply,/72 horas/);assert.equal(requests.size,2);assert.equal(commercial.guestSubmitted,true);
+ assert.match(requests.get(commercial.id).args[2],/Teléfono: \+5355551234/);assert.equal(requests.get(commercial.id).owner,null);
+ await say('confirmar solicitud comercial');assert.equal(requests.size,2);
+ console.log('PASS guest contact flow: explicit choice, no account, invalid number and repeat confirmation');
  console.log('PASS real Telegram decision journeys: business, household, supplier, identity gate, duplicate confirmation, cancellation and appointment');
 })().catch(e=>{console.error(e);process.exitCode=1});

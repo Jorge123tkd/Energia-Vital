@@ -59,8 +59,8 @@ export function extractTelegramMessage(payload:any):{updateId:string;chatId:stri
 }
 export function extractTelegramAccountCallback(payload:any):{id:string;input:NonNullable<ReturnType<typeof extractTelegramMessage>>}|null{
   const q=payload?.callback_query;
-  if(!q||q.data!=='customer:create'||typeof q.id!=='string'||q.id.length>128||!validUpdateId(payload.update_id)||q.message?.chat?.type!=='private'||!validChatId(q.from?.id)||q.from.id!==q.message.chat.id||q.from.is_bot===true)return null;
-  const input=extractTelegramMessage({update_id:payload.update_id,message:{chat:q.message.chat,from:q.from,text:'crear cuenta'}});
+  if(!q||!['customer:create','customer:contact'].includes(q.data)||typeof q.id!=='string'||q.id.length>128||!validUpdateId(payload.update_id)||q.message?.chat?.type!=='private'||!validChatId(q.from?.id)||q.from.id!==q.message.chat.id||q.from.is_bot===true)return null;
+  const input=extractTelegramMessage({update_id:payload.update_id,message:{chat:q.message.chat,from:q.from,text:q.data==='customer:contact'?'dejar número de WhatsApp':'crear cuenta'}});
   return input?{id:q.id,input}:null;
 }
 async function acknowledgeCallback(env:Env,id:string){
@@ -77,6 +77,37 @@ function canonicalMarkup(markup:TelegramReplyMarkup|undefined,site:string):Teleg
 }
 function accountChoices(site:string):TelegramReplyMarkup{
   return {inline_keyboard:[[{text:'Crear cuenta',callback_data:'customer:create'}],[{text:'Vincular cuenta',url:site+'/perfil'}]]};
+}
+function commercialContactChoices(site:string):TelegramReplyMarkup{
+ return {inline_keyboard:[[{text:'Dejar número de WhatsApp',callback_data:'customer:contact'}],[{text:'Crear cuenta',callback_data:'customer:create'}],[{text:'Vincular cuenta',url:site+'/perfil'}]]};
+}
+export function normalizeContactPhone(text:string):string|null{
+ const raw=text.trim();
+ if(!/^\+?[0-9 ()-]{8,25}$/.test(raw))return null;
+ let digits=raw.replace(/\D/g,'');
+ // Only infer the Cuban country code for an unprefixed eight-digit number.
+ if(!raw.startsWith('+')&&digits.length===8)digits='53'+digits;
+ if(!/^[1-9]\d{7,14}$/.test(digits)||(!raw.startsWith('+')&&digits.length!==10)||(!raw.startsWith('+')&&!digits.startsWith('53')))return null;
+ return '+'+digits;
+}
+function cleanContactName(value:string|undefined):string|null{
+ const name=(value||'').trim().replace(/\s+/g,' ');
+ return name.length>=3&&name.length<=120&&/\p{L}/u.test(name)?name:null;
+}
+async function saveGuestCommercial(env:Env,d:CommercialDraft,phone:string):Promise<boolean>{
+ const name=cleanContactName(d.contact);
+ if(!name||d.stage!=='review'||!d.company||!d.need||!d.location||!d.kind||d.payment===undefined||d.budget===undefined)return false;
+ const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment,payment_currency:d.currency});
+ if(intake.error||!intake.value)return false;
+ const title=('Solicitud comercial: '+d.company).slice(0,180);
+ const description='[Contacto por WhatsApp - sin cuenta]\nNombre: '+name+'\nTeléfono: '+phone+'\n\n[Origen: Telegram]\nEntidad: '+d.company+'\nNecesidad: '+d.need;
+ const time=now();
+ await env.DB.batch([
+  env.DB.prepare("INSERT INTO requests (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at) VALUES (?,NULL,'consultation','consultation',?,?,'pending','medium',?,NULL,?,?) ON CONFLICT(id) DO NOTHING").bind(d.id,title,description,d.location,time,time),
+  env.DB.prepare("INSERT INTO request_intake(request_id,available_budget_usd_cents,payment_method,payment_currency,customer_type,created_at,updated_at) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM requests WHERE id=? AND customer_id IS NULL AND description=?) ON CONFLICT(request_id) DO NOTHING").bind(d.id,intake.value.available_budget_usd_cents,intake.value.payment_method,intake.value.payment_currency,intake.value.customer_type,time,time,d.id,description)
+ ]);
+ const saved=await env.DB.prepare("SELECT r.id FROM requests r JOIN request_intake i ON i.request_id=r.id WHERE r.id=? AND r.customer_id IS NULL AND r.description=?").bind(d.id,description).first();
+ return !!saved;
 }
 function registrationDecision(stage:Stage,site:string,invalid=false):BotDecision{
   const reply=(invalid&&stage!=='password'?'No pude validar ese dato. Inténtalo otra vez.\n\n':'')+registrationPrompt(stage);
@@ -169,6 +200,7 @@ export async function decide(env:Env,chatId:string,raw:string,state:SolarState|n
 
   const customer=await currentTelegramCustomer(env,chatId);
   const accountButton=accountChoices(site);
+  const contactButton=commercialContactChoices(site);
   if(/^(?:vincular cuenta|vincular cuenta existente|vincular cuenta de cliente)$/i.test(text))return {reply:'Entra en tu cuenta web, abre Mi perfil → Vincular Telegram, genera un código y envíamelo aquí. No compartas tu contraseña.',replyMarkup:{inline_keyboard:[[{text:'Abrir mi perfil',url:site+'/perfil'}]]},skipHistory:true};
   if(action==='customer-account')return customer
     ?{reply:'Tu cuenta Bonaire ya está vinculada, '+customer.name+'. Puedes entrar a la web con tu correo y contraseña o seguir aquí.',skipHistory:true}
@@ -218,7 +250,7 @@ export async function decide(env:Env,chatId:string,raw:string,state:SolarState|n
   // An explicit commercial menu switches back to the saved request.
   // Otherwise a previously started appointment owns its date/time replies.
   const switchCommercial=action==='request-service'||action==='business-services'||action==='business-partner'||startCommercialIntake(text)||/^(?:confirmar solicitud(?: comercial)?|enviar solicitud|cancelar borrador)$/i.test(text);
-  const visit=switchCommercial?null:advanceAppointmentDraft(text,appointment);
+  const visit=switchCommercial||prior?.contactMode==='name'||prior?.contactMode==='phone'?null:advanceAppointmentDraft(text,appointment);
   if(visit){
     if(visit.submit){
       if(!customer)return {reply:'Tu horario está guardado. Crea o vincula tu cuenta para enviar la cita; después escribe «confirmar cita».',appointment:visit.draft,replyMarkup:accountButton,skipHistory:true};
@@ -226,6 +258,28 @@ export async function decide(env:Env,chatId:string,raw:string,state:SolarState|n
       return {reply,appointment:/^(?:Cita solicitada|Esta cita ya se solicitó)/.test(reply)?null:visit.draft,skipHistory:true};
     }
     return {reply:visit.reply,appointment:visit.draft,state:null,skipHistory:true};
+  }
+  // Contact-only is an explicit continuation of a confirmed review, not an account.
+  // Keep names/phone outside assistant history and never authorize private reads by phone.
+  if(prior?.stage==='review'&&!customer&&prior.contactMode){
+    const contactText=normalize(text);
+    if(/^(?:dejar numero(?: de whatsapp)?|dejar telefono|solo telefono|whatsapp)$/.test(contactText)){
+      const name=cleanContactName(prior.contact||(prior.kind==='persona'?prior.company:undefined));
+      const d:CommercialDraft={...prior,contact:name||undefined,contactMode:name?'phone':'name'};
+      return {reply:name?'Indícame el número de WhatsApp donde podemos contactarte (incluye el prefijo del país, por ejemplo +53). Al enviarlo autorizas a Bonaire a contactarte sobre esta solicitud.':'¿Cuál es tu nombre completo como persona de contacto? Después te pediré tu número de WhatsApp.',commercial:d,replyMarkup:{remove_keyboard:true},skipHistory:true};
+    }
+    const interrupt=action!==null||/^(?:cancelar|cancelar borrador|cancelar solicitud comercial|no gracias|confirmar solicitud(?: comercial)?|enviar solicitud|corregir\b)/.test(contactText);
+    if(!interrupt&&prior.contactMode==='name'){
+      const name=cleanContactName(text);
+      if(!name||/[¿?]/.test(text)||/\d/.test(name))return {reply:'Escribe el nombre de la persona de contacto, sin teléfono. Puedes cancelar el borrador.',commercial:prior,skipHistory:true,replyMarkup:{remove_keyboard:true}};
+      return {reply:'Gracias. Indícame ahora el número de WhatsApp con prefijo de país. Al enviarlo autorizas a Bonaire a contactarte por esta solicitud.',commercial:{...prior,contact:name,contactMode:'phone'},skipHistory:true,replyMarkup:{remove_keyboard:true}};
+    }
+    if(!interrupt&&prior.contactMode==='phone'){
+      const phone=normalizeContactPhone(text);
+      if(!phone)return {reply:'No pude validar ese número. Escribe un teléfono cubano de 8 dígitos o el número internacional con + y prefijo de país. No se ha registrado nada.',commercial:prior,skipHistory:true,replyMarkup:{remove_keyboard:true}};
+      if(!await saveGuestCommercial(env,prior,phone))return {reply:'No pude confirmar el registro. Conservé tu borrador; vuelve a intentarlo o habla con un gestor.',commercial:prior,skipHistory:true,replyMarkup:{remove_keyboard:true}};
+      return {reply:'¡Solicitud recibida! Referencia: '+prior.id+'. Nuestro equipo comercial procurará comunicarse contigo por WhatsApp en un plazo de hasta 72 horas. No necesitas crear una cuenta ni efectuar ningún pago ahora.',commercial:{...prior,stage:'submitted',contactMode:undefined,guestSubmitted:true},state:null,appointment:null,skipHistory:true};
+    }
   }
   const documentReply=await telegramDocuments(env,chatId,text);
   if(documentReply!==null)return {reply:documentReply,skipHistory:true};
@@ -237,7 +291,7 @@ export async function decide(env:Env,chatId:string,raw:string,state:SolarState|n
     const step=advanceCommercialIntake(intakeMessage,prior,'tg-solicitud-'+updateId);
     if(step){
       if(step.submit&&step.draft){
-        if(!customer)return {reply:'Tu solicitud está preparada y guardada en este chat. Para enviarla y poder consultar las respuestas, crea o vincula tu cuenta. Después escribe «confirmar solicitud comercial». No volveremos a pedir los datos del borrador.',commercial:step.draft,state:null,replyMarkup:accountButton,skipHistory:true};
+        if(!customer)return {reply:'Tu solicitud está preparada y guardada. Deja un número de WhatsApp, o bien crea o vincula tu cuenta para consultar el expediente en línea. Si eliges una cuenta, después confirma la solicitud; no volveremos a pedir los datos.',commercial:{...step.draft,contactMode:'choice'},state:null,replyMarkup:contactButton,skipHistory:true};
         const d=step.draft, time=now();
         const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment,payment_currency:d.currency});
         if(intake.error||!intake.value)return {reply:'Revisa el borrador antes de enviarlo.',commercial:prior,state:null};
@@ -502,7 +556,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     // Refrescar el vínculo después de procesar el mensaje: el OTP puede haberlo creado
     // o «desvincular» puede haberlo revocado en esta misma interacción.
     const currentStaff=await currentTelegramStaff(env,input.chatId);
-    const draftKeyboard:TelegramReplyMarkup|undefined=nextCommercial?.stage==='review'?{keyboard:[[{text:'Confirmar solicitud comercial'},{text:'Cancelar borrador'}],[{text:'Hablar con una persona'}]],resize_keyboard:true,one_time_keyboard:true,input_field_placeholder:'Revisa o confirma tu solicitud…'}:undefined;
+    const draftKeyboard:TelegramReplyMarkup|undefined=nextCommercial?.stage==='review'&&!nextCommercial.contactMode?{keyboard:[[{text:'Confirmar solicitud comercial'},{text:'Cancelar borrador'}],[{text:'Hablar con una persona'}]],resize_keyboard:true,one_time_keyboard:true,input_field_placeholder:'Revisa o confirma tu solicitud…'}:undefined;
     const keyboard=decision.replyMarkup||draftKeyboard||telegramReplyKeyboard(Boolean(currentStaff),nextState?.stage,decision.keyboardView||'normal');
     const renderedReply=canonicalTelegramLinks(presentTelegramReply(decision.reply,nextState?.stage),site);
     await sendTelegramText(env,input.chatId,renderedReply,keyboard);

@@ -49,6 +49,10 @@ function signed(date=now,user={id:123456,is_bot:false}){
  assert.match(unsupported({...voice,message:{...voice.message,voice:undefined,photo:[]}}).reply,/8 MB/);
  const callback={update_id:999,callback_query:{id:'callback-test',data:'customer:create',from:{id:123456},message:{chat:{id:123456,type:'private'}}}};
  assert.equal(routeModule.exports.extractTelegramAccountCallback(callback).input.text,'crear cuenta');
+ assert.equal(routeModule.exports.extractTelegramAccountCallback({...callback,callback_query:{...callback.callback_query,data:'customer:contact'}}).input.text,'dejar número de WhatsApp');
+ assert.equal(routeModule.exports.normalizeContactPhone('55551234'),'+5355551234');
+ assert.equal(routeModule.exports.normalizeContactPhone('+1 787 555 0123'),'+17875550123');
+ assert.equal(routeModule.exports.normalizeContactPhone('123'),null);
  assert.equal(routeModule.exports.extractTelegramAccountCallback({...callback,callback_query:{...callback.callback_query,from:{id:654321}}}),null);
  assert.equal(routeModule.exports.extractTelegramAccountCallback({...callback,callback_query:{...callback.callback_query,message:{chat:{id:123456,type:'group'}}}}),null);
  console.log('PASS Telegram signed identity, tampering, expiration, duplicate parameters, guided registration, separate customer code format and private callbacks');
