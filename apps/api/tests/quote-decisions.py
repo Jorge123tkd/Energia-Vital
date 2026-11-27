@@ -3,7 +3,7 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]/'migrations'
 db=sqlite3.connect(':memory:')
 db.execute('PRAGMA foreign_keys=ON')
-for n in (1,15,31):
+for n in range(1,32):
  db.executescript(next(root.glob(f'{n:03}_*.sql')).read_text())
 db.execute("INSERT INTO admin_users(id,email,password_hash,role) VALUES('a','a@invalid.test','x','admin')")
 db.execute("INSERT INTO customers(id,name,email,phone) VALUES('c','Cliente','c@invalid.test','55551234'),('x','Otro','x@invalid.test','55551235')")
