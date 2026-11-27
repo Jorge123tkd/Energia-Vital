@@ -4,6 +4,7 @@
  let {token}:{token:string}=$props();
  type Row={code:string;revision:number;name:string;category:string;unit:string;service_id:string|null;sale_cents:number|null;cost_cents:number|null;conditions:string;active:number};
  let rows=$state<Row[]>([]),next=$state<string|null>(null),busy=$state(false),error=$state(''),notice=$state(''),editing=$state(false);
+ let services=$state<{id:string;name:string}[]>([]),serviceSearch=$state(''),serviceNext=$state<string|null>(null),serviceBusy=$state(false);
  let code=$state(''),revision=$state(0),name=$state(''),category=$state('labor'),unit=$state('unit'),serviceId=$state<string|null>(null),sale=$state(''),cost=$state(''),conditions=$state(''),active=$state(true);
  const cats=[['labor','Mano de obra'],['material','Material'],['transport','Transporte'],['handling','Manipulación'],['other','Otros']];
  const units=[['unit','Unidad'],['m','Metro'],['m2','Metro cuadrado'],['kg','Kilogramo'],['set','Conjunto'],['hour','Hora'],['visit','Visita'],['trip','Viaje'],['service','Servicio']];
@@ -11,7 +12,8 @@
  const call=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
  const label=(v:number|null)=>v===null?'Por definir':(v/100).toFixed(2)+' USD';
  async function load(more=false){busy=true;error='';try{const r=await call(url+(more&&next?'?after='+encodeURIComponent(next):''));rows=more?[...rows,...r.tariffs]:r.tariffs;next=r.next}catch(e){error=(e as Error).message}finally{busy=false}}
- function edit(r?:Row){code=r?.code||'';revision=r?.revision||0;name=r?.name||'';category=r?.category||'labor';unit=r?.unit||'unit';serviceId=r?.service_id||null;sale=r?.sale_cents==null?'':String(r.sale_cents/100);cost=r?.cost_cents==null?'':String(r.cost_cents/100);conditions=r?.conditions||'';active=r?!!r.active:true;editing=true;error='';notice=''}
+ async function loadServices(more=false){serviceBusy=true;error='';try{const p=new URLSearchParams({search:serviceSearch});if(more&&serviceNext)p.set('after',serviceNext);const r=await call(url+'/services?'+p);services=more?[...services,...r.services]:r.services;serviceNext=r.next}catch(e){error=(e as Error).message}finally{serviceBusy=false}}
+ function edit(r?:Row){code=r?.code||'';revision=r?.revision||0;name=r?.name||'';category=r?.category||'labor';unit=r?.unit||'unit';serviceId=r?.service_id||null;sale=r?.sale_cents==null?'':String(r.sale_cents/100);cost=r?.cost_cents==null?'':String(r.cost_cents/100);conditions=r?.conditions||'';active=r?!!r.active:true;editing=true;error='';notice='';serviceSearch='';void loadServices()}
  function cents(v:string){if(!v.trim())return null;if(!/^\d{1,9}(?:\.\d{1,2})?$/.test(v.trim()))throw Error('Introduce importes USD con hasta dos decimales.');return Math.round(Number(v)*100)}
  async function save(e:SubmitEvent){e.preventDefault();if(busy)return;error='';notice='';try{const body={code,expected_revision:revision,name,category,unit,service_id:serviceId,sale_cents:cents(sale),cost_cents:cents(cost),conditions,active};if(!window.confirm('¿Guardar esta revisión del tarifario? No modifica presupuestos ni existencias.'))return;busy=true;await call(url,body);editing=false;notice='Tarifa registrada. Las cotizaciones anteriores se conservan.';await load()}catch(e){error=(e as Error).message}finally{busy=false}}
  onMount(()=>{void load()});
@@ -26,6 +28,7 @@
  <label>Nombre<input required minlength="3" maxlength="150" bind:value={name}/></label>
  <label>Categoría<select bind:value={category}>{#each cats as c}<option value={c[0]}>{c[1]}</option>{/each}</select></label>
  <label>Unidad<select bind:value={unit}>{#each units as u}<option value={u[0]}>{u[1]}</option>{/each}</select></label>
+ <div class="md:col-span-2 space-y-2"><label>Servicio de Bonaire vinculado (opcional)<select bind:value={serviceId} disabled={serviceBusy}><option value={null}>Tarifa interna independiente</option>{#if serviceId&&!services.some(s=>s.id===serviceId)}<option value={serviceId}>Servicio ya vinculado</option>{/if}{#each services as s (s.id)}<option value={s.id}>{s.name}</option>{/each}</select></label><div class="flex gap-2"><input aria-label="Buscar servicio existente" bind:value={serviceSearch} maxlength="100"/><button type="button" disabled={serviceBusy} onclick={()=>loadServices()} class="border rounded px-2">Buscar servicio</button>{#if serviceNext}<button type="button" disabled={serviceBusy} onclick={()=>loadServices(true)} class="border rounded px-2">Más</button>{/if}</div></div>
  <label>Precio de venta USD<input inputmode="decimal" placeholder="Por definir" bind:value={sale}/></label>
  <label>Costo interno USD<input inputmode="decimal" placeholder="Por definir" bind:value={cost}/></label>
  <label class="md:col-span-2">Condiciones<textarea maxlength="500" bind:value={conditions}></textarea></label>

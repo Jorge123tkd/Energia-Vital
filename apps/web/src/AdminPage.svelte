@@ -14,6 +14,7 @@
   import RequestPhotoGallery from './components/RequestPhotoGallery.svelte';
   import StaffCalendar from './components/StaffCalendar.svelte';
   import StudioEntrance from './components/StudioEntrance.svelte';
+  import StudioTariffs from './components/StudioTariffs.svelte';
   // Studio UI remains dark unless deliberately enabled at build time.
   // Pages bridge can be deployed separately without opening unfinished admin flows.
   const studioUiEnabled = import.meta.env.VITE_STUDIO_UI_ENABLED === 'true';
@@ -767,6 +768,7 @@
       <AdminAssistantUsage {token} onCustomer={id=>openDossier(id)} />
     {:else if staffRole === 'admin' && (tab === 'products' || tab === 'services' || tab === 'gallery' || tab === 'site')}
       <AdminContent {token} {tab} {products} {services} {categories} onRefresh={async () => { await reload(); }} />
+      {#if tab==='services'}<details class="rounded-2xl border bg-white p-4 mt-4"><summary class="font-bold cursor-pointer">Tarifas y precios de instalación</summary><div class="mt-3"><StudioTariffs {token}/></div></details>{/if}
     {:else if staffRole === 'admin' && tab === 'staff'}
       <AdminStaff {token} {ownId} />
     {:else if tab === 'notifications' && staffRole === 'admin'}

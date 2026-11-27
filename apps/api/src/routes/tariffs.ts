@@ -21,6 +21,19 @@ tariffRoutes.get('/',async c=>{
  const rows=(await c.env.DB.prepare("SELECT code,revision,name,category,unit,sale_cents,conditions,service_id FROM commercial_tariffs WHERE active=1 AND sale_cents IS NOT NULL AND code>? AND instr(lower(name),lower(?))>0 ORDER BY code LIMIT 51").bind(after,search).all()).results||[];
  return c.json({tariffs:rows.slice(0,50),next:rows.length>50?rows[49].code:null});
 });
+// Existing product prices are suggestions only, never stock or purchase cost.
+tariffRoutes.get('/products',async c=>{
+ const after=c.req.query('after')||'',search=(c.req.query('search')||'').trim();
+ if(after.length>128||search.length>100)return c.json({error:'Consulta inválida'},400);
+ const rows=(await c.env.DB.prepare("SELECT id,name,brand,model,price FROM products WHERE is_active=1 AND currency='USD' AND typeof(price) IN ('integer','real') AND price>0 AND price<=999999999.99 AND id>? AND instr(lower(name||' '||COALESCE(brand,'')||' '||COALESCE(model,'')),lower(?))>0 ORDER BY id LIMIT 51").bind(after,search).all<{id:string;name:string;brand:string|null;model:string|null;price:number}>()).results||[];
+ return c.json({tariffs:rows.slice(0,50).map(p=>({code:p.id,name:[p.name,p.brand,p.model].filter(Boolean).join(' · ').slice(0,160),unit:'unit',sale_cents:Math.round(p.price*100)})),next:rows.length>50?rows[49].id:null});
+});
+tariffRoutes.get('/manage/services',requireAdminAuth,async c=>{
+ const after=c.req.query('after')||'',search=(c.req.query('search')||'').trim();
+ if(after.length>128||search.length>100)return c.json({error:'Consulta inválida'},400);
+ const rows=(await c.env.DB.prepare("SELECT id,name FROM services WHERE is_active=1 AND id>? AND instr(lower(name),lower(?))>0 ORDER BY id LIMIT 51").bind(after,search).all()).results||[];
+ return c.json({services:rows.slice(0,50),next:rows.length>50?rows[49].id:null});
+});
 tariffRoutes.get('/manage',requireAdminAuth,async c=>{
  const after=c.req.query('after')||'';
  if(after&&!code(after))return c.json({error:'Cursor inválido'},400);
