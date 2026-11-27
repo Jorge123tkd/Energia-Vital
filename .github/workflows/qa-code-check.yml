@@ -1,0 +1,252 @@
+name: Bonaire - validacion previa de QA sin despliegue
+on:
+  push:
+    branches:
+      - feat/cloudflare-customer-accounts-hardening
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qa-code-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias del lockfile
+        run: npm ci
+      - name: Auditar dependencias de produccion
+        run: npm audit --omit=dev --audit-level=high
+      - name: Verificar aislamiento QA y reglas Access (datos sinteticos)
+        run: |
+          node scripts/prepare-cloudflare-qa-config.test.cjs
+          node scripts/verify-qa-access.test.cjs
+      - name: Probar conversaciones con empresas y proveedores en Telegram y web
+        run: node apps/api/tests/business-assistant-phase-a.cjs
+      - name: Probar gates de migracion y respaldo 029-034
+        run: node scripts/tests/migrations-029-034-release.cjs
+      - name: Probar generacion de acta PDF y recuperacion de acta firmada
+        run: node apps/web/tests/service-delivery-print.cjs
+      - name: Probar pagina oficial de descargas EV Pro Studio
+        run: node apps/web/tests/evpro-downloads.cjs
+      - name: Probar solicitudes comerciales, citas y documentos
+        run: |
+          node apps/api/tests/telegram-customer-attachments.cjs
+          node apps/api/tests/assistant-usage.cjs
+          node apps/api/tests/commercial-intake.cjs
+          node apps/api/tests/residential-survey.cjs
+          node apps/web/tests/commercial-quote-print.cjs
+          node apps/api/tests/telegram-journeys.cjs
+          node apps/api/tests/telegram-customer-auth.cjs
+          node apps/api/tests/telegram-customer-appointments.cjs
+          node apps/api/tests/request-documents.cjs
+      - name: Typecheck API y Svelte
+        run: |
+          npm run typecheck --workspace=apps/api
+          npm run typecheck --workspace=apps/web
+      - name: Compilar frontend
+        env:
+          VITE_STUDIO_UI_ENABLED: 'false'
+        run: npm run build --workspace=apps/web
+      - name: Revisar _routes.json en dist para Studio y sesiones
+        run: node apps/web/tests/pages-build-output.mjs
+      - name: Probar protecciones de sesion
+        run: |
+          node apps/web/tests/auth-session.cjs
+          node apps/web/tests/admin-browser-session.cjs
+          node --test apps/web/tests/studio-bridge.test.mjs apps/web/tests/studio-action-audit.test.mjs apps/web/tests/studio-technical-share.test.mjs
+      - name: Comparar interfaz Studio publicada con la revisión preparada (solo lectura)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for asset in index.html bridge.js app.js; do
+            expected="$(sha256sum "apps/web/public/studio-engineering/$asset" | cut -d ' ' -f 1)"
+            if curl --fail --silent --show-error --max-time 20 -H 'Cache-Control: no-cache' "https://bnergiv.com/studio-engineering/$asset?check=${GITHUB_SHA}" -o "$RUNNER_TEMP/studio-$asset"; then
+              actual="$(sha256sum "$RUNNER_TEMP/studio-$asset" | cut -d ' ' -f 1)"
+              if [[ "$expected" == "$actual" ]]; then echo "[PUBLICADO] $asset coincide"; else echo "[PENDIENTE DE PUBLICAR] $asset no coincide"; fi
+            else
+              echo "[SIN VERIFICAR] $asset no accesible"
+            fi
+          done
+      - name: Probar creación real y actualización automática en Chromium aislado
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/evpro-browser" --no-package-lock --no-audit --no-fund playwright@1.58.2
+          EVPRO_BROWSER_DEPS="$RUNNER_TEMP/evpro-browser" node apps/web/tests/studio-browser-sync.mjs
+      - name: Compilar Pages Functions sin servidor
+        working-directory: apps/web
+        run: npx wrangler pages functions build functions --outfile "$RUNNER_TEMP/bonaire-session.js" --output-routes-path "$RUNNER_TEMP/bonaire-routes.json"
+      - name: Verificar y registrar paquete Pages, sin publicación
+        run: node apps/web/tests/pages-package-preflight.mjs "$RUNNER_TEMP/bonaire-session.js" "$RUNNER_TEMP/bonaire-routes.json" "$RUNNER_TEMP/bonaire-pages-preflight.json"
+      - name: Conservar manifiesto de prepublicación (solo hashes, sin binarios ni secretos)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bonaire-pages-preflight-${{ github.sha }}
+          path: ${{ runner.temp }}/bonaire-pages-preflight.json
+          retention-days: 14
+          if-no-files-found: error
+      - name: Analizar sintaxis del publicador Pages sin ejecutarlo
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $parseErrors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/pages-publicacion-controlada.ps1",[ref]$tokens,[ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "Error de sintaxis en publicador Pages" }
+          $src=Get-Content scripts/pages-publicacion-controlada.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "El publicador para Windows PowerShell 5.1 debe usar solo caracteres ASCII" }
+          foreach($expected in @('PUBLICAR_SOLO_PAGES_BONAIRE','$total -ne 34 -or $last -ne 34','migrations','pages deploy dist','--branch main','/api/studio/v1/me','/api/studio/native/v1/me','--environment production --json', 'ConvertFrom-Json','VITE_STUDIO_UI_ENABLED')){
+            if (!$src.Contains($expected)) { throw "Falta control del release Pages: $expected" }
+          }
+          if ($src -match 'wrangler deploy|d1 migrations apply|r2 object put|r2 object delete'){ throw 'Script Pages no debe mutar Worker, D1 o R2' }
+          Write-Host '[OK] PowerShell Pages listo, publicacion bloqueada por defecto.'
+      - name: Probar politica de release Pages aislado con D1 034
+        run: node scripts/tests/pages-only-policy.cjs
+      - name: Ensayar migraciones en memoria con registros ficticios
+        run: python3 apps/api/tests/migration-preservation.py
+      - name: Validar almacén, brigadas, compras y finanzas con registros ficticios
+        run: |
+          python3 apps/api/tests/warehouse-ledger.py
+          python3 apps/api/tests/warehouse-brigade-links.py
+          python3 apps/api/tests/procurement.py
+          python3 apps/api/tests/business-finance.py
+          python3 apps/api/tests/commercial-tariffs.py
+          python3 apps/api/tests/residential-survey-db.py
+          python3 apps/api/tests/quote-decisions.py
+          python3 apps/api/tests/service-contracts.py
+          python3 apps/api/tests/service-execution.py
+          python3 apps/api/tests/service-delivery.py
+      - name: Verificar respaldos D1 cifrados y restauracion SQLite sin datos reales
+        run: node --test scripts/tests/backup-bonaire-crypto.test.mjs
+      - name: Analizar sintaxis del exportador privado PowerShell sin usar Cloudflare
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $parseErrors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/respaldo-d1-025-028.ps1",[ref]$tokens,[ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "Error de sintaxis en respaldo PowerShell" }
+          $src=Get-Content scripts/respaldo-d1-025-028.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "El script para PowerShell 5.1 debe ser ASCII" }
+          foreach($required in @('param([switch]$Crear)','d1 export energia-vital-db --remote','backup-bonaire-crypto.mjs','d1_migrations','24')){
+            if (!$src.Contains($required)) { throw "Falta control del respaldo D1: $required" }
+          }
+          if ($src -match 'migrations apply|pages deploy|wrangler deploy|r2 object put') { throw "Respaldo no debe mutar Cloudflare" }
+          Write-Host '[OK] Respaldos de D1: script offline y sin migraciones.'
+      - name: Verificar flujo de copia a disco USB independiente sin ejecutarlo
+        shell: pwsh
+        run: |
+          $t=$null
+          $e=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/verificar-respaldo-usb.ps1",[ref]$t,[ref]$e) | Out-Null
+          if ($e.Count -ne 0) { throw "Error de sintaxis del verificador USB" }
+          $src=Get-Content scripts/verificar-respaldo-usb.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "Script USB PowerShell 5.1 debe ser ASCII" }
+          foreach($required in @('Get-Partition','Get-Disk','BusType','Get-FileHash','Copy-Item','--verificar')){
+            if (!$src.Contains($required)) { throw "Falta un control del respaldo externo: $required" }
+          }
+          if ($src -match 'wrangler|d1 migrations apply|pages deploy|r2 object put'){
+            throw "La copia externa no puede realizar operaciones Cloudflare"
+          }
+          Write-Host '[OK] Verificador USB parsea correctamente; no se copio nada en CI.'
+      - name: Revisar migracion 025-028 sin aplicarla ni tocar Cloudflare
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/migrar-bonaire-025-028.ps1",[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -ne 0) { throw "Error en sintaxis de migracion productiva" }
+          $src=Get-Content scripts/migrar-bonaire-025-028.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "PowerShell 5.1 exige solo ASCII" }
+          foreach($required in @('param([switch]$Aplicar)','energia-vital-qa-db','energia-vital-db','MIGRAR_BONAIRE_025_028_CON_COPIA_LOCAL','Get-FileHash','025_warehouse_ledger.sql','028_business_finance.sql','d1 migrations apply')){
+            if (!$src.Contains($required)) { throw "Falta guarda de migracion: $required" }
+          }
+          if ($src -match 'wrangler deploy|pages deploy|r2 object put|d1 export') { throw "El script de migracion no debe desplegar ni crear nuevas copias" }
+          Write-Host '[OK] Migraciones 025-028 preparadas sin ejecucion productiva.'
+      - name: Analizar scripts de migracion 029-034 sin ejecutar operaciones remotas
+        shell: pwsh
+        run: |
+          $files=@('scripts/migrar-bonaire-qa-029-034.ps1','scripts/respaldo-d1-029-034.ps1','scripts/verificar-respaldo-usb-029-034.ps1','scripts/migrar-bonaire-029-034.ps1')
+          foreach($file in $files){
+            $tokens=$null
+            $errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile($file,[ref]$tokens,[ref]$errors) | Out-Null
+            if($errors.Count -ne 0){throw "Error de sintaxis: $file"}
+            $content=Get-Content $file -Raw
+            if($content -match '[^\x00-\x7F]'){throw "PowerShell 5.1 exige ASCII: $file"}
+          }
+          $qaMigration=Get-Content 'scripts/migrar-bonaire-qa-029-034.ps1' -Raw
+          if($qaMigration -notmatch 'energia-vital-qa-db' -or $qaMigration -match 'energia-vital-db --remote'){throw 'La migracion QA no esta aislada'}
+          $backup=Get-Content 'scripts/respaldo-d1-029-034.ps1' -Raw
+          $backupCommands=$backup -replace '(?m)^\s*#.*$',''
+          if($backup -notmatch '--crear-28' -or $backupCommands -match '(?im)^\s*&?\s*(?:npx(?:\.cmd)?\s+)?(?:wrangler|wrangler@[^\s]+)\s+(?:d1\s+migrations\s+apply|deploy)|\bpages\s+deploy\b'){throw 'El respaldo previo no es seguro'}
+          $usb=Get-Content 'scripts/verificar-respaldo-usb-029-034.ps1' -Raw
+          if($usb -notmatch 'BusType' -or $usb -notmatch '--verificar-28'){throw 'El respaldo USB no se verifica fisicamente'}
+          $migration=Get-Content 'scripts/migrar-bonaire-029-034.ps1' -Raw
+          if($migration -notmatch 'MIGRAR_BONAIRE_029_034_CON_RESPALDO_USB' -or $migration -notmatch 'qa\.total -ne 34' -or $migration -notmatch 'prod\.total -ne 28'){throw 'La migracion productiva no exige QA 34 y respaldo externo 28'}
+          Write-Host '[OK] Cuatro scripts 029-034 parseados; ninguna operacion remota ejecutada.'
+      - name: Comprobar publicador Worker exclusivo sin ejecutar despliegue
+        shell: pwsh
+        run: |
+          $t=$null
+          $err=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/publicar-solo-worker-bonaire.ps1",[ref]$t,[ref]$err) | Out-Null
+          if ($err.Count -ne 0) { throw "Error de sintaxis publicador Worker" }
+          $src=Get-Content scripts/publicar-solo-worker-bonaire.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "Script PowerShell 5.1 debe usar ASCII" }
+          foreach($required in @('param([switch]$Publicar)','PUBLICAR_SOLO_WORKER_BONAIRE','wrangler@4.151.2 deploy --config wrangler.toml','r.total -ne 34','r.last_id -ne 34','r.residential_flow -ne 9','/health')){
+            if (!$src.Contains($required)) { throw "Falta control de release Worker: $required" }
+          }
+          if ($src -match 'pages deploy|d1 migrations apply|d1 export|r2 object put') { throw "Worker-only no debe publicar Pages ni modificar D1" }
+          Write-Host '[OK] Publicador Worker sin mutaciones automaticas.'
+      - name: Impedir publicar versión empresarial con esquema anterior a 034
+        shell: pwsh
+        run: |
+          $src=Get-Content scripts/publicar-produccion.ps1 -Raw
+          foreach($required in @('row.total -ne 34','row.ultimo -ne 34','row.residential_flow','row.tariffs_view','row.warehouse_items','row.warehouse_links','row.procurement_orders','row.business_obligations')){
+            if (!$src.Contains($required)) { throw "Falta el control de migraciones: $required" }
+          }
+          Write-Host '[OK] Release exige esquema comercial 034, sin aplicar D1.'
+
+      - name: Revisar sintaxis del comprobador de Pages publicada sin ejecutarlo
+        shell: pwsh
+        run: |
+          $t=$null
+          $parseErrors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/verificar-pages-publicado.ps1",[ref]$t,[ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "Comprobador Pages con sintaxis incorrecta" }
+          $src=Get-Content scripts/verificar-pages-publicado.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "Comprobador Windows PowerShell 5.1 debe usar solo ASCII" }
+          if ($src -match '\$home\b') { throw "HOME es una variable reservada de PowerShell" }
+          foreach ($check in @('/api/studio/v1/me','/api/studio/native/v1/me','/api/admin-session/refresh','/admin/citas')) {
+            if (!$src.Contains($check)) { throw "Falta verificacion HTTPS: $check" }
+          }
+          if ($src -match 'wrangler|d1 migrations apply|pages deploy|r2 object put') { throw "El comprobador no puede publicar ni cambiar la infraestructura" }
+          Write-Host '[OK] Verificador Pages independiente validado; sin deploy.'
+      - name: Verificar Worker comercial publicado y compuertas empresariales cerradas
+        run: node --test scripts/tests/production-worker-gates.cjs
+      - name: Comprobar HTTPS de Pages ya publicada sin datos privados
+        shell: bash
+        run: |
+          set -euo pipefail
+          site='https://bnergiv.com'
+          check_url() {
+            local label="$1" route="$2" want_status="$3" want_type="$4"
+            shift 4
+            local result status ctype
+            result="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}|%{content_type}' "$@" "$site$route")"
+            status="$(printf '%s' "$result" | cut -d '|' -f 1)"
+            ctype="$(printf '%s' "$result" | cut -d '|' -f 2)"
+            if [[ "$status" != "$want_status" ]] || [[ "$want_type" != '*' && "$ctype" != "$want_type"* ]]; then
+              echo "::error::Pages $label devolvio $result; se esperaba $want_status / $want_type"
+              exit 1
+            fi
+            echo "[OK] Pages $label: $result"
+          }
+          check_url 'Studio web anonimo' '/api/studio/v1/me' '401' 'application/json'
+          check_url 'Studio nativo anonimo' '/api/studio/native/v1/me' '401' 'application/json'
+          check_url 'Refresh admin sin cookie' '/api/admin-session/refresh' '401' '*' -X POST -H "Origin: $site" -H 'Content-Type: application/json' --data '{}'
+          check_url 'Portada' '/' '200' 'text/html'
+          check_url 'Admin citas por URL directa' '/admin/citas' '200' 'text/html'
+          echo '[OK] Validaciones HTTP de Pages publicada concluidas. No se desplego nada.'

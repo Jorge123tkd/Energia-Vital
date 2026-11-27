@@ -1,0 +1,19 @@
+# Entorno de pruebas remoto, separado del Worker y D1 de produccion.
+# Uso explicito: npx wrangler deploy --config wrangler.qa.toml
+# No desplegar sin verificar secretos de QA y dependencias del Worker.
+name = "energia-vital-api-qa"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "energia-vital-qa-db"
+database_id = "62755365-2c9a-4b20-8933-21209609a94b"
+
+[vars]
+ENVIRONMENT = "qa"
+WORKERS_AI_ENABLED = "false"
+WORKERS_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+
+# Sin triggers de Telegram ni binding a R2 de produccion.
+# Las funcionalidades de medios requieren un bucket R2 exclusivo de QA.

@@ -1,0 +1,36 @@
+name: Auditar inventario D1 remoto — SOLO LECTURA
+on:
+  workflow_dispatch:
+    inputs:
+      audit_confirmation:
+        description: 'Escribe AUDITAR_SOLO_LECTURA para consultar exclusivamente metadatos D1'
+        required: true
+        type: string
+permissions:
+  contents: read
+
+jobs:
+  inspect-schema:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.audit_confirmation == 'AUDITAR_SOLO_LECTURA' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Consulta de esquema D1 remota — no lee ninguna fila comercial
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute energia-vital-db --remote --json \
+            --command "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('auth_sessions','customers','admin_users','requests','brigades','brigade_members','brigade_work','request_activities','commercial_quote_versions','request_financial_declarations','request_payment_reports','technical_work_reports','service_followup_cases','service_case_notes','brigade_chief_accounts','brigade_chief_sessions','brigade_chief_reports','brigade_evidence_images','chief_completion_reviews') UNION ALL SELECT name FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'" \
+            > "$RUNNER_TEMP/d1-schema-only.json"
+          node tests/remote-inventory-schema.cjs < "$RUNNER_TEMP/d1-schema-only.json"
+      - name: Limpiar respuesta temporal
+        if: always()
+        run: rm -f "$RUNNER_TEMP/d1-schema-only.json"

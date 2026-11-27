@@ -35,11 +35,13 @@ export async function callAI(
         ...history.slice(-6).map((h) => ({ role: h.role, content: h.content })),
         { role: 'user', content: userMessage },
       ];
-      const result: any = await env.AI.run(model, { messages, max_tokens: 512 });
+      let timer:ReturnType<typeof setTimeout>|undefined;
+      let result:any;
+      try{result=await Promise.race([env.AI.run(model,{messages,max_tokens:512}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Tiempo de IA agotado')),7000)})]);}finally{if(timer!==undefined)clearTimeout(timer);}
       const text = extractWorkersAIText(result);
       if (text) return { text, provider: 'workers-ai', model };
     } catch (e) {
-      console.error('Workers AI falló, se usará el motor determinista:', e);
+      console.warn('Workers AI no disponible; se usará el motor determinista.');
     }
   }
 
@@ -49,6 +51,7 @@ export async function callAI(
       const model = env.AI_MODEL || 'gpt-4o-mini';
       const res = await fetch(`${env.AI_API_BASE.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
+        signal:AbortSignal.timeout(8000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${env.AI_API_KEY}`,
@@ -74,7 +77,7 @@ export async function callAI(
         console.error('Proveedor de IA respondió con error:', res.status);
       }
     } catch (e) {
-      console.error('Fallo al llamar al proveedor de IA:', e);
+      console.warn('Proveedor IA no disponible; se usará el motor determinista.');
     }
   }
 

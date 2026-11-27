@@ -1,0 +1,41 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
+const src=fs.readFileSync(path.join(__dirname,'../src/telegram-customer-appointments.ts'),'utf8');
+const mod={exports:{}};
+new Function('module','exports',ts.transpileModule(src,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(mod,mod.exports);
+const {cubanAppointmentTime:time,requestTelegramAppointment:request}=mod.exports;
+assert.equal(time('2027-01-20 10:00').toISOString(),'2027-01-20T15:00:00.000Z');
+assert.equal(time('2027-07-20 10:00').toISOString(),'2027-07-20T14:00:00.000Z');
+assert.equal(time('2027-02-30 10:00'),null);
+assert.equal(time('2027-01-20 24:00'),null);
+assert.equal(time('2027-01-20'),null);
+(async()=>{
+ let writes=0;
+ const env={DB:{prepare(sql){return {bind(...args){return {first:async()=>null,run:async()=>{writes++;assert.ok(sql.includes("telegram_customer_chat_id=?"));assert.ok(sql.includes("NOT EXISTS"));assert.ok(sql.includes("'pending'"));return {meta:{changes:1}}}}}}}}};
+ assert.match(await request(env,'customer','123','100','solicitar cita'),/confirmar cita/);
+ assert.equal(writes,0);
+ assert.match(await request(env,'customer','123','100','confirmar cita 2001-01-01 10:00'),/futura/);
+ assert.equal(writes,0);
+ console.log('PASS Cuban appointment time, invalid calendar dates and explicit confirmation');
+})().catch(e=>{console.error(e);process.exitCode=1});
+
+const {advanceAppointmentDraft:advance}=mod.exports;
+const at=new Date('2026-11-26T15:00:00Z');
+let draft=advance('Quiero reservar una cita mañana a las 10',null,at);
+assert.deepEqual(draft.draft,{date:'2026-11-27',time:'10:00'});
+assert.equal(draft.submit,undefined);
+assert.equal(advance('confirmar cita',draft.draft,at).submit,'2026-11-27 10:00');
+draft=advance('solicitar cita',null,at);
+draft=advance('28/11/2026',draft.draft,at);
+draft=advance('a las 2 pm',draft.draft,at);
+assert.equal(draft.draft.time,'14:00');
+assert.equal(advance('cancelar cita',draft.draft,at).draft,null);
+console.log('PASS natural appointment draft with Cuba timezone and explicit confirmation');
+
+const {cubanDayBounds:bounds}=mod.exports;
+assert.deepEqual(bounds('2027-01-20'),{start:'2027-01-20T05:00:00.000Z',end:'2027-01-21T05:00:00.000Z'});
+assert.deepEqual(bounds('2027-07-20'),{start:'2027-07-20T04:00:00.000Z',end:'2027-07-21T04:00:00.000Z'});
+assert.equal(bounds('2027-02-30'),null);
+assert.equal((Date.parse(bounds('2027-03-14').end)-Date.parse(bounds('2027-03-14').start))/3600000,23);
+assert.equal((Date.parse(bounds('2027-11-07').end)-Date.parse(bounds('2027-11-07').start))/3600000,25);
+console.log('PASS civil day boundaries in Cuba including both DST transitions');

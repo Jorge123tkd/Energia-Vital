@@ -1,140 +1,64 @@
 import { Hono } from 'hono';
-import { Env } from '../types';
-import { requireAdminAuth, requireCustomerAuth, getUser } from '../middleware';
+import type { Env } from '../types';
+import { getUser, requireAdminAuth, requireCustomerAuth } from '../middleware';
 
 export const rewardsRoutes = new Hono<{ Bindings: Env; Variables: { user?: any } }>();
-
-/* ─── CATÁLOGO DE RECOMPENSAS ─── */
-
-// Listar catálogo activo (público / customer)
-rewardsRoutes.get('/', async (c) => {
-  const { results } = await c.env.DB.prepare(
-    'SELECT * FROM reward_catalog WHERE is_active = 1 ORDER BY name ASC'
-  ).all<any>();
+rewardsRoutes.get('/', requireCustomerAuth, async c => {
+  const { results } = await c.env.DB.prepare('SELECT id, name, description, cost, stock_quantity FROM reward_catalog WHERE is_active = 1 ORDER BY name').all();
   return c.json({ rewards: results ?? [] });
 });
-
-// Crear un ítem (admin)
-rewardsRoutes.post('/', requireAdminAuth, async (c) => {
+rewardsRoutes.post('/', requireAdminAuth, async c => {
   const b = await c.req.json<any>();
-  if (!b.name || !b.cost || b.cost < 0) return c.json({ error: 'name y cost (>=0) son requeridos' }, 400);
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  await c.env.DB.prepare(
-    `INSERT INTO reward_catalog (id, name, description, cost, stock_quantity, is_active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, 1, ?, ?)`
-  )
-    .bind(id, b.name, b.description || null, b.cost, b.stock_quantity || null, now, now)
-    .run();
-  return c.json({ id, message: 'Recompensa creada' });
+  const name = typeof b.name === 'string' ? b.name.trim().slice(0, 160) : '';
+  if (!name || !Number.isInteger(b.cost) || b.cost < 0) return c.json({ error: 'Nombre y coste de puntos enteros requeridos' }, 400);
+  const id = crypto.randomUUID(), now = new Date().toISOString();
+  await c.env.DB.prepare('INSERT INTO reward_catalog (id, name, description, cost, stock_quantity, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)')
+    .bind(id, name, typeof b.description === 'string' ? b.description.slice(0, 500) : null, b.cost, Number.isInteger(b.stock_quantity) ? b.stock_quantity : null, now, now).run();
+  return c.json({ id }, 201);
 });
-
-// Actualizar / eliminar (admin)
-rewardsRoutes.patch('/:id', requireAdminAuth, async (c) => {
+rewardsRoutes.patch('/:id', requireAdminAuth, async c => {
   const b = await c.req.json<any>();
-  const now = new Date().toISOString();
-  await c.env.DB.prepare(
-    `UPDATE reward_catalog SET
-     name = COALESCE(?, name), description = COALESCE(?, description),
-     cost = COALESCE(?, cost), stock_quantity = COALESCE(?, stock_quantity),
-     is_active = COALESCE(?, is_active), updated_at = ?
-     WHERE id = ?`
-  )
-    .bind(b.name || null, b.description || null, b.cost || null, b.stock_quantity || null,
-      b.is_active !== undefined ? (b.is_active ? 1 : 0) : null, now, c.req.param('id'))
-    .run();
+  const old = await c.env.DB.prepare('SELECT * FROM reward_catalog WHERE id = ?').bind(c.req.param('id')).first<any>();
+  if (!old) return c.json({ error: 'Recompensa no encontrada' }, 404);
+  await c.env.DB.prepare('UPDATE reward_catalog SET name = ?, description = ?, cost = ?, stock_quantity = ?, is_active = ?, updated_at = ? WHERE id = ?')
+    .bind(typeof b.name === 'string' ? b.name.trim().slice(0, 160) : old.name, typeof b.description === 'string' ? b.description.slice(0, 500) : old.description,
+      Number.isInteger(b.cost) && b.cost >= 0 ? b.cost : old.cost,
+      b.stock_quantity === null ? null : Number.isInteger(b.stock_quantity) && b.stock_quantity >= 0 ? b.stock_quantity : old.stock_quantity,
+      typeof b.is_active === 'boolean' ? Number(b.is_active) : old.is_active,
+      new Date().toISOString(), old.id).run();
   return c.json({ message: 'Recompensa actualizada' });
 });
-
-rewardsRoutes.delete('/:id', requireAdminAuth, async (c) => {
-  await c.env.DB.prepare('DELETE FROM reward_catalog WHERE id = ?').bind(c.req.param('id')).run();
-  return c.json({ message: 'Recompensa eliminada' });
+rewardsRoutes.delete('/:id', requireAdminAuth, async c => {
+  await c.env.DB.prepare('UPDATE reward_catalog SET is_active = 0 WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ message: 'Recompensa desactivada' });
 });
-
-/* ─── CANJE DE PUNTOS ─── */
-
-// Balance de puntos (customer)
-rewardsRoutes.get('/balance', requireCustomerAuth, async (c) => {
+rewardsRoutes.get('/balance', requireCustomerAuth, async c => {
   const user = getUser(c)!;
   const row = await c.env.DB.prepare('SELECT * FROM customer_points WHERE customer_id = ?').bind(user.user_id).first<any>();
-  if (!row) {
-    const now = new Date().toISOString();
-    await c.env.DB.prepare(
-      'INSERT INTO customer_points (customer_id, balance, total_earned, total_spent, updated_at) VALUES (?, 0, 0, 0, ?)'
-    ).bind(user.user_id, now).run();
-    return c.json({ balance: 0, total_earned: 0, total_spent: 0 });
-  }
-  return c.json({ balance: row.balance, total_earned: row.total_earned, total_spent: row.total_spent });
+  return c.json({ balance: row?.balance ?? 0, total_earned: row?.total_earned ?? 0, total_spent: row?.total_spent ?? 0 });
 });
-
-// Canjear una recompensa (customer)
-rewardsRoutes.post('/:id/redeem', requireCustomerAuth, async (c) => {
-  const { DB } = c.env;
+rewardsRoutes.post('/:id/redeem', requireCustomerAuth, async c => {
   const user = getUser(c)!;
-  const rewardId = c.req.param('id');
-
-  const reward = await DB.prepare('SELECT * FROM reward_catalog WHERE id = ? AND is_active = 1')
-    .bind(rewardId).first<any>();
-  if (!reward) return c.json({ error: 'Recompensa no encontrada' }, 404);
-  if (reward.stock_quantity !== null && reward.stock_quantity <= 0) return c.json({ error: 'Sin stock' }, 400);
-
-  const points = await DB.prepare('SELECT * FROM customer_points WHERE customer_id = ?').bind(user.user_id).first<any>();
-  const balance = points ? points.balance : 0;
-  if (balance < reward.cost) return c.json({ error: 'Puntos insuficientes' }, 400);
-
-  const now = new Date().toISOString();
-  const redemptionId = crypto.randomUUID();
-  const redemptionCode = crypto.randomUUID().slice(0, 8).toUpperCase();
-
-  await DB.prepare(
-    `INSERT INTO reward_redemptions (id, customer_id, reward_id, points_spent, status, redemption_code, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'redeemed', ?, ?, ?)`
-  ).bind(redemptionId, user.user_id, rewardId, reward.cost, redemptionCode, now, now).run();
-
-  if (points) {
-    await DB.prepare('UPDATE customer_points SET balance = balance - ?, total_spent = total_spent + ?, updated_at = ? WHERE customer_id = ?')
-      .bind(reward.cost, reward.cost, now, user.user_id).run();
-  } else {
-    await DB.prepare('INSERT INTO customer_points (customer_id, balance, total_earned, total_spent, updated_at) VALUES (?, -?, 0, ?, ?)')
-      .bind(user.user_id, reward.cost, reward.cost, now).run();
-  }
-
-  if (reward.stock_quantity !== null) {
-    await DB.prepare('UPDATE reward_catalog SET stock_quantity = stock_quantity - 1 WHERE id = ?').bind(rewardId).run();
-  }
-
-  await DB.prepare(
-    `INSERT INTO notifications (id, user_id, user_type, type, title, message, is_read, created_at)
-     VALUES (?, ?, 'customer', 'reward_available', ?, ?, 0, ?)`
-  ).bind(crypto.randomUUID(), user.user_id, 'Recompensa canjeada',
-    `Has canjeado ${reward.name} por ${reward.cost} puntos. Código: ${redemptionCode}`, now).run();
-
-  return c.json({
-    message: 'Recompensa canjeada',
-    redemption: { id: redemptionId, reward_name: reward.name, points_spent: reward.cost, redemption_code: redemptionCode },
-  });
+  const id = crypto.randomUUID(), now = new Date().toISOString(), code = crypto.randomUUID().slice(0, 8).toUpperCase();
+  try {
+    // La migración 004 garantiza balance/stock y descuento atómico con triggers SQL.
+    const result = await c.env.DB.prepare(`INSERT INTO reward_redemptions (id, customer_id, reward_id, points_spent, status, redemption_code, created_at, updated_at)
+      SELECT ?, ?, id, cost, 'redeemed', ?, ?, ? FROM reward_catalog WHERE id = ? AND is_active = 1`)
+      .bind(id, user.user_id, code, now, now, c.req.param('id')).run();
+    if (!result.meta?.changes) return c.json({ error: 'Recompensa no disponible' }, 404);
+  } catch { return c.json({ error: 'Puntos insuficientes o recompensa agotada' }, 409); }
+  return c.json({ message: 'Canje registrado', redemption: { id, redemption_code: code } }, 201);
 });
-
-// Historial de canjes del customer
-rewardsRoutes.get('/redemptions', requireCustomerAuth, async (c) => {
+rewardsRoutes.get('/redemptions', requireCustomerAuth, async c => {
   const user = getUser(c)!;
-  const { results } = await c.env.DB.prepare(
-    `SELECT r.*, rc.name as reward_name FROM reward_redemptions r
-     JOIN reward_catalog rc ON r.reward_id = rc.id
-     WHERE r.customer_id = ? ORDER BY r.created_at DESC`
-  ).bind(user.user_id).all<any>();
+  const { results } = await c.env.DB.prepare(`SELECT r.id, r.points_spent, r.status, r.redemption_code, r.created_at, rc.name AS reward_name
+    FROM reward_redemptions r JOIN reward_catalog rc ON rc.id = r.reward_id WHERE r.customer_id = ? ORDER BY r.created_at DESC`)
+    .bind(user.user_id).all();
   return c.json({ redemptions: results ?? [] });
 });
-
-// Canjes de un ítem (admin)
-rewardsRoutes.get('/:id/redemptions', requireAdminAuth, async (c) => {
-  const { results } = await c.env.DB.prepare(
-    `SELECT r.*, rc.name as reward_name, cust.name as customer_name
-     FROM reward_redemptions r
-     JOIN reward_catalog rc ON r.reward_id = rc.id
-     LEFT JOIN customers cust ON r.customer_id = cust.id
-     WHERE r.reward_id = ? ORDER BY r.created_at DESC`
-  ).bind(c.req.param('id')).all<any>();
+rewardsRoutes.get('/:id/redemptions', requireAdminAuth, async c => {
+  const { results } = await c.env.DB.prepare(`SELECT r.*, c.name AS customer_name FROM reward_redemptions r
+    LEFT JOIN customers c ON c.id = r.customer_id WHERE r.reward_id = ? ORDER BY r.created_at DESC`)
+    .bind(c.req.param('id')).all();
   return c.json({ redemptions: results ?? [] });
 });
-

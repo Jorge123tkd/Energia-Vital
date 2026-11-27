@@ -1,59 +1,251 @@
-name: Desplegar Energía Vital
-
+name: Validar y desplegar Energía Vital
 on:
+  pull_request:
+    branches: [main, feat/cloudflare-customer-accounts-hardening]
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish_confirmation:
+        description: 'Escribe PUBLICAR_BONAIRE solo tras aprobar el lanzamiento'
+        required: true
+        type: string
+      backup_confirmed:
+        description: 'Respaldo externo cifrado de D1 creado y verificado'
+        required: true
+        type: boolean
+        default: false
+      migrations_reviewed:
+        description: 'Migraciones remotas y prueba sobre copia histórica revisadas'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
-  deploy-web:
+  checks:
     runs-on: ubuntu-latest
-    name: Desplegar frontend en Cloudflare Pages
     steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
-
-      - name: Instalar Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Instalar dependencias del frontend
-        working-directory: ./apps/web
+          node-version: '22'
+          cache: npm
+      - name: Instalar dependencias del monorepo
         run: npm ci
-
+      - name: Bloquear configuración QA vinculada a recursos de producción
+        run: node scripts/prepare-cloudflare-qa-config.test.cjs
+      - name: Verificar política de respaldo manual D1 hacia R2 privado
+        run: node apps/api/tests/backup-workflow-policy.cjs
+      - name: Compilar Worker de respaldo sin publicar (dry-run)
+        run: npx wrangler deploy --dry-run --config apps/d1-backup/wrangler.toml --outdir "$RUNNER_TEMP/bonaire-backup-dryrun"
+      - name: Probar política de auditoría de dependencias
+        run: node apps/api/tests/release-dependency-audit.test.cjs
+      - name: Bloquear CVE críticas, altas o moderadas en el lockfile combinado
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --json > "$RUNNER_TEMP/bonaire-audit-all.json" || true
+          node apps/api/tests/release-dependency-audit.cjs < "$RUNNER_TEMP/bonaire-audit-all.json"
+          npm audit --omit=dev --json > "$RUNNER_TEMP/bonaire-audit-production.json" || true
+          node apps/api/tests/release-dependency-audit.cjs < "$RUNNER_TEMP/bonaire-audit-production.json"
+          rm -f "$RUNNER_TEMP/bonaire-audit-all.json" "$RUNNER_TEMP/bonaire-audit-production.json"
+      - name: Revisar TypeScript API
+        run: npm run typecheck --workspace=apps/api
+      - name: Revisar Svelte + TypeScript
+        run: npm run typecheck --workspace=apps/web
       - name: Construir frontend
-        working-directory: ./apps/web
-        run: npm run build
+        run: npm run build --workspace=apps/web
+      - name: Verificar artefacto Pages generado y rutas protegidas
+        run: node apps/web/tests/pages-build-output.mjs
+      - name: Probar renovación y cierre de sesiones en navegador simulado
+        run: node apps/web/tests/auth-session.cjs
+      - name: Ensayo de preservación de datos históricos ficticios (sin Cloudflare real)
+        run: python3 apps/api/tests/migration-preservation.py
+      - name: Verificar inventario D1 de solo esquema (fixtures ficticios)
+        run: node apps/api/tests/remote-inventory-schema.test.cjs
 
-      - name: Desplegar a Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: energia-vital-web
-          directory: ./apps/web/dist
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+      - name: Crear D1 de pruebas local (no production)
+        working-directory: apps/api
+        run: npx wrangler d1 migrations apply energia-vital-db --local
+      - name: Iniciar Cloudflare Worker local
+        working-directory: apps/api
+        run: |
+          npx wrangler dev --local --port 8787 --var JWT_SECRET:ClaveCIExclusivaParaPruebasDe36Caracteres123 --var ADMIN_SETUP_KEY:ClaveSetupCIExclusivaParaPruebasDe36Caracteres123 >/tmp/energia-vital-worker.log 2>&1 &
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8787/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/energia-vital-worker.log
+          exit 1
+      - name: Probar registro, aislamiento y operaciones con Worker + D1
+        run: npm test --workspace=apps/api
 
   deploy-api:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.publish_confirmation == 'PUBLICAR_BONAIRE' &&
+      inputs.backup_confirmed == true &&
+      inputs.migrations_reviewed == true
+    needs: checks
     runs-on: ubuntu-latest
-    name: Desplegar API en Cloudflare Workers
-    needs: deploy-web
     steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
-
-      - name: Instalar Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-
-      - name: Instalar dependencias del API
-        working-directory: ./apps/api
-        run: npm ci
-
-      - name: Desplegar API a Workers
-        working-directory: ./apps/api
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # Enforce Pages production branch BEFORE touching the production API Worker.
+      - name: Verificar rama real de producción de Cloudflare Pages (solo lectura)
+        id: check-pages-production
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --max-time 20 \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/energia-vital-web")"
+          branch="$(printf '%s' "$response" | node -e '
+            let raw="";
+            process.stdin.on("data",x=>raw+=x).on("end",()=>{
+              try {
+                const p=JSON.parse(raw);
+                const b=p?.result?.production_branch;
+                if(p.success!==true||typeof b!=="string"||!/^[A-Za-z0-9._/-]{1,100}$/.test(b))process.exit(1);
+                process.stdout.write(b);
+              } catch {process.exit(1);}
+            });
+          ')"
+          if [[ "$branch" != "$GITHUB_REF_NAME" ]]; then
+            echo "Bloqueado: la rama de producción de Pages no coincide con la rama aprobada en GitHub." >&2
+            exit 1
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+      - name: Confirmar esquema D1 remoto antes de publicar (solo SELECT)
+        working-directory: apps/api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute energia-vital-db --remote --json \
+            --command "SELECT (SELECT COUNT(*) FROM d1_migrations) AS migrations, (SELECT COALESCE(MAX(id),0) FROM d1_migrations) AS last_migration, (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('brigades','brigade_members','brigade_work','request_activities','commercial_quote_versions','request_financial_declarations','request_payment_reports','technical_work_reports','service_followup_cases','service_case_notes','brigade_chief_accounts','brigade_chief_sessions','brigade_chief_reports','brigade_evidence_images','chief_completion_reviews','commercial_tariff_versions','residential_survey_versions','commercial_quote_decisions','service_contract_drafts','service_contract_approvals','service_contract_signatures','service_work_orders','service_work_assignments','service_deliveries')) AS present, (SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='commercial_tariffs') AS tariffs_view" \
+            > "$RUNNER_TEMP/bonaire-schema-count.json"
+          node -e '
+            const fs = require("fs");
+            const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const result = Array.isArray(raw) ? raw[0] : raw;
+            const row = result?.results?.[0];
+            const count = Number(row?.present);
+            if (Number(row?.migrations) !== 34 || Number(row?.last_migration) !== 34 || count !== 24 || Number(row?.tariffs_view) !== 1) {
+              console.error("D1 remota NO cumple 34/34 o faltan tablas de tarifas, contratos, ejecucion y entrega. Detenido antes de deploy.");
+              process.exit(1);
+            }
+            console.log("Verificación de estructura D1 remota correcta: 34/34, 24 tablas y vista de tarifas.");
+          ' "$RUNNER_TEMP/bonaire-schema-count.json"
+      - name: Bloquear publicación si falta la columna de rotación en D1 remota (solo SELECT)
+        working-directory: apps/api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute energia-vital-db --remote --json \
+            --command "SELECT COUNT(*) AS present FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'" \
+            > "$RUNNER_TEMP/bonaire-refresh-column.json"
+          node -e '
+            const fs = require("fs");
+            const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const result = Array.isArray(raw) ? raw[0] : raw;
+            if (Number(result?.results?.[0]?.present) !== 1) {
+              console.error("Bloqueado: falta auth_sessions.refresh_hash de migración 021 en D1 remota.");
+              process.exit(1);
+            }
+            console.log("Esquema D1 remota compatible con refresh rotation 021.");
+          ' "$RUNNER_TEMP/bonaire-refresh-column.json"
+      - name: Publicar Cloudflare Worker
+        working-directory: apps/api
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Verificar rutas nuevas de entrega y garantías protegidas (solo lectura)
+        run: node scripts/tests/production-delivery-gate.cjs
+      - name: Verificar compuertas empresariales cerradas
+        run: node --test scripts/tests/production-worker-gates.cjs
+
+  deploy-web:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [checks, deploy-api]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Construir web con la URL pública del Worker
+        run: npm run build --workspace=apps/web
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+      - name: Rechazar build Pages sin _routes.json de Studio
+        run: node apps/web/tests/pages-build-output.mjs
+      - name: Compilar Pages Functions sin publicar
+        working-directory: apps/web
+        run: npx wrangler pages functions build functions --outfile "$RUNNER_TEMP/bonaire-pages-functions.js" --output-routes-path "$RUNNER_TEMP/bonaire-pages-routes.json"
+      - name: Probar los puentes protegidos y bindings Studio antes de publicar
+        run: |
+          node --test apps/web/tests/studio-bridge.test.mjs apps/web/tests/studio-action-audit.test.mjs apps/web/tests/studio-technical-share.test.mjs
+      - name: Verificar rama real de producción de Cloudflare Pages (solo lectura)
+        id: pages-production
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          response="$(curl --fail --silent --show-error --max-time 20 \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/energia-vital-web")"
+          branch="$(printf '%s' "$response" | node -e '
+            let raw="";
+            process.stdin.on("data",x=>raw+=x).on("end",()=>{
+              try {
+                const p=JSON.parse(raw);
+                const b=p?.result?.production_branch;
+                if(p.success!==true||typeof b!=="string"||!/^[A-Za-z0-9._/-]{1,100}$/.test(b))process.exit(1);
+                process.stdout.write(b);
+              } catch {process.exit(1);}
+            });
+          ')"
+          if [[ "$branch" != "$GITHUB_REF_NAME" ]]; then
+            echo "Bloqueado: la rama de producción de Pages no coincide con la rama aprobada en GitHub." >&2
+            exit 1
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+      # Ejecutar Wrangler desde apps/web para que Pages lea su wrangler.toml
+      # con los bindings de producción, nunca desde la raíz del monorepo.
+      - name: Publicar Cloudflare Pages
+        working-directory: apps/web
+        run: npx wrangler pages deploy dist --project-name energia-vital-web --branch "${{ steps.pages-production.outputs.branch }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Comprobar rutas Studio públicas sin credenciales después de publicar
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /api/studio/v1/me /api/studio/native/v1/me; do
+            status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "https://bnergiv.com$path")"
+            if [ "$status" != "401" ]; then
+              echo "La ruta $path devolvió $status; se esperaba 401 sin sesión. Revisar Pages/Functions." >&2
+              exit 1
+            fi
+            echo "$path: función alcanzable y protegida (401 anónimo)."
+          done

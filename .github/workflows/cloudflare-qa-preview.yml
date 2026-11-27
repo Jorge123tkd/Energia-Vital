@@ -1,0 +1,135 @@
+name: Publicar vista previa QA aislada - autorizacion manual
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Escribe PUBLICAR_SOLO_QA (nunca publica production)'
+        required: true
+        type: string
+      qa_access_confirmed:
+        description: 'Confirmo Cloudflare Access/restriccion de acceso en la web QA'
+        required: true
+        type: boolean
+        default: false
+      qa_snapshot_protected:
+        description: 'Confirmo que QA contiene copia de produccion, Access cubre API y Pages y no hay acceso publico'
+        required: true
+        type: boolean
+        default: false
+      qa_schema_ready:
+        description: 'Confirmo 21 migraciones en D1 QA restaurada, con posible informacion real privada'
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  preview:
+    if: >-
+      github.ref == 'refs/heads/feat/cloudflare-customer-accounts-hardening' &&
+      inputs.confirmation == 'PUBLICAR_SOLO_QA' &&
+      inputs.qa_access_confirmed == true &&
+      inputs.qa_snapshot_protected == true &&
+      inputs.qa_schema_ready == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Validar aislamiento de recursos QA
+        env:
+          QA_D1_DATABASE_ID: ${{ vars.QA_D1_DATABASE_ID }}
+          QA_D1_DATABASE_NAME: ${{ vars.QA_D1_DATABASE_NAME }}
+          QA_R2_BUCKET_NAME: ${{ vars.QA_R2_BUCKET_NAME }}
+          QA_WORKER_NAME: ${{ vars.QA_WORKER_NAME }}
+          QA_PAGES_PROJECT: ${{ vars.QA_PAGES_PROJECT }}
+          QA_API_URL: ${{ vars.QA_API_URL }}
+          QA_SITE_URL: ${{ vars.QA_SITE_URL }}
+          QA_ACCESS_TEAM_DOMAIN: ${{ vars.QA_ACCESS_TEAM_DOMAIN }}
+          QA_ACCESS_AUD: ${{ vars.QA_ACCESS_AUD }}
+        run: |
+          set -euo pipefail
+          node scripts/prepare-cloudflare-qa-config.test.cjs
+          node scripts/prepare-cloudflare-qa-config.cjs apps/api/wrangler.qa.generated.toml
+      - name: Comprobar Cloudflare Access REAL en Worker y Pages QA (solo lectura)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QA_D1_DATABASE_ID: ${{ vars.QA_D1_DATABASE_ID }}
+          QA_D1_DATABASE_NAME: ${{ vars.QA_D1_DATABASE_NAME }}
+          QA_R2_BUCKET_NAME: ${{ vars.QA_R2_BUCKET_NAME }}
+          QA_WORKER_NAME: ${{ vars.QA_WORKER_NAME }}
+          QA_PAGES_PROJECT: ${{ vars.QA_PAGES_PROJECT }}
+          QA_API_URL: ${{ vars.QA_API_URL }}
+          QA_SITE_URL: ${{ vars.QA_SITE_URL }}
+          QA_ACCESS_TEAM_DOMAIN: ${{ vars.QA_ACCESS_TEAM_DOMAIN }}
+          QA_ACCESS_AUD: ${{ vars.QA_ACCESS_AUD }}
+        run: node scripts/verify-qa-access.cjs
+      - name: Comprobar esquema QA (SELECT, sin datos personales)
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QA_D1_DATABASE_NAME: ${{ vars.QA_D1_DATABASE_NAME }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute "$QA_D1_DATABASE_NAME" --remote --json \
+            --config wrangler.qa.generated.toml \
+            --command "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('auth_sessions','customers','admin_users','requests','brigades','brigade_members','brigade_work','request_activities','commercial_quote_versions','request_financial_declarations','request_payment_reports','technical_work_reports','service_followup_cases','service_case_notes','brigade_chief_accounts','brigade_chief_sessions','brigade_chief_reports','brigade_evidence_images','chief_completion_reviews') UNION ALL SELECT name FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash'" \
+            > "$RUNNER_TEMP/d1-qa-schema.json"
+          node tests/remote-inventory-schema.cjs < "$RUNNER_TEMP/d1-qa-schema.json"
+      - name: Confirmar 21 migraciones QA y columna refresh_hash (solo SELECT)
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute energia-vital-qa-db --remote --json \
+            --config wrangler.qa.generated.toml \
+            --command "SELECT (SELECT COUNT(*) FROM d1_migrations) AS migrations, (SELECT MAX(id) FROM d1_migrations) AS last_id, (SELECT COUNT(*) FROM pragma_table_info('auth_sessions') WHERE name='refresh_hash') AS refresh_column" \
+            > "$RUNNER_TEMP/d1-qa-migrations.json"
+          node ../../scripts/verify-qa-migrations.cjs < "$RUNNER_TEMP/d1-qa-migrations.json"
+
+      - name: Ejecutar validaciones de código y seguridad
+        run: |
+          npm run typecheck --workspace=apps/api
+          npm run typecheck --workspace=apps/web
+          node apps/web/tests/auth-session.cjs
+          node scripts/prepare-cloudflare-qa-config.test.cjs
+          node scripts/verify-qa-access.test.cjs
+      - name: Publicar SOLAMENTE Worker QA
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config wrangler.qa.generated.toml
+      - name: Construir web para Worker QA
+        env:
+          VITE_API_URL: ${{ vars.QA_API_URL }}
+          VITE_QA_MODE: 'true'
+          QA_D1_DATABASE_ID: ${{ vars.QA_D1_DATABASE_ID }}
+          QA_D1_DATABASE_NAME: ${{ vars.QA_D1_DATABASE_NAME }}
+          QA_R2_BUCKET_NAME: ${{ vars.QA_R2_BUCKET_NAME }}
+          QA_WORKER_NAME: ${{ vars.QA_WORKER_NAME }}
+          QA_PAGES_PROJECT: ${{ vars.QA_PAGES_PROJECT }}
+          QA_API_URL: ${{ vars.QA_API_URL }}
+          QA_SITE_URL: ${{ vars.QA_SITE_URL }}
+          QA_ACCESS_TEAM_DOMAIN: ${{ vars.QA_ACCESS_TEAM_DOMAIN }}
+          QA_ACCESS_AUD: ${{ vars.QA_ACCESS_AUD }}
+        run: |
+          node scripts/verify-qa-build-env.cjs
+          npm run build --workspace=apps/web
+      - name: Publicar SOLO proyecto Pages QA (nunca energia-vital-web)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          QA_PAGES_PROJECT: ${{ vars.QA_PAGES_PROJECT }}
+        run: npx wrangler pages deploy apps/web/dist --project-name "$QA_PAGES_PROJECT" --branch release-preview
+      - name: Limpiar configuracion y metadatos QA
+        if: always()
+        run: rm -f apps/api/wrangler.qa.generated.toml "$RUNNER_TEMP/d1-qa-schema.json" "$RUNNER_TEMP/d1-qa-migrations.json"

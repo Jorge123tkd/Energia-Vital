@@ -1,0 +1,12 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const s=fs.readFileSync('apps/web/src/components/ServiceDelivery.svelte','utf8');
+assert.match(s,/window\.open\('','_blank'\)/);
+assert.match(s,/printWindow\.print\(\)/);
+assert.match(s,/Imprimir \/ guardar acta como PDF/);
+assert.match(s,/Imprimir \/ guardar garantía como PDF/);
+assert.match(s,/Descargar acta firmada/);
+assert.match(s,/type:'application\/pdf'/);
+assert.doesNotMatch(s,/type:'text\/html;charset=utf-8'/);
+console.log('PASS service delivery print: browser PDF workflow and signed PDF retrieval.');

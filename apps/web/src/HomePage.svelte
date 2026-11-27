@@ -1,96 +1,129 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api } from './lib/api';
-  import { isAssistantOpen } from './lib/store';
-
-  let products: any[] = $state([]);
-  let settings: any = {};
-  let loading = $state(true);
-
-  onMount(async () => {
-    try {
-      const [p, s] = await Promise.all([api.getProducts({ featured: 'true' }), api.getSettings()]);
-      products = p.products ?? [];
-      settings = s.settings ?? {};
-    } catch (e) {
-      console.error(e);
-    } finally {
-      loading = false;
-    }
+  import { messagingBotUrl } from './lib/messaging-links';
+  let { onAssistant }: { onAssistant: () => void } = $props();
+  import CatalogPage from './CatalogPage.svelte';
+  import ServicesPage from './ServicesPage.svelte';
+  import GalleryPage from './GalleryPage.svelte';
+  let settings: Record<string, string> = $state({});
+  let botWhatsApp = $derived(messagingBotUrl(settings.bot_whatsapp_url, 'whatsapp'));
+  let botTelegram = $derived(messagingBotUrl(settings.bot_telegram_url, 'telegram'));
+  const intro = 'Paneles solares, inversores, baterías y servicios de instalación y mantenimiento. Explora nuestro catálogo y recibe asesoramiento profesional para tu hogar o negocio.';
+  onMount(() => {
+    void (async () => {
+      try { settings = (await api.getSettings()).settings ?? {}; }
+      catch { /* The home banner keeps its defaults if settings are unavailable. */ }
+    })();
+    const interval = window.setInterval(() => {
+      if (!document.hidden && slides.length > 1) activeSlide = (activeSlide + 1) % slides.length;
+    }, 7500);
+    return () => window.clearInterval(interval);
   });
-
-  function openAssistant() {
-    isAssistantOpen.set(true);
-  }
+  type Slide = { title: string; subtitle: string; image_url: string; link_label: string; link_url: string };
+  let activeSlide = $state(0);
+  const defaults: Slide[] = [
+    { title: 'Bonaire', subtitle: intro, image_url: '', link_label: 'Explorar equipos', link_url: '/catalogo' },
+    { title: 'Trabajos que hablan por nosotros', subtitle: 'Conoce nuestros proyectos e instalaciones de energía solar.', image_url: '', link_label: 'Ver nuestros trabajos', link_url: '/galeria' },
+    { title: 'Novedades y soluciones solares', subtitle: 'Descubre equipos disponibles y consulta las propuestas que mejor se adaptan a ti.', image_url: '', link_label: 'Ver catálogo', link_url: '/catalogo' }
+  ];
+  let slides = $derived.by((): Slide[] => {
+    try {
+      const parsed = JSON.parse(settings.home_slides || '');
+      if (Array.isArray(parsed) && parsed.length >= 1 && parsed.length <= 6 && parsed.every((s: any) =>
+        typeof s.title === 'string' && typeof s.subtitle === 'string' &&
+        typeof s.image_url === 'string' && typeof s.link_label === 'string' &&
+        typeof s.link_url === 'string')) return parsed.map((s: Slide) => ({
+          ...s, title: s.title === 'Energía Vital' ? 'Bonaire' : s.title
+        }));
+    } catch { /* configuración inicial: usar títulos por defecto */ }
+    return [{ ...defaults[0], title: settings.home_title === 'Energía Vital' ? 'Bonaire' : settings.home_title || defaults[0].title,
+      subtitle: settings.home_subtitle || intro }, defaults[1], defaults[2]];
+  });
+  let slide = $derived(slides[activeSlide] || slides[0]);
+  function selectSlide(index: number) { activeSlide = ((index % slides.length) + slides.length) % slides.length; }
 </script>
 
-<header class="relative overflow-hidden">
-  <div class="absolute inset-0 bg-energia-900/90">
-    <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1509391366360-2e959784a276?w=1920&q=80')] bg-cover bg-center opacity-30"></div>
-  </div>
-  <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-12 text-center">
-    <h1 class="text-4xl md:text-6xl font-bold text-white mb-6 tracking-tight">
-      Energía Vital<br />
-      <span class="text-energia-400">Tu asistente solar inteligente</span>
-    </h1>
-    <p class="text-lg text-gray-200 mb-8 max-w-2xl mx-auto">
-      Dime qué necesitas y te guiaré paso a paso. Equipos solares, inversores, baterías, estaciones EcoFlow, instalación y mantenimiento.
-    </p>
-    <div class="flex flex-col sm:flex-row gap-4 justify-center">
-      <button class="bg-energia-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-energia-700 transition-colors" onclick={openAssistant}>
-        Hablar con el asistente
-      </button>
-      <button class="bg-white text-energia-900 px-8 py-3 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors" onclick={() => document.getElementById('catalogo-section')?.scrollIntoView()}>
-        Ver catálogo
-      </button>
+<section aria-label="Presentación de Bonaire" class="relative rounded-3xl overflow-hidden h-[490px] sm:h-[520px] lg:h-[540px] bg-slate-950 text-white flex flex-col shadow-xl">
+  {#if slide.image_url && /^https:\/\/[^\s]+$/i.test(slide.image_url)}
+    <img src={slide.image_url} alt="" class="absolute inset-0 w-full h-full object-cover" />
+    <div class="absolute inset-0 bg-gradient-to-r from-slate-950/95 via-slate-950/75 to-slate-900/25"></div>
+  {:else}
+    <div class="absolute inset-0 bg-gradient-to-br from-slate-950 via-teal-950 to-teal-700"></div>
+    <div class="absolute -right-20 -top-20 w-96 h-96 bg-teal-400/10 rounded-full blur-3xl"></div>
+  {/if}
+  <div class="relative min-h-0 overflow-y-auto overscroll-contain px-5 py-7 sm:px-14 sm:py-12 max-w-4xl flex-1">
+    <span class="inline-flex items-center px-3 py-1.5 border border-white/25 bg-white/10 rounded-full text-xs sm:text-sm text-teal-50 mb-5">☀ Bonaire · {activeSlide + 1} de {slides.length}</span>
+    <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight mb-4 line-clamp-2 break-words">{slide.title}</h1>
+    <p class="text-sm sm:text-lg text-teal-50 leading-relaxed mb-6 max-w-2xl line-clamp-3">{slide.subtitle}</p>
+    <div class="flex flex-wrap gap-3">
+      <a href={slide.link_url} target={slide.link_url.startsWith('https://') ? '_blank' : undefined}
+        rel={slide.link_url.startsWith('https://') ? 'noopener noreferrer' : undefined}
+        class="inline-flex items-center justify-center px-6 py-3.5 rounded-xl font-bold bg-white text-teal-950 hover:bg-teal-50">
+        {slide.link_label || 'Conocer más'} →
+      </a>
+      <button onclick={onAssistant} class="px-5 py-3.5 rounded-xl border border-white/40 bg-white/10 font-semibold hover:bg-white/20">Hablar con el asistente</button>
+      {#if botWhatsApp}
+        <a href={botWhatsApp} target="_blank" rel="noopener noreferrer"
+          class="px-4 py-3.5 rounded-xl border border-teal-300/50 bg-teal-950/30 text-sm font-semibold hover:bg-teal-900/50">
+          ◉ Bot de WhatsApp
+        </a>
+      {/if}
+      {#if botTelegram}
+        <a href={botTelegram} target="_blank" rel="noopener noreferrer"
+          class="px-4 py-3.5 rounded-xl border border-teal-300/50 bg-teal-950/30 text-sm font-semibold hover:bg-teal-900/50">
+          ➤ Bot de Telegram
+        </a>
+      {/if}
     </div>
   </div>
-</header>
-
-<section id="catalogo-section" class="py-16 bg-white">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex justify-between items-center mb-8">
-      <h2 class="text-2xl font-bold text-gray-900">Productos destacados</h2>
-      <a href="/catalogo" class="text-energia-600 font-medium hover:underline">Ver todos →</a>
+  <div class="relative shrink-0 px-5 pb-5 pt-3 sm:px-14 flex items-center justify-between gap-4 border-t border-white/10">
+    <div class="flex items-center gap-2" role="group" aria-label="Seleccionar diapositiva">
+      {#each slides as item, index}
+        <button type="button" aria-label={'Mostrar diapositiva ' + (index + 1) + ': ' + item.title}
+          aria-current={activeSlide === index ? 'true' : undefined}
+          onclick={() => selectSlide(index)}
+          class="h-2.5 rounded-full transition-all {activeSlide === index ? 'w-10 bg-white' : 'w-3 bg-white/40 hover:bg-white/70'}"></button>
+      {/each}
     </div>
-
-    {#if loading}
-      <div class="text-center py-20">Cargando productos...</div>
-    {:else if products.length === 0}
-      <div class="text-center py-20 text-gray-500">No hay productos disponibles.</div>
-    {:else}
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {#each products as product}
-          <div class="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow">
-            {#if product.images && product.images[0]}
-              <img src="{product.images[0].url || ''}" alt="{product.name}" class="w-full h-48 object-cover" />
-            {:else}
-              <div class="w-full h-48 bg-gray-100 flex items-center justify-center text-gray-400">Sin imagen</div>
-            {/if}
-            <div class="p-4">
-              <h3 class="font-semibold text-gray-900 mb-1">{product.name}</h3>
-              {#if product.brand}
-                <p class="text-sm text-gray-500 mb-2">{product.brand} {product.model || ''}</p>
-              {/if}
-              {#if product.price !== null && product.price !== undefined}
-                <div class="text-energia-600 font-bold text-lg mb-3">${product.price.toLocaleString()} {product.currency}</div>
-              {/if}
-              <button class="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors text-sm">
-                Consultar disponibilidad
-              </button>
-            </div>
-          </div>
-        {/each}
-      </div>
-    {/if}
+    <div class="flex gap-2">
+      <button type="button" aria-label="Diapositiva anterior" onclick={() => selectSlide(activeSlide - 1)}
+        class="border border-white/40 rounded-full w-11 h-11 hover:bg-white/15 text-xl">‹</button>
+      <button type="button" aria-label="Diapositiva siguiente" onclick={() => selectSlide(activeSlide + 1)}
+        class="border border-white/40 rounded-full w-11 h-11 hover:bg-white/15 text-xl">›</button>
+    </div>
   </div>
 </section>
 
-<section class="py-16 bg-gray-50">
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-    <h2 class="text-2xl font-bold text-gray-900 mb-6">¿Necesitas ayuda?</h2>
-    <p class="text-gray-600 mb-8 max-w-2xl mx-auto">
-      Nuestro asistente está listo para ayudarte a encontrar el equipo solar adecuado, agendar una cita o resolver dudas sobre instalación y mantenimiento.
-    </p>
+
+<nav class="mt-6 rounded-2xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center gap-2 sm:gap-3" aria-label="Explorar Bonaire">
+  <span class="text-xs uppercase font-extrabold tracking-wider text-slate-500 mr-1">Explora Bonaire</span>
+  <a href="#inicio-equipos" class="rounded-xl bg-teal-50 text-teal-800 px-3 py-2 text-sm font-semibold hover:bg-teal-100">Equipos</a>
+  <a href="#inicio-servicios" class="rounded-xl bg-teal-50 text-teal-800 px-3 py-2 text-sm font-semibold hover:bg-teal-100">Servicios</a>
+  <a href="#inicio-proyectos" class="rounded-xl bg-teal-50 text-teal-800 px-3 py-2 text-sm font-semibold hover:bg-teal-100">Proyectos</a>
+  <a href="/contacto" class="rounded-xl border border-slate-200 text-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-50">Solicitar servicio</a>
+</nav>
+
+<section id="inicio-equipos" class="max-w-7xl mx-auto py-8 scroll-mt-24" aria-label="Productos destacados">
+  <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Productos destacados</h2>
+    <a href="/catalogo" class="text-teal-800 font-semibold hover:underline">Ver catálogo completo →</a>
   </div>
+  <CatalogPage featured />
+</section>
+
+<section id="inicio-servicios" class="max-w-7xl mx-auto py-8 scroll-mt-24" aria-label="Servicios destacados">
+  <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Servicios destacados</h2>
+    <a href="/servicios" class="text-teal-800 font-semibold hover:underline">Ver todos los servicios →</a>
+  </div>
+  <ServicesPage featured />
+</section>
+
+<section id="inicio-proyectos" class="max-w-7xl mx-auto py-8 scroll-mt-24" aria-label="Galerías destacadas">
+  <div class="flex flex-wrap justify-between items-end gap-3 mb-6">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Galerías destacadas</h2>
+    <a href="/galeria" class="text-teal-800 font-semibold hover:underline">Ver todos los proyectos →</a>
+  </div>
+  <GalleryPage featured />
 </section>

@@ -1,0 +1,124 @@
+name: Bonaire - publicar solo Pages con Studio
+on:
+  push:
+    branches: [feat/cloudflare-customer-accounts-hardening]
+    paths: ['.github/workflows/studio-pages-release.yml']
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Escribe PUBLICAR_PAGES_STUDIO_PRIVADO'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: bonaire-pages-production-only
+  cancel-in-progress: false
+jobs:
+  browser-qa:
+    if: >-
+      github.ref == 'refs/heads/feat/cloudflare-customer-accounts-hardening' &&
+      ((github.event_name == 'push' && github.event.before == 'a054f2fa16b97f9f8943e34d590fbae4ce7b7b13') ||
+       (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'PUBLICAR_PAGES_STUDIO_PRIVADO'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Instalar Chromium QA aislado
+        run: |
+          npm install --prefix "$RUNNER_TEMP/evpro-browser" --no-audit --no-fund playwright@1.56.1
+          "$RUNNER_TEMP/evpro-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verificar ingeniería y formularios comerciales antes de publicar
+        run: |
+          npm run dev --workspace=apps/web -- --host 127.0.0.1 > "$RUNNER_TEMP/studio-vite.log" 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for n in $(seq 1 40); do if curl -fsS http://127.0.0.1:5173/tests/fixtures/studio-parity.html >/dev/null; then break; fi; sleep 1; done
+          EV_PLAYWRIGHT_MODULE="$RUNNER_TEMP/evpro-browser/node_modules/playwright/index.mjs" node apps/web/tests/studio-browser-parity.mjs
+  pages-only:
+    needs: browser-qa
+    # One-time owner-authorized release; browser QA must succeed on this exact commit.
+    # Future pushes never deploy automatically; subsequent releases need dispatch.
+    if: >-
+      github.ref == 'refs/heads/feat/cloudflare-customer-accounts-hardening' &&
+      ((github.event_name == 'push' && github.event.before == 'a054f2fa16b97f9f8943e34d590fbae4ce7b7b13') ||
+       (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'PUBLICAR_PAGES_STUDIO_PRIVADO'))
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/cloudflare-customer-accounts-hardening
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Comprobar revisión exacta y preparar dependencias sin secretos
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          if ((git rev-parse HEAD).Trim() -cne $env:GITHUB_SHA) { throw 'La rama cambió; no publicar.' }
+          $manifest=Get-Content apps/web/public/studio-engineering/source-version.json -Raw | ConvertFrom-Json
+          if ($env:GITHUB_EVENT_NAME -eq 'push' -and ($manifest.release -ne '3.9.0-beta.16' -or $manifest.commit -ne 'a7aa3fbeb517b9aca22c003c40392618f65e6327')) { throw 'La autorización única corresponde exclusivamente a Beta 16.' }
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci falló' }
+          node scripts/tests/pages-only-policy.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Política Pages-only no superada' }
+          node --test apps/web/tests/studio-bridge.test.mjs apps/web/tests/studio-action-audit.test.mjs apps/web/tests/studio-technical-share.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Pruebas Studio no superadas' }
+          npm run typecheck --workspace=apps/web
+          if ($LASTEXITCODE -ne 0) { throw 'Typecheck web no superado' }
+      - name: Validar destino y publicar exclusivamente Pages
+        shell: pwsh
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          $ErrorActionPreference='Stop'
+          if (!$env:CLOUDFLARE_API_TOKEN -or !$env:CLOUDFLARE_ACCOUNT_ID) { throw 'Credenciales Cloudflare no configuradas en GitHub; no se publicó nada.' }
+          if ($env:CLOUDFLARE_ACCOUNT_ID -ne '466af6f26fce494d6dc640128e200e24') { throw 'Cuenta Cloudflare distinta de la autorizada.' }
+          $response=Invoke-RestMethod -Uri ('https://api.cloudflare.com/client/v4/accounts/'+$env:CLOUDFLARE_ACCOUNT_ID+'/pages/projects/energia-vital-web') -Headers @{Authorization=('Bearer '+$env:CLOUDFLARE_API_TOKEN)} -TimeoutSec 30
+          if (!$response.success -or $response.result.name -ne 'energia-vital-web' -or $response.result.production_branch -ne 'main' -or !$response.result.canonical_deployment.id) { throw 'Proyecto, rama o retorno de Pages no confirmados.' }
+          $previous=$response.result.canonical_deployment.id
+          Write-Host ('[RETORNO] Despliegue previo: '+$previous)
+          # The reviewed publisher rechecks D1 34/34 and the active private
+          # Studio gates, builds Studio enabled and deploys ONLY Pages.
+          powershell -NoProfile -File scripts/pages-publicacion-controlada.ps1 -Publicar -HabilitarStudio -DependenciasYaInstaladas -Confirmacion PUBLICAR_PAGES_STUDIO_PRIVADO
+          if ($LASTEXITCODE -ne 0) { throw 'Publicador Pages no confirmó éxito; revisar su salida antes de reintentar.' }
+      - name: Comprobar archivos exactos servidos por bnergiv.com
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach ($asset in @('index.html','bridge.js','app.js','style.css','source-version.json','engine.js','library.js','business-menu.js','updater.js','favicon.svg')) {
+            $target=Join-Path $env:RUNNER_TEMP ('published-'+$asset)
+            $response=curl.exe --fail --silent --show-error --location --max-redirs 3 --proto-redir '=https' --max-time 30 -H 'Cache-Control: no-cache' -o $target -w '%{http_code}|%{url_effective}' ('https://bnergiv.com/studio-engineering/'+$asset+'?verify='+$env:GITHUB_SHA)
+            if ($LASTEXITCODE -ne 0) { throw ('No se pudo verificar '+$asset) }
+            $allowedPath=if($asset -eq 'index.html'){'(index\.html)?'}else{[regex]::Escape($asset)}
+            if("$response" -notmatch ('^200\|https://bnergiv\.com/studio-engineering/'+$allowedPath+'(\?[^#]*)?\z')){throw ('Destino final inesperado: '+$asset)}
+            $expected=(Get-FileHash -Algorithm SHA256 ('apps/web/public/studio-engineering/'+$asset)).Hash
+            if ((Get-FileHash -Algorithm SHA256 $target).Hash -ne $expected) { throw ('Pages publicado, pero hash no coincide: '+$asset) }
+            Write-Host ('[OK] Publicado y verificado: '+$asset)
+          }
+
+      - name: Comprobar centro de descargas y favicons publicados
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach ($asset in @('evpro/downloads.html','evpro/downloads.js','evpro/stable-release.json','favicon.svg','studio-engineering/favicon.svg')) {
+            $target=Join-Path $env:RUNNER_TEMP ('published-'+($asset -replace '[^A-Za-z0-9.-]','_'))
+            $response=curl.exe --fail --silent --show-error --location --max-redirs 3 --proto-redir '=https' --max-time 30 -H 'Cache-Control: no-cache' -o $target -w '%{http_code}|%{url_effective}' ('https://bnergiv.com/'+$asset+'?verify='+$env:GITHUB_SHA)
+            if ($LASTEXITCODE -ne 0) { throw ('No se pudo verificar '+$asset) }
+            if ("$response" -notmatch ('^200\|https://bnergiv\.com/'+[regex]::Escape($asset)+'(\?[^#]*)?\z')) { throw ('Destino final inesperado: '+$asset) }
+            $expected=(Get-FileHash -Algorithm SHA256 ('apps/web/public/'+$asset)).Hash
+            if ((Get-FileHash -Algorithm SHA256 $target).Hash -ne $expected) { throw ('Hash no coincide: '+$asset) }
+            Write-Host ('[OK] Publicado y verificado: '+$asset)
+          }
+          $manifest=Get-Content apps/web/public/evpro/stable-release.json -Raw | ConvertFrom-Json
+          if ($manifest.schema -ne 'evpro-stable-v2' -or $manifest.available -ne $false) { throw 'El canal publico no debe exponer un piloto privado.' }

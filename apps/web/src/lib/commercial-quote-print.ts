@@ -1,0 +1,23 @@
+// Public-facing printable snapshot; never serialize a full internal quote.
+type Printable={id:string;request_id:string;title:string;version_no:number;total_cents:number;subtotal_cents:number;taxes_cents:number;freight_cents:number;discount_cents:number;valid_until?:string|null;issued_at?:string|null;delivery_terms?:string|null;warranty_terms?:string|null;payment_terms?:string|null;stock_notes?:string|null;tax_notes?:string|null;freight_notes?:string|null;items:{description:string;quantity:number;unit_price_usd_cents:number;line_total_usd_cents:number}[]};
+const esc=(v:unknown)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+const money=(n:number)=>(n/100).toFixed(2)+' USD';
+export function commercialQuoteHtml(q:Printable,approved:boolean){
+ const terms=[['Vigencia',q.valid_until],['Entrega',q.delivery_terms],['Garantía',q.warranty_terms],['Pago',q.payment_terms],['Disponibilidad',q.stock_notes],['Impuestos',q.tax_notes],['Transporte',q.freight_notes]];
+ const rows=q.items.map(i=>'<tr><td>'+esc(i.description)+'</td><td>'+esc(i.quantity)+'</td><td>'+esc(money(i.unit_price_usd_cents))+'</td><td>'+esc(money(i.line_total_usd_cents))+'</td></tr>').join('');
+ return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'"><title>Propuesta comercial Bonaire</title><style>@page{size:A4;margin:15mm}*{box-sizing:border-box}body{font:12px/1.5 system-ui,sans-serif;color:#18323a;margin:20px}header{border-bottom:3px solid #0f766e;padding-bottom:12px}h1{font-size:25px;margin:0;color:#0f766e}h2{font-size:19px}h3{font-size:14px}table{width:100%;border-collapse:collapse}th,td{padding:7px;border-bottom:1px solid #cadbd7;text-align:right;vertical-align:top}th:first-child,td:first-child{text-align:left;width:48%;overflow-wrap:anywhere}thead{display:table-header-group}tr{break-inside:avoid}dl{display:grid;grid-template-columns:105px 1fr;gap:4px 8px}dt{font-weight:bold}dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.totals{text-align:right;break-inside:avoid}.total{font-size:18px;font-weight:bold;color:#0f766e}.meta{overflow-wrap:anywhere}.watermark{background:#fff4dc;padding:10px;font-weight:bold}footer{border-top:1px solid #cadbd7;margin-top:18px;padding-top:8px;font-size:11px}.terms{break-inside:auto}@media print{body{margin:0}}</style></head><body><header><h1>BONAIRE</h1>Energía Vital · Propuesta comercial · bnergiv.com</header>'+(!approved?'<p class="watermark">BORRADOR INTERNO — NO ES UNA OFERTA EMITIDA</p>':'')+'<h2>'+esc(q.title)+'</h2><p class="meta">Solicitud: '+esc(q.request_id)+'<br>Referencia: '+esc(q.id)+' · Revisión '+esc(q.version_no)+(q.issued_at?'<br>Emitida: '+esc(q.issued_at.slice(0,10)):'')+'</p><table><thead><tr><th>Concepto</th><th>Cant.</th><th>Precio/u.</th><th>Importe</th></tr></thead><tbody>'+rows+'</tbody></table><div class="totals"><p>Subtotal: '+money(q.subtotal_cents)+'<br>Impuestos: '+money(q.taxes_cents)+'<br>Transporte: '+money(q.freight_cents)+'<br>Descuento: '+money(q.discount_cents)+'</p><p class="total">TOTAL: '+money(q.total_cents)+'</p></div><h3>Condiciones comerciales</h3><dl class="terms">'+terms.map(([k,v])=>'<dt>'+esc(k)+'</dt><dd>'+esc(v||'Por confirmar')+'</dd>').join('')+'</dl><h3>Respuesta a la propuesta</h3><p>□ Acepto la propuesta &nbsp; □ Solicito modificaciones &nbsp; □ No acepto</p><p>Observaciones: ____________________________________________________</p><p>Nombre: ____________________________ Fecha: ______________</p><footer>La aceptación de esta propuesta no equivale a la firma del contrato ni acredita pago o autorización de inicio. Las condiciones definitivas se formalizan por separado.</footer></body></html>';
+}
+export function printCommercialQuote(q:Printable,approved:boolean){
+ // The same printable HTML works on browser; native direct PDF is a separate capability.
+ const popup=window.open('','_blank','width=900,height=850');
+ if(!popup)throw Error('Permite ventanas emergentes para abrir la vista imprimible.');
+ popup.opener=null;
+ popup.document.open();popup.document.write(commercialQuoteHtml(q,approved));popup.document.close();
+ popup.focus();popup.print();
+}
+
+export function downloadCommercialQuoteHtml(q:Printable,approved:boolean){
+ const url=URL.createObjectURL(new Blob([commercialQuoteHtml(q,approved)],{type:'text/html;charset=utf-8'}));
+ const link=document.createElement('a');link.href=url;link.download='Bonaire-propuesta-'+q.id.replace(/[^A-Za-z0-9_-]/g,'').slice(0,80)+'-R'+q.version_no+'.html';
+ document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+}

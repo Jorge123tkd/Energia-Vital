@@ -1,490 +1,408 @@
 import { Hono } from 'hono';
-import { Env, AdminLoginResponse, CustomerLoginResponse, RefreshResponse } from '../types';
-import { ensureAdminUser } from '../db';
-import { hashPassword, comparePassword, generateTokenPair, verifyToken, extractToken } from '../auth';
-import { JwtPayload } from '../auth';
-import { sendLoginCode, sendToTelegram } from '../telegram-service';
+import type { Env } from '../types';
+import { REFRESH_TTL, comparePassword, extractToken, generateTokenPair, hashPassword, verifyToken, type JwtPayload } from '../auth';
+import { activeSession } from '../middleware';
+import { rateLimited } from '../rate-limit';
+import { verifiedTelegramUser } from '../telegram-customer-auth';
+import { activeRegistration, issueCustomerCode, notifyCustomerOnboarding } from '../telegram-customer-onboarding';
 
-export const authRoutes = new Hono<{ Bindings: Env; Variables: { user?: JwtPayload } }>();
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  HELPERS                                                                   */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-const CODE_TTL_SECONDS = 5 * 60;     // 5 minutos
-const LINK_TTL_SECONDS = 10 * 60;    // 10 minutos
-
-function nowISO(): string {
-  return new Date().toISOString();
+export const authRoutes = new Hono<{ Bindings: Env }>();
+// Evita que respuestas con access/refresh JWT se almacenen en cachés.
+authRoutes.use('*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-store');
+  c.header('Pragma', 'no-cache');
+});
+/** SHA-256 del refresh JWT firmado: nunca guardar el token en D1. */
+async function refreshFingerprint(token: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+const validEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const validPhone = (phone: string) => /^\+?[0-9 ()-]{8,20}$/.test(phone) && (phone.match(/\d/g) || []).length >= 8;
+const validPassword = (s: unknown): s is string => typeof s === 'string' && s.length >= 10 && s.length <= 128;
+const clean = (v: unknown, limit: number) => typeof v === 'string' ? v.trim().slice(0, limit) : '';
+/** Un JSON malformado, nulo, lista o primitivo nunca debe causar un 500 en auth. */
+async function readBodyObject(c: { req: { json: () => Promise<unknown> } }): Promise<Record<string, unknown> | null> {
+  const body = await c.req.json().catch(() => null);
+  return body !== null && typeof body === 'object' && !Array.isArray(body)
+    ? body as Record<string, unknown>
+    : null;
 }
 
-/** Valida formato de email. */
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+function safeCustomer(row: any) {
+  return { id: row.id, name: row.name, email: row.email, phone: row.phone, address: row.address,
+    city: row.city, province: row.province, phone_verified: Boolean(row.phone_verified), telegram_linked: Boolean(row.telegram_customer_chat_id), role: 'customer' };
+}
+async function issue(env: Env, userId: string, type: 'customer' | 'admin', role: string, ttl=REFRESH_TTL) {
+  const sid = crypto.randomUUID();
+  const now = new Date();
+  const expires = new Date(now.getTime() + ttl * 1000).toISOString();
+  const tokens = await generateTokenPair(env, userId, type, role, sid);
+  await env.DB.prepare('INSERT INTO auth_sessions (id, user_id, user_type, created_at, expires_at, refresh_hash) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(sid, userId, type, now.toISOString(), expires, await refreshFingerprint(tokens.refresh_token)).run();
+  return tokens;
+}
+async function signedIn(c: any, type: 'admin' | 'customer'): Promise<JwtPayload | null> {
+  const p = await extractToken(c.req.header('authorization'), c.env);
+  if (!p || p.type !== type || !await activeSession(c.env, p)) return null;
+  return p;
 }
 
-/** Valida formato de teléfono (mínimo 10 dígitos). */
-function isValidPhone(phone: string): boolean {
-  return /^\+?[0-9]{10,15}$/.test(phone);
+// Primer administrador: requiere secreto independiente configurado en Workers.
+authRoutes.post('/setup', async c => {
+  if (await rateLimited(c.env, c.req.raw, 'admin_setup', 5, 3600)) return c.json({ error: 'Demasiados intentos' }, 429);
+  const setup = (c.env as Env & { ADMIN_SETUP_KEY?: string }).ADMIN_SETUP_KEY;
+  if (!setup || setup.length < 32 || c.req.header('x-setup-key') !== setup) return c.json({ error: 'Configuración inicial no autorizada' }, 403);
+  const b = await readBodyObject(c);
+  if (!b) return c.json({ error: 'Datos de configuración inválidos' }, 400);
+  const email = clean(b.email, 254).toLowerCase();
+  if (!validEmail(email) || !validPassword(b.password)) return c.json({ error: 'Email o contraseña inválidos (mínimo 10 caracteres)' }, 400);
+  const now = new Date().toISOString();
+  // La condición de primer administrador se comprueba en el MISMO INSERT de
+  // SQLite/D1: dos solicitudes simultáneas con correos distintos nunca deben
+  // crear dos administradores por una carrera SELECT -> INSERT.
+  const result = await c.env.DB.prepare(`INSERT INTO admin_users
+    (id, email, password_hash, role, is_active, created_at, updated_at)
+    SELECT ?, ?, ?, 'admin', 1, ?, ?
+    WHERE NOT EXISTS (SELECT 1 FROM admin_users)`)
+    .bind(crypto.randomUUID(), email, await hashPassword(b.password), now, now).run();
+  if (result.meta.changes !== 1) {
+    return c.json({ error: 'El administrador ya fue configurado' }, 409);
+  }
+  return c.json({ message: 'Administrador inicial creado' }, 201);
+});
+
+authRoutes.post('/login', async c => {
+  if (await rateLimited(c.env, c.req.raw, 'admin_login', 10, 900)) return c.json({ error: 'Demasiados intentos' }, 429);
+  const b = await readBodyObject(c);
+  const email = clean(b?.email, 254).toLowerCase();
+  const password = b?.password;
+  if (!validEmail(email) || typeof password !== 'string' || !password || password.length > 128)
+    return c.json({ error: 'Credenciales inválidas' }, 401);
+  const admin = await c.env.DB.prepare('SELECT * FROM admin_users WHERE LOWER(email) = ? AND is_active = 1')
+    .bind(email).first<any>();
+  if (!admin || !await comparePassword(password, admin.password_hash)) return c.json({ error: 'Credenciales inválidas' }, 401);
+  // Browser sessions have a fixed absolute lifetime in D1, never extended on refresh.
+  const ttl=b?.browser_session===true?(b.remember===true?7*86400:8*3600):REFRESH_TTL;
+  const tokens = await issue(c.env, admin.id, 'admin', admin.role,ttl);
+  return c.json({ user: { id: admin.id, email: admin.email, role: admin.role }, token: tokens.access_token, ...tokens });
+});
+
+// Acceso único al sitio: la credencial se verifica en su tabla original.
+// Un JWT de administrador nunca obtiene permisos de cliente ni viceversa.
+authRoutes.post('/sign-in', async c => {
+  if (await rateLimited(c.env, c.req.raw, 'site_login', 10, 900))
+    return c.json({ error: 'Demasiados intentos. Inténtalo más tarde.' }, 429);
+  const b = await readBodyObject(c);
+  const email = clean(b?.email, 254).toLowerCase();
+  const password = typeof b?.password === 'string' ? b.password : '';
+  if (!validEmail(email) || !password || password.length > 128)
+    return c.json({ error: 'Credenciales inválidas' }, 401);
+
+  const ttl=b?.browser_session===true?(b.remember===true?7*86400:8*3600):REFRESH_TTL;
+  // Admin antes que cliente solo cuando su contraseña ha sido verificada.
+  const admin = await c.env.DB.prepare(`SELECT id, email, role, password_hash FROM admin_users
+      WHERE LOWER(email) = ? AND is_active = 1 AND role IN ('admin','operator')`)
+    .bind(email).first<any>();
+  if (admin && await comparePassword(password, admin.password_hash)) {
+    const tokens = await issue(c.env, admin.id, 'admin', admin.role,ttl);
+    return c.json({
+      user: { id: admin.id, email: admin.email, name: admin.role === 'admin' ? 'Administrador' : 'Moderador', role: admin.role, account_type: 'admin' },
+      ...tokens,
+    });
+  }
+  const customer = await c.env.DB.prepare(
+    'SELECT * FROM customers WHERE LOWER(email) = ? AND password_hash IS NOT NULL AND is_active = 1'
+  ).bind(email).first<any>();
+  if (!customer || !await comparePassword(password, customer.password_hash))
+    return c.json({ error: 'Credenciales inválidas' }, 401);
+  const tokens = await issue(c.env, customer.id, 'customer', 'customer',ttl);
+  return c.json({ user: safeCustomer(customer), ...tokens });
+});
+
+/** Evita registros incompletos cuando la D1 remota no recibió todas las migraciones. */
+async function registrationSchemaReady(env: Env): Promise<boolean> {
+  const { results } = await env.DB.prepare('PRAGMA table_info(customers)').all<{ name: string }>();
+  const columns = new Set((results || []).map(row => row.name));
+  const required = ['id', 'name', 'email', 'phone', 'address', 'city', 'province', 'password_hash', 'role', 'phone_verified', 'created_at', 'updated_at'];
+  const missing = required.filter(name => !columns.has(name));
+  const sessions = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'auth_sessions'").first();
+  if (missing.length || !sessions) {
+    console.error('[register] D1 necesita migraciones de cuentas', { missingColumns: missing, missingSessions: !sessions });
+    return false;
+  }
+  return true;
 }
 
-/** Genera un código numérico de 6 dígitos. */
-function generateCode(length: number = 6): string {
-  const chars = '0123456789';
-  let code = '';
-  const array = new Uint8Array(length);
-  crypto.getRandomValues(array);
-  for (let i = 0; i < length; i++) code += chars[array[i] % chars.length];
-  return code;
-}
-
-/**
- * Verifica un JWT de refresh y devuelve el payload.
- * El refresh token contiene el mismo payload que el access (user_id, type, role).
- */
-async function verifyRefreshToken(env: Env, refreshToken: string): Promise<JwtPayload | null> {
-  return verifyToken(refreshToken, env.JWT_SECRET || '');
-}
-
-/** Crea un customer y devuelve el objeto normalizado. */
-function normalizeCustomer(row: any): CustomerLoginResponse['user'] {
-  return {
-    id: row.id,
-    name: row.name,
-    email: row.email ?? undefined,
-    phone: row.phone ?? undefined,
-    role: row.role || 'customer',
-    phone_verified: !!row.phone_verified,
-  };
-}
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  ADMIN AUTH                                                                */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-// Login del administrador
-authRoutes.post('/login', async (c) => {
-  const { DB, JWT_SECRET, ADMIN_PASSWORD_HASH } = c.env;
-  const body = await c.req.json<{ email: string; password: string }>();
-
-  const email = (body.email || '').trim().toLowerCase();
-  const password = body.password || '';
-
-  // 1) Verificar contra tabla admin_users
-  const admin = await DB.prepare(
-    'SELECT * FROM admin_users WHERE LOWER(email) = ? AND is_active = 1'
-  )
-    .bind(email)
-    .first<any>();
-
-  let valid = false;
-  let adminId = '';
-
-  if (admin) {
-    valid = await comparePassword(password, admin.password_hash);
-    adminId = admin.id;
-  } else if (email === 'admin' && ADMIN_PASSWORD_HASH) {
-    // Fallback: login con ADMIN_PASSWORD_HASH env
-    valid = await comparePassword(password, ADMIN_PASSWORD_HASH);
-    if (valid) {
-      // Crear admin en DB si no existe
-      await ensureAdminUser(DB, email, ADMIN_PASSWORD_HASH);
-      adminId = email;
+authRoutes.post('/register', async c => {
+  if (await rateLimited(c.env, c.req.raw, 'register', 5, 3600)) return c.json({ error: 'Demasiados intentos de registro. Inténtalo más tarde.' }, 429);
+  const b = await c.req.json<any>().catch(() => null);
+  if (!b || typeof b !== 'object') return c.json({ error: 'Solicitud de registro inválida' }, 400);
+  const name = clean(b.name, 120);
+  const email = clean(b.email, 254).toLowerCase();
+  const phone = clean(b.phone, 25);
+  const address = clean(b.address, 250);
+  const city = clean(b.city, 100);
+  const province = clean(b.province, 100);
+  if (name.length < 3 || !validEmail(email) || !validPhone(phone) || address.length < 6 || city.length < 2 || province.length < 2 || !validPassword(b.password))
+    return c.json({ error: 'Completa nombre, email, teléfono, dirección, municipio, provincia y contraseña de al menos 10 caracteres.' }, 400);
+  if (!c.env.JWT_SECRET || c.env.JWT_SECRET.length < 32) {
+    console.error('[register] JWT_SECRET no configurado');
+    return c.json({ error: 'El registro no está disponible temporalmente. Contacta al equipo de Energía Vital.' }, 503);
+  }
+  try {
+    if (!await registrationSchemaReady(c.env)) {
+      return c.json({ error: 'El registro no está disponible temporalmente. Contacta al equipo de Energía Vital.' }, 503);
     }
+    const existing = await c.env.DB.prepare('SELECT id FROM customers WHERE LOWER(email) = ?').bind(email).first();
+    if (existing) return c.json({ error: 'Este correo ya está registrado. Utiliza «Entrar» o contacta a soporte para recuperar el acceso.' }, 409);
+    const reservedAdmin = await c.env.DB.prepare('SELECT id FROM admin_users WHERE LOWER(email) = ?').bind(email).first();
+    if (reservedAdmin) return c.json({ error: 'Este correo ya pertenece a una cuenta. Utiliza «Entrar».' }, 409);
+
+    const id = crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const ttl=b.browser_session===true?8*3600:REFRESH_TTL;
+    const expires = new Date(Date.now() + ttl * 1000).toISOString();
+    const hash = await hashPassword(b.password);
+    const tokens = await generateTokenPair(c.env, id, 'customer', 'customer', sessionId);
+    // D1.batch ejecuta ambas sentencias de forma transaccional:
+    // no deja una cuenta creada a medias si la sesión no se puede guardar.
+    await c.env.DB.batch([
+      c.env.DB.prepare(`INSERT INTO customers (id, name, email, phone, address, city, province, password_hash, role, phone_verified, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer', 0, ?, ?)`)
+        .bind(id, name, email, phone, address, city, province, hash, now, now),
+      c.env.DB.prepare('INSERT INTO auth_sessions (id, user_id, user_type, created_at, expires_at, refresh_hash) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(sessionId, id, 'customer', now, expires, await refreshFingerprint(tokens.refresh_token)),
+    ]);
+    // Solo avisos internos: no enviamos SMS ni WhatsApp sin autorización expresa.
+    try {
+      const {results}=await c.env.DB.prepare(`SELECT key,value FROM system_settings
+        WHERE key IN ('welcome_notification_enabled','welcome_notification_title','welcome_notification_message')`)
+        .all<{key:string;value:string}>();
+      const configured=Object.fromEntries((results||[]).map(x=>[x.key,x.value]));
+      if(configured.welcome_notification_enabled!=='false') {
+        await c.env.DB.prepare(`INSERT INTO notifications
+          (id,user_id,user_type,type,title,message,is_read,created_at)
+          VALUES (?,?,'customer','welcome',?,?,0,?)`).bind(
+          crypto.randomUUID(),id,
+          configured.welcome_notification_title||'¡Bienvenido a Bonaire!',
+          configured.welcome_notification_message||
+            'Gracias por registrarte. Desde tu cuenta puedes solicitar servicios, consultar tus citas y recibir notificaciones.',
+          now,
+        ).run();
+      }
+    } catch(e) {
+      console.error('[register] El aviso de bienvenida no se pudo guardar',e);
+      // La cuenta ya está creada: un fallo de notificaciones no bloquea el alta.
+    }
+    return c.json({ user: { id, name, email, phone, address, city, province, role: 'customer', phone_verified: false }, ...tokens }, 201);
+  } catch (error) {
+    console.error('[register] Error en D1 al registrar una cuenta', error);
+    const detail = error instanceof Error ? error.message : String(error);
+    if (/UNIQUE constraint failed|unique index|SQLITE_CONSTRAINT_UNIQUE/i.test(detail)) {
+      return c.json({ error: 'Este correo ya está registrado. Utiliza «Entrar».' }, 409);
+    }
+    return c.json({ error: 'No se pudo completar el registro por un problema temporal. Inténtalo más tarde o contacta a soporte.' }, 500);
   }
-
-  if (!valid) return c.json({ error: 'Credenciales inválidas' }, 401);
-
-  const secret = JWT_SECRET || '';
-  const { access_token, refresh_token } = await generateTokenPair(
-    c.env,
-    adminId,
-    'admin',
-    admin?.role || 'admin',
-  );
-
-  const response: AdminLoginResponse = {
-    user: { id: adminId, email: email, role: (admin?.role || 'admin') as any },
-    token: access_token,
-    access_token,
-    refresh_token,
-  };
-  return c.json(response);
 });
 
-// Crear primer administrador (setup inicial, solo si no existen admins)
-authRoutes.post('/setup', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<{ email: string; password: string }>();
+// Mini App: la contraseña viaja por HTTPS, nunca por mensaje de Telegram.
+authRoutes.post('/telegram/registration-draft', async c=>{
+  if(await rateLimited(c.env,c.req.raw,'telegram_registration_draft',30,600))return c.json({error:'Demasiados intentos.'},429);
+  const b=await readBodyObject(c);
+  const chatId=await verifiedTelegramUser(b?.init_data,c.env.TELEGRAM_BOT_TOKEN);
+  if(!chatId)return c.json({error:'Abre el formulario nuevamente desde Telegram.'},401);
+  const draft=await activeRegistration(c.env,chatId);
+  if(!draft||draft.stage!=='password')return c.json({error:'El registro no está listo o venció. Regresa al chatbot para continuar.'},409);
+  return c.json({ready:true,draft_id:draft.draft_id});
+});
+authRoutes.post('/telegram/link-code',async c=>{
+  const user=await signedIn(c,'customer');
+  if(!user)return c.json({error:'Inicia sesión con tu cuenta de cliente.'},401);
+  if(await rateLimited(c.env,c.req.raw,'telegram_customer_code',12,900))return c.json({error:'Demasiados intentos.'},429);
+  const customer=await c.env.DB.prepare('SELECT telegram_customer_chat_id FROM customers WHERE id=? AND is_active=1 AND password_hash IS NOT NULL').bind(user.user_id).first<{telegram_customer_chat_id:string|null}>();
+  if(!customer)return c.json({error:'Cuenta no disponible.'},403);
+  if(customer.telegram_customer_chat_id)return c.json({error:'Tu cuenta ya está vinculada. Para cambiar el vínculo, contacta a Bonaire.'},409);
+  const result=await issueCustomerCode(c.env,user.user_id);
+  return result?c.json(result):c.json({error:'Espera un minuto antes de generar otro código.'},429);
+});
+authRoutes.post('/telegram/register', async c => {
+  if(await rateLimited(c.env,c.req.raw,'telegram_customer_register',5,3600))
+    return c.json({error:'Demasiados intentos. Inténtalo más tarde.'},429);
+  const b=await readBodyObject(c);
+  if(!b)return c.json({error:'Datos inválidos'},400);
+  const chatId=await verifiedTelegramUser(b.init_data,c.env.TELEGRAM_BOT_TOKEN);
+  if(!chatId)return c.json({error:'Abre el formulario nuevamente desde el bot de Bonaire.'},401);
+  const finish=b.mode==='finish';
+  const draft=finish?await activeRegistration(c.env,chatId):null;
+  if(finish&&(!draft||draft.stage!=='password'||draft.draft_id!==b.draft_id))return c.json({error:'El registro venció o cambió. Vuelve al chatbot.'},409);
+  const data=finish&&draft?JSON.parse(draft.data_json) as Record<string,unknown>:b;
+  const name=clean(data.name,120),email=clean(data.email,254).toLowerCase(),phone=clean(data.phone,25);
+  const address=clean(data.address,250),city=clean(data.city,100),province=clean(data.province,100);
+  if(name.length<3||!validEmail(email)||!validPhone(phone)||address.length<6||city.length<2||province.length<2||!validPassword(b.password))
+    return c.json({error:'Completa todos los campos y usa una contraseña de 10 a 128 caracteres.'},400);
+  try{
+    if(!await registrationSchemaReady(c.env))return c.json({error:'Registro temporalmente no disponible.'},503);
+    const id=crypto.randomUUID(),time=new Date().toISOString();
+    const hash=await hashPassword(b.password);
+    // La comprobación de correo y Telegram ocurre en el mismo INSERT, no en una consulta anterior.
+    const result=await c.env.DB.prepare("INSERT INTO customers (id,name,email,phone,address,city,province,password_hash,role,phone_verified,telegram_customer_chat_id,created_at,updated_at) "+
+      "SELECT ?,?,?,?,?,?,?,?,'customer',0,?,?,? WHERE NOT EXISTS(SELECT 1 FROM customers WHERE lower(email)=? OR telegram_customer_chat_id=?) "+
+      "AND NOT EXISTS(SELECT 1 FROM admin_users WHERE lower(email)=?) "+
+      "AND (? IS NULL OR EXISTS(SELECT 1 FROM telegram_customer_registration_drafts WHERE chat_id=? AND draft_id=? AND stage='password' AND expires_at>?))")
+      .bind(id,name,email,phone,address,city,province,hash,chatId,time,time,email,chatId,email,draft?.draft_id??null,chatId,draft?.draft_id??null,new Date().toISOString()).run();
+    if(result.meta.changes!==1)return c.json({error:'Ya existe una cuenta asociada a estos datos. Si tienes cuenta web, utiliza «Vincular cuenta existente».'},409);
+    if(draft){
+      await c.env.DB.prepare('DELETE FROM telegram_customer_registration_drafts WHERE chat_id=? AND draft_id=?').bind(chatId,draft.draft_id).run().catch(()=>null);
+      await notifyCustomerOnboarding(c.env,chatId,'¡Cuenta creada y vinculada correctamente! Ya puedes entrar en Bonaire con tu correo y contraseña, o cerrar el formulario y seguir conversando aquí.');
+    }
+    return c.json({message:'Cuenta creada y vinculada. Ya puedes acceder a la web con tu correo y contraseña.'},201);
+  }catch{return c.json({error:'No se pudo completar el registro. Inténtalo de nuevo o contacta con Bonaire.'},500);}
+});
+authRoutes.post('/telegram/link', async c=>{
+  if(await rateLimited(c.env,c.req.raw,'telegram_customer_link',8,900))return c.json({error:'Demasiados intentos.'},429);
+  const b=await readBodyObject(c);
+  const chatId=await verifiedTelegramUser(b?.init_data,c.env.TELEGRAM_BOT_TOKEN);
+  if(!chatId)return c.json({error:'Abre el formulario desde Telegram.'},401);
+  const email=clean(b?.email,254).toLowerCase(),password=b?.password;
+  if(!validEmail(email)||typeof password!=='string'||password.length>128)return c.json({error:'Credenciales inválidas.'},401);
+  const customer=await c.env.DB.prepare("SELECT id,password_hash FROM customers WHERE lower(email)=? AND is_active=1 AND password_hash IS NOT NULL").bind(email).first<{id:string;password_hash:string}>();
+  if(!customer||!await comparePassword(password,customer.password_hash))return c.json({error:'Credenciales inválidas.'},401);
+  const result=await c.env.DB.prepare("UPDATE customers SET telegram_customer_chat_id=?,updated_at=? WHERE id=? AND is_active=1 AND password_hash=? AND (telegram_customer_chat_id IS NULL OR telegram_customer_chat_id=?) AND NOT EXISTS(SELECT 1 FROM customers WHERE telegram_customer_chat_id=? AND id<>?)")
+    .bind(chatId,new Date().toISOString(),customer.id,customer.password_hash,chatId,chatId,customer.id).run();
+  if(result.meta.changes!==1)return c.json({error:'Ya existe una vinculación. Contacta con Bonaire para revisarla.'},409);
+  return c.json({message:'Cuenta vinculada correctamente.'});
+});
 
-  // Verificar que no existan ya admins
-  const count = await DB.prepare('SELECT COUNT(*) as cnt FROM admin_users').first<any>();
-  if (count && count.cnt > 0) {
-    return c.json({ error: 'Ya existen administradores registados' }, 400);
+authRoutes.post('/customer/login', async c => {
+  if (await rateLimited(c.env, c.req.raw, 'customer_login', 12, 900)) return c.json({ error: 'Demasiados intentos' }, 429);
+  const b = await readBodyObject(c);
+  const email = clean(b?.email, 254).toLowerCase();
+  const password = b?.password;
+  if (!validEmail(email) || typeof password !== 'string' || !password || password.length > 128)
+    return c.json({ error: 'Credenciales inválidas' }, 401);
+  const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE LOWER(email) = ? AND password_hash IS NOT NULL AND is_active = 1')
+    .bind(email).first<any>();
+  if (!customer || !await comparePassword(password, customer.password_hash)) return c.json({ error: 'Credenciales inválidas' }, 401);
+  const tokens = await issue(c.env, customer.id, 'customer', 'customer');
+  return c.json({ user: safeCustomer(customer), ...tokens });
+});
+
+authRoutes.post('/refresh', async c => {
+  // Defensa de aplicación adicional; WAF/Turnstile requiere revisión remota.
+  // Cuota suficientemente amplia para varias sesiones detrás de una NAT.
+  if (await rateLimited(c.env, c.req.raw, 'auth_refresh', 180, 60))
+    return c.json({ error: 'Demasiadas renovaciones. Inténtalo de nuevo más tarde.' }, 429);
+  const b = await readBodyObject(c);
+  const token = typeof b?.refresh_token === 'string' && b.refresh_token.length <= 4096
+    ? await verifyToken(b.refresh_token, c.env.JWT_SECRET || '') : null;
+  if (!token || token.kind !== 'refresh' || !await activeSession(c.env, token)) return c.json({ error: 'Sesión expirada' }, 401);
+  // El rol del refresh JWT puede estar obsoleto. Solo los permisos vigentes
+  // en D1 pueden determinar el rol de los nuevos tokens.
+  let role: string;
+  if (token.type === 'admin') {
+    const current = await c.env.DB.prepare(`SELECT role FROM admin_users
+      WHERE id = ? AND is_active = 1 AND role IN ('admin','operator')`)
+      .bind(token.user_id).first<{ role: string }>();
+    if (!current) return c.json({ error: 'Cuenta bloqueada o sin permisos' }, 403);
+    role = current.role;
+  } else {
+    const current = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ? AND is_active = 1')
+      .bind(token.user_id).first();
+    if (!current) return c.json({ error: 'Cuenta bloqueada o no disponible' }, 403);
+    role = 'customer';
   }
-
-  const hash = await hashPassword(body.password);
-  await ensureAdminUser(DB, body.email, hash);
-  return c.json({ message: 'Administrador creado', email: body.email });
+  const tokens = await generateTokenPair(c.env, token.user_id, token.type, role, token.sid);
+  // Compare-and-swap atómico. La primera renovación legacy (hash NULL) gana
+  // una sola vez; dos requests concurrentes nunca pueden renovar ambos.
+  const prior = await refreshFingerprint(b!.refresh_token as string);
+  const next = await refreshFingerprint(tokens.refresh_token);
+  const updated = await c.env.DB.prepare(`UPDATE auth_sessions SET refresh_hash = ?
+    WHERE id = ? AND user_id = ? AND user_type = ?
+    AND revoked_at IS NULL AND expires_at > ?
+    AND (refresh_hash = ? OR (refresh_hash IS NULL AND ? = 1))`)
+    .bind(next, token.sid, token.user_id, token.type, new Date().toISOString(), prior, token.jti ? 0 : 1).run();
+  if (updated.meta.changes !== 1) return c.json({ error: 'Token de renovación utilizado o expirado' }, 401);
+  return c.json(tokens);
 });
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  CUSTOMER AUTH                                                             */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-// Registro de cliente
-authRoutes.post('/register', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<{ name: string; email: string; password: string; phone?: string }>();
-
-  if (!body.name?.trim()) return c.json({ error: 'El nombre es requerido' }, 400);
-  if (!isValidEmail(body.email)) return c.json({ error: 'Email inválido' }, 400);
-  if (body.password.length < 8) return c.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, 400);
-
-  const existing = await DB.prepare('SELECT id FROM customers WHERE email = ?').bind(body.email.toLowerCase()).first<any>();
-  if (existing) return c.json({ error: 'El email ya está registrado' }, 409);
-
-  const hash = await hashPassword(body.password);
-  const id = crypto.randomUUID();
-  const now = nowISO();
-
-  await DB.prepare(
-    `INSERT INTO customers (id, name, email, password_hash, role, phone_verified, telegram_chat_id, telegram_username, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'customer', 0, NULL, NULL, ?, ?)`
-  )
-    .bind(id, body.name.trim(), body.email.toLowerCase(), hash, now, now)
-    .run();
-
-  return c.json({ message: 'Cliente registrado. Verifica tu email y/o teléfono.', user: { id, name: body.name, email: body.email } });
-});
-
-// Login de cliente (email + password)
-authRoutes.post('/customer/login', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<{ email: string; password: string }>();
-
-  if (!body.email || !body.password) return c.json({ error: 'Email y contraseña requeridos' }, 400);
-
-  const customer = await DB.prepare(
-    'SELECT * FROM customers WHERE email = ? AND password_hash IS NOT NULL'
-  )
-    .bind(body.email.toLowerCase())
-    .first<any>();
-
-  if (!customer) return c.json({ error: 'Credenciales inválidas' }, 401);
-
-  const valid = await comparePassword(body.password, customer.password_hash);
-  if (!valid) return c.json({ error: 'Credenciales inválidas' }, 401);
-
-  const { access_token, refresh_token } = await generateTokenPair(c.env, customer.id, 'customer', customer.role);
-
-  return c.json({ user: normalizeCustomer(customer), access_token, refresh_token });
-});
-
-// Refresh de access token
-authRoutes.post('/refresh', async (c) => {
-  const body = await c.req.json<{ refresh_token: string }>();
-  if (!body.refresh_token) return c.json({ error: 'Refresh token requerido' }, 400);
-
-  const payload = await verifyRefreshToken(c.env, body.refresh_token);
-  if (!payload) return c.json({ error: 'Token inválido o expirado' }, 401);
-
-  const { access_token, refresh_token } = await generateTokenPair(c.env, payload.user_id, payload.type, payload.role);
-  return c.json({ access_token, refresh_token });
-});
-
-// Logout
-authRoutes.post('/logout', async (c) => {
+authRoutes.post('/logout', async c => {
+  const bearer = await extractToken(c.req.header('authorization'), c.env);
+  // El access puede haber vencido. Se permite cerrar LA MISMA sesión
+  // presentando el refresh firmado en el cuerpo, sin entregarlo en URL/cookie.
+  const body = bearer ? null : await readBodyObject(c);
+  const refresh = !bearer && typeof body?.refresh_token === 'string' && body.refresh_token.length <= 4096
+    ? await verifyToken(body.refresh_token, c.env.JWT_SECRET || '') : null;
+  const session = bearer || (refresh?.kind === 'refresh' ? refresh : null);
+  if (!session) return c.json({ error: 'No autorizado' }, 401);
+  await c.env.DB.prepare(`UPDATE auth_sessions SET revoked_at = ?
+    WHERE id = ? AND user_id = ? AND user_type = ? AND revoked_at IS NULL`)
+    .bind(new Date().toISOString(), session.sid, session.user_id, session.type).run();
   return c.json({ message: 'Sesión cerrada' });
 });
 
-// Me (customer)
-authRoutes.get('/me', async (c) => {
-  const user = await extractToken(c.req.header('authorization') ?? null, c.env);
-  if (!user || user.type !== 'customer') return c.json({ error: 'No autorizado' }, 401);
+authRoutes.get('/me', async c => {
+  const user = await signedIn(c, 'customer');
+  if (!user) return c.json({ error: 'No autorizado' }, 401);
+  const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ? AND is_active = 1').bind(user.user_id).first<any>();
+  return customer ? c.json({ user: safeCustomer(customer) }) : c.json({ error: 'Cuenta bloqueada o no encontrada' }, 403);
+});
 
+authRoutes.put('/me', async c => {
+  const user = await signedIn(c, 'customer');
+  if (!user) return c.json({ error: 'No autorizado' }, 401);
+  const active = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ? AND is_active = 1').bind(user.user_id).first();
+  if (!active) return c.json({ error: 'Cuenta bloqueada' }, 403);
+  const b = await readBodyObject(c);
+  if (!b) return c.json({ error: 'Datos del perfil inválidos' }, 400);
+  const name = clean(b.name, 120), phone = clean(b.phone, 25), address = clean(b.address, 250);
+  const city = clean(b.city, 100), province = clean(b.province, 100);
+  if (name.length < 3 || !validPhone(phone) || address.length < 6 || city.length < 2 || province.length < 2)
+    return c.json({ error: 'Completa nombre, teléfono, dirección, municipio y provincia' }, 400);
+  await c.env.DB.prepare('UPDATE customers SET name = ?, phone = ?, address = ?, city = ?, province = ?, phone_verified = CASE WHEN phone = ? THEN phone_verified ELSE 0 END, updated_at = ? WHERE id = ?')
+    .bind(name, phone, address, city, province, phone, new Date().toISOString(), user.user_id).run();
   const customer = await c.env.DB.prepare('SELECT * FROM customers WHERE id = ?').bind(user.user_id).first<any>();
-  if (!customer) return c.json({ error: 'Customer no encontrado' }, 404);
-  return c.json({ user: normalizeCustomer(customer) });
+  return c.json({ user: safeCustomer(customer) });
 });
 
-// Me (admin)
-authRoutes.get('/admin/me', async (c) => {
-  const user = await extractToken(c.req.header('authorization') ?? null, c.env);
-  if (!user || user.type !== 'admin') return c.json({ error: 'No autorizado' }, 401);
-
-  const admin = await c.env.DB.prepare('SELECT id, email, role, telegram_username FROM admin_users WHERE id = ?')
-    .bind(user.user_id).first<any>();
-  if (!admin) return c.json({ error: 'Admin no encontrado' }, 404);
-
-  return c.json({ user: { id: admin.id, email: admin.email, role: admin.role, telegram_username: admin.telegram_username ?? null } });
+authRoutes.put('/password', async c => {
+  const user = await signedIn(c, 'customer');
+  if (!user) return c.json({ error: 'No autorizado' }, 401);
+  const active = await c.env.DB.prepare('SELECT id FROM customers WHERE id = ? AND is_active = 1').bind(user.user_id).first();
+  if (!active) return c.json({ error: 'Cuenta bloqueada' }, 403);
+  const b = await readBodyObject(c);
+  if (!b) return c.json({ error: 'Datos de contraseña inválidos' }, 400);
+  if (!validPassword(b.new_password)) return c.json({ error: 'La contraseña nueva debe tener entre 10 y 128 caracteres' }, 400);
+  const current = await c.env.DB.prepare('SELECT password_hash FROM customers WHERE id = ?').bind(user.user_id).first<any>();
+  if (!current || !await comparePassword(typeof b.current_password === 'string' ? b.current_password : '', current.password_hash)) return c.json({ error: 'Contraseña actual incorrecta' }, 403);
+  const now = new Date().toISOString();
+  const nextHash = await hashPassword(b.new_password);
+  // D1.batch aplica el cambio de contraseña y la revocación de otras sesiones
+  // en la misma transacción. Si hay dos cambios concurrentes, la condición
+  // del hash anterior evita sobrescribir una contraseña recién actualizada.
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE customers SET password_hash = ?, updated_at = ?
+      WHERE id = ? AND is_active = 1 AND password_hash = ?`)
+      .bind(nextHash, now, user.user_id, current.password_hash),
+    c.env.DB.prepare(`UPDATE auth_sessions SET revoked_at = ?
+      WHERE user_id = ? AND user_type = 'customer' AND id != ?
+        AND revoked_at IS NULL
+        AND EXISTS (SELECT 1 FROM customers WHERE id = ? AND password_hash = ?)`)
+      .bind(now, user.user_id, user.sid, user.user_id, nextHash),
+  ]);
+  if (results[0].meta?.changes !== 1) {
+    return c.json({ error: 'La contraseña cambió durante la operación. Vuelve a iniciar sesión.' }, 409);
+  }
+  return c.json({ message: 'Contraseña actualizada; otras sesiones cerradas' });
 });
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  PHONE VERIFICATION                                                        */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-// Solicitar código de verificación
-authRoutes.post('/phone/request', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<{ phone?: string; email?: string; telegram_chat_id?: string }>();
-
-  if (!body.phone && !body.email && !body.telegram_chat_id) {
-    return c.json({ error: 'Debe proporcionar phone, email o telegram_chat_id' }, 400);
-  }
-
-  let customerId: string | null = null;
-  let customerName: string | null = null;
-  let customerTelegramId: string | null = null;
-  let phoneNumber: string | null = null;
-
-  // Si se provee telegram_chat_id, buscar customer por ese chat
-  if (body.telegram_chat_id) {
-    const row = await DB.prepare('SELECT id, name, phone FROM customers WHERE telegram_chat_id = ?')
-      .bind(body.telegram_chat_id).first<any>();
-    if (row) {
-      customerId = row.id;
-      customerName = row.name;
-      customerTelegramId = body.telegram_chat_id;
-    }
-  }
-
-  // Si se provee email, buscar customer
-  if (!customerId && body.email) {
-    const row = await DB.prepare('SELECT id, name, phone, telegram_chat_id FROM customers WHERE email = ?')
-      .bind(body.email.toLowerCase()).first<any>();
-    if (row) {
-      customerId = row.id;
-      customerName = row.name;
-      if (row.telegram_chat_id) customerTelegramId = row.telegram_chat_id;
-      if (row.phone) phoneNumber = row.phone;
-    }
-  }
-
-  // Si se provee phone, buscar o crear customer
-  if (!customerId && body.phone) {
-    if (!isValidPhone(body.phone)) return c.json({ error: 'Formato de teléfono inválido' }, 400);
-    phoneNumber = body.phone;
-    const row = await DB.prepare('SELECT id, name, telegram_chat_id FROM customers WHERE phone = ?')
-      .bind(body.phone).first<any>();
-    if (row) {
-      customerId = row.id;
-      customerName = row.name;
-      if (row.telegram_chat_id) customerTelegramId = row.telegram_chat_id;
-    } else {
-      const id = crypto.randomUUID();
-      const now = nowISO();
-      await DB.prepare(
-        `INSERT INTO customers (id, name, email, password_hash, role, phone, phone_verified, telegram_chat_id, telegram_username, created_at, updated_at)
-         VALUES (?, ?, NULL, NULL, 'customer', ?, 0, NULL, NULL, ?, ?)`
-      ).bind(id, `Cliente ${body.phone}`, body.phone, now, now).run();
-      customerId = id;
-      customerName = `Cliente ${body.phone}`;
-    }
-  }
-
-  if (!customerId) return c.json({ error: 'No se pudo identificar el cliente' }, 404);
-
-  const code = generateCode();
-  const expiresAt = new Date(Date.now() + CODE_TTL_SECONDS * 1000).toISOString();
-
-  await DB.prepare(
-    `INSERT INTO phone_verifications (id, customer_id, phone, code, expires_at, used, created_at)
-     VALUES (?, ?, ?, ?, ?, 0, ?)`
-  ).bind(crypto.randomUUID(), customerId, phoneNumber || '', code, expiresAt, nowISO()).run();
-
-  let sentVia: string | null = null;
-  if (customerTelegramId) {
-    await sendLoginCode(c.env, customerTelegramId, code, customerName || undefined);
-    sentVia = 'telegram';
-  } else {
-    sentVia = 'dev';
-  }
-
-  return c.json({
-    message: 'Código de verificación enviado',
-    sent_via: sentVia,
-    ...(sentVia === 'dev' ? { code } : {}),
-    expires_at: expiresAt,
-  });
+authRoutes.get('/admin/me', async c => {
+  const user = await signedIn(c, 'admin');
+  if (!user) return c.json({ error: 'No autorizado' }, 401);
+  const admin = await c.env.DB.prepare('SELECT id, email, role FROM admin_users WHERE id = ? AND is_active = 1').bind(user.user_id).first();
+  return admin ? c.json({ user: admin }) : c.json({ error: 'Administrador no autorizado' }, 403);
 });
 
-// Verificar código de teléfono
-authRoutes.post('/phone/verify', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<{ phone?: string; email?: string; code: string }>();
-  if (!body.code) return c.json({ error: 'Código requerido' }, 400);
-
-  let customerId: string | null = null;
-  let phoneNumber: string | null = null;
-
-  if (body.email) {
-    const row = await DB.prepare('SELECT id, phone FROM customers WHERE email = ?').bind(body.email.toLowerCase()).first<any>();
-    if (row) { customerId = row.id; phoneNumber = row.phone; }
-  }
-  if (!customerId && body.phone) {
-    phoneNumber = body.phone;
-    const row = await DB.prepare('SELECT id FROM customers WHERE phone = ?').bind(body.phone).first<any>();
-    if (row) customerId = row.id;
-  }
-  if (!customerId) return c.json({ error: 'Cliente no encontrado' }, 404);
-
-  const targetPhone = phoneNumber || body.phone;
-
-  const verification = await DB.prepare(
-    `SELECT * FROM phone_verifications
-     WHERE customer_id = ? AND phone = ? AND used = 0 AND expires_at > ?
-     ORDER BY created_at DESC LIMIT 1`
-  ).bind(customerId, targetPhone, nowISO()).first<any>();
-
-  if (!verification) return c.json({ error: 'Código inválido o expirado' }, 401);
-  if (verification.code !== body.code) return c.json({ error: 'Código incorrecto' }, 401);
-
-  await DB.prepare('UPDATE phone_verifications SET used = 1 WHERE id = ?').bind(verification.id).run();
-  await DB.prepare('UPDATE customers SET phone_verified = 1 WHERE id = ?').bind(customerId).run();
-
-  const { access_token, refresh_token } = await generateTokenPair(c.env, customerId, 'customer', 'customer');
-  return c.json({ message: 'Teléfono verificado correctamente', access_token, refresh_token });
-});
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  TELEGRAM LOGIN FLOW                                                       */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-// Genera un código de enlace para vincular Telegram con un customer
-authRoutes.post('/telegram/link', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<{ telegram_chat_id: string; name?: string; email?: string }>();
-
-  if (!body.telegram_chat_id) return c.json({ error: 'telegram_chat_id requerido' }, 400);
-
-  let customer = await DB.prepare('SELECT * FROM customers WHERE telegram_chat_id = ?')
-    .bind(body.telegram_chat_id).first<any>();
-
-  if (!customer) {
-    const id = crypto.randomUUID();
-    const now = nowISO();
-    const name = body.name || `Cliente Telegram ${body.telegram_chat_id}`;
-    await DB.prepare(
-      `INSERT INTO customers (id, name, email, password_hash, role, phone_verified, telegram_chat_id, telegram_username, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, 'customer', 0, ?, NULL, ?, ?)`
-    ).bind(id, name, body.email?.toLowerCase() || null, body.telegram_chat_id, now, now).run();
-    customer = await DB.prepare('SELECT * FROM customers WHERE id = ?').bind(id).first<any>();
-  }
-
-  const linkCode = generateCode(8);
-  const expiresAt = new Date(Date.now() + LINK_TTL_SECONDS * 1000).toISOString();
-
-  await DB.prepare(
-    `INSERT INTO telegram_links (id, customer_id, link_code, used, expires_at, created_at)
-     VALUES (?, ?, ?, 0, ?, ?)`
-  ).bind(crypto.randomUUID(), customer.id, linkCode, expiresAt, nowISO()).run();
-
-  await sendLoginCode(c.env, body.telegram_chat_id, linkCode, customer.name);
-
-  return c.json({
-    message: 'Código de enlace enviado a Telegram',
-    telegram_chat_id: body.telegram_chat_id,
-    customer_id: customer.id,
-  });
-});
-
-// Intercambia un link_code de Telegram por tokens JWT
-authRoutes.post('/telegram/exchange', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<{ link_code: string }>();
-  if (!body.link_code) return c.json({ error: 'link_code requerido' }, 400);
-
-  const link = await DB.prepare(
-    `SELECT * FROM telegram_links WHERE link_code = ? AND used = 0 AND expires_at > ?`
-  ).bind(body.link_code, nowISO()).first<any>();
-
-  if (!link) return c.json({ error: 'Código inválido o expirado' }, 401);
-
-  await DB.prepare('UPDATE telegram_links SET used = 1 WHERE id = ?').bind(link.id).run();
-
-  const customer = await DB.prepare('SELECT * FROM customers WHERE id = ?').bind(link.customer_id).first<any>();
-  if (!customer) return c.json({ error: 'Customer no encontrado' }, 404);
-
-  const { access_token, refresh_token } = await generateTokenPair(c.env, customer.id, 'customer', customer.role);
-
-  return c.json({
-    message: 'Login exitoso vía Telegram',
-    user: normalizeCustomer(customer),
-    access_token,
-    refresh_token,
-  });
-});
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  TELEGRAM WEBHOOK                                                          */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-// Webhook de Telegram para recibir actualizaciones
-authRoutes.post('/telegram/webhook', async (c) => {
-  const { DB } = c.env;
-  const body = await c.req.json<any>();
-
-  // Verificar firma del webhook
-  if (c.env.TELEGRAM_WEBHOOK_SECRET) {
-    const secretToken = c.req.header('x-telegram-bot-api-secret-token');
-    if (secretToken !== c.env.TELEGRAM_WEBHOOK_SECRET) return c.json({ error: 'Forbidden' }, 403);
-  }
-
-  const message = body.message || body.edited_message;
-  if (!message) return c.json({ ok: true });
-
-  const chatId = message.chat?.id;
-  const text = message.text || '';
-  const from = message.from;
-  const username = from?.username || null;
-
-  if (chatId && text) {
-    const lower = text.toLowerCase().trim();
-
-    if (lower === '/start' || lower === '/start@energiavitalbot') {
-      await sendToTelegram(
-        c.env, chatId,
-        `👋 ¡Hola! Bienvenido a Energía Vital.\n\n` +
-          `Para acceder al sistema, necesitas un código de enlace.\n` +
-          `Pide a tu administrador que te genere uno, o usa /login para solicitar uno.`,
-      );
-    } else if (lower === '/login') {
-      const customer = await DB.prepare('SELECT id, name FROM customers WHERE telegram_chat_id = ?')
-        .bind(String(chatId)).first<any>();
-
-      if (!customer) {
-        await sendToTelegram(
-          c.env, chatId,
-          `❌ No tienes una cuenta vinculada.\n\n` +
-            `Pide a un administrador que te registre o genera un código de enlace desde la web.`,
-        );
-        return c.json({ ok: true });
-      }
-
-      const code = generateCode();
-      const expiresAt = new Date(Date.now() + CODE_TTL_SECONDS * 1000).toISOString();
-      await DB.prepare(
-        `INSERT INTO phone_verifications (id, customer_id, phone, code, expires_at, used, created_at)
-         VALUES (?, ?, ?, ?, ?, 0, ?)`
-      ).bind(crypto.randomUUID(), customer.id, '', code, expiresAt, nowISO()).run();
-
-      await sendLoginCode(c.env, chatId, code, customer.name);
-    } else {
-      await sendToTelegram(
-        c.env, chatId,
-        `ℹ️ Comando no reconocido.\nUsa /start para comenzar o /login para obtener un código de acceso.`,
-      );
-    }
-
-    // Actualizar username del customer si existe
-    if (from) {
-      await DB.prepare('UPDATE customers SET telegram_username = ? WHERE telegram_chat_id = ?')
-        .bind(username, String(chatId)).run();
-    }
-  }
-
-  return c.json({ ok: true });
-});
-
-
+// Se retira el login sin contraseña vía teléfono o Telegram. Telegram queda como canal de notificaciones.
