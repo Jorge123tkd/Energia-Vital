@@ -594,7 +594,7 @@ export function unsupportedTelegramMessage(body:unknown):{updateId:string;chatId
  const b=body as any,m=b?.message;
  if(!validUpdateId(b?.update_id)||m?.chat?.type!=='private'||!validChatId(m.chat.id)||m.from?.id!==m.chat.id||m.from?.is_bot===true)return null;
  if(!m.photo&&!m.document&&!m.video&&!m.audio&&!m.voice&&!m.sticker&&!m.animation&&!m.video_note&&!m.contact&&!m.location)return null;
- const reply=m.photo?'No pude aceptar esa foto. Envíala como fotografía de hasta 8 MB y añade «solicitud REFERENCIA» si ya tienes un expediente.':m.voice||m.audio||m.video||m.video_note?'Por ahora no puedo escuchar audios ni analizar videos. Escríbeme la necesidad y, si ya tienes solicitud, adjunta fotos, PDF, DOCX o XLSX de hasta 8 MB.':'Este tipo de mensaje no se incorpora al expediente. Puedes escribir la información o adjuntar fotos, PDF, DOCX o XLSX de hasta 8 MB con «solicitud REFERENCIA».';
+ const reply=m.photo?'No pude validar esa foto. Envía una fotografía JPEG de hasta 8 MB. Para incorporarla a un expediente debes tener tu cuenta creada y vinculada, y añadir «solicitud REFERENCIA». El límite es de cinco fotos por solicitud.':m.voice||m.audio||m.video||m.video_note?'Por ahora no puedo escuchar audios ni analizar videos. Escríbeme la necesidad. Para adjuntar fotos o documentos a una solicitud, crea o vincula tu cuenta y usa «solicitud REFERENCIA».':'Este tipo de archivo no se incorpora al expediente. Se admiten fotos JPEG, PDF, DOCX y XLSX de hasta 8 MB; para adjuntarlos necesitas una cuenta creada y vinculada y el texto «solicitud REFERENCIA». Límite: 20 documentos por solicitud.';
  return {updateId:String(b.update_id),chatId:String(m.chat.id),reply};
 }
 telegramRoutes.post('/webhook',async c=>{

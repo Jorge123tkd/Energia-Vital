@@ -14,7 +14,7 @@ export function extractTelegramPhoto(payload:any):TelegramPhoto|null{
 }
 export async function receiveTelegramPhoto(env:Env,input:TelegramPhoto):Promise<string>{
  const customer=await currentTelegramCustomer(env,input.chatId);
- if(!customer)return 'Primero crea o vincula tu cuenta con «Mi cuenta». Confirma la solicitud y vuelve a adjuntar la fotografía con su referencia. No se ha guardado esta foto.';
+ if(!customer)return 'Tu solicitud por teléfono puede seguir registrada. Para adjuntar fotos y consultar el expediente desde Telegram, crea o vincula tu cuenta con «Mi cuenta». Después reenvía la foto con «solicitud REFERENCIA». No se ha guardado esta foto.';
  const match=/^solicitud\s+([a-z0-9-]{1,128})$/i.exec(input.caption);
  if(!match)return 'Todavía no guardé esta foto. Termina y confirma tu solicitud o consulta «mis solicitudes». Después reenvíala con el texto «solicitud REFERENCIA» para incorporarla al expediente correcto.';
  const requestId=match[1],imageId='tg-photo-'+input.updateId;

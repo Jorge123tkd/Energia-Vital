@@ -8,7 +8,7 @@ export function extractTelegramDocument(payload:any){
 }
 export async function receiveTelegramDocument(env:Env,input:NonNullable<ReturnType<typeof extractTelegramDocument>>){
  const customer=await currentTelegramCustomer(env,input.chatId);
- if(!customer)return 'Crea o vincula tu cuenta con «Mi cuenta». Después registra tu solicitud, confirma el resumen y adjunta el archivo con la referencia que te daré. No se ha guardado este archivo.';
+ if(!customer)return 'Tu solicitud por teléfono puede seguir registrada. Para adjuntar PDF, DOCX o XLSX y consultar el expediente desde Telegram, crea o vincula tu cuenta con «Mi cuenta». Después reenvía el archivo con «solicitud REFERENCIA». No se ha guardado este archivo.';
  const match=/^solicitud\s+([a-z0-9-]{1,128})$/i.exec(input.caption);
  if(!match)return 'Todavía no guardé el archivo. Si estás preparando una solicitud, termina y confirma el resumen primero. Si ya está registrada, reenvíalo con «solicitud REFERENCIA» (consulta «mis solicitudes»).';
  if(!Number.isSafeInteger(input.size)||input.size<1||input.size>maxDocumentBytes||!/\.(pdf|docx|xlsx)$/i.test(input.filename))return 'Solo archivos PDF, DOCX y XLSX de hasta 8 MB.';
