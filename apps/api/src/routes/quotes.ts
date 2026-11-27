@@ -10,10 +10,12 @@ import { validCubanWorkDate, cubaToday } from '../brigade-policy';
 
 import { tariffRoutes } from './tariffs';
 import { residentialRoutes } from './residential';
+import {contractRoutes} from './contracts';
 import {quoteDecisionsAvailable,recordQuoteDecision} from '../quote-decisions';
 export const quoteRoutes=new Hono<{Bindings:Env;Variables:{user?:any}}>();
 quoteRoutes.route('/tariffs',tariffRoutes);
 quoteRoutes.route('/residential',residentialRoutes);
+quoteRoutes.route('/contracts',contractRoutes);
 quoteRoutes.use('*',requireStaffAuth);
 type Item={description:string;quantity:number;unit_price_usd_cents:number;
   line_total_usd_cents:number};

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api,apiRequest } from '../lib/api';
   import {printCommercialQuote,downloadCommercialQuoteHtml} from '../lib/commercial-quote-print';
+  import ServiceContract from './ServiceContract.svelte';
 
   type Item={description:string;quantity:number;unit_price_usd_cents:number;
     line_total_usd_cents:number};
@@ -209,6 +210,7 @@
       {:else if canReview&&decisionsAvailable&&v.status==='approved_internal'}<button type="button" disabled={busy} onclick={()=>{decisionId=v.id;decisionValue='changes';decisionNote='';decisionEvidence=''}} class="border rounded px-3 py-2 text-xs">Registrar respuesta documentada</button>
       {#if decisionId===v.id}<form class="space-y-2 border rounded p-3" onsubmit={e=>{e.preventDefault();void recordDecision(v)}}><label class="block text-sm">Decisión<select class="block w-full border rounded p-2" bind:value={decisionValue}><option value="accept">Acepta</option><option value="changes">Solicita modificaciones</option><option value="reject">No acepta</option></select></label><label class="block text-sm">Observaciones<textarea class="block w-full border rounded p-2" bind:value={decisionNote} required={decisionValue==='changes'} minlength={decisionValue==='changes'?3:0} maxlength="1000"></textarea></label><label class="block text-sm">Evidencia de la respuesta (referencia al documento o comunicación real)<textarea class="block w-full border rounded p-2" required minlength="12" maxlength="1000" bind:value={decisionEvidence}></textarea></label><button type="submit" disabled={busy} class="bg-teal-800 text-white rounded px-3 py-2">Registrar</button><button type="button" disabled={busy} onclick={()=>decisionId=''} class="ml-2">Cancelar</button></form>{/if}
       {/if}
+      {#if canReview&&v.customer_decision?.decision==='accept'}<ServiceContract {token} quoteId={v.id}/>{/if}
       {#if v.reviewed_by_email}
         <p class="text-xs text-slate-600">Revisó: {v.reviewed_by_email}{v.review_reason?' · '+v.review_reason:''}</p>
       {/if}
