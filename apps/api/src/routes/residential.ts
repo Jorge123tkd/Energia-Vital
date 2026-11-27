@@ -9,7 +9,7 @@ residentialRoutes.use('*',async(c,next)=>{
  if(!await c.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='residential_survey_versions'").first())return c.json({error:'Levantamiento residencial pendiente de migración 030.'},503);
  await next();
 });
-const validId=(id:string)=>/^[A-Za-z0-9_-]{1,128}$/.test(id);
+const validId=(id:unknown):id is string=>typeof id==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(id);
 residentialRoutes.get('/project/:id',requireAdminAuth,async c=>{
  const id=c.req.param('id');if(!validId(id))return c.json({error:'Proyecto inválido'},400);
  const link=await c.env.DB.prepare("SELECT l.request_id,r.title FROM warehouse_project_links l JOIN requests r ON r.id=l.request_id WHERE l.project_id=? AND r.status NOT IN ('cancelled','completed')").bind(id).first();
