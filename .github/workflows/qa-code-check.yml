@@ -179,7 +179,78 @@ jobs:
           $qaMigration=Get-Content 'scripts/migrar-bonaire-qa-029-034.ps1' -Raw
           if($qaMigration -notmatch 'energia-vital-qa-db' -or $qaMigration -match 'energia-vital-db --remote'){throw 'La migracion QA no esta aislada'}
           $backup=Get-Content 'scripts/respaldo-d1-029-034.ps1' -Raw
-          if($backup -notmatch '--crear-28' -or $backup -match 'migrations apply|wrangler deploy|pages deploy'){throw 'El respaldo previo no es seguro'}
+          $backupCommands=$backup -replace '(?m)^\s*#.*
+          $usb=Get-Content 'scripts/verificar-respaldo-usb-029-034.ps1' -Raw
+          if($usb -notmatch 'BusType' -or $usb -notmatch '--verificar-28'){throw 'El respaldo USB no se verifica fisicamente'}
+          $migration=Get-Content 'scripts/migrar-bonaire-029-034.ps1' -Raw
+          if($migration -notmatch 'MIGRAR_BONAIRE_029_034_CON_RESPALDO_USB' -or $migration -notmatch 'qa\.total -ne 34' -or $migration -notmatch 'prod\.total -ne 28'){throw 'La migracion productiva no exige QA 34 y respaldo externo 28'}
+          Write-Host '[OK] Cuatro scripts 029-034 parseados; ninguna operacion remota ejecutada.'
+      - name: Comprobar publicador Worker exclusivo sin ejecutar despliegue
+        shell: pwsh
+        run: |
+          $t=$null
+          $err=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/publicar-solo-worker-bonaire.ps1",[ref]$t,[ref]$err) | Out-Null
+          if ($err.Count -ne 0) { throw "Error de sintaxis publicador Worker" }
+          $src=Get-Content scripts/publicar-solo-worker-bonaire.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "Script PowerShell 5.1 debe usar ASCII" }
+          foreach($required in @('param([switch]$Publicar)','PUBLICAR_SOLO_WORKER_BONAIRE','wrangler@4.151.2 deploy --config wrangler.toml','r.total -ne 34','r.last_id -ne 34','r.residential_flow -ne 9','/health')){
+            if (!$src.Contains($required)) { throw "Falta control de release Worker: $required" }
+          }
+          if ($src -match 'pages deploy|d1 migrations apply|d1 export|r2 object put') { throw "Worker-only no debe publicar Pages ni modificar D1" }
+          Write-Host '[OK] Publicador Worker sin mutaciones automaticas.'
+      - name: Impedir publicar versión empresarial con esquema anterior a 034
+        shell: pwsh
+        run: |
+          $src=Get-Content scripts/publicar-produccion.ps1 -Raw
+          foreach($required in @('row.total -ne 34','row.ultimo -ne 34','row.residential_flow','row.tariffs_view','row.warehouse_items','row.warehouse_links','row.procurement_orders','row.business_obligations')){
+            if (!$src.Contains($required)) { throw "Falta el control de migraciones: $required" }
+          }
+          Write-Host '[OK] Release exige esquema comercial 034, sin aplicar D1.'
+
+      - name: Revisar sintaxis del comprobador de Pages publicada sin ejecutarlo
+        shell: pwsh
+        run: |
+          $t=$null
+          $parseErrors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/verificar-pages-publicado.ps1",[ref]$t,[ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -ne 0) { throw "Comprobador Pages con sintaxis incorrecta" }
+          $src=Get-Content scripts/verificar-pages-publicado.ps1 -Raw
+          if ($src -match '[^\x00-\x7F]') { throw "Comprobador Windows PowerShell 5.1 debe usar solo ASCII" }
+          if ($src -match '\$home\b') { throw "HOME es una variable reservada de PowerShell" }
+          foreach ($check in @('/api/studio/v1/me','/api/studio/native/v1/me','/api/admin-session/refresh','/admin/citas')) {
+            if (!$src.Contains($check)) { throw "Falta verificacion HTTPS: $check" }
+          }
+          if ($src -match 'wrangler|d1 migrations apply|pages deploy|r2 object put') { throw "El comprobador no puede publicar ni cambiar la infraestructura" }
+          Write-Host '[OK] Verificador Pages independiente validado; sin deploy.'
+      - name: Verificar Worker comercial publicado y compuertas empresariales cerradas
+        run: node --test scripts/tests/production-worker-gates.cjs
+      - name: Comprobar HTTPS de Pages ya publicada sin datos privados
+        shell: bash
+        run: |
+          set -euo pipefail
+          site='https://bnergiv.com'
+          check_url() {
+            local label="$1" route="$2" want_status="$3" want_type="$4"
+            shift 4
+            local result status ctype
+            result="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}|%{content_type}' "$@" "$site$route")"
+            status="$(printf '%s' "$result" | cut -d '|' -f 1)"
+            ctype="$(printf '%s' "$result" | cut -d '|' -f 2)"
+            if [[ "$status" != "$want_status" ]] || [[ "$want_type" != '*' && "$ctype" != "$want_type"* ]]; then
+              echo "::error::Pages $label devolvio $result; se esperaba $want_status / $want_type"
+              exit 1
+            fi
+            echo "[OK] Pages $label: $result"
+          }
+          check_url 'Studio web anonimo' '/api/studio/v1/me' '401' 'application/json'
+          check_url 'Studio nativo anonimo' '/api/studio/native/v1/me' '401' 'application/json'
+          check_url 'Refresh admin sin cookie' '/api/admin-session/refresh' '401' '*' -X POST -H "Origin: $site" -H 'Content-Type: application/json' --data '{}'
+          check_url 'Portada' '/' '200' 'text/html'
+          check_url 'Admin citas por URL directa' '/admin/citas' '200' 'text/html'
+          echo '[OK] Validaciones HTTP de Pages publicada concluidas. No se desplego nada.'
+,''
+          if($backup -notmatch '--crear-28' -or $backupCommands -match '(?im)^\s*&?\s*(?:npx(?:\.cmd)?\s+)?(?:wrangler|wrangler@[^\s]+)\s+(?:d1\s+migrations\s+apply|deploy)|\bpages\s+deploy\b'){throw 'El respaldo previo no es seguro'}
           $usb=Get-Content 'scripts/verificar-respaldo-usb-029-034.ps1' -Raw
           if($usb -notmatch 'BusType' -or $usb -notmatch '--verificar-28'){throw 'El respaldo USB no se verifica fisicamente'}
           $migration=Get-Content 'scripts/migrar-bonaire-029-034.ps1' -Raw
