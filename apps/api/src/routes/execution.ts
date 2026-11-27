@@ -1,7 +1,9 @@
 import {Hono} from 'hono';
 import type {Env} from '../types';
 import {requireAdminAuth} from '../middleware';
+import {deliveryRoutes} from './delivery';
 export const executionRoutes=new Hono<{Bindings:Env;Variables:{user?:any}}>();
+executionRoutes.route('/delivery',deliveryRoutes);
 executionRoutes.use('*',requireAdminAuth);
 executionRoutes.use('*',async(c,next)=>{
  c.header('Cache-Control','private, no-store');

@@ -1,6 +1,7 @@
 <script lang="ts">
  import {onMount} from 'svelte';
  import {apiRequest} from '../lib/api';
+ import ServiceDelivery from './ServiceDelivery.svelte';
  let {token,quoteId}:{token:string;quoteId:string}=$props();
  let data=$state<any>(null),availability=$state<any>(null),busy=$state(false),error=$state(''),notice=$state(''),reference=$state(''),scope=$state(''),note=$state(''),mode=$state('warehouse'),date=$state(''),brigade=$state(''),minutes=$state(480),ack=$state(false);
  const base='/api/quotes/contracts/execution/'+encodeURIComponent(quoteId);
@@ -24,5 +25,6 @@
  <form onsubmit={schedule} class="space-y-2"><label class="block">Fecha acordada (Cuba)<input type="date" required bind:value={date} onchange={()=>{availability=null;brigade=''}} class="block border rounded p-2"/></label><button type="button" disabled={busy||!date} onclick={check} class="border rounded px-3 py-2">Consultar disponibilidad</button>
  {#if availability?.date===date}<label class="block">Brigada<select required bind:value={brigade} class="block w-full border rounded p-2"><option value="">Seleccionar</option>{#each availability.brigades as b (b.id)}<option value={b.id}>{b.name} · {b.day_jobs?'Ocupada':'Disponible'}{b.id===availability.recommended_brigade_id?' · Recomendada':''}</option>{/each}</select></label><label class="block">Duración estimada (min)<input type="number" min="30" max="1440" required bind:value={minutes} class="block border rounded p-2"/></label><label class="flex gap-2"><input type="checkbox" bind:checked={ack}/> Reconozco la ocupación si procede.</label><button type="submit" disabled={busy||!brigade} class="bg-teal-800 text-white rounded px-3 py-2">Programar brigada</button>{/if}</form>
  {#each data.works as w (w.id)}<p class="text-sm">{w.work_date} · {w.brigade_name} · {w.status}</p>{/each}
+ <ServiceDelivery {token} {quoteId}/>
  {/if}{/if}
 </section>

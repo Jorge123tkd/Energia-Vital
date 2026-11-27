@@ -7,7 +7,7 @@ for n in range(1,34): db.executescript(next(root.glob(f'{n:03}_*.sql')).read_tex
 db.execute("INSERT INTO admin_users(id,email,password_hash,role) VALUES('a','a@invalid.test','x','admin')")
 db.execute("INSERT INTO requests(id,type,title,status) VALUES('r','installation','QA job','approved')")
 db.execute("INSERT INTO warehouse_project_links(project_id,request_id,linked_by) VALUES('p','r','a')")
-db.execute("INSERT INTO commercial_quote_versions(id,request_id,version_no,title,items_json,subtotal_cents,total_cents,valid_until,created_by,created_at,updated_at) VALUES('q','r',1,'QA','[]',100,100,'2026-12-31','a','now','now')")
+db.execute("INSERT INTO commercial_quote_versions(id,request_id,version_no,title,items_json,subtotal_cents,total_cents,valid_until,created_by,created_at,updated_at) VALUES('q','r',1,'QA offer','[]',100,100,'2026-12-31','a','now','now')")
 db.execute("UPDATE commercial_quote_versions SET status='in_review' WHERE id='q'")
 db.execute("UPDATE commercial_quote_versions SET status='approved_internal',reviewed_by='a',reviewed_at='now' WHERE id='q'")
 def reject(fn):
