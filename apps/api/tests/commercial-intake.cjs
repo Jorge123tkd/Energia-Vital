@@ -53,3 +53,16 @@ assert.match(say('corregir ubicación: La Habana').reply,/La Habana/);
 assert.equal(d.location,'La Habana');
 assert.equal(advance('¿Qué productos venden?',null,'q'),null);
 console.log('PASS natural business intake, multi-field extraction, explicit correction and consent');
+
+d=null;
+assert.equal(say('solicitar servicio').draft.stage,'need');
+say('Necesito reparar el inversor y estamos en Boyeros');
+assert.equal(say('vivienda').draft.kind,'persona');
+say('Nombre: Ana Pérez; contacto: Ana');
+say('Forma de pago: transferencia; moneda: CUP; presupuesto: 2500 USD');
+assert.equal(d.currency,'CUP');assert.equal(d.budget,'2500');assert.equal(d.stage,'review');
+assert.equal(say('enviar solicitud').submit,true);
+d={...d,stage:'submitted'};assert.match(say('confirmar solicitud').reply,/case-test/);
+d=null;assert.equal(say('quiero ser proveedor').draft.stage,'need');assert.equal(d.kind,'otro');
+assert.equal(say('cancelar borrador').draft,null);
+console.log('PASS residential and supplier journeys, payment currency, confirmation aliases');

@@ -3,7 +3,7 @@
 import {parseRequestIntake} from './request-intake';
 export type CommercialDraft = {
  id:string; stage:'kind'|'company'|'need'|'location'|'payment'|'budget'|'review'|'submitted';
- kind?:string; company?:string; need?:string; location?:string; payment?:string; budget?:string; contact?:string; natural?:boolean;
+ kind?:string; company?:string; need?:string; location?:string; payment?:string; budget?:string; contact?:string; currency?:string; natural?:boolean;
 };
 export type CommercialStep = {draft:CommercialDraft|null; reply:string; submit?:true};
 const norm=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -12,12 +12,12 @@ const labels:Record<string,string>={mipyme:'Mipyme',estatal:'Empresa estatal',em
 export const startCommercialIntake=(s:string)=>/^(?:registrar (?:una )?solicitud comercial|crear (?:un )?expediente comercial|iniciar solicitud empresarial|registrar proyecto empresarial)[.!]*$/.test(norm(s));
 const optional=(s:string)=>/^(?:no se|por definir|pendiente|omitir|no disponible|aun no|todavia no)$/.test(norm(s));
 export function commercialSummary(d:CommercialDraft):string{
- return ['Tipo: '+labels[d.kind||'otro'],'Entidad o titular: '+d.company,...(d.contact?['Persona de contacto: '+d.contact]:[]),'Necesidad: '+d.need,'Ubicación: '+d.location,'Forma de pago: '+(d.payment||'Por definir'),'Presupuesto disponible USD: '+(d.budget||'Por definir')].join('\n');
+ return ['Tipo: '+labels[d.kind||'otro'],'Entidad o titular: '+d.company,...(d.contact?['Persona de contacto: '+d.contact]:[]),'Necesidad: '+d.need,'Ubicación: '+d.location,'Forma de pago: '+(d.payment||'Por definir'),...(d.currency?['Moneda de pago: '+d.currency]:[]),'Presupuesto disponible USD: '+(d.budget||'Por definir')].join('\n');
 }
 
 // Natural enterprise intake: explicit menu or a clear commercial intention,
 // never a generic question. Use existing DB categories for compatibility.
-const naturalMenu=/^(?:empresas? y negocios|empresas?|negocios?|atencion a empresas|proyecto empresarial|servicios para empresas|proveedores y alianzas|proveedores?|alianzas|solicitar servicio|registrar solicitud)$/;
+const naturalMenu=/^(?:empresas? y negocios|empresas?|negocios?|atencion a empresas|proyecto empresarial|servicios para empresas|proveedores y alianzas|proveedores?|alianzas|alianza comercial|ser proveedor|quiero ser proveedor|distribuidor|distribucion en cuba|colaboracion comercial|solicitar servicio|quiero solicitar servicio|pedir servicio|registrar solicitud)$/;
 export function naturalCommercialStart(text:string):boolean{
  const m=norm(text).replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim();
  if(naturalMenu.test(m)||/^(?:somos|soy) (?:una? )?(?:empresa(?: estatal| privada)?|mipyme|negocio privado|cooperativa)$/.test(m))return true;
@@ -41,14 +41,15 @@ function naturalNext(d:CommercialDraft):CommercialStep{
 function naturalKind(text:string):string|undefined{
  const m=norm(text);
  if(/\b(?:estatal|organismo estatal|institucion publica)\b/.test(m))return 'estatal';
- if(/\b(?:privad[ao]|mipyme|mi pyme|tcp|cooperativa|residencial|vivienda)\b/.test(m))return 'empresa_privada';
+ if(/\b(?:residencial|vivienda|casa particular)\b/.test(m))return 'persona';
+ if(/\b(?:privad[ao]|mipyme|mi pyme|tcp|cooperativa)\b/.test(m))return 'empresa_privada';
  if(/\b(?:proveedor|fabricante|alianza)\b/.test(m))return 'otro';
  return undefined;
 }
 function labelled(text:string,key:string):string|undefined{
  const re=new RegExp('(?:^|[;,\\n]|\\b(?:y|la|el)\\s+)\\s*(?:'+key+')\\s*(?:es\\s+|:|=)\\s*([^;\\n]+)','i');
  const m=re.exec(text);
- return m?.[1].split(/,\s*(?:(?:la |el )?(?:persona|contacto|ubicaci[oó]n|municipio|necesidad|presupuesto|forma de pago|entidad|empresa)\b)/i)[0].trim();
+ return m?.[1].split(/,\s*(?:(?:la |el )?(?:persona|contacto|ubicaci[oó]n|municipio|necesidad|presupuesto|forma de pago|moneda|tipo de cliente|entidad|empresa)\b)/i)[0].trim();
 }
 export function resumeCommercialIntake(d:CommercialDraft):string{
  if(d.stage==='submitted')return 'Solicitud registrada. Referencia: '+d.id+'. Consulta «mis solicitudes».';
@@ -59,7 +60,7 @@ function advanceNatural(text:string,prior:CommercialDraft|null,id:string):Commer
  const m=norm(text),d:CommercialDraft=prior?{...prior}:{id,stage:'need',natural:true};
  if(/^(?:cancelar|cancelar borrador|cancelar solicitud comercial|no gracias)$/.test(m))return {draft:null,reply:'Borrador cancelado. No se registró ninguna solicitud.'};
  if(/[¿?]/.test(text))return {draft:d,reply:'Tu solicitud sigue guardada. '+resumeCommercialIntake(d)};
- if(d.stage==='review'&&m==='confirmar solicitud comercial')return {draft:d,reply:'',submit:true};
+ if(d.stage==='review'&&/^(?:confirmar solicitud comercial|confirmar solicitud|enviar solicitud)$/.test(m))return {draft:d,reply:'',submit:true};
  const menu=naturalMenu.test(m.replace(/[^\p{L}\p{N}\s]/gu,' ').replace(/\s+/g,' ').trim())||/^(?:somos|soy) (?:una? )?(?:empresa(?: estatal| privada)?|mipyme|negocio privado|cooperativa)$/.test(m);
  if(menu){const kind=naturalKind(text);if(kind&&!d.kind)d.kind=kind;return naturalNext(d);}
  let value:string|undefined,matched=false;
@@ -72,7 +73,9 @@ function advanceNatural(text:string,prior:CommercialDraft|null,id:string):Commer
  assign('contact',labelled(text,'(?:persona de contacto|contacto|representante)'),120);
  assign('location',labelled(text,'(?:corregir\\s+)?(?:ubicaci[oó]n|municipio|provincia|direcci[oó]n)'),250);
  assign('need',labelled(text,'(?:corregir\\s+)?(?:necesidad|servicio|proyecto)'),1800,3);
- assign('payment',labelled(text,'(?:forma de pago|pago)'),160);
+ assign('payment',labelled(text,'(?:corregir\\s+)?(?:forma de pago|pago)'),160);
+ const currency=labelled(text,'(?:corregir\\s+)?moneda(?: de pago)?')||(/\b(?:transferencia|efectivo|cheque)\s+(?:en\s+)?(USD|CUP|MLC|EUR)\b/i.exec(text)?.[1]);
+ if(currency&&/^(USD|CUP|MLC|EUR)$/i.test(currency)){d.currency=currency.toUpperCase();matched=true;}
  const place=/(?:somos|estamos|trabajamos|radicamos)\s+(?:de|en)\s+([^,;\n]+?)(?=\s+y\s+(?:necesit|querem|pag)|[,;\n]|$)/i.exec(text);
  if(place&&!d.location)assign('location',place[1].trim(),250);
  const need=/(?:necesitamos|necesito|queremos|requerimos)\s+(.+?)(?=\s+y\s+(?:somos|estamos|trabajamos)|[;\n]|$)/i.exec(text);
@@ -83,6 +86,11 @@ function advanceNatural(text:string,prior:CommercialDraft|null,id:string):Commer
  }
  value=labelled(text,'(?:corregir\\s+)?presupuesto(?: disponible)?');
  if(value){const amount=value.replace(/\s*USD$/i,'').trim(),parsed=parseRequestIntake({available_budget_usd:optional(amount)?'':amount,customer_type:d.kind});if(!parsed.error){d.budget=optional(amount)?'':amount;matched=true;}}
+ // Un importe explícitamente en USD se entiende aunque no lleve etiqueta.
+ if(d.budget===undefined&&!value){
+  const plain=/^(\d{1,9}(?:[.,]\d{1,2})?)\s*USD$/i.exec(text);
+  if(plain){d.budget=plain[1];matched=true;}
+ }
  if(!matched&&d.stage!=='review'){
   switch(d.stage){
    case 'need':if(text.length>=3&&text.length<=1800)d.need=text;break;
@@ -112,7 +120,7 @@ export function advanceCommercialIntake(message:string, prior:CommercialDraft|nu
  if(/^(?:cancelar borrador|cancelar solicitud comercial)$/.test(m)&&prior.stage!=='submitted')
    return {draft:null,reply:'Borrador cancelado. No se ha registrado ninguna solicitud.'};
  if(prior.stage==='submitted'){
-   if(m==='confirmar solicitud comercial')return {draft:prior,reply:'Esta solicitud ya está registrada. Referencia: '+prior.id};
+   if(/^(?:confirmar solicitud comercial|confirmar solicitud|enviar solicitud)$/.test(m))return {draft:prior,reply:'Esta solicitud ya está registrada. Referencia: '+prior.id};
    return null;
  }
  // A question is not consent or a field value.
@@ -143,7 +151,7 @@ export function advanceCommercialIntake(message:string, prior:CommercialDraft|nu
   d.budget=amount;d.stage='review';return {draft:d,reply:'Revisa tu solicitud:\n\n'+commercialSummary(d)+'\n\nPara enviarla al equipo escribe exactamente «confirmar solicitud comercial». Para descartarla escribe «cancelar borrador». No implica aprobación, contrato, cita ni compromiso de pago.'};
  }
  case 'review':
-  if(m!=='confirmar solicitud comercial')return invalid('Para enviar el resumen escribe «confirmar solicitud comercial». Para modificar los datos, cancela el borrador y vuelve a iniciarlo.');
+  if(!/^(?:confirmar solicitud comercial|confirmar solicitud|enviar solicitud)$/.test(m))return invalid('Para enviar el resumen escribe «confirmar solicitud comercial». Para modificar los datos, cancela el borrador y vuelve a iniciarlo.');
   return {draft:d,reply:'',submit:true};
  }
  return null;

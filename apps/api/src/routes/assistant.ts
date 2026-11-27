@@ -104,7 +104,7 @@ assistantRoutes.post('/message', async c => {
       const writes:D1PreparedStatement[]=[];
       if(step.submit && step.draft){
         const d=step.draft;
-        const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment});
+        const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment,payment_currency:d.currency});
         if(intake.error||!intake.value)return c.json({error:'Revisa los datos del borrador'},400);
         const description='[Origen: asistente web]\nEntidad: '+d.company+'\nNecesidad: '+d.need+(d.contact?'\nPersona de contacto: '+d.contact:'');
         // INSERT condicional: solo el dueño con el borrador exacto puede registrar.

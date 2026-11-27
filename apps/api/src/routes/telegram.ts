@@ -207,7 +207,9 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     const labels:Record<string,string>={pending:'Pendiente',quoted:'Presupuestada',approved:'Aprobada',scheduled:'Programada',completed:'Completada',cancelled:'Cancelada',confirmed:'Confirmada',in_progress:'En proceso'};
     return {reply:results?.length?(isRequests?'Tus últimas solicitudes:\n\n':'Tus últimas citas:\n\n')+results.map(x=>x.title+'\n'+(labels[x.status]||x.status)+' · '+x.date+'\nReferencia: '+x.id).join('\n\n')+(isRequests?'\n\nEscribe «ver solicitud» seguido de su referencia para leer las respuestas del equipo.':''):'Todavía no tienes registros en esta sección.',skipHistory:true};
   }
-  const visit=advanceAppointmentDraft(text,appointment);
+  const commercialActive=!!prior&&prior.stage!=='submitted';
+  // No consumir cifras del presupuesto como fecha/hora de una cita anterior.
+  const visit=advanceAppointmentDraft(text,commercialActive&&!/\bcita\b/i.test(text)?null:appointment);
   if(visit){
     if(visit.submit){
       if(!customer)return {reply:'Tu horario está guardado. Crea o vincula tu cuenta para enviar la cita; después escribe «confirmar cita».',appointment:visit.draft,replyMarkup:accountButton,skipHistory:true};
@@ -218,7 +220,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   }
   const documentReply=await telegramDocuments(env,chatId,text);
   if(documentReply!==null)return {reply:documentReply,skipHistory:true};
-  const intakeMessage=action==='request-service'&&!prior?'solicitar servicio':text;
+  const intakeMessage=(!prior||prior.stage==='submitted')&&action==='request-service'?'solicitar servicio':(!prior||prior.stage==='submitted')&&action==='business-services'&&!naturalCommercialStart(text)?'empresas y negocios':(!prior||prior.stage==='submitted')&&action==='business-partner'&&!naturalCommercialStart(text)?'proveedores y alianzas':text;
   // Las acciones administrativas, nueva conversación y contacto humano no se consumen como campos.
   if((action===null||action==='request-service'||action==='business-services'||action==='business-partner')&&(prior||startCommercialIntake(intakeMessage)||naturalCommercialStart(intakeMessage))){
     // Una vez persistido el borrador, su ID estable evita duplicar confirmaciones.
@@ -227,7 +229,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
       if(step.submit&&step.draft){
         if(!customer)return {reply:'Tu solicitud está preparada y guardada en este chat. Para enviarla y poder consultar las respuestas, crea o vincula tu cuenta. Después escribe «confirmar solicitud comercial». No volveremos a pedir los datos del borrador.',commercial:step.draft,state:null,replyMarkup:accountButton,skipHistory:true};
         const d=step.draft, time=now();
-        const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment});
+        const intake=parseRequestIntake({customer_type:d.kind,available_budget_usd:d.budget,payment_method:d.payment,payment_currency:d.currency});
         if(intake.error||!intake.value)return {reply:'Revisa el borrador antes de enviarlo.',commercial:prior,state:null};
         await env.DB.batch([
           env.DB.prepare("INSERT INTO requests (id,customer_id,type,request_category_id,title,description,status,priority,location,preferred_date,created_at,updated_at) "+
@@ -242,7 +244,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
         const saved=await env.DB.prepare("SELECT r.id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1")
           .bind(d.id,customer.id,chatId).first();
         if(!saved)return {reply:'No fue posible confirmar el registro. Comprueba tu cuenta.',commercial:prior,state:null};
-        return {reply:'Solicitud registrada. Referencia: '+d.id+'. Pendiente de revisión. Escribe «mis solicitudes» para consultar su estado.',commercial:{...d,stage:'submitted'},state:null};
+        return {reply:'Solicitud registrada. Referencia: '+d.id+'. Pendiente de revisión. Escribe «mis solicitudes» para consultar su estado. Puedes adjuntar fotos, PDF, Word o Excel con el texto «solicitud '+d.id+'».',commercial:{...d,stage:'submitted'},state:null};
       }
       return {reply:step.reply,commercial:step.draft,state:null};
     }
@@ -375,7 +377,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   ).bind(chatId,threadId).all<{role:string;content:string}>();
   const recent=(commercialHistory.results||[]).reverse();
   const commercial=businessProposalReply(text,recent) || businessServiceReply(text,recent);
-  if(commercial)return {reply:commercial,state:null};
+  if(commercial)return {reply:commercial+'\n\nSi quieres tramitarlo aquí mismo, escribe «registrar solicitud comercial». No necesitas salir de Telegram.',state:null};
 
   const solar=advanceSolarGuidance(text,state);
   if(solar.handled)return {reply:solar.reply,state:solar.state};
