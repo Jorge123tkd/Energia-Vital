@@ -66,3 +66,11 @@ d={...d,stage:'submitted'};assert.match(say('confirmar solicitud').reply,/case-t
 d=null;assert.equal(say('quiero ser proveedor').draft.stage,'need');assert.equal(d.kind,'otro');
 assert.equal(say('cancelar borrador').draft,null);
 console.log('PASS residential and supplier journeys, payment currency, confirmation aliases');
+
+const {recoverLegacyCommercialIntake}=load('commercial-intake');
+const old=[{role:'user',content:'Empresas y negocios'},{role:'assistant',content:'Atención empresarial · Bonaire'},{role:'user',content:'respaldo solar y somos de Boyeros'},{role:'assistant',content:'Atención empresarial · Bonaire'}];
+const recovered=recoverLegacyCommercialIntake(old,'Privada','recover-1');
+assert.equal(recovered.draft.need,'respaldo solar');assert.equal(recovered.draft.location,'Boyeros');assert.equal(recovered.draft.stage,'company');
+assert.equal(recoverLegacyCommercialIntake(old,'confirmar solicitud comercial','recover-2').submit,undefined);
+assert.equal(recoverLegacyCommercialIntake([{role:'assistant',content:'Atención empresarial · Bonaire'}],'Privada','no-anchor'),null);
+console.log('PASS legacy conversation recovery without replaying consent');

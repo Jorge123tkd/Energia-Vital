@@ -15,6 +15,7 @@ if ($SkipInstall) {
 Test-Step 'Asistente empresarial' {node apps/api/tests/business-assistant-phase-a.cjs}
 Test-Step 'Estadisticas del asistente web' {node apps/api/tests/assistant-usage.cjs}
 Test-Step 'Solicitudes comerciales' {node apps/api/tests/commercial-intake.cjs}
+Test-Step 'Conversaciones Telegram' {node apps/api/tests/telegram-journeys.cjs}
 Test-Step 'Identidad Telegram' {node apps/api/tests/telegram-customer-auth.cjs}
 Test-Step 'Citas Telegram' {node apps/api/tests/telegram-customer-appointments.cjs}
 Test-Step 'Validar documentos' {node apps/api/tests/request-documents.cjs}

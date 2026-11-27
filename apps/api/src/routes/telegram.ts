@@ -19,7 +19,7 @@ import { classifyTelegramMessage,telegramReplyKeyboard,presentTelegramReply,type
 import { humanWhatsAppReply } from '../telegram-human-contact';
 import { currentTelegramCustomer } from '../telegram-customer-auth';
 import { SITE_URL, startsRegistration, cancelsRegistration, isCustomerCode, activeRegistration, startRegistration, saveRegistrationStep, cancelRegistration, registrationPrompt, redeemCustomerCode, type Stage } from '../telegram-customer-onboarding';
-import { advanceCommercialIntake, startCommercialIntake, naturalCommercialStart, resumeCommercialIntake, type CommercialDraft } from '../commercial-intake';
+import { advanceCommercialIntake, startCommercialIntake, naturalCommercialStart, resumeCommercialIntake, recoverLegacyCommercialIntake, type CommercialDraft } from '../commercial-intake';
 import { parseRequestIntake } from '../request-intake';
 import { requestTelegramAppointment,advanceAppointmentDraft,appointmentDraftReply,type AppointmentDraft } from '../telegram-customer-appointments';
 import { setTelegramCustomerNotifications } from '../telegram-customer-notifications';
@@ -69,7 +69,7 @@ async function acknowledgeCallback(env:Env,id:string){
 function siteForBot(env:Env){return env.ENVIRONMENT==='qa'?(env.SITE_URL||'').replace(/\/+$/,''):SITE_URL;}
 /** Rewrite only known retired Bonaire web hosts, never Telegram/WhatsApp/API URLs. */
 export function canonicalTelegramLinks(value:string,site='https://bnergiv.com'):string{
- return value.replace(/https?:\/\/(?:energia-vital-web|energiavitalweb|energia-vitalweb)\.(?:pages\.dev|pages\.net|page\.dev|page\.net)(?=[:/?#\s"'<>),.!]|$)/gi,()=>site);
+ return value.replace(/https?:\/\/(?:energia-vital-web|energiavitalweb|energia-vitalweb)\.(?:pages\.dev|pages\.net|page\.dev|page\.net)(?=[/?#\s"'<>),!]|$|\.(?=\s|$))/gi,()=>site);
 }
 function canonicalMarkup(markup:TelegramReplyMarkup|undefined,site:string):TelegramReplyMarkup|undefined{
  if(!markup||!('inline_keyboard' in markup))return markup;
@@ -155,7 +155,7 @@ type BotDecision={
   reply:string;state?:SolarState|null;commercial?:CommercialDraft|null;appointment?:AppointmentDraft|null;newThread?:boolean;skipHistory?:boolean;
   keyboardView?:'reminders';replyMarkup?:TelegramReplyMarkup;
 };
-async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string,prior:CommercialDraft|null,updateId:string,appointment:AppointmentDraft|null=null):Promise<BotDecision>{
+export async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,threadId:string,prior:CommercialDraft|null,updateId:string,appointment:AppointmentDraft|null=null):Promise<BotDecision>{
   const text=raw.trim();
   // Un empleado obtiene su código desde /admin y lo escribe AQUÍ sin comandos.
   // Por compatibilidad seguimos admitiendo /vincular 12345678.
@@ -231,6 +231,7 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   if(documentReply!==null)return {reply:documentReply,skipHistory:true};
   const intakeMessage=(!prior||prior.stage==='submitted')&&action==='request-service'?'solicitar servicio':(!prior||prior.stage==='submitted')&&action==='business-services'&&!naturalCommercialStart(text)?'empresas y negocios':(!prior||prior.stage==='submitted')&&action==='business-partner'&&!naturalCommercialStart(text)?'proveedores y alianzas':text;
   // Las acciones administrativas, nueva conversación y contacto humano no se consumen como campos.
+  if(prior&&prior.stage!=='submitted'&&isCurrencyQuestion(text))return {reply:formatExchangeReply(await getElToqueRates(env.ELTOQUE_API_TOKEN))+'\n\n'+resumeCommercialIntake(prior),skipHistory:true};
   if((action===null||action==='request-service'||action==='business-services'||action==='business-partner')&&(prior||startCommercialIntake(intakeMessage)||naturalCommercialStart(intakeMessage))){
     // Una vez persistido el borrador, su ID estable evita duplicar confirmaciones.
     const step=advanceCommercialIntake(intakeMessage,prior,'tg-solicitud-'+updateId);
@@ -382,9 +383,13 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
   // Historial limitado al chat/hilo actual: jamás reutilizar el de otra empresa.
   const commercialHistory=await env.DB.prepare(
     "SELECT role,content FROM telegram_bot_messages WHERE chat_id=? AND thread_id=? "+
-    "ORDER BY created_at DESC LIMIT 12"
+    "ORDER BY created_at DESC,rowid DESC LIMIT 24"
   ).bind(chatId,threadId).all<{role:string;content:string}>();
   const recent=(commercialHistory.results||[]).reverse();
+  if(!prior){
+    const recovered=recoverLegacyCommercialIntake(recent,text,'tg-solicitud-'+updateId);
+    if(recovered)return {reply:'Retomé tu conversación comercial. '+recovered.reply,commercial:recovered.draft,state:null};
+  }
   const commercial=businessProposalReply(text,recent) || businessServiceReply(text,recent);
   if(commercial)return {reply:commercial+'\n\nSi quieres tramitarlo aquí mismo, escribe «registrar solicitud comercial». No necesitas salir de Telegram.',state:null};
 
@@ -497,7 +502,8 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     // Refrescar el vínculo después de procesar el mensaje: el OTP puede haberlo creado
     // o «desvincular» puede haberlo revocado en esta misma interacción.
     const currentStaff=await currentTelegramStaff(env,input.chatId);
-    const keyboard=decision.replyMarkup||telegramReplyKeyboard(Boolean(currentStaff),nextState?.stage,decision.keyboardView||'normal');
+    const draftKeyboard:TelegramReplyMarkup|undefined=nextCommercial?.stage==='review'?{keyboard:[[{text:'Confirmar solicitud comercial'},{text:'Cancelar borrador'}],[{text:'Hablar con una persona'}]],resize_keyboard:true,one_time_keyboard:true,input_field_placeholder:'Revisa o confirma tu solicitud…'}:undefined;
+    const keyboard=decision.replyMarkup||draftKeyboard||telegramReplyKeyboard(Boolean(currentStaff),nextState?.stage,decision.keyboardView||'normal');
     const renderedReply=presentTelegramReply(decision.reply,nextState?.stage);
     await sendTelegramText(env,input.chatId,renderedReply,keyboard);
     const audit=decision.skipHistory?[]:[

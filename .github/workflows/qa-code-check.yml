@@ -30,6 +30,7 @@ jobs:
         run: |
           node apps/api/tests/assistant-usage.cjs
           node apps/api/tests/commercial-intake.cjs
+          node apps/api/tests/telegram-journeys.cjs
           node apps/api/tests/telegram-customer-auth.cjs
           node apps/api/tests/telegram-customer-appointments.cjs
           node apps/api/tests/request-documents.cjs

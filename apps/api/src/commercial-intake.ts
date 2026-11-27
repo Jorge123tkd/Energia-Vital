@@ -7,8 +7,8 @@ export type CommercialDraft = {
 };
 export type CommercialStep = {draft:CommercialDraft|null; reply:string; submit?:true};
 const norm=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-const kinds:Record<string,string>={'mipyme':'mipyme','empresa estatal':'estatal','estatal':'estatal','negocio privado':'empresa_privada','empresa privada':'empresa_privada','tcp':'tcp','cooperativa':'cooperativa','residencial':'persona','vivienda':'persona','proveedor':'otro','alianza':'otro','otro':'otro'};
-const labels:Record<string,string>={mipyme:'Mipyme',estatal:'Empresa estatal',empresa_privada:'Empresa / negocio privado',tcp:'TCP',cooperativa:'Cooperativa',persona:'Residencial',otro:'Proveedor, alianza u otra organización'};
+const kinds:Record<string,string>={'privada':'empresa_privada','privado':'empresa_privada','mipyme':'mipyme','empresa estatal':'estatal','estatal':'estatal','negocio privado':'empresa_privada','empresa privada':'empresa_privada','tcp':'tcp','cooperativa':'cooperativa','residencial':'persona','vivienda':'persona','proveedor':'otro','alianza':'otro','otro':'otro'};
+const labels:Record<string,string>={mipyme:'Privado · Mipyme',estatal:'Estatal',empresa_privada:'Privado',tcp:'Privado · TCP',cooperativa:'Privado · Cooperativa',persona:'Privado · Residencial',otro:'Proveedor / alianza comercial'};
 export const startCommercialIntake=(s:string)=>/^(?:registrar (?:una )?solicitud comercial|crear (?:un )?expediente comercial|iniciar solicitud empresarial|registrar proyecto empresarial)[.!]*$/.test(norm(s));
 const optional=(s:string)=>/^(?:no se|por definir|pendiente|omitir|no disponible|aun no|todavia no)$/.test(norm(s));
 export function commercialSummary(d:CommercialDraft):string{
@@ -114,7 +114,7 @@ export function advanceCommercialIntake(message:string, prior:CommercialDraft|nu
  if((!prior||prior.stage==='submitted')&&naturalCommercialStart(text)&&!startCommercialIntake(text))return advanceNatural(text,null,id);
  if(startCommercialIntake(text)){
    if(prior&&prior.stage!=='submitted')return {draft:prior,reply:'Ya tienes un borrador en esta conversación. Continúa respondiendo la última pregunta o escribe «cancelar borrador» para comenzar nuevamente.'};
-   return {draft:{id,stage:'kind'},reply:'Vamos a preparar una solicitud comercial. ¿Qué tipo de cliente eres: mipyme, empresa estatal, negocio privado, TCP, cooperativa, residencial, proveedor o alianza? Todavía no se enviará nada.'};
+   return {draft:{id,stage:'kind'},reply:'Vamos a preparar una solicitud comercial. ¿Eres cliente estatal o privado? Si representas a un proveedor o buscas una alianza, también puedes indicarlo. Todavía no se enviará nada.'};
  }
  if(!prior)return null;
  if(/^(?:cancelar borrador|cancelar solicitud comercial)$/.test(m)&&prior.stage!=='submitted')
@@ -129,7 +129,7 @@ export function advanceCommercialIntake(message:string, prior:CommercialDraft|nu
  const invalid=(reply:string):CommercialStep=>({draft:prior,reply});
  switch(d.stage){
  case 'kind':{
-  const kind=Object.prototype.hasOwnProperty.call(kinds,m)?kinds[m]:undefined;if(!kind)return invalid('Selecciona mipyme, empresa estatal, negocio privado, TCP, cooperativa, residencial, proveedor o alianza.');
+  const kind=Object.prototype.hasOwnProperty.call(kinds,m)?kinds[m]:undefined;if(!kind)return invalid('Indica estatal o privado (incluye residencial, mipyme, TCP y cooperativa), o proveedor/alianza.');
   d.kind=kind;d.stage='company';return {draft:d,reply:'¿Cuál es el nombre de la entidad o titular? Usaremos el contacto de tu cuenta registrada.'};
  }
  case 'company':
@@ -155,4 +155,22 @@ export function advanceCommercialIntake(message:string, prior:CommercialDraft|nu
   return {draft:d,reply:'',submit:true};
  }
  return null;
+}
+
+/** Recover old template-only threads, not arbitrary history. Never replay consent. */
+export function recoverLegacyCommercialIntake(history:{role:string;content:string}[],message:string,id:string):CommercialStep|null{
+ const last=history.at(-1);
+ if(last?.role!=='assistant'||!(/^(?:Atención empresarial|Propuesta comercial) · Bonaire/.test(last.content)))return null;
+ let anchor=-1;
+ for(let i=0;i<history.length;i++)if(history[i].role==='user'&&naturalCommercialStart(history[i].content))anchor=i;
+ if(anchor<0)return null;
+ let draft:CommercialDraft|null=null;
+ for(const item of [...history.slice(anchor),{role:'user',content:message}]){
+  if(item.role!=='user')continue;
+  const m=norm(item.content);
+  if(/^(?:confirmar|enviar|cancelar|nuevo chat|borrar historial|mi cuenta|mis solicitudes|mis citas)\b/.test(m))continue;
+  const step:CommercialStep|null=advanceCommercialIntake(item.content,draft,id);
+  if(step&&!step.submit)draft=step.draft;
+ }
+ return draft?{draft,reply:resumeCommercialIntake(draft)}:null;
 }
