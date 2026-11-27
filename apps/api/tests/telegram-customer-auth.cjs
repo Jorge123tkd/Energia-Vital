@@ -36,6 +36,11 @@ function signed(date=now,user={id:123456,is_bot:false}){
  const routeModule={exports:{}};
  const deny=async c=>c.json({error:'not authorized'},401);
  new Function('require','module','exports',ts.transpileModule(routeSrc,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(name=>name==='hono'?require('hono'):name==='../middleware'?{requireAdminAuth:deny,requireStaffAuth:deny}:name==='../telegram-customer-onboarding'?onboardingModule.exports:{},routeModule,routeModule.exports);
+ const canonical=routeModule.exports.canonicalTelegramLinks;
+ assert.equal(canonical('https://energia-vital-web.pages.dev/perfil?x=1'),'https://bnergiv.com/perfil?x=1');
+ assert.equal(canonical('http://energiavitalweb.page.net/entrar'),'https://bnergiv.com/entrar');
+ assert.equal(canonical('https://wa.me/5355555555 https://eltoque.com https://api.telegram.org'),'https://wa.me/5355555555 https://eltoque.com https://api.telegram.org');
+ assert.equal(canonical('https://energia-vital-web.pages.dev.evil.example'),'https://energia-vital-web.pages.dev.evil.example');
  const callback={update_id:999,callback_query:{id:'callback-test',data:'customer:create',from:{id:123456},message:{chat:{id:123456,type:'private'}}}};
  assert.equal(routeModule.exports.extractTelegramAccountCallback(callback).input.text,'crear cuenta');
  assert.equal(routeModule.exports.extractTelegramAccountCallback({...callback,callback_query:{...callback.callback_query,from:{id:654321}}}),null);

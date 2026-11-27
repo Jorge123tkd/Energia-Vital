@@ -67,6 +67,14 @@ async function acknowledgeCallback(env:Env,id:string){
   try{await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/answerCallbackQuery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({callback_query_id:id}),signal:AbortSignal.timeout(5000)});}catch{/* No sensitive logs. */}
 }
 function siteForBot(env:Env){return env.ENVIRONMENT==='qa'?(env.SITE_URL||'').replace(/\/+$/,''):SITE_URL;}
+/** Rewrite only known retired Bonaire web hosts, never Telegram/WhatsApp/API URLs. */
+export function canonicalTelegramLinks(value:string,site='https://bnergiv.com'):string{
+ return value.replace(/https?:\/\/(?:energia-vital-web|energiavitalweb|energia-vitalweb)\.(?:pages\.dev|pages\.net|page\.dev|page\.net)(?=[:/?#\s"'<>),.!]|$)/gi,()=>site);
+}
+function canonicalMarkup(markup:TelegramReplyMarkup|undefined,site:string):TelegramReplyMarkup|undefined{
+ if(!markup||!('inline_keyboard' in markup))return markup;
+ return {inline_keyboard:markup.inline_keyboard.map(row=>row.map(button=>'url' in button?{...button,url:canonicalTelegramLinks(button.url,site)}:'web_app' in button?{...button,web_app:{url:canonicalTelegramLinks(button.web_app.url,site)}}:button))};
+}
 function accountChoices(site:string):TelegramReplyMarkup{
   return {inline_keyboard:[[{text:'Crear cuenta',callback_data:'customer:create'}],[{text:'Vincular cuenta',url:site+'/perfil'}]]};
 }
@@ -84,8 +92,8 @@ export async function sendTelegramText(
   if(!env.TELEGRAM_BOT_TOKEN)throw Error('Bot Telegram no configurado');
   const response=await fetch('https://api.telegram.org/bot'+env.TELEGRAM_BOT_TOKEN+'/sendMessage',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({chat_id:chatId,text:text.slice(0,3900),
-      link_preview_options:{is_disabled:true},reply_markup:replyMarkup}),
+    body:JSON.stringify({chat_id:chatId,text:canonicalTelegramLinks(text,siteForBot(env)).slice(0,3900),
+      link_preview_options:{is_disabled:true},reply_markup:canonicalMarkup(replyMarkup,siteForBot(env))}),
     signal:AbortSignal.timeout(9000)
   });
   if(!response.ok)throw Error('Telegram no aceptó el mensaje ('+response.status+')');
@@ -207,9 +215,10 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
     const labels:Record<string,string>={pending:'Pendiente',quoted:'Presupuestada',approved:'Aprobada',scheduled:'Programada',completed:'Completada',cancelled:'Cancelada',confirmed:'Confirmada',in_progress:'En proceso'};
     return {reply:results?.length?(isRequests?'Tus últimas solicitudes:\n\n':'Tus últimas citas:\n\n')+results.map(x=>x.title+'\n'+(labels[x.status]||x.status)+' · '+x.date+'\nReferencia: '+x.id).join('\n\n')+(isRequests?'\n\nEscribe «ver solicitud» seguido de su referencia para leer las respuestas del equipo.':''):'Todavía no tienes registros en esta sección.',skipHistory:true};
   }
-  const commercialActive=!!prior&&prior.stage!=='submitted';
-  // No consumir cifras del presupuesto como fecha/hora de una cita anterior.
-  const visit=advanceAppointmentDraft(text,commercialActive&&!/\bcita\b/i.test(text)?null:appointment);
+  // An explicit commercial menu switches back to the saved request.
+  // Otherwise a previously started appointment owns its date/time replies.
+  const switchCommercial=action==='request-service'||action==='business-services'||action==='business-partner'||startCommercialIntake(text)||/^(?:confirmar solicitud(?: comercial)?|enviar solicitud|cancelar borrador)$/i.test(text);
+  const visit=switchCommercial?null:advanceAppointmentDraft(text,appointment);
   if(visit){
     if(visit.submit){
       if(!customer)return {reply:'Tu horario está guardado. Crea o vincula tu cuenta para enviar la cita; después escribe «confirmar cita».',appointment:visit.draft,replyMarkup:accountButton,skipHistory:true};
@@ -244,9 +253,9 @@ async function decide(env:Env,chatId:string,raw:string,state:SolarState|null,thr
         const saved=await env.DB.prepare("SELECT r.id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1")
           .bind(d.id,customer.id,chatId).first();
         if(!saved)return {reply:'No fue posible confirmar el registro. Comprueba tu cuenta.',commercial:prior,state:null};
-        return {reply:'Solicitud registrada. Referencia: '+d.id+'. Pendiente de revisión. Escribe «mis solicitudes» para consultar su estado. Puedes adjuntar fotos, PDF, Word o Excel con el texto «solicitud '+d.id+'».',commercial:{...d,stage:'submitted'},state:null};
+        return {reply:'Solicitud registrada. Referencia: '+d.id+'. Pendiente de revisión. Escribe «mis solicitudes» para consultar su estado. Puedes adjuntar fotos, PDF, Word o Excel con el texto «solicitud '+d.id+'».',commercial:{...d,stage:'submitted'},state:null,appointment:switchCommercial?null:undefined};
       }
-      return {reply:step.reply,commercial:step.draft,state:null};
+      return {reply:step.reply,commercial:step.draft,appointment:switchCommercial?null:undefined,state:null};
     }
   }
 
