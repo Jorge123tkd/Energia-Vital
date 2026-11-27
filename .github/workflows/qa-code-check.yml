@@ -34,6 +34,9 @@ jobs:
         run: node apps/web/tests/evpro-downloads.cjs
       - name: Probar solicitudes comerciales, citas y documentos
         run: |
+          node apps/api/tests/telegram-customer-attachments.cjs
+          node apps/api/tests/assistant-usage.cjs
+        run: |
           node apps/api/tests/assistant-usage.cjs
           node apps/api/tests/commercial-intake.cjs
           node apps/api/tests/residential-survey.cjs
