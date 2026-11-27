@@ -26,6 +26,10 @@ jobs:
           node scripts/verify-qa-access.test.cjs
       - name: Probar conversaciones con empresas y proveedores en Telegram y web
         run: node apps/api/tests/business-assistant-phase-a.cjs
+      - name: Probar gates de migracion y respaldo 029-034
+        run: node scripts/tests/migrations-029-034-release.cjs
+      - name: Probar generacion de acta PDF y recuperacion de acta firmada
+        run: node apps/web/tests/service-delivery-print.cjs
       - name: Probar solicitudes comerciales, citas y documentos
         run: |
           node apps/api/tests/assistant-usage.cjs
