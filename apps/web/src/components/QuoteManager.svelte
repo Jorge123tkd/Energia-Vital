@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '../lib/api';
+  import { api,apiRequest } from '../lib/api';
 
   type Item={description:string;quantity:number;unit_price_usd_cents:number;
     line_total_usd_cents:number};
@@ -21,6 +21,19 @@
   let stockNotes=$state(''),taxNotes=$state(''),freightNotes=$state(''),internalNotes=$state('');
   let reviewReason=$state('');
   let nextKey=0;
+  let tariffs=$state<any[]>([]),tariffSearch=$state(''),tariffId=$state(''),tariffBusy=$state(false),tariffError=$state(''),tariffNext=$state<string|null>(null);
+  async function loadTariffs(more=false){
+    tariffBusy=true;tariffError='';
+    try{const p=new URLSearchParams({search:tariffSearch});if(more&&tariffNext)p.set('after',tariffNext);
+      const r=await apiRequest('/api/quotes/tariffs?'+p,{headers:{Authorization:'Bearer '+token}});
+      tariffs=more?[...tariffs,...r.tariffs]:r.tariffs;tariffNext=r.next;tariffId='';
+    }catch(e){tariffError=(e as Error).message}finally{tariffBusy=false}
+  }
+  function addTariff(){
+    const t=tariffs.find(t=>t.code===tariffId);if(!t||items.length>=60||t.sale_cents==null)return;
+    const entry={key:++nextKey,description:(t.name+' ('+t.unit+')').slice(0,180),quantity:1,price_usd:t.sale_cents/100};
+    items=items.length===1&&!items[0].description?[entry]:[...items,entry];tariffId='';
+  }
   const states:Record<string,string>={
     draft:'Borrador interno',in_review:'Pendiente de revisión humana',
     approved_internal:'Aprobada internamente (no emitida)',
@@ -61,7 +74,7 @@
     taxNotes=last?.tax_notes||'';
     freightNotes=last?.freight_notes||'';
     internalNotes=last?.internal_notes||'';
-    error='';success='';editorOpen=true;
+    error='';success='';editorOpen=true;void loadTariffs();
   }
   async function saveDraft(e:SubmitEvent){
     e.preventDefault();
@@ -232,6 +245,14 @@
         </label>
         <fieldset class="border border-slate-200 rounded-xl p-3 space-y-2">
           <legend class="font-bold text-sm px-1">Partidas y precios unitarios en USD</legend>
+          <div class="rounded-lg bg-slate-50 p-3 space-y-2">
+            <p class="text-xs font-semibold">Añadir desde tarifario central</p>
+            <div class="flex gap-2"><input class="min-w-0 flex-1 border rounded p-2" aria-label="Buscar tarifa" bind:value={tariffSearch} maxlength="100"/><button type="button" disabled={tariffBusy} onclick={()=>loadTariffs()} class="border rounded px-2">Buscar</button></div>
+            <select aria-label="Tarifa" bind:value={tariffId} class="w-full border rounded p-2"><option value="">Seleccionar tarifa</option>{#each tariffs as t (t.code)}<option value={t.code}>{t.name} · {amount(t.sale_cents)} / {t.unit}</option>{/each}</select>
+            <div class="flex gap-2"><button type="button" disabled={!tariffId||items.length>=60||busy} onclick={addTariff} class="border rounded px-2 py-1">Añadir partida</button>{#if tariffNext}<button type="button" disabled={tariffBusy} onclick={()=>loadTariffs(true)} class="border rounded px-2">Más tarifas</button>{/if}</div>
+            {#if tariffError}<p class="text-xs text-amber-800">{tariffError} · Puedes seguir introduciendo partidas manuales.</p>{/if}
+            <p class="text-xs text-slate-500">Se copia el precio a este borrador; no cambia cotizaciones anteriores.</p>
+          </div>
           {#each items as i (i.key)}
             <div class="grid grid-cols-1 sm:grid-cols-[1fr_85px_115px_auto] gap-2 items-end">
               <label class="block text-xs font-semibold">Descripción

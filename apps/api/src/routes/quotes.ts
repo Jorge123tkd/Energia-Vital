@@ -8,7 +8,9 @@ import type { Env } from '../types';
 import { requireAdminAuth, requireStaffAuth } from '../middleware';
 import { validCubanWorkDate, cubaToday } from '../brigade-policy';
 
+import { tariffRoutes } from './tariffs';
 export const quoteRoutes=new Hono<{Bindings:Env;Variables:{user?:any}}>();
+quoteRoutes.route('/tariffs',tariffRoutes);
 quoteRoutes.use('*',requireStaffAuth);
 type Item={description:string;quantity:number;unit_price_usd_cents:number;
   line_total_usd_cents:number};

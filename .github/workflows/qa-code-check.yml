@@ -103,6 +103,7 @@ jobs:
           python3 apps/api/tests/warehouse-brigade-links.py
           python3 apps/api/tests/procurement.py
           python3 apps/api/tests/business-finance.py
+          python3 apps/api/tests/commercial-tariffs.py
       - name: Verificar respaldos D1 cifrados y restauracion SQLite sin datos reales
         run: node --test scripts/tests/backup-bonaire-crypto.test.mjs
       - name: Analizar sintaxis del exportador privado PowerShell sin usar Cloudflare

@@ -3,12 +3,13 @@
  import { apiRequest } from '../lib/api';
  import StudioPublication from './StudioPublication.svelte';
  import StudioCommercialActions from './StudioCommercialActions.svelte';
+ import StudioTariffs from './StudioTariffs.svelte';
  let {token,projects,initialMode='inventory',embedded=false,procurementGroup=false}: {token:string;projects:{id:string;name:string}[];initialMode?:Mode;embedded?:boolean;procurementGroup?:boolean}=$props();
- type Mode='inventory'|'catalog'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication';
+ type Mode='inventory'|'tariffs'|'catalog'|'orders'|'suppliers'|'finance'|'shortages'|'conflicts'|'backup'|'publication';
  let mode=$state<Mode>(untrack(()=>initialMode)),project=$state(''),busy=$state(false),error=$state(''),rows=$state<Record<string,any>[]>([]),cursor=$state<string|null>(null),loaded=$state(false),backupId=$state(''),receipt=$state<any>(null);
  let generation=0;let search=$state('');
  let reviewSeq=$state<number|null>(null),reviewRevision=$state<number|null>(null),central=$state<any>(null),merged=$state('');
- const tabs:{key:Mode;name:string}[]=[{key:'inventory',name:'Almacén'},{key:'catalog',name:'Catálogo Bonaire'},{key:'orders',name:'Compras'},{key:'suppliers',name:'Proveedores'},{key:'finance',name:'Economía'},{key:'shortages',name:'Faltantes'},{key:'conflicts',name:'Conflictos'},{key:'backup',name:'Respaldos'},{key:'publication',name:'Publicaciones'}];
+ const tabs:{key:Mode;name:string}[]=[{key:'inventory',name:'Almacén'},{key:'catalog',name:'Catálogo Bonaire'},{key:'tariffs',name:'Tarifas y precios'},{key:'orders',name:'Compras'},{key:'suppliers',name:'Proveedores'},{key:'finance',name:'Economía'},{key:'shortages',name:'Faltantes'},{key:'conflicts',name:'Conflictos'},{key:'backup',name:'Respaldos'},{key:'publication',name:'Publicaciones'}];
  const query=(path:string,body?:unknown)=>apiRequest(path,{headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
  const money=(v:unknown,c:string)=>typeof v==='number'?new Intl.NumberFormat('es',{style:'currency',currency:c}).format(v/100):'—';
  const qty=(v:unknown)=>typeof v==='number'?new Intl.NumberFormat('es',{maximumFractionDigits:3}).format(v/1000):'—';
@@ -61,8 +62,10 @@
 </script>
 <section class="rounded-2xl border bg-white p-4 sm:p-6 space-y-4" aria-label="Operaciones empresariales">
  <header><p class="uppercase tracking-widest text-xs text-teal-700 font-bold">Administración autorizada</p><h3 class="text-xl font-extrabold">{mode==='conflicts'?'Revisión de conflictos':mode==='backup'?'Copias de secciones compartidas':mode==='finance'?'Obligaciones y compromisos reales':tabs.find(t=>t.key===mode)?.name||'Operaciones empresariales'}</h3><p class="text-sm text-slate-500">{mode==='finance'?'Información comercial registrada, distinta del presupuesto estimado del expediente.':mode==='inventory'?'Existencias físicas y reservas, distintas del listado de materiales del diseño.':mode==='backup'?'Copias de secciones compartidas, no sustituyen el respaldo general de ingeniería.':'Consultas en línea sujetas a permisos y habilitación del servidor.'}</p></header>
- {#if !embedded||procurementGroup}<div class="flex gap-2 flex-wrap">{#each (procurementGroup?tabs.filter(t=>['inventory','catalog','orders','suppliers','shortages'].includes(t.key)):tabs) as t}<button type="button" aria-pressed={mode===t.key} class={mode===t.key?'rounded-lg bg-teal-800 text-white px-3 py-2 text-sm font-semibold':'rounded-lg border px-3 py-2 text-sm'} disabled={busy} onclick={()=>select(t.key)}>{t.name}</button>{/each}</div>{/if}
- {#if mode==='publication'}
+ {#if !embedded||procurementGroup}<div class="flex gap-2 flex-wrap">{#each (procurementGroup?tabs.filter(t=>['inventory','catalog','tariffs','orders','suppliers','shortages'].includes(t.key)):tabs) as t}<button type="button" aria-pressed={mode===t.key} class={mode===t.key?'rounded-lg bg-teal-800 text-white px-3 py-2 text-sm font-semibold':'rounded-lg border px-3 py-2 text-sm'} disabled={busy} onclick={()=>select(t.key)}>{t.name}</button>{/each}</div>{/if}
+ {#if mode==='tariffs'}
+  <StudioTariffs {token}/>
+ {:else if mode==='publication'}
   <StudioPublication {token} {projects}/>
  {:else}
  {#if ['finance','shortages','backup'].includes(mode)}
