@@ -41,6 +41,12 @@ function signed(date=now,user={id:123456,is_bot:false}){
  assert.equal(canonical('http://energiavitalweb.page.net/entrar'),'https://bnergiv.com/entrar');
  assert.equal(canonical('https://wa.me/5355555555 https://eltoque.com https://api.telegram.org'),'https://wa.me/5355555555 https://eltoque.com https://api.telegram.org');
  assert.equal(canonical('https://energia-vital-web.pages.dev.evil.example'),'https://energia-vital-web.pages.dev.evil.example');
+ const unsupported=routeModule.exports.unsupportedTelegramMessage;
+ const voice={update_id:1000,message:{chat:{id:123456,type:'private'},from:{id:123456},voice:{file_id:'qa'}}};
+ assert.match(unsupported(voice).reply,/no puedo escuchar/);
+ assert.equal(unsupported({...voice,message:{...voice.message,from:{id:654321}}}),null);
+ assert.equal(unsupported({...voice,message:{...voice.message,chat:{id:123456,type:'group'}}}),null);
+ assert.match(unsupported({...voice,message:{...voice.message,voice:undefined,photo:[]}}).reply,/8 MB/);
  const callback={update_id:999,callback_query:{id:'callback-test',data:'customer:create',from:{id:123456},message:{chat:{id:123456,type:'private'}}}};
  assert.equal(routeModule.exports.extractTelegramAccountCallback(callback).input.text,'crear cuenta');
  assert.equal(routeModule.exports.extractTelegramAccountCallback({...callback,callback_query:{...callback.callback_query,from:{id:654321}}}),null);

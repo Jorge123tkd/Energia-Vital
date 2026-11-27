@@ -14,9 +14,9 @@ export function extractTelegramPhoto(payload:any):TelegramPhoto|null{
 }
 export async function receiveTelegramPhoto(env:Env,input:TelegramPhoto):Promise<string>{
  const customer=await currentTelegramCustomer(env,input.chatId);
- if(!customer)return 'Primero crea o vincula tu cuenta con «Mi cuenta». Después vuelve a adjuntar la fotografía.';
+ if(!customer)return 'Primero crea o vincula tu cuenta con «Mi cuenta». Confirma la solicitud y vuelve a adjuntar la fotografía con su referencia. No se ha guardado esta foto.';
  const match=/^solicitud\s+([a-z0-9-]{1,128})$/i.exec(input.caption);
- if(!match)return 'Para guardar esta foto en tu expediente, reenvíala con el texto «solicitud REFERENCIA». Escribe «mis solicitudes» para ver tu referencia.';
+ if(!match)return 'Todavía no guardé esta foto. Termina y confirma tu solicitud o consulta «mis solicitudes». Después reenvíala con el texto «solicitud REFERENCIA» para incorporarla al expediente correcto.';
  const requestId=match[1],imageId='tg-photo-'+input.updateId;
  const owner=await env.DB.prepare("SELECT r.id FROM requests r JOIN customers c ON c.id=r.customer_id WHERE r.id=? AND c.id=? AND c.telegram_customer_chat_id=? AND c.is_active=1 AND r.status NOT IN ('cancelled','completed')")
  .bind(requestId,customer.id,input.chatId).first();

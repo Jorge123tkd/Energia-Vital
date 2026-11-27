@@ -316,7 +316,7 @@ export async function decide(env:Env,chatId:string,raw:string,state:SolarState|n
     case 'agenda-tomorrow':
       if(!staff)return {reply:'La agenda interna de Bonaire es privada. Si trabajas en nuestro equipo, '+
         'vincula tu cuenta de /admin para consultarla. Si eres cliente y deseas pedir una cita, '+
-        'puedo orientarte sobre cómo solicitarla desde la web.',skipHistory:true};
+        'escribe «solicitar cita» aquí mismo para elegir fecha y hora de Cuba.',skipHistory:true};
       return {reply:await agendaForTeam(env,action==='agenda-today'?'today':'tomorrow'),skipHistory:true};
     case 'pending':
       if(!staff)return {reply:'El listado de solicitudes internas pertenece al personal autorizado. '+
@@ -504,7 +504,7 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
     const currentStaff=await currentTelegramStaff(env,input.chatId);
     const draftKeyboard:TelegramReplyMarkup|undefined=nextCommercial?.stage==='review'?{keyboard:[[{text:'Confirmar solicitud comercial'},{text:'Cancelar borrador'}],[{text:'Hablar con una persona'}]],resize_keyboard:true,one_time_keyboard:true,input_field_placeholder:'Revisa o confirma tu solicitud…'}:undefined;
     const keyboard=decision.replyMarkup||draftKeyboard||telegramReplyKeyboard(Boolean(currentStaff),nextState?.stage,decision.keyboardView||'normal');
-    const renderedReply=presentTelegramReply(decision.reply,nextState?.stage);
+    const renderedReply=canonicalTelegramLinks(presentTelegramReply(decision.reply,nextState?.stage),site);
     await sendTelegramText(env,input.chatId,renderedReply,keyboard);
     const audit=decision.skipHistory?[]:[
       env.DB.prepare(
@@ -534,6 +534,14 @@ async function processUpdate(env:Env,input:NonNullable<ReturnType<typeof extract
       .bind(now(),input.updateId).run().catch(()=>null);
     throw e;
   }
+}
+// Do not download unsupported media or silently ignore a valid private upload.
+export function unsupportedTelegramMessage(body:unknown):{updateId:string;chatId:string;reply:string}|null{
+ const b=body as any,m=b?.message;
+ if(!validUpdateId(b?.update_id)||m?.chat?.type!=='private'||!validChatId(m.chat.id)||m.from?.id!==m.chat.id||m.from?.is_bot===true)return null;
+ if(!m.photo&&!m.document&&!m.video&&!m.audio&&!m.voice&&!m.sticker&&!m.animation&&!m.video_note&&!m.contact&&!m.location)return null;
+ const reply=m.photo?'No pude aceptar esa foto. Envíala como fotografía de hasta 8 MB y añade «solicitud REFERENCIA» si ya tienes un expediente.':m.voice||m.audio||m.video||m.video_note?'Por ahora no puedo escuchar audios ni analizar videos. Escríbeme la necesidad y, si ya tienes solicitud, adjunta fotos, PDF, DOCX o XLSX de hasta 8 MB.':'Este tipo de mensaje no se incorpora al expediente. Puedes escribir la información o adjuntar fotos, PDF, DOCX o XLSX de hasta 8 MB con «solicitud REFERENCIA».';
+ return {updateId:String(b.update_id),chatId:String(m.chat.id),reply};
 }
 telegramRoutes.post('/webhook',async c=>{
   const env=c.env;
@@ -589,7 +597,18 @@ telegramRoutes.post('/webhook',async c=>{
     }
   }
   const message=extractTelegramMessage(body);
-  if(!message)return c.json({ok:true});
+  if(!message){
+    const unsupported=unsupportedTelegramMessage(body);
+    if(!unsupported||!await claimUpdate(env,unsupported.updateId,unsupported.chatId))return c.json({ok:true});
+    try{
+      if(await claimAttachmentQuota(env,unsupported.chatId))await sendTelegramText(env,unsupported.chatId,unsupported.reply);
+      await env.DB.prepare("UPDATE telegram_bot_updates SET status='sent',updated_at=? WHERE update_id=?").bind(now(),unsupported.updateId).run();
+      return c.json({ok:true});
+    }catch{
+      await env.DB.prepare("UPDATE telegram_bot_updates SET status='failed',updated_at=? WHERE update_id=?").bind(now(),unsupported.updateId).run().catch(()=>null);
+      return c.json({error:'No se pudo responder al archivo'},503);
+    }
+  }
   try{await processUpdate(env,message);return c.json({ok:true});}
   catch{return c.json({error:'Falló la entrega; Telegram puede reintentar'},503);}
 });
